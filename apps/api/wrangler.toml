@@ -1,0 +1,6 @@
+name = "irth-api"
+compatibility_date = "2024-03-20"
+main = "src/index.ts"
+
+[observability]
+enabled = true

@@ -1,0 +1,11 @@
+{
+  "Index": {
+    "title": "Welcome to IRTH OS"
+  },
+  "Login": {
+    "title": "Login",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Submit"
+  }
+}

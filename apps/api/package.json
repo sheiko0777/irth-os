@@ -1,0 +1,22 @@
+{
+  "name": "@irth/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@trpc/client": "^11.0.0-rc.0",
+    "@trpc/server": "^11.0.0-rc.0",
+    "better-auth": "^1.2.0",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "@types/node": "^25.8.0",
+    "typescript": "^5.0.0",
+    "wrangler": "^3.0.0"
+  }
+}
