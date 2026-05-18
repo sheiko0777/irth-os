@@ -8,7 +8,36 @@
     "password": "كلمة المرور",
     "submit": "دخول"
   },
+  "nav": {
+    "dashboard": "لوحة القيادة",
+    "orders": "الطلبات",
+    "products": "المنتجات"
+  },
+  "dashboard": {
+    "title": "نظرة عامة",
+    "ordersToday": "طلبات اليوم",
+    "revenueToday": "أرباح اليوم (ج.م)",
+    "pendingOrders": "الطلبات المعلقة",
+    "activeProducts": "المنتجات النشطة"
+  },
   "orders": {
+    "title": "الطلبات",
+    "search": "البحث برقم الطلب...",
+    "statusFilter": "تصفية بالحالة",
+    "allStatuses": "جميع الحالات",
+    "table": {
+      "orderNumber": "رقم الطلب",
+      "status": "الحالة",
+      "totalAmount": "الإجمالي",
+      "createdAt": "تاريخ الإنشاء",
+      "actions": "إجراءات"
+    },
+    "detail": {
+      "title": "تفاصيل الطلب",
+      "items": "العناصر",
+      "history": "سجل الحالة",
+      "updateStatus": "تحديث الحالة"
+    },
     "status": {
       "pending": "قيد الانتظار",
       "confirmed": "مؤكد",
@@ -17,6 +46,41 @@
       "delivered": "تم التوصيل",
       "cancelled": "ملغي"
     }
+  },
+  "products": {
+    "title": "المنتجات",
+    "create": "إضافة منتج",
+    "edit": "تعديل المنتج",
+    "table": {
+      "name": "الاسم",
+      "brand": "العلامة التجارية",
+      "variants": "الأنواع",
+      "status": "الحالة",
+      "actions": "إجراءات"
+    },
+    "status": {
+      "active": "نشط",
+      "inactive": "غير نشط"
+    },
+    "form": {
+      "name": "اسم المنتج",
+      "description": "الوصف",
+      "brand": "العلامة التجارية",
+      "isActive": "المنتج نشط؟",
+      "submit": "حفظ",
+      "cancel": "إلغاء",
+      "variants": "الأنواع",
+      "addVariant": "إضافة نوع",
+      "sku": "رمز المنتج (SKU)",
+      "price": "السعر",
+      "stock": "المخزون"
+    }
+  },
+  "common": {
+    "view": "عرض",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "currency": "ج.م"
   },
   "shipping": {
     "error": {
