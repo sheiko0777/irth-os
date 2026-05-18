@@ -1,0 +1,14 @@
+name: Deploy All
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-api:
+    uses: ./.github/workflows/deploy-api.yml
+    secrets: inherit
+
+  deploy-admin:
+    needs: deploy-api
+    uses: ./.github/workflows/deploy-admin.yml
+    secrets: inherit
