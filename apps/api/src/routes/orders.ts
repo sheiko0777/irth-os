@@ -86,7 +86,7 @@ ordersRoute.get('/', async (c: Context) => {
 ordersRoute.get('/:id', async (c: Context) => {
   const orgId = getOrgId(c);
   const id = c.req.param('id');
-  const [order] = await db.select().from(orders).where(and(eq(orders.id, id), eq(orders.orgId, orgId)));
+  const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
   
   if (!order) {
     return c.json({ data: null, error: 'not_found', meta: null }, 404);
@@ -106,7 +106,7 @@ ordersRoute.patch('/:id/status', async (c: Context) => {
   
   const { status } = updateStatusSchema.parse(body);
 
-  const [order] = await db.select().from(orders).where(and(eq(orders.id, id), eq(orders.orgId, orgId)));
+  const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
   
   if (!order) {
     return c.json({ data: null, error: 'not_found', meta: null }, 404);
@@ -115,7 +115,7 @@ ordersRoute.patch('/:id/status', async (c: Context) => {
   const updatedOrder = await withAudit(db, async () => {
       const [res] = await db.update(orders)
         .set({ status, updatedAt: new Date() })
-        .where(and(eq(orders.id, id), eq(orders.orgId, orgId)))
+        .where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)))
         .returning();
       return res;
   }, {
