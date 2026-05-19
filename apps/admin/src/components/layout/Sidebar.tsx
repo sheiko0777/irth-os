@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { useTranslations } from "next-intl"
 import { signOut, useSession } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
+import { NotificationBell } from "./NotificationBell"
 
 export function Sidebar({ locale }: { locale: string }) {
   const pathname = usePathname()
@@ -31,8 +32,9 @@ export function Sidebar({ locale }: { locale: string }) {
 
   return (
     <div className="flex h-screen w-64 flex-col border-e bg-white">
-      <div className="flex h-14 items-center border-b px-4">
+      <div className="flex h-14 items-center justify-between border-b px-4">
         <span className="font-bold text-lg">IRTH OS Admin</span>
+        <NotificationBell locale={locale} />
       </div>
       <nav className="flex-1 space-y-1 p-2">
         {links.map((link) => {
