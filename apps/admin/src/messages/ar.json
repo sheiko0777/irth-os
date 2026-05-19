@@ -11,7 +11,14 @@
   "nav": {
     "dashboard": "لوحة القيادة",
     "orders": "الطلبات",
-    "products": "المنتجات"
+    "products": "المنتجات",
+    "settings": "الإعدادات"
+  },
+  "settings": {
+    "title": "إعدادات المنظمة",
+    "members": "الأعضاء",
+    "invite": "دعوة عضو",
+    "inviteSuccess": "تم إرسال الدعوة"
   },
   "dashboard": {
     "title": "نظرة عامة",

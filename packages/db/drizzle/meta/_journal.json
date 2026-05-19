@@ -15,6 +15,13 @@
       "when": 1779107290809,
       "tag": "0001_bored_ted_forrester",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779162222989,
+      "tag": "0002_tenant_onboarding",
+      "breakpoints": true
     }
   ]
 }

@@ -13,11 +13,29 @@ const baseColumns = {
 };
 
 export const organizations = pgTable("organizations", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  settings: jsonb("settings").default({}),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  brand: brandEnum("brand").notNull().default("irth"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const orgMembers = pgTable("org_members", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  userId: text("user_id").notNull(),
+  role: text("role").notNull().default("member"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const orgInvites = pgTable("org_invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  email: text("email").notNull(),
+  token: text("token").notNull().unique(),
+  role: text("role").notNull().default("member"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const products = pgTable("products", {

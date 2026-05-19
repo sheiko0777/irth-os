@@ -5,6 +5,7 @@ import { shippingRoute } from './routes/shipping'
 import { paymobRoute } from './routes/webhooks/paymob'
 import { bostaRoute } from './routes/webhooks/bosta'
 import { auditMiddleware } from './middlewares/audit'
+import { orgsRouter } from './routes/orgs'
 
 const app = new Hono()
 
@@ -22,5 +23,6 @@ app.route('/api/orders', ordersRoute)
 app.route('/api/shipping', shippingRoute)
 app.route('/api/webhooks/paymob', paymobRoute)
 app.route('/api/webhooks/bosta', bostaRoute)
+app.route('/api/orgs', orgsRouter)
 
 export default app
