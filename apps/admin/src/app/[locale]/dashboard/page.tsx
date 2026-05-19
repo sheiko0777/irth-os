@@ -1,4 +1,6 @@
 import { getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { serverCaller } from "@/server/caller";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, DollarSign, Package, ShoppingCart } from "lucide-react";
@@ -6,7 +8,32 @@ import { Activity, DollarSign, Package, ShoppingCart } from "lucide-react";
 // Revalidate every 60 seconds
 export const revalidate = 60;
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ params }: { params: Promise<{ locale: string }> }) {
+    const { locale } = await params;
+
+    const headersList = await headers();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+    // CVE-2025-29927 Mitigation: Validate Session internally with headers
+    let sessionData = null;
+    try {
+        const sessionRes = await fetch(`${appUrl}/api/auth/get-session`, {
+            headers: {
+                cookie: headersList.get("cookie") || "",
+                "x-forwarded-host": headersList.get("x-forwarded-host") || headersList.get("host") || "",
+            },
+        });
+        if (sessionRes.ok) {
+            sessionData = await sessionRes.json();
+        }
+    } catch (e) {
+        console.error("Failed to check session in dashboard", e);
+    }
+
+    if (!sessionData?.session) {
+        redirect(`/${locale}/login`);
+    }
+
     const t = await getTranslations("dashboard");
     const caller = await serverCaller();
     const stats = await caller.dashboard.getStats();

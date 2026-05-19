@@ -7,13 +7,14 @@ import { ar } from "date-fns/locale";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-export default async function OrdersPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+    const searchParamsResolved = await searchParams;
     const t = await getTranslations("orders");
     const caller = await serverCaller();
 
-    const search = typeof searchParams.search === "string" ? searchParams.search : undefined;
-    const status = typeof searchParams.status === "string" ? searchParams.status as any : undefined;
-    const page = typeof searchParams.page === "string" ? parseInt(searchParams.page, 10) : 1;
+    const search = typeof searchParamsResolved.search === "string" ? searchParamsResolved.search : undefined;
+    const status = typeof searchParamsResolved.status === "string" ? (searchParamsResolved.status as "pending" | "confirmed" | "payment_failed" | "shipped" | "delivered" | "cancelled") : undefined;
+    const page = typeof searchParamsResolved.page === "string" ? parseInt(searchParamsResolved.page, 10) : 1;
 
     const ordersResponse = await caller.orders.list({
         page,
@@ -61,7 +62,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: { [ke
                                 <TableCell colSpan={5} className="text-center">No orders found.</TableCell>
                             </TableRow>
                         ) : (
-                            orders.map((order) => (
+                            orders.map((order: { id: string, orderNumber: string, status: string, totalAmount: number, createdAt: string | Date }) => (
                                 <TableRow key={order.id}>
                                     <TableCell className="font-medium">
                                         {order.orderNumber}

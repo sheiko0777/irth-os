@@ -5,11 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
-export default async function ProductsPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+    const searchParamsResolved = await searchParams;
     const t = await getTranslations("products");
     const caller = await serverCaller();
 
-    const page = typeof searchParams.page === "string" ? parseInt(searchParams.page, 10) : 1;
+    const page = typeof searchParamsResolved.page === "string" ? parseInt(searchParamsResolved.page, 10) : 1;
 
     const productsResponse = await caller.products.list({ page, pageSize: 20 });
 
@@ -45,7 +46,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: { [
                                 <TableCell colSpan={5} className="text-center">لا توجد منتجات.</TableCell>
                             </TableRow>
                         ) : (
-                            products.map((product) => (
+                            products.map((product: { id: string, name: string, brand: string, variantsCount: number, isActive: boolean }) => (
                                 <TableRow key={product.id}>
                                     <TableCell className="font-medium">{product.name}</TableCell>
                                     <TableCell>{product.brand}</TableCell>
