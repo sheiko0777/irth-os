@@ -20,6 +20,8 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+type FormDefaultValues = z.input<typeof formSchema>;
+
 export function EditProductForm({ product }: { product: any }) {
     const t = useTranslations("products.form");
     const router = useRouter();
@@ -35,7 +37,7 @@ export function EditProductForm({ product }: { product: any }) {
         }
     });
 
-    const onSubmit = (data: FormValues) => {
+    const onSubmit = (data: FormDefaultValues) => {
         startTransition(async () => {
             const res = await updateProductAction(data);
             if (res?.error) {

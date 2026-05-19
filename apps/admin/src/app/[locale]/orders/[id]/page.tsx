@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusUpdater } from "./StatusUpdater";
 
-export default async function OrderDetailPage({ params }: { params: { id: string, locale: string } }) {
+export default async function OrderDetailPage({ params }: { params: Promise<{ id: string, locale: string }> }) {
     const { id, locale } = await params;
     const t = await getTranslations("orders");
     const caller = await serverCaller();
@@ -49,7 +49,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {items.map((item) => (
+                                {items.map((item: { id: string, sku: string, quantity: number, price: number }) => (
                                     <TableRow key={item.id}>
                                         <TableCell>{item.sku}</TableCell>
                                         <TableCell>{item.quantity}</TableCell>
@@ -79,7 +79,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {history.map((record) => (
+                                    {history.map((record: { id: string, provider: string, trackingNumber: string | null, status: string | null, createdAt: string | Date }) => (
                                         <TableRow key={record.id}>
                                             <TableCell>{record.provider}</TableCell>
                                             <TableCell>{record.trackingNumber || '-'}</TableCell>

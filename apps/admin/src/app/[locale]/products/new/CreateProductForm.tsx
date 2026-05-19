@@ -24,12 +24,14 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+type FormDefaultValues = z.input<typeof formSchema>;
+
 export function CreateProductForm() {
     const t = useTranslations("products.form");
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
 
-    const { register, control, handleSubmit, formState: { errors } } = useForm<FormValues>({
+    const { register, control, handleSubmit, formState: { errors } } = useForm<FormDefaultValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: "",
@@ -44,9 +46,9 @@ export function CreateProductForm() {
         name: "variants"
     });
 
-    const onSubmit = (data: FormValues) => {
+    const onSubmit = (data: FormDefaultValues) => {
         startTransition(async () => {
-            const res = await createProductAction(data);
+            const res = await createProductAction(data as any);
             if (res?.error) {
                 alert("Error creating product: " + res.error);
             } else {

@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { EditProductForm } from "./EditProductForm";
 
-export default async function EditProductPage({ params }: { params: { id: string } }) {
+export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const t = await getTranslations("products");
     const caller = await serverCaller();
