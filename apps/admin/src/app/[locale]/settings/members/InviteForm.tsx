@@ -1,5 +1,5 @@
 import type React from "react";
-"use client";
+("use client");
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,9 @@ export function InviteForm({ orgId }: { orgId: string }) {
   const t = useTranslations("settings");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("member");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [status, setStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -22,13 +24,13 @@ export function InviteForm({ orgId }: { orgId: string }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "org_id": orgId,
+          org_id: orgId,
         },
         body: JSON.stringify({ email, role }),
       });
 
       if (!res.ok) throw new Error("Failed to invite");
-      
+
       setStatus("success");
       setEmail("");
     } catch (error) {
@@ -39,7 +41,12 @@ export function InviteForm({ orgId }: { orgId: string }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <label htmlFor="email" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">البريد الإلكتروني</label>
+        <label
+          htmlFor="email"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          البريد الإلكتروني
+        </label>
         <Input
           id="email"
           type="email"
@@ -49,7 +56,12 @@ export function InviteForm({ orgId }: { orgId: string }) {
         />
       </div>
       <div className="space-y-2">
-        <label htmlFor="role" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">الدور</label>
+        <label
+          htmlFor="role"
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+        >
+          الدور
+        </label>
         <select
           id="role"
           value={role}
@@ -66,9 +78,7 @@ export function InviteForm({ orgId }: { orgId: string }) {
       {status === "success" && (
         <p className="text-sm text-green-600">{t("inviteSuccess")}</p>
       )}
-      {status === "error" && (
-        <p className="text-sm text-red-600">حدث خطأ</p>
-      )}
+      {status === "error" && <p className="text-sm text-red-600">حدث خطأ</p>}
     </form>
   );
 }

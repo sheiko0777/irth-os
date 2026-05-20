@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 
 export default async function SettingsPage() {
   const t = await getTranslations("settings");
-  
+
   // In a real app we would get the current user's org info
   // For the purpose of the task, let's mock it or display a placeholder
   const orgName = "IRTH Platform";
