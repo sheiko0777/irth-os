@@ -38,20 +38,43 @@ export const orgInvites = pgTable("org_invites", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const products = pgTable("products", {
-  ...baseColumns,
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  brand: brandEnum("brand").default('irth').notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
+export const categories = pgTable('categories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
+  name: text('name').notNull(),
+  slug: text('slug').notNull(),
+  parentId: uuid('parent_id'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const productVariants = pgTable("product_variants", {
-  ...baseColumns,
-  productId: uuid("product_id").references(() => products.id).notNull(),
-  sku: varchar("sku", { length: 100 }).notNull(),
-  price: decimal("price", { precision: 12, scale: 2 }).notNull(),
-  stock: integer("stock").default(0).notNull(),
+export const products = pgTable('products', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
+  categoryId: uuid('category_id').references(() => categories.id),
+  name: text('name').notNull(),
+  nameAr: text('name_ar'),
+  sku: text('sku').notNull().unique(),
+  description: text('description'),
+  descriptionAr: text('description_ar'),
+  price: decimal('price', { precision: 12, scale: 2 }).notNull(),
+  currency: text('currency').notNull().default('USD'),
+  stock: integer('stock').notNull().default(0),
+  status: text('status').notNull().default('active'), // 'active' | 'draft' | 'archived'
+  images: jsonb('images').default([]),
+  brand: brandEnum('brand').default('irth').notNull(), // Keeping brand to not break existing tests/code without need, or maybe we drop it? The spec didn't mention it. I will keep it for safety unless told otherwise. Actually I will just keep it since it's an enum we have.
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const productVariants = pgTable('product_variants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  productId: uuid('product_id').notNull().references(() => products.id),
+  name: text('name').notNull(),
+  sku: text('sku').notNull().unique(),
+  price: decimal('price', { precision: 12, scale: 2 }),
+  stock: integer('stock').notNull().default(0),
+  attributes: jsonb('attributes').default({}),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 export const orders = pgTable("orders", {

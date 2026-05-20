@@ -1,24 +1,24 @@
 import { getTranslations } from "next-intl/server";
+import { ProductForm } from "../../ProductForm";
 import { serverCaller } from "@/server/caller";
-import { EditProductForm } from "./EditProductForm";
+import { notFound } from "next/navigation";
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
+    const resolvedParams = await params;
     const t = await getTranslations("products");
     const caller = await serverCaller();
-
-    const response = await caller.products.getById({ id });
-
-    if (response.error || !response.data) {
-        return <div>Product not found</div>;
-    }
-
-    return (
-        <div className="space-y-6">
-            <h1 className="text-3xl font-bold tracking-tight">{t("edit")}</h1>
-            <div className="max-w-3xl">
-                <EditProductForm product={response.data.product} />
+    
+    try {
+        const productResponse = await caller.products.getById({ id: resolvedParams.id });
+        const categoriesResponse = await caller.categories.list();
+        
+        return (
+            <div className="space-y-6 max-w-2xl">
+                <h1 className="text-3xl font-bold tracking-tight">{t("edit")}</h1>
+                <ProductForm initialData={productResponse.data.product} categories={categoriesResponse.data} />
             </div>
-        </div>
-    );
+        );
+    } catch (e) {
+        notFound();
+    }
 }
