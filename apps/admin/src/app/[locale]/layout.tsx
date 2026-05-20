@@ -1,8 +1,9 @@
 import {NextIntlClientProvider} from 'next-intl';
 import {getMessages} from 'next-intl/server';
-import {notFound} from 'next/navigation';
+import {notFound, redirect} from 'next/navigation';
 import {routing} from '@/i18n/routing';
 import type { Metadata } from 'next';
+import { verifySession } from '@/lib/auth';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -22,6 +23,9 @@ export default async function LocaleLayout({
   if (!routing.locales.includes(locale as any)) {
     notFound();
   }
+
+  // CVE-2025-29927 mitigation
+  const session = await verifySession();
 
   const messages = await getMessages();
 

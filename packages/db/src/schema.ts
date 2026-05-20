@@ -1,6 +1,8 @@
 import { pgTable, uuid, timestamp, varchar, text, jsonb, decimal, boolean, integer, pgEnum } from "drizzle-orm/pg-core";
 
 export const brandEnum = pgEnum('brand', ['irth']);
+export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
+export const shippingProviderEnum = pgEnum('shipping_provider', ['bosta', 'mylerz']);
 
 // Base columns for all tables with org_id rule
 const baseColumns = {
@@ -37,7 +39,7 @@ export const productVariants = pgTable("product_variants", {
 export const orders = pgTable("orders", {
   ...baseColumns,
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(), // IRT-2026-0001
-  status: varchar("status", { length: 50 }).notNull(),
+  status: orderStatusEnum("status").notNull().default('pending'),
   totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(),
   customerId: uuid("customer_id"), // Ref to auth users eventually
 });
@@ -48,6 +50,15 @@ export const orderItems = pgTable("order_items", {
   variantId: uuid("variant_id").references(() => productVariants.id).notNull(),
   quantity: integer("quantity").notNull(),
   price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+});
+
+export const shipmentTracking = pgTable("shipment_tracking", {
+  ...baseColumns,
+  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  provider: shippingProviderEnum("provider").notNull(),
+  trackingNumber: varchar("tracking_number", { length: 255 }),
+  status: varchar("status", { length: 100 }), // The provider's status, mapped later to order status
+  rawPayload: jsonb("raw_payload").default({}),
 });
 
 export const auditLog = pgTable("audit_log", {

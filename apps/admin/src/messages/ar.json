@@ -7,5 +7,25 @@
     "email": "البريد الإلكتروني",
     "password": "كلمة المرور",
     "submit": "دخول"
+  },
+  "orders": {
+    "status": {
+      "pending": "قيد الانتظار",
+      "confirmed": "مؤكد",
+      "payment_failed": "فشل الدفع",
+      "shipped": "تم الشحن",
+      "delivered": "تم التوصيل",
+      "cancelled": "ملغي"
+    }
+  },
+  "shipping": {
+    "error": {
+      "unavailable": "خدمة الشحن غير متوفرة حالياً"
+    }
+  },
+  "payment": {
+    "error": {
+      "failed": "عملية الدفع لم تكتمل"
+    }
   }
 }
