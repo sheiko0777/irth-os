@@ -7,7 +7,7 @@ const intlMiddleware = createMiddleware(routing);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   // Apply next-intl middleware first
   const response = intlMiddleware(request);
 
@@ -26,7 +26,8 @@ export async function middleware(request: NextRequest) {
   const pathWithoutLocale = segments.slice(2).join("/");
 
   // Public routes mapping
-  const isPublicRoute = pathWithoutLocale === "login" || pathWithoutLocale === "";
+  const isPublicRoute =
+    pathWithoutLocale === "login" || pathWithoutLocale === "";
 
   // Check Better Auth Session
   // CVE-2025-29927 Mitigation: Validate Host Header properly or use API
@@ -37,10 +38,13 @@ export async function middleware(request: NextRequest) {
     const sessionRes = await fetch(`${appUrl}/api/auth/get-session`, {
       headers: {
         cookie: request.headers.get("cookie") || "",
-        "x-forwarded-host": request.headers.get("x-forwarded-host") || request.headers.get("host") || "",
+        "x-forwarded-host":
+          request.headers.get("x-forwarded-host") ||
+          request.headers.get("host") ||
+          "",
       },
     });
-    
+
     if (sessionRes.ok) {
       session = await sessionRes.json();
     }

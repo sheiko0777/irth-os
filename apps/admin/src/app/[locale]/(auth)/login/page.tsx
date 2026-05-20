@@ -7,9 +7,16 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { signIn } from "@/lib/auth-client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -65,7 +72,7 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
-            
+
             <div className="space-y-2">
               <label className="text-sm font-medium">{t("email")}</label>
               <Input
@@ -75,7 +82,7 @@ export default function LoginPage() {
                 className="text-start"
               />
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-sm font-medium">{t("password")}</label>
               <Input
@@ -85,9 +92,9 @@ export default function LoginPage() {
                 className="text-start"
               />
             </div>
-            
+
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "..." : t("login")}
+              {isSubmitting ? <Spinner className="mr-2" /> : null} {t("login")}
             </Button>
           </form>
         </CardContent>
