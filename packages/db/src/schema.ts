@@ -22,8 +22,10 @@ export const organizations = pgTable("organizations", {
 
 export const products = pgTable("products", {
   ...baseColumns,
-  name: varchar("name", { length: 255 }).notNull(),
+  nameEn: varchar("name_en", { length: 255 }).notNull(),
+  nameAr: varchar("name_ar", { length: 255 }).notNull(),
   description: text("description"),
+  category: varchar("category", { length: 255 }).notNull(),
   brand: brandEnum("brand").default('irth').notNull(),
   isActive: boolean("is_active").default(true).notNull(),
 });
