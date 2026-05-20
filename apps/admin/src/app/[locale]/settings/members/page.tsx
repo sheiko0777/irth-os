@@ -1,6 +1,8 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getTranslations } from "next-intl/server";
 import { InviteForm } from "./InviteForm";
+import { MemberRoleSelect } from "./MemberRoleSelect";
+import { PermissionGate } from "@/components/PermissionGate";
 // No explicit React import!
 
 export default async function MembersPage() {
@@ -28,21 +30,23 @@ export default async function MembersPage() {
               {members.map((member) => (
                 <div key={member.id} className="flex justify-between items-center border-b pb-2">
                   <span>{member.userId}</span>
-                  <span className="text-sm text-muted-foreground">{member.role}</span>
+                  <MemberRoleSelect role={member.role} />
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("invite")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <InviteForm orgId={orgId} />
-          </CardContent>
-        </Card>
+        <PermissionGate resource="members" action="invite">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("invite")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <InviteForm orgId={orgId} />
+            </CardContent>
+          </Card>
+        </PermissionGate>
       </div>
     </div>
   );

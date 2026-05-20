@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { organizations, orgMembers, orgInvites, withAudit } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
+import { requireRole } from '../middlewares/requireRole';
 // import { Resend } from 'resend'; // Assume resend is installed, or we handle it
 
 export const orgsRouter = new Hono();
@@ -68,7 +69,7 @@ const inviteSchema = z.object({
   role: z.string().default('member'),
 });
 
-orgsRouter.post('/:id/invite', async (c: Context) => {
+orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const id = c.req.param('id');
     const orgId = c.req.header('org_id') || id;
@@ -140,3 +141,41 @@ orgsRouter.post('/invite/accept', async (c: Context) => {
   }
 });
 
+
+const updateRoleSchema = z.object({
+  role: z.enum(['owner', 'admin', 'member']),
+});
+
+orgsRouter.patch('/members/:memberId/role', requireRole('owner'), async (c: Context) => {
+  try {
+    const orgId = c.req.header('org_id');
+    const memberId = c.req.param('memberId');
+    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+
+    const body = await c.req.json();
+    const { role } = updateRoleSchema.parse(body);
+    const userId = c.req.header('user_id') || 'system';
+
+    const result = await withAudit(db, async () => {
+      const [updated] = await db.update(orgMembers)
+        .set({ role })
+        .where(and(
+          eq(orgMembers.id, memberId as string),
+          eq(orgMembers.orgId, orgId as string)
+        )).returning();
+      return updated;
+    }, {
+      orgId,
+      userId,
+      action: 'UPDATE_MEMBER_ROLE',
+      tableName: 'org_members',
+      changes: { role }
+    });
+
+    if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
+
+    return c.json({ data: result, error: null, meta: null });
+  } catch (error: unknown) {
+    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+  }
+});

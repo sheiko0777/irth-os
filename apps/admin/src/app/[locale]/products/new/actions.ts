@@ -2,17 +2,12 @@
 
 import { serverCaller } from "@/server/caller";
 
-export async function createProductAction(data: {
-    name: string;
-    description?: string;
-    brand: "irth";
-    variants: { sku: string; price: string | number; stock: number; }[];
-}) {
+export async function createProductAction(data: unknown) {
     try {
         const caller = await serverCaller();
-        await caller.products.create(data);
+        await caller.products.create(data as Parameters<typeof caller.products.create>[0]);
         return { success: true };
-    } catch (e: any) {
-        return { error: e.message || "Failed to create product" };
+    } catch (e: unknown) {
+        return { error: e instanceof Error ? e.message : "Failed to create product" };
     }
 }

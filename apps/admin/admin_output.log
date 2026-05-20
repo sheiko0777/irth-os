@@ -1,0 +1,20 @@
+
+> @irth/admin@0.0.0 dev /app/apps/admin
+> next dev
+
+   ▲ Next.js 15.3.0
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.0.2:3000
+
+ ✓ Starting...
+ ✓ Ready in 1915ms
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 1516ms (218 modules)
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 4.8s (645 modules)
+ GET /api/auth/get-session 404 in 5219ms
+ GET /api/auth/get-session 404 in 277ms
+ ○ Compiling /[locale]/login ...
+ ✓ Compiled /[locale]/login in 6.6s (1333 modules)
+ GET /api/auth/get-session 404 in 223ms
+ GET /ar/login 200 in 9361ms

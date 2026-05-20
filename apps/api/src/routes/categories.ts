@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { categories, withAudit } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
+import { requireRole } from '../middlewares/requireRole';
 
 export const categoriesRouter = new Hono();
 
@@ -26,7 +27,7 @@ const createCategorySchema = z.object({
   parentId: z.string().uuid().optional(),
 });
 
-categoriesRouter.post('/', async (c: Context) => {
+categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const orgId = c.req.header('org_id');
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
@@ -55,7 +56,7 @@ categoriesRouter.post('/', async (c: Context) => {
   }
 });
 
-categoriesRouter.delete('/:id', async (c: Context) => {
+categoriesRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   try {
     const orgId = c.req.header('org_id');
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);

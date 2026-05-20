@@ -19,17 +19,17 @@ const productSchema = z.object({
     categoryId: z.string().uuid().optional(),
     description: z.string().optional(),
     descriptionAr: z.string().optional(),
-    price: z.coerce.number().min(0),
+    price: z.preprocess((val) => Number(val), z.number().min(0)),
     currency: z.string().default("USD"),
-    stock: z.coerce.number().int().min(0),
+    stock: z.preprocess((val) => Number(val), z.number().int().min(0)),
     status: z.string().default("active"),
 });
 
-export function ProductForm({ initialData, categories }: { initialData?: z.infer<typeof productSchema>, categories?: { id: string; name: string }[] }) {
+export function ProductForm({ initialData, categories }: { initialData?: z.infer<typeof productSchema> & { id?: string }, categories?: { id: string; name: string }[] }) {
     const t = useTranslations("products");
     const router = useRouter();
 
-    const form = useForm<z.infer<typeof productSchema>>({
+    const form = useForm({
         resolver: zodResolver(productSchema),
         defaultValues: initialData || {
             name: "",
