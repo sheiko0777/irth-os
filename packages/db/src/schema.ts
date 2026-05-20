@@ -1,8 +1,29 @@
-import { pgTable, uuid, timestamp, varchar, text, jsonb, decimal, boolean, integer, pgEnum } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  uuid,
+  timestamp,
+  varchar,
+  text,
+  jsonb,
+  decimal,
+  boolean,
+  integer,
+  pgEnum,
+} from "drizzle-orm/pg-core";
 
-export const brandEnum = pgEnum('brand', ['irth']);
-export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
-export const shippingProviderEnum = pgEnum('shipping_provider', ['bosta', 'mylerz']);
+export const brandEnum = pgEnum("brand", ["irth"]);
+export const orderStatusEnum = pgEnum("order_status", [
+  "pending",
+  "confirmed",
+  "payment_failed",
+  "shipped",
+  "delivered",
+  "cancelled",
+]);
+export const shippingProviderEnum = pgEnum("shipping_provider", [
+  "bosta",
+  "mylerz",
+]);
 
 // Base columns for all tables with org_id rule
 const baseColumns = {
@@ -22,7 +43,9 @@ export const organizations = pgTable("organizations", {
 
 export const orgMembers = pgTable("org_members", {
   id: uuid("id").primaryKey().defaultRandom(),
-  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  orgId: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id),
   userId: text("user_id").notNull(),
   role: text("role").notNull().default("member"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -30,7 +53,9 @@ export const orgMembers = pgTable("org_members", {
 
 export const orgInvites = pgTable("org_invites", {
   id: uuid("id").primaryKey().defaultRandom(),
-  orgId: uuid("org_id").notNull().references(() => organizations.id),
+  orgId: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id),
   email: text("email").notNull(),
   token: text("token").notNull().unique(),
   role: text("role").notNull().default("member"),
@@ -38,41 +63,76 @@ export const orgInvites = pgTable("org_invites", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const categories = pgTable("categories", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  parentId: uuid("parent_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const products = pgTable("products", {
-  ...baseColumns,
-  name: varchar("name", { length: 255 }).notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  categoryId: uuid("category_id").references(() => categories.id),
+  name: text("name").notNull(),
+  nameAr: text("name_ar"),
+  sku: text("sku").notNull().unique(),
   description: text("description"),
-  brand: brandEnum("brand").default('irth').notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
+  descriptionAr: text("description_ar"),
+  price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("USD"),
+  stock: integer("stock").notNull().default(0),
+  status: text("status").notNull().default("active"), // 'active' | 'draft' | 'archived'
+  images: jsonb("images").default([]),
+  brand: brandEnum("brand").default("irth").notNull(), // Keeping brand to not break existing tests/code without need, or maybe we drop it? The spec didn't mention it. I will keep it for safety unless told otherwise. Actually I will just keep it since it's an enum we have.
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const productVariants = pgTable("product_variants", {
-  ...baseColumns,
-  productId: uuid("product_id").references(() => products.id).notNull(),
-  sku: varchar("sku", { length: 100 }).notNull(),
-  price: decimal("price", { precision: 12, scale: 2 }).notNull(),
-  stock: integer("stock").default(0).notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => products.id),
+  name: text("name").notNull(),
+  sku: text("sku").notNull().unique(),
+  price: decimal("price", { precision: 12, scale: 2 }),
+  stock: integer("stock").notNull().default(0),
+  attributes: jsonb("attributes").default({}),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const orders = pgTable("orders", {
   ...baseColumns,
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(), // IRT-2026-0001
-  status: orderStatusEnum("status").notNull().default('pending'),
+  status: orderStatusEnum("status").notNull().default("pending"),
   totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(),
   customerId: uuid("customer_id"), // Ref to auth users eventually
 });
 
 export const orderItems = pgTable("order_items", {
   ...baseColumns,
-  orderId: uuid("order_id").references(() => orders.id).notNull(),
-  variantId: uuid("variant_id").references(() => productVariants.id).notNull(),
+  orderId: uuid("order_id")
+    .references(() => orders.id)
+    .notNull(),
+  variantId: uuid("variant_id")
+    .references(() => productVariants.id)
+    .notNull(),
   quantity: integer("quantity").notNull(),
   price: decimal("price", { precision: 12, scale: 2 }).notNull(),
 });
 
 export const shipmentTracking = pgTable("shipment_tracking", {
   ...baseColumns,
-  orderId: uuid("order_id").references(() => orders.id).notNull(),
+  orderId: uuid("order_id")
+    .references(() => orders.id)
+    .notNull(),
   provider: shippingProviderEnum("provider").notNull(),
   trackingNumber: varchar("tracking_number", { length: 255 }),
   status: varchar("status", { length: 100 }), // The provider's status, mapped later to order status
@@ -88,24 +148,28 @@ export const auditLog = pgTable("audit_log", {
   changes: jsonb("changes").notNull(),
 });
 
-export const notifications = pgTable('notifications', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull().references(() => organizations.id),
-  userId: text('user_id').notNull(),
-  type: text('type').notNull(), // 'invite_accepted' | 'member_joined' | 'order_status' | 'system'
-  title: text('title').notNull(),
-  body: text('body'),
-  read: boolean('read').notNull().default(false),
-  createdAt: timestamp('created_at').defaultNow(),
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  userId: text("user_id").notNull(),
+  type: text("type").notNull(), // 'invite_accepted' | 'member_joined' | 'order_status' | 'system'
+  title: text("title").notNull(),
+  body: text("body"),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const activityLog = pgTable('activity_log', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull().references(() => organizations.id),
-  userId: text('user_id').notNull(),
-  action: text('action').notNull(),
-  entity: text('entity').notNull(),
-  entityId: text('entity_id'),
-  meta: jsonb('meta'),
-  createdAt: timestamp('created_at').defaultNow(),
+export const activityLog = pgTable("activity_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  userId: text("user_id").notNull(),
+  action: text("action").notNull(),
+  entity: text("entity").notNull(),
+  entityId: text("entity_id"),
+  meta: jsonb("meta"),
+  createdAt: timestamp("created_at").defaultNow(),
 });

@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { TRPCProvider } from '@/components/providers/TRPCProvider';
 import './globals.css';
 
 export default async function LocaleLayout({
@@ -45,13 +46,15 @@ export default async function LocaleLayout({
     <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}>
       <body className="bg-gray-50 text-gray-900">
         <NextIntlClientProvider messages={messages}>
-          <div className="flex h-screen overflow-hidden">
-            {/* Hide sidebar if not authenticated or on login page */}
-            {sessionData?.session && !isLogin ? <Sidebar locale={locale} /> : null}
-            <main className="flex-1 overflow-y-auto p-8">
-              {children}
-            </main>
-          </div>
+          <TRPCProvider>
+            <div className="flex h-screen overflow-hidden">
+              {/* Hide sidebar if not authenticated or on login page */}
+              {sessionData?.session && !isLogin ? <Sidebar locale={locale} /> : null}
+              <main className="flex-1 overflow-y-auto p-8">
+                {children}
+              </main>
+            </div>
+          </TRPCProvider>
         </NextIntlClientProvider>
       </body>
     </html>

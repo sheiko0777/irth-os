@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { orders, orderItems, productVariants } from '@irth/db';
+import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
@@ -30,7 +30,14 @@ ordersRoute.post('/', async (c: Context) => {
   const itemsToInsert: { orgId: string, variantId: string, quantity: number, price: string }[] = [];
   
   for (const item of data.items) {
-    const variantResult = await db.select().from(productVariants).where(and(eq(productVariants.id, item.variantId), eq(productVariants.orgId, orgId)));
+    const variantResult = await db.select({
+      id: productVariants.id,
+      price: productVariants.price,
+      productId: productVariants.productId
+    })
+    .from(productVariants)
+    .innerJoin(products, eq(productVariants.productId, products.id))
+    .where(and(eq(productVariants.id, item.variantId), eq(products.orgId, orgId)));
     if (!variantResult.length) {
       return c.json({ data: null, error: 'variant_not_found', meta: null }, 404);
     }
@@ -42,7 +49,7 @@ ordersRoute.post('/', async (c: Context) => {
       orgId,
       variantId: item.variantId,
       quantity: item.quantity,
-      price: price.toString()
+      price: variant.price!,
     });
   }
 

@@ -12,6 +12,7 @@
     "dashboard": "لوحة القيادة",
     "orders": "الطلبات",
     "products": "المنتجات",
+    "categories": "التصنيفات",
     "settings": "الإعدادات"
   },
   "settings": {
@@ -58,29 +59,46 @@
     "title": "المنتجات",
     "create": "إضافة منتج",
     "edit": "تعديل المنتج",
+    "search": "البحث بالاسم...",
+    "statusFilter": "تصفية بالحالة",
+    "allStatuses": "جميع الحالات",
     "table": {
       "name": "الاسم",
-      "brand": "العلامة التجارية",
-      "variants": "الأنواع",
+      "sku": "رمز المنتج",
+      "price": "السعر",
+      "stock": "المخزون",
+      "category": "التصنيف",
       "status": "الحالة",
       "actions": "إجراءات"
     },
     "status": {
       "active": "نشط",
-      "inactive": "غير نشط"
+      "draft": "مسودة",
+      "archived": "مؤرشف"
     },
     "form": {
       "name": "اسم المنتج",
+      "nameAr": "اسم المنتج (عربي)",
       "description": "الوصف",
-      "brand": "العلامة التجارية",
-      "isActive": "المنتج نشط؟",
+      "descriptionAr": "الوصف (عربي)",
+      "categoryId": "التصنيف",
+      "status": "الحالة",
       "submit": "حفظ",
       "cancel": "إلغاء",
-      "variants": "الأنواع",
-      "addVariant": "إضافة نوع",
       "sku": "رمز المنتج (SKU)",
       "price": "السعر",
+      "currency": "العملة",
       "stock": "المخزون"
+    }
+  },
+  "categories": {
+    "title": "التصنيفات",
+    "create": "إضافة تصنيف",
+    "delete": "حذف",
+    "table": {
+      "name": "الاسم",
+      "slug": "الرابط",
+      "actions": "إجراءات"
     }
   },
   "common": {

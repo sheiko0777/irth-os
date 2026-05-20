@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, ShoppingCart, Package, LogOut, Settings } from "lucide-react"
+import { LayoutDashboard, ShoppingCart, Package, LogOut, Settings, ListTree } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useTranslations } from "next-intl"
 import { signOut, useSession } from "@/lib/auth-client"
@@ -21,6 +21,7 @@ export function Sidebar({ locale }: { locale: string }) {
     { href: `/${locale}/dashboard`, label: t("dashboard"), icon: LayoutDashboard },
     { href: `/${locale}/orders`, label: t("orders"), icon: ShoppingCart },
     { href: `/${locale}/products`, label: t("products"), icon: Package },
+    { href: `/${locale}/categories`, label: t("categories"), icon: ListTree },
     { href: `/${locale}/settings`, label: t("settings"), icon: Settings },
   ]
 
