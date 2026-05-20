@@ -49,7 +49,7 @@ export const dashboardRouter = router({
             .where(
                 and(
                     eq(products.orgId, ctx.orgId),
-                    eq(products.isActive, true)
+                    eq(products.status, 'active')
                 )
             );
 

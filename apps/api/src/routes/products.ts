@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { products, productVariants, withAudit } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
+import { requireRole } from '../middlewares/requireRole';
 
 export const productsRouter = new Hono();
 
@@ -52,7 +53,7 @@ const createProductSchema = z.object({
   images: z.array(z.any()).default([]),
 });
 
-productsRouter.post('/', async (c: Context) => {
+productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const orgId = c.req.header('org_id');
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
@@ -120,7 +121,7 @@ const updateProductSchema = z.object({
   images: z.array(z.any()).optional(),
 });
 
-productsRouter.patch('/:id', async (c: Context) => {
+productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const orgId = c.req.header('org_id');
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
@@ -158,7 +159,7 @@ productsRouter.patch('/:id', async (c: Context) => {
   }
 });
 
-productsRouter.delete('/:id', async (c: Context) => {
+productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   try {
     const orgId = c.req.header('org_id');
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
@@ -220,7 +221,7 @@ const createVariantSchema = z.object({
   attributes: z.any().default({}),
 });
 
-productsRouter.post('/:id/variants', async (c: Context) => {
+productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const orgId = c.req.header('org_id');
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);

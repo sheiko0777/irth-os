@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { PermissionGate } from "@/components/PermissionGate";
 
 export default async function CategoriesPage() {
     const t = await getTranslations("categories");
@@ -19,7 +20,9 @@ export default async function CategoriesPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-                <Button>{t("create")}</Button>
+                <PermissionGate resource="categories" action="write">
+                    <Button>{t("create")}</Button>
+                </PermissionGate>
             </div>
 
             <div className="rounded-md border bg-white">
@@ -42,9 +45,11 @@ export default async function CategoriesPage() {
                                     <TableCell className="font-medium">{category.name}</TableCell>
                                     <TableCell>{category.slug}</TableCell>
                                     <TableCell className="text-end">
-                                        <Button variant="ghost" size="sm" className="text-red-500">
-                                            {t("delete")}
-                                        </Button>
+                                        <PermissionGate resource="categories" action="delete">
+                                            <Button variant="ghost" size="sm" className="text-red-500">
+                                                {t("delete")}
+                                            </Button>
+                                        </PermissionGate>
                                     </TableCell>
                                 </TableRow>
                             ))

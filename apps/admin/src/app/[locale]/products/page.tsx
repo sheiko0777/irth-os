@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { redirect } from "next/navigation";
+import { PermissionGate } from "@/components/PermissionGate";
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
     const searchParamsResolved = await searchParams;
@@ -39,9 +40,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-                <Link href="/ar/products/new">
-                    <Button>{t("create")}</Button>
-                </Link>
+                <PermissionGate resource="products" action="write">
+                    <Link href="/ar/products/new">
+                        <Button>{t("create")}</Button>
+                    </Link>
+                </PermissionGate>
             </div>
 
             <form action={handleSearch} className="flex gap-4">
@@ -79,7 +82,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                                 <TableCell colSpan={7} className="text-center">لا توجد منتجات.</TableCell>
                             </TableRow>
                         ) : (
-                            products.map((product: any) => (
+                            products.map((product: { id: string; name: string; sku: string; price: string | number; stock: number; category?: string; status: string; }) => (
                                 <TableRow key={product.id}>
                                     <TableCell className="font-medium">{product.name}</TableCell>
                                     <TableCell>{product.sku}</TableCell>
@@ -92,11 +95,13 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-end">
-                                        <Link href={`/ar/products/${product.id}/edit`}>
-                                            <Button variant="ghost" size="sm">
-                                                تعديل
-                                            </Button>
-                                        </Link>
+                                        <PermissionGate resource="products" action="write">
+                                            <Link href={`/ar/products/${product.id}/edit`}>
+                                                <Button variant="ghost" size="sm">
+                                                    تعديل
+                                                </Button>
+                                            </Link>
+                                        </PermissionGate>
                                     </TableCell>
                                 </TableRow>
                             ))
