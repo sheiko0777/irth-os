@@ -9,49 +9,30 @@ export const dashboardRouter = router({
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
 
-        const ordersTodayQuery = await ctx.db
-            .select({ count: count() })
-            .from(orders)
-            .where(
-                and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, startOfDay)
-                )
-            );
-
-        // Revenue today
-        const revenueTodayQuery = await ctx.db
-            .select({ total: sum(orders.totalAmount) })
-            .from(orders)
-            .where(
-                and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, startOfDay),
-                    eq(orders.status, 'delivered') // Or whatever counts as revenue
-                )
-            );
-
-        // Pending orders
-        const pendingOrdersQuery = await ctx.db
-            .select({ count: count() })
-            .from(orders)
-            .where(
-                and(
-                    eq(orders.orgId, ctx.orgId),
-                    eq(orders.status, 'pending')
-                )
-            );
-
-        // Active products
-        const activeProductsQuery = await ctx.db
-            .select({ count: count() })
-            .from(products)
-            .where(
-                and(
-                    eq(products.orgId, ctx.orgId),
-                    eq(products.status, 'active')
-                )
-            );
+        // Batch independent queries — O(max latency) instead of O(4 × latency)
+        const [
+            ordersTodayQuery,
+            revenueTodayQuery,
+            pendingOrdersQuery,
+            activeProductsQuery
+        ] = await Promise.all([
+            ctx.db
+                .select({ count: count() })
+                .from(orders)
+                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay))),
+            ctx.db
+                .select({ total: sum(orders.totalAmount) })
+                .from(orders)
+                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay), eq(orders.status, 'delivered'))),
+            ctx.db
+                .select({ count: count() })
+                .from(orders)
+                .where(and(eq(orders.orgId, ctx.orgId), eq(orders.status, 'pending'))),
+            ctx.db
+                .select({ count: count() })
+                .from(products)
+                .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active'))),
+        ]);
 
         return {
             data: {
