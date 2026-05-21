@@ -3,28 +3,13 @@ import type { Context } from 'hono';
 import { db } from '../../db';
 import { orders, shipmentTracking, auditLog } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
-import crypto from 'node:crypto';
+import { verifyHmac } from '../../middlewares/verifyWebhook';
 import { issueInvoice } from '../../services/eta';
 
 const bostaRoute = new Hono();
 
-bostaRoute.post('/', async (c: Context) => {
-  const bostaSecret = process.env.BOSTA_WEBHOOK_SECRET || process.env.BOSTA_API_KEY; 
-  if (!bostaSecret) {
-    return c.json({ data: null, error: 'bosta_secret_not_configured', meta: null }, 500);
-  }
-
-  const hmacHeader = c.req.header('x-bosta-signature');
-  if (!hmacHeader) {
-     return c.json({ data: null, error: 'missing_signature', meta: null }, 401);
-  }
-
-  const bodyRaw = await c.req.text();
-  const calculatedHmac = crypto.createHmac('sha512', bostaSecret).update(bodyRaw).digest('hex');
-
-  if (calculatedHmac !== hmacHeader) {
-     return c.json({ data: null, error: 'invalid_signature', meta: null }, 401);
-  }
+bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), async (c: Context) => {
+  const bodyRaw = c.get('rawBody') as string;
 
   const payload = JSON.parse(bodyRaw);
   const trackingNumber = payload.trackingNumber as string | undefined;
