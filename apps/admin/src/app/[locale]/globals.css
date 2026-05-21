@@ -1,5 +1,20 @@
-@import "tailwindcss";
-
-@theme {
-  --font-sans: "Cairo", ui-sans-serif, system-ui, sans-serif;
+@import 'tailwindcss';
+:root {
+  --void:#020406; --ink:#060a10; --surface:#0e1622; --card-bg:#131e2e; --raised:#182436;
+  --rim1:#1a2840; --rim2:#223050; --rim3:#2c3e66;
+  --t1:#f0f6ff; --t2:#93b0d0; --t3:#4e7090; --t4:#263a52;
+  --gold:#e09000; --gold2:#f5a800; --gold3:#ffc340;
+  --gold-bg:rgba(224,144,0,.06); --gold-br:rgba(224,144,0,.2);
+  --emerald:#00c478; --crimson:#e83838; --azure:#2e8fff; --amber:#f5a500;
+  --background:#060a10; --foreground:#f0f6ff;
+  --primary:#e09000; --primary-foreground:#020406;
+  --secondary:#0e1622; --secondary-foreground:#93b0d0;
+  --muted:#0e1622; --muted-foreground:#4e7090;
+  --border:#1a2840; --input:#223050; --ring:#e09000; --radius:8px;
 }
+html { direction: rtl; }
+body { background:var(--ink); color:var(--t2); font-family:'IBM Plex Sans Arabic',sans-serif; line-height:1.75; -webkit-font-smoothing:antialiased; }
+h1,h2,h3,h4,h5,h6 { font-family:'Cairo',sans-serif; color:var(--t1); font-weight:700; }
+::-webkit-scrollbar { width:3px; height:3px; }
+::-webkit-scrollbar-track { background:var(--void); }
+::-webkit-scrollbar-thumb { background:var(--rim3); border-radius:2px; }
