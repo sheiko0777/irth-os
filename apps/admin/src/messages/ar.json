@@ -11,8 +11,24 @@
   "nav": {
     "dashboard": "لوحة القيادة",
     "orders": "الطلبات",
+    "inventory": "المخزون",
     "products": "المنتجات",
     "settings": "الإعدادات"
+  },
+  "inventory": {
+    "title": "إدارة المخزون",
+    "alerts_banner": "تنبيه: {count} من المنتجات وصلت لحد إعادة الطلب",
+    "columns": {
+      "product": "المنتج",
+      "variant": "النوع",
+      "quantity": "الكمية المتاحة",
+      "reorderPoint": "حد إعادة الطلب",
+      "status": "الحالة"
+    },
+    "status": {
+      "low": "ناقص",
+      "ok": "متاح"
+    }
   },
   "settings": {
     "title": "إعدادات المنظمة",
