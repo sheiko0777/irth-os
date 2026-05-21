@@ -1,9 +1,13 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from './schema';
+import * as baseSchema from './schema';
+import * as inventorySchema from './schema/inventory';
+
+const schema = { ...baseSchema, ...inventorySchema };
 import { auditLog } from './schema';
 
 export * from './schema';
+export * from './schema/inventory';
 
 export const createDb = (url: string) => {
   // prepare: false required for Supabase Transaction pooler (port 6543)
