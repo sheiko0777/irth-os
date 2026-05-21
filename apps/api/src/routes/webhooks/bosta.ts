@@ -22,7 +22,10 @@ bostaRoute.post('/', async (c: Context) => {
   const bodyRaw = await c.req.text();
   const calculatedHmac = crypto.createHmac('sha512', bostaSecret).update(bodyRaw).digest('hex');
 
-  if (calculatedHmac !== hmacHeader) {
+  const calculatedBuffer = Buffer.from(calculatedHmac, 'hex');
+  const providedBuffer = Buffer.from(hmacHeader, 'hex');
+
+  if (calculatedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(calculatedBuffer, providedBuffer)) {
      return c.json({ data: null, error: 'invalid_signature', meta: null }, 401);
   }
 

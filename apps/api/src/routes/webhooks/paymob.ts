@@ -45,7 +45,10 @@ paymobRoute.post('/', async (c: Context) => {
 
   const calculatedHmac = crypto.createHmac('sha512', hmacSecret).update(concatenatedString).digest('hex');
 
-  if (calculatedHmac !== hmacHeader) {
+  const calculatedBuffer = Buffer.from(calculatedHmac, 'hex');
+  const providedBuffer = Buffer.from(hmacHeader, 'hex');
+
+  if (calculatedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(calculatedBuffer, providedBuffer)) {
     return c.json({ data: null, error: 'invalid_hmac', meta: null }, 401);
   }
 
