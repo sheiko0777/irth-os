@@ -1,7 +1,7 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from "expo-secure-store";
 
-const ORG_ID_KEY = 'irth_org_id';
-const SESSION_TOKEN_KEY = 'irth_session_token';
+const ORG_ID_KEY = "irth_org_id";
+const SESSION_TOKEN_KEY = "irth_session_token";
 
 export async function setOrgId(orgId: string): Promise<void> {
   await SecureStore.setItemAsync(ORG_ID_KEY, orgId);

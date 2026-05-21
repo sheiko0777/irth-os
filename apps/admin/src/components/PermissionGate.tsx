@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { ReactNode } from 'react';
-import { can, useRole, PERMISSIONS } from '../lib/permissions';
-import type { Role } from '@irth/db/src/permissions';
+import { ReactNode } from "react";
+import { can, useRole, PERMISSIONS } from "../lib/permissions";
+import type { Role } from "@irth/db/src/permissions";
 
 interface PermissionGateProps {
   resource: keyof typeof PERMISSIONS;
@@ -10,7 +10,11 @@ interface PermissionGateProps {
   children: ReactNode;
 }
 
-export function PermissionGate({ resource, action, children }: PermissionGateProps) {
+export function PermissionGate({
+  resource,
+  action,
+  children,
+}: PermissionGateProps) {
   const role = useRole();
 
   if (!role || !can(role, resource, action)) {

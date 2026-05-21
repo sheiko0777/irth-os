@@ -7,7 +7,7 @@ import { PermissionGate } from "@/components/PermissionGate";
 
 export default async function MembersPage() {
   const t = await getTranslations("settings");
-  
+
   // Dummy data for members
   const members = [
     { id: "1", userId: "user-1", role: "owner" },
@@ -19,7 +19,7 @@ export default async function MembersPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">{t("members")}</h1>
-      
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -28,7 +28,10 @@ export default async function MembersPage() {
           <CardContent>
             <div className="space-y-4">
               {members.map((member) => (
-                <div key={member.id} className="flex justify-between items-center border-b pb-2">
+                <div
+                  key={member.id}
+                  className="flex justify-between items-center border-b pb-2"
+                >
                   <span>{member.userId}</span>
                   <MemberRoleSelect role={member.role} />
                 </div>
