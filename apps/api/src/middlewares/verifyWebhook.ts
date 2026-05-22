@@ -1,5 +1,5 @@
 import { MiddlewareHandler } from 'hono';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 
 export function verifyHmac(secretEnvKey: string, headerName: string): MiddlewareHandler {
   return async (c, next) => {
@@ -15,7 +15,10 @@ export function verifyHmac(secretEnvKey: string, headerName: string): Middleware
     const sigBuf = Buffer.from(signature.replace('sha512=', ''), 'hex');
     const expBuf = Buffer.from(expected, 'hex');
 
-    if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+    const hashedSig = createHash('sha256').update(sigBuf).digest();
+    const hashedExp = createHash('sha256').update(expBuf).digest();
+
+    if (!timingSafeEqual(hashedSig, hashedExp)) {
       return c.json({ data: null, error: 'Invalid signature', meta: null }, 401);
     }
 

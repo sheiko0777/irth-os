@@ -1,3 +1,4 @@
+import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -44,7 +45,7 @@ orgsRouter.post('/', async (c: Context) => {
 
     return c.json({ data: org, error: null, meta: null }, 201);
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -60,7 +61,7 @@ orgsRouter.get('/:id/members', async (c: Context) => {
     const members = await db.select().from(orgMembers).where(eq(orgMembers.orgId, id as string));
     return c.json({ data: members, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -104,7 +105,7 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
 
     return c.json({ data: invite, error: null, meta: null }, 201);
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -137,7 +138,7 @@ orgsRouter.post('/invite/accept', async (c: Context) => {
 
     return c.json({ data: member, error: null, meta: null }, 201);
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -176,6 +177,6 @@ orgsRouter.patch('/members/:memberId/role', requireRole('owner'), async (c: Cont
 
     return c.json({ data: result, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });

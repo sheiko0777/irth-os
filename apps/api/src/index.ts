@@ -17,8 +17,9 @@ const app = new Hono()
 
 app.use('*', corsMiddleware)
 app.use('*', securityHeaders)
-app.use('/api/*', rateLimit(100, 60_000))
-app.use('/api/auth/*', rateLimit(10, 60_000))
+const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT || '0', 10);
+app.use('/api/*', rateLimit(100, 60_000, trustedProxyCount))
+app.use('/api/auth/*', rateLimit(10, 60_000, trustedProxyCount))
 app.use('*', auditMiddleware())
 
 app.get('/health', (c) => {

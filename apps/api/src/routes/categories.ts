@@ -1,3 +1,4 @@
+import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -17,7 +18,7 @@ categoriesRouter.get('/', async (c: Context) => {
 
     return c.json({ data, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -52,7 +53,7 @@ categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => 
 
     return c.json({ data: result, error: null, meta: null }, 201);
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -83,6 +84,6 @@ categoriesRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
 
     return c.json({ data: result, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });

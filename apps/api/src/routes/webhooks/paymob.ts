@@ -47,7 +47,10 @@ paymobRoute.post('/', async (c: Context) => {
   const sigBuf = Buffer.from(hmacHeader, 'hex');
   const expBuf = Buffer.from(expected, 'hex');
 
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+  const hashedSig = crypto.createHash('sha256').update(sigBuf).digest();
+  const hashedExp = crypto.createHash('sha256').update(expBuf).digest();
+
+  if (!crypto.timingSafeEqual(hashedSig, hashedExp)) {
     return c.json({ data: null, error: 'invalid_hmac', meta: null }, 401);
   }
 
