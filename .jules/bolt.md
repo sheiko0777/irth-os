@@ -1,0 +1,3 @@
+## 2025-02-14 - Fix N+1 and Batch Insert Anti-Pattern in API
+**Learning:** Sequential DB operations inside loops are a significant performance bottleneck, particularly for operations like order creation which often involve multiple items. Executing a `db.select()` and later a `db.insert()` for every single item causes N round trips to the database. Drizzle handles bulk operations efficiently but explicit refactoring is required.
+**Action:** Always batch reads using `inArray()` before a loop to construct an in-memory hash map for O(1) lookups. Additionally, aggregate items to be inserted in an array and use Drizzle's `.values([])` to perform a single batch insert instead of iterating and inserting one by one.
