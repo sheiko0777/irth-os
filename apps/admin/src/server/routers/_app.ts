@@ -8,6 +8,7 @@ import { integrationsRouter } from './integrations';
 import { financeRouter } from './finance';
 import { settingsRouter } from './settings';
 import { etaRouter } from './eta';
+import { courierRouter } from './courier';
 
 export const appRouter = router({
     dashboard: dashboardRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
     finance: financeRouter,
     settings: settingsRouter,
     eta: etaRouter,
+    courier: courierRouter,
 });
 
 export type AppRouter = typeof appRouter;
