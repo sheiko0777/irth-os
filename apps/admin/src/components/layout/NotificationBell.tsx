@@ -48,6 +48,7 @@ export function NotificationBell({ locale }: { locale: string }) {
     fetchNotifications()
     const interval = setInterval(fetchNotifications, 30000) // Poll every 30s
     return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const markAsRead = async (id: string) => {

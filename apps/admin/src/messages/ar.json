@@ -51,10 +51,46 @@
     }
   },
   "settings": {
-    "title": "إعدادات المنظمة",
+    "title": "إعدادات النظام",
     "members": "الأعضاء",
     "invite": "دعوة عضو",
-    "inviteSuccess": "تم إرسال الدعوة"
+    "inviteSuccess": "تم إرسال الدعوة",
+    "sections": {
+      "general": "عام",
+      "product": "ترقيم المنتجات",
+      "pricing": "التسعير والضرائب",
+      "shipping": "الشحن",
+      "integrations": "التكاملات"
+    },
+    "fields": {
+      "org_name": "اسم المنظمة",
+      "org_currency": "العملة",
+      "org_phone": "الهاتف",
+      "org_email": "البريد الإلكتروني",
+      "sku_prefix": "بادئة رمز المنتج (SKU Prefix)",
+      "sku_next_number": "الرقم التالي",
+      "sku_pad_length": "طول الحشو (Pad Length)",
+      "sku_preview": "معاينة الترقيم",
+      "vat_rate": "نسبة ضريبة القيمة المضافة (VAT %)",
+      "global_pct": "نسبة الخصم العام (%)",
+      "max_pct": "الحد الأقصى للخصم (%)",
+      "shipping_provider": "مزود خدمة الشحن",
+      "shipping_flat_rate": "سعر الشحن الثابت",
+      "shipping_free_threshold": "حد الشحن المجاني",
+      "fawry_merchant_code": "كود التاجر فوري (Fawry Merchant Code)",
+      "fawry_base_url": "الرابط الأساسي لفوري (Fawry Base URL)",
+      "whatsapp_api_key": "مفتاح API لـ WhatsApp",
+      "resend_api_key": "مفتاح API لـ Resend",
+      "resend_from": "بريد الإرسال لـ Resend (From Email)",
+      "cf_account_id": "معرف حساب Cloudflare (Account ID)",
+      "cf_r2_bucket": "اسم دلو Cloudflare R2 (Bucket)",
+      "cf_r2_public_url": "الرابط العام لـ Cloudflare R2"
+    },
+    "actions": {
+      "save": "حفظ",
+      "saveSuccess": "تم الحفظ بنجاح",
+      "saveError": "حدث خطأ أثناء الحفظ"
+    }
   },
   "dashboard": {
     "title": "نظرة عامة",

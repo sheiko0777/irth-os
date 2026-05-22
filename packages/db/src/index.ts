@@ -3,13 +3,15 @@ import postgres from 'postgres';
 import * as baseSchema from './schema';
 import * as inventorySchema from './schema/inventory';
 import * as outboxSchema from './schema/outbox';
+import * as orgSettingsSchema from './schema/orgSettings';
 
-const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema };
+const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema };
 import { auditLog } from './schema';
 
 export * from './schema';
 export * from './schema/inventory';
 export * from './schema/outbox';
+export * from './schema/orgSettings';
 
 export const createDb = (url: string) => {
   // prepare: false required for Supabase Transaction pooler (port 6543)
