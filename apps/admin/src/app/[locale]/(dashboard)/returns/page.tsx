@@ -75,7 +75,7 @@ export default async function ReturnsPage({ params }: { params: Promise<{ locale
                   </td>
                 </tr>
               ) : (
-                returns.map((ret) => (
+                returns.map((ret: any) => (
                   <tr key={ret.id} className="hover:bg-black/5">
                     <td className="px-6 py-4 font-mono font-medium text-[var(--t1)]">{ret.returnNumber}</td>
                     <td className="px-6 py-4 text-[var(--t2)]">{ret.orderId.substring(0, 8)}...</td>

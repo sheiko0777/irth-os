@@ -114,7 +114,7 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
                       </td>
                     </tr>
                   ) : (
-                    returnObj.items.map((item) => (
+                    returnObj.items.map((item: any) => (
                       <tr key={item.id} className="hover:bg-black/5">
                         <td className="px-4 py-3 text-[var(--t1)]">
                           {item.productName}

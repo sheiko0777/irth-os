@@ -81,7 +81,7 @@ export default async function CourierPage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                remittances.map((rem) => (
+                                remittances.map((rem: any) => (
                                     <TableRow key={rem.id} className="border-b border-[var(--rim1)]">
                                         <TableCell className="font-mono text-sm text-[var(--t2)]">{rem.remittanceReference}</TableCell>
                                         <TableCell className="text-sm text-[var(--t1)] capitalize">{rem.courier}</TableCell>
@@ -125,7 +125,7 @@ export default async function CourierPage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                shipments.map((ship) => (
+                                shipments.map((ship: any) => (
                                     <TableRow key={ship.id} className="border-b border-[var(--rim1)]">
                                         <TableCell className="font-mono text-xs text-[var(--t2)]">{ship.trackingNumber || '—'}</TableCell>
                                         <TableCell className="text-sm text-[var(--t1)] capitalize">{ship.courier}</TableCell>

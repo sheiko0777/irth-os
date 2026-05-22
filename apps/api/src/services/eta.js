@@ -1,0 +1,121 @@
+const isProd = process.env.ETA_ENV === 'production';
+const ETA_ID_URL = isProd
+    ? 'https://id.eta.gov.eg/connect/token'
+    : 'https://id.preprod.eta.gov.eg/connect/token';
+const ETA_API_URL = isProd
+    ? 'https://api.invoicing.eta.gov.eg/api/v1'
+    : 'https://api.preprod.invoicing.eta.gov.eg/api/v1';
+async function getAuthToken() {
+    const clientId = process.env.ETA_CLIENT_ID;
+    const clientSecret = process.env.ETA_CLIENT_SECRET;
+    if (!clientId || !clientSecret)
+        throw new Error('ETA credentials not configured');
+    const res = await fetch(ETA_ID_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: clientId,
+            client_secret: clientSecret,
+            scope: 'InvoicingAPI',
+        }),
+    });
+    if (!res.ok)
+        throw new Error(`ETA auth failed: ${res.status}`);
+    const data = await res.json();
+    return data.access_token;
+}
+export const issueInvoice = async (order) => {
+    const issuerEin = process.env.ETA_ISSUER_EIN;
+    if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET || !issuerEin) {
+        console.warn('ETA credentials not fully configured. Skipping invoice issuance.');
+        return null;
+    }
+    try {
+        const token = await getAuthToken();
+        const amount = Number(order.totalAmount);
+        const vatAmount = amount * 0.14;
+        const doc = {
+            issuer: { type: 'B', id: issuerEin, name: 'IRTH Business' },
+            receiver: { type: 'P', id: '123456789', name: 'Customer' },
+            documentType: 'I',
+            documentTypeVersion: '1.0',
+            dateTimeIssued: new Date().toISOString(),
+            taxpayerActivityCode: '1061',
+            internalId: order.id,
+            purchaseOrderReference: order.id,
+            invoiceLines: [
+                {
+                    description: 'Order Items',
+                    itemType: 'EGS',
+                    itemCode: 'EG-1234567',
+                    unitType: 'EA',
+                    quantity: 1,
+                    unitValue: { currencySold: 'EGP', amountEGP: amount },
+                    salesTotal: amount,
+                    total: amount,
+                    valueDifference: 0,
+                    totalTaxableFees: 0,
+                    netTotal: amount,
+                    itemsDiscount: 0,
+                    taxableItems: [{ taxType: 'T1', amount: vatAmount, subType: 'V009', rate: 14 }],
+                },
+            ],
+            totalSalesAmount: amount,
+            totalDiscountAmount: 0,
+            netAmount: amount,
+            taxTotals: [{ taxType: 'T1', amount: vatAmount }],
+            extraDiscountAmount: 0,
+            totalItemsDiscountAmount: 0,
+            totalAmount: amount + vatAmount,
+        };
+        const res = await fetch(`${ETA_API_URL}/documentsubmissions`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documents: [doc] }),
+        });
+        if (!res.ok)
+            throw new Error(`ETA submission failed: ${res.status}`);
+        const data = await res.json();
+        const accepted = data.acceptedDocuments?.[0];
+        console.log(`ETA invoice submitted for order ${order.id}. UUID: ${accepted?.uuid}`);
+        return { uuid: accepted?.uuid ?? `mock-${order.id}`, longId: accepted?.longId };
+    }
+    catch (err) {
+        console.error('Failed to issue ETA invoice:', err);
+        return null;
+    }
+};
+export const getInvoiceStatus = async (uuid) => {
+    if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET)
+        return { status: 'Unknown' };
+    try {
+        const token = await getAuthToken();
+        const res = await fetch(`${ETA_API_URL}/documents/${uuid}/details`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        return { status: data.status ?? 'Valid', qrCodeData: data.qrCodeData, longId: data.longId };
+    }
+    catch (err) {
+        console.error('Failed to fetch ETA invoice status:', err);
+        return { status: 'Error' };
+    }
+};
+export const cancelInvoice = async (uuid, reason) => {
+    if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET)
+        return false;
+    try {
+        const token = await getAuthToken();
+        const res = await fetch(`${ETA_API_URL}/documents/state/${uuid}/state`, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'cancelled', reason }),
+        });
+        return res.ok;
+    }
+    catch (err) {
+        console.error('Failed to cancel ETA invoice:', err);
+        return false;
+    }
+};

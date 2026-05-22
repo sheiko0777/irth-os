@@ -54,7 +54,7 @@ export default async function EtaPage() {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            invoices.map((inv) => (
+                            invoices.map((inv: any) => (
                                 <TableRow key={inv.id} className="border-b border-[var(--rim1)]">
                                     <TableCell className="font-mono text-xs text-[var(--t2)]">{inv.orderId.slice(0, 8)}…</TableCell>
                                     <TableCell className="font-mono text-xs text-[var(--t2)]">

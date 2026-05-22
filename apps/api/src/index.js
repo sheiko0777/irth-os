@@ -1,0 +1,37 @@
+import { Hono } from 'hono';
+import { auth } from './auth';
+import { ordersRoute } from './routes/orders';
+import { shippingRoute } from './routes/shipping';
+import { paymobRoute } from './routes/webhooks/paymob';
+import { bostaRoute } from './routes/webhooks/bosta';
+import { webhooksRouter } from './routes/webhooks';
+import { auditMiddleware } from './middlewares/audit';
+import { orgsRouter } from './routes/orgs';
+import { notificationsRouter } from './routes/notifications';
+import { productsRouter } from './routes/products';
+import { categoriesRouter } from './routes/categories';
+import { corsMiddleware } from './middlewares/cors';
+import { securityHeaders } from './middlewares/securityHeaders';
+import { rateLimit } from './middlewares/rateLimit';
+const app = new Hono();
+app.use('*', corsMiddleware);
+app.use('*', securityHeaders);
+app.use('/api/*', rateLimit(100, 60_000));
+app.use('/api/auth/*', rateLimit(10, 60_000));
+app.use('*', auditMiddleware());
+app.get('/health', (c) => {
+    return c.json({ data: { status: 'ok', environment: 'development' }, error: null, meta: null });
+});
+app.on(['POST', 'GET'], '/api/auth/**', (c) => {
+    return auth.handler(c.req.raw);
+});
+app.route('/api/orders', ordersRoute);
+app.route('/api/shipping', shippingRoute);
+app.route('/api/webhooks/paymob', paymobRoute);
+app.route('/api/webhooks/bosta', bostaRoute);
+app.route('/webhooks', webhooksRouter);
+app.route('/api/orgs', orgsRouter);
+app.route('/api/notifications', notificationsRouter);
+app.route('/api/products', productsRouter);
+app.route('/api/categories', categoriesRouter);
+export default app;

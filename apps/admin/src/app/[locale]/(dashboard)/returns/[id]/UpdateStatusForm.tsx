@@ -30,7 +30,7 @@ export default function UpdateStatusForm({
       router.refresh();
       setError(null);
     },
-    onError: (err: unknown) => {
+    onError: (err: any) => {
       setError(err.message);
     }
   });
