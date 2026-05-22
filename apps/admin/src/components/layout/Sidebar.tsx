@@ -22,6 +22,7 @@ export function Sidebar({ locale }: { locale: string }) {
     { href: `/${locale}/notifications`, label: 'الإشعارات' },
     { href: `/${locale}/settings`, label: 'الإعدادات' },
     { href: `/${locale}/settings/members`, label: 'الأعضاء' },
+    { href: `/${locale}/eta`, label: 'الفواتير الإلكترونية' },
   ];
 
   const handleLogout = async () => {
