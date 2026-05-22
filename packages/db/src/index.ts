@@ -4,14 +4,16 @@ import * as baseSchema from './schema';
 import * as inventorySchema from './schema/inventory';
 import * as outboxSchema from './schema/outbox';
 import * as orgSettingsSchema from './schema/orgSettings';
+import * as etaInvoicesSchema from './schema/etaInvoices';
 
-const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema };
+const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema };
 import { auditLog } from './schema';
 
 export * from './schema';
 export * from './schema/inventory';
 export * from './schema/outbox';
 export * from './schema/orgSettings';
+export * from './schema/etaInvoices';
 
 export const createDb = (url: string) => {
   // prepare: false required for Supabase Transaction pooler (port 6543)

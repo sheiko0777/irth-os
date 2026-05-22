@@ -13,6 +13,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.2.2",
+    "@irth/api": "workspace:*",
     "@irth/db": "workspace:*",
     "@irth/utils": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.15",
