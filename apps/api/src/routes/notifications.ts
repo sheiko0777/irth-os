@@ -1,3 +1,4 @@
+import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import { db } from '../db';
 import { notifications, activityLog } from '@irth/db';
@@ -28,7 +29,7 @@ notificationsRouter.get('/', async (c) => {
 
     return c.json({ data, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ error: error instanceof Error ? error.message : String(error), data: null, meta: null }, 500);
+    return c.json({ error: handleError(error), data: null, meta: null }, 500);
   }
 });
 
@@ -59,7 +60,7 @@ notificationsRouter.patch('/:id/read', async (c) => {
 
     return c.json({ data: result[0], error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ error: error instanceof Error ? error.message : String(error), data: null, meta: null }, 500);
+    return c.json({ error: handleError(error), data: null, meta: null }, 500);
   }
 });
 
@@ -84,7 +85,7 @@ notificationsRouter.patch('/read-all', async (c) => {
 
     return c.json({ data: { success: true }, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ error: error instanceof Error ? error.message : String(error), data: null, meta: null }, 500);
+    return c.json({ error: handleError(error), data: null, meta: null }, 500);
   }
 });
 
@@ -119,6 +120,6 @@ notificationsRouter.get('/activity', async (c) => {
       meta: { page: query.page, limit: query.limit }
     });
   } catch (error: unknown) {
-    return c.json({ error: error instanceof Error ? error.message : String(error), data: null, meta: null }, 500);
+    return c.json({ error: handleError(error), data: null, meta: null }, 500);
   }
 });

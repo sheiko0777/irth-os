@@ -1,3 +1,4 @@
+import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -35,7 +36,7 @@ productsRouter.get('/', async (c: Context) => {
 
     return c.json({ data, error: null, meta: { total, page, limit } });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -81,7 +82,7 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
 
     return c.json({ data: result, error: null, meta: null }, 201);
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -103,7 +104,7 @@ productsRouter.get('/:id', async (c: Context) => {
 
     return c.json({ data: { product, variants }, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -155,7 +156,7 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
 
     return c.json({ data: result, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -186,7 +187,7 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
 
     return c.json({ data: result, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -209,7 +210,7 @@ productsRouter.get('/:id/variants', async (c: Context) => {
 
     return c.json({ data, error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
@@ -259,7 +260,7 @@ productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Co
 
     return c.json({ data: result, error: null, meta: null }, 201);
   } catch (error: unknown) {
-    return c.json({ data: null, error: error instanceof Error ? error.message : String(error), meta: null }, 400);
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
 
