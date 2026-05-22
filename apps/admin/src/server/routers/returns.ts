@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { publicProcedure, router } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems } from '@irth/db';
+import { protectedProcedure, router } from '../trpc';
+import { db, orderReturns, returnItems, inventoryItems, orderItems } from '@irth/db';
 import { eq, and, count, sum, sql, desc } from 'drizzle-orm';
 
 export const returnsRouter = router({
-  list: publicProcedure
+  list: protectedProcedure
     .input(z.object({
-      status: z.string().optional(),
+      status: z.enum(['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged']).optional(),
       orderId: z.string().optional(),
       page: z.number().optional().default(1),
       pageSize: z.number().optional().default(10),
@@ -16,7 +16,7 @@ export const returnsRouter = router({
 
       const conditions = [eq(orderReturns.orgId, ctx.orgId)];
       if (input.status) {
-        conditions.push(eq(orderReturns.status, input.status as any));
+        conditions.push(eq(orderReturns.status, input.status));
       }
       if (input.orderId) {
         conditions.push(eq(orderReturns.orderId, input.orderId));
@@ -48,7 +48,7 @@ export const returnsRouter = router({
       };
     }),
 
-  get: publicProcedure
+  get: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
@@ -70,7 +70,7 @@ export const returnsRouter = router({
       return { data, error: null, meta: null };
     }),
 
-  create: publicProcedure
+  create: protectedProcedure
     .input(z.object({
       orderId: z.string(),
       reason: z.enum(['damaged', 'wrong_item', 'not_as_described', 'changed_mind', 'other']),
@@ -119,7 +119,7 @@ export const returnsRouter = router({
       return { data: createdReturn, error: null, meta: null };
     }),
 
-  updateStatus: publicProcedure
+  updateStatus: protectedProcedure
     .input(z.object({
       id: z.string(),
       status: z.enum(['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged']),
@@ -153,7 +153,7 @@ export const returnsRouter = router({
       return { data: updated, error: null, meta: null };
     }),
 
-  restock: publicProcedure
+  restock: protectedProcedure
     .input(z.object({
       returnId: z.string(),
       itemId: z.string(),
@@ -190,8 +190,6 @@ export const returnsRouter = router({
       // The instructions say: "where inventory_items matches (find by joining)"
 
       if (item.orderItemId) {
-        // Find the variant id from order item
-        const { orderItems } = await import('@irth/db');
         const [orderItem] = await db.select().from(orderItems).where(eq(orderItems.id, item.orderItemId)).limit(1);
         if (orderItem && orderItem.variantId) {
            const [invItem] = await db.select().from(inventoryItems)
@@ -209,7 +207,7 @@ export const returnsRouter = router({
       return { data: { restocked: true }, error: null, meta: null };
     }),
 
-  summary: publicProcedure
+  summary: protectedProcedure
     .query(async ({ ctx }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 

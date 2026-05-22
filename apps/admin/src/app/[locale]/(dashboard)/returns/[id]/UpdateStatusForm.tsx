@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 
+type ReturnStatus = 'requested' | 'approved' | 'rejected' | 'received' | 'restocked' | 'refunded' | 'exchanged';
+
 interface UpdateStatusFormProps {
   returnId: string;
   currentStatus: string;
@@ -20,7 +22,7 @@ export default function UpdateStatusForm({
   resolutionType
 }: UpdateStatusFormProps) {
   const router = useRouter();
-  const [status, setStatus] = useState<string>(currentStatus);
+  const [status, setStatus] = useState<ReturnStatus>(currentStatus as ReturnStatus);
   const [adminNotes, setAdminNotes] = useState<string>(initialAdminNotes);
   const [refundAmount, setRefundAmount] = useState<string>(initialRefundAmount);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,7 @@ export default function UpdateStatusForm({
       setError(null);
     },
     onError: (err: unknown) => {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'حدث خطأ');
     }
   });
 
@@ -41,7 +43,7 @@ export default function UpdateStatusForm({
 
     updateMutation.mutate({
       id: returnId,
-      status: status as any,
+      status,
       adminNotes: adminNotes || undefined,
       refundAmount: refundAmount || undefined,
     });
