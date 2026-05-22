@@ -8,9 +8,11 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260517.1",
+    "@types/node": "^25.9.1",
     "prettier": "^3.0.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=20.0.0",

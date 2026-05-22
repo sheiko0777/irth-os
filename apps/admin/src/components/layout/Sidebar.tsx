@@ -15,6 +15,7 @@ export function Sidebar({ locale }: { locale: string }) {
     { href: `/${locale}`, label: 'الرئيسية' },
     { href: `/${locale}/orders`, label: 'الطلبات' },
     { href: `/${locale}/inventory`, label: 'المخزون' },
+    { href: `/${locale}/integrations`, label: 'التكاملات' },
     { href: `/${locale}/products`, label: 'المنتجات' },
     { href: `/${locale}/categories`, label: 'التصنيفات' },
     { href: `/${locale}/notifications`, label: 'الإشعارات' },

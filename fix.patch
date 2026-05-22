@@ -1,0 +1,19 @@
+--- apps/api/src/services/integrations.ts
++++ apps/api/src/services/integrations.ts
+@@ -107,7 +107,7 @@
+     }>;
+ }
+
+-export async function sendWhatsAppTemplate(to: string, templateName: string, components: WhatsAppTemplateComponent[] = []): Promise<any> {
++export async function sendWhatsAppTemplate(to: string, templateName: string, components: WhatsAppTemplateComponent[] = []): Promise<unknown> {
+     const apiKey = process.env.WHATSAPP_360DIALOG_API_KEY;
+
+     if (!apiKey) {
+@@ -141,7 +141,7 @@
+     html: string;
+ }
+
+-export async function sendTransactionalEmail(opts: SendEmailOptions): Promise<any> {
++export async function sendTransactionalEmail(opts: SendEmailOptions): Promise<unknown> {
+     const apiKey = process.env.RESEND_API_KEY;
+     const fromEmail = process.env.RESEND_FROM;
