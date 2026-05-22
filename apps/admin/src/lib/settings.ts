@@ -33,6 +33,16 @@ export const SETTING_KEYS = {
     cf_r2_bucket: 'integration.cf_r2_bucket',
     cf_r2_public_url: 'integration.cf_r2_public_url',
   },
+  eta: {
+    client_id: 'eta.client_id',
+    client_secret: 'eta.client_secret',
+    issuer_ein: 'eta.issuer_ein',
+    env: 'eta.env',
+  },
+  courier: {
+    bosta_webhook_secret: 'courier.bosta_webhook_secret',
+    aramex_webhook_token: 'courier.aramex_webhook_token',
+  },
 } as const;
 
 export type SettingKey = typeof SETTING_KEYS[keyof typeof SETTING_KEYS][keyof typeof SETTING_KEYS[keyof typeof SETTING_KEYS]];
@@ -40,6 +50,9 @@ export type SettingKey = typeof SETTING_KEYS[keyof typeof SETTING_KEYS][keyof ty
 export const SENSITIVE_KEYS = [
   SETTING_KEYS.integration.whatsapp_api_key,
   SETTING_KEYS.integration.resend_api_key,
+  SETTING_KEYS.eta.client_secret,
+  SETTING_KEYS.courier.bosta_webhook_secret,
+  SETTING_KEYS.courier.aramex_webhook_token,
 ];
 
 export const DEFAULT_SETTINGS: Record<string, string> = {
