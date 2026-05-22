@@ -13,7 +13,8 @@
     "orders": "الطلبات",
     "inventory": "المخزون",
     "products": "المنتجات",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "integrations": "التكاملات"
   },
   "inventory": {
     "title": "إدارة المخزون",
@@ -28,6 +29,17 @@
     "status": {
       "low": "ناقص",
       "ok": "متاح"
+    }
+  },
+  "integrations": {
+    "title": "التكاملات",
+    "outbox": "صندوق الأحداث المرسلة (Outbox)",
+    "empty": "لا توجد أحداث معلقة",
+    "columns": {
+      "id": "المعرف",
+      "type": "النوع",
+      "attempts": "المحاولات",
+      "date": "التاريخ"
     }
   },
   "settings": {
