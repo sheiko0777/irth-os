@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ExportButton } from "@/components/ExportButton";
 
 export default async function InventoryPage() {
     const t = await getTranslations();
@@ -23,6 +24,7 @@ export default async function InventoryPage() {
         <div className="space-y-6" dir="rtl">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold font-cairo text-[var(--t1)]">{t('inventory.title')}</h1>
+                <ExportButton type="inventory" label="تصدير المخزون" />
             </div>
 
             {alerts.length > 0 && (

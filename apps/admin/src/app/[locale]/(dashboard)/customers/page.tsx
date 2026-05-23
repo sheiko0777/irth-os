@@ -2,6 +2,7 @@ import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 import CustomerActions from "./CustomerActions";
+import { ExportButton } from "@/components/ExportButton";
 
 export default async function CustomersPage() {
   const caller = await serverCaller();
@@ -18,7 +19,10 @@ export default async function CustomersPage() {
     <div className="space-y-6 font-cairo">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">العملاء</h1>
-        <CustomerActions actionType="create" />
+        <div className="flex items-center gap-2">
+          <ExportButton type="customers" label="تصدير العملاء" />
+          <CustomerActions actionType="create" />
+        </div>
       </div>
 
       {summary.data && (
