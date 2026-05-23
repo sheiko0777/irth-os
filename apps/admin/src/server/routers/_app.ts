@@ -10,6 +10,7 @@ import { settingsRouter } from './settings';
 import { etaRouter } from './eta';
 import { courierRouter } from './courier';
 import { returnsRouter } from './returns';
+import { purchasingRouter } from './purchasing';
 
 export const appRouter = router({
     dashboard: dashboardRouter,
@@ -23,6 +24,7 @@ export const appRouter = router({
     eta: etaRouter,
     courier: courierRouter,
     returns: returnsRouter,
+    purchasing: purchasingRouter,
 });
 
 export type AppRouter = typeof appRouter;

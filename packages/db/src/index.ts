@@ -7,8 +7,9 @@ import * as orgSettingsSchema from './schema/orgSettings';
 import * as etaInvoicesSchema from './schema/etaInvoices';
 import * as couriersSchema from './schema/couriers';
 import * as returnsSchema from './schema/returns';
+import * as purchasingSchema from './schema/purchasing';
 
-const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema };
+const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema };
 import { auditLog } from './schema';
 
 export * from './schema';
@@ -18,6 +19,7 @@ export * from './schema/orgSettings';
 export * from './schema/etaInvoices';
 export * from './schema/couriers';
 export * from './schema/returns';
+export * from './schema/purchasing';
 
 export const createDb = (url: string) => {
   // prepare: false required for Supabase Transaction pooler (port 6543)
