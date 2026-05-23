@@ -29,12 +29,15 @@ export const createDb = (url: string) => {
   return drizzle(client, { schema });
 };
 
-export const db = process.env.DATABASE_URL ? createDb(process.env.DATABASE_URL) : null as any;
+export type DbInstance = ReturnType<typeof createDb>;
+
+// DATABASE_URL is always set (GitHub secret / .env.local). Non-null assertion is intentional.
+export const db = createDb(process.env.DATABASE_URL!);
 
 export async function withAudit<T extends { id?: string }>(
-    dbInstance: any,
+    dbInstance: DbInstance,
     operation: () => Promise<T>,
-    auditData: { orgId: string, userId: string | null, action: string, tableName: string, changes: any }
+    auditData: { orgId: string, userId: string | null, action: string, tableName: string, changes: Record<string, unknown> }
 ) {
     const result = await operation();
     const recordId = result?.id || 'unknown_id';

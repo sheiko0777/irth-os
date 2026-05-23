@@ -48,7 +48,7 @@ export function CreateProductForm() {
 
     const onSubmit = (data: FormDefaultValues) => {
         startTransition(async () => {
-            const res = await createProductAction(data as any);
+            const res = await createProductAction(data);
             if (res?.error) {
                 alert("Error creating product: " + res.error);
             } else {

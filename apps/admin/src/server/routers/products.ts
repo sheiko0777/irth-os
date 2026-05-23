@@ -164,8 +164,8 @@ export const productsRouter = router({
                 throw new TRPCError({ code: 'NOT_FOUND' });
             }
 
-            const updateData: any = { ...input, updatedAt: new Date() };
-            delete updateData.id;
+            const { id: _id, ...rest } = input;
+            const updateData: Record<string, unknown> = { ...rest, updatedAt: new Date() };
             if (input.price !== undefined) {
                updateData.price = typeof input.price === 'number' ? input.price.toString() : input.price;
             }
