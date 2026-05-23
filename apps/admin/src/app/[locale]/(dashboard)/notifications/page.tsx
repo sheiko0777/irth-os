@@ -1,66 +1,79 @@
-import { getTranslations } from "next-intl/server"
-import { headers } from "next/headers"
+import { serverCaller } from '@/server/caller';
 
-interface Notification {
-  id: string
-  title: string
-  body: string | null
-  read: boolean
-  createdAt: string
-}
+const TYPE_LABELS: Record<string, string> = {
+    order_status:    'تحديث طلب',
+    invite_accepted: 'قبول دعوة',
+    member_joined:   'عضو جديد',
+    system:          'نظام',
+};
 
-async function getNotifications(): Promise<Notification[]> {
-  try {
-    const reqHeaders = await headers();
-    const orgId = reqHeaders.get('org_id') || 'system';
-    
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/notifications`, {
-      headers: {
-        ...Object.fromEntries(reqHeaders.entries()),
-        'org_id': orgId
-      }
-    })
-    if (!res.ok) return []
-    const json = await res.json()
-    return json.data || []
-  } catch (e) {
-    console.error("Failed to fetch notifications", e)
-    return []
-  }
-}
+export default async function NotificationsPage() {
+    const caller = await serverCaller();
+    const response = await caller.notifications.list({ page: 1, pageSize: 50 });
 
-export default async function NotificationsPage({ params }: { params: Promise<{ locale: string }> }) {
-  const { locale } = await params
-  const t = await getTranslations("notifications")
-  const notifications = await getNotifications()
+    const items = response.error ? [] : response.data.items;
 
-  return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
-      </div>
+    return (
+        <div className="font-cairo p-6 space-y-6" dir="rtl">
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold text-[var(--t1)]">الإشعارات</h1>
+                {response.data && (
+                    <span className="text-sm text-[var(--t2)]">
+                        {response.data.unread} غير مقروء
+                    </span>
+                )}
+            </div>
 
-      <div className="bg-white rounded-md border">
-        {notifications.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">{t("empty")}</div>
-        ) : (
-          <div className="divide-y">
-            {notifications.map((notif) => (
-              <div key={notif.id} className={`p-4 ${!notif.read ? 'bg-blue-50/50' : ''}`}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-medium">{notif.title}</h3>
-                    {notif.body && <p className="text-sm text-gray-600 mt-1">{notif.body}</p>}
-                  </div>
-                  <span className="text-xs text-gray-500">
-                    {new Date(notif.createdAt).toLocaleString(locale)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+            <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
+                <table className="w-full text-right">
+                    <thead className="bg-gray-50 border-b border-[var(--rim1)]">
+                        <tr>
+                            <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">النوع</th>
+                            <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">العنوان</th>
+                            <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">التفاصيل</th>
+                            <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">الوقت</th>
+                            <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--rim1)]">
+                        {items.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-[var(--t2)]">
+                                    لا توجد إشعارات
+                                </td>
+                            </tr>
+                        ) : (
+                            items.map((item) => (
+                                <tr key={item.id} className="hover:bg-gray-50/50">
+                                    <td className="px-4 py-3 text-sm text-[var(--t2)]">
+                                        {TYPE_LABELS[item.type] ?? item.type}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm font-medium text-[var(--t1)]">
+                                        {item.title}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-[var(--t2)] max-w-xs truncate">
+                                        {item.body ?? 'ـ'}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-[var(--t2)]" dir="ltr">
+                                        {item.createdAt
+                                            ? new Date(item.createdAt).toLocaleString('ar-EG')
+                                            : 'ـ'}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                            item.read
+                                                ? 'bg-gray-100 text-gray-600'
+                                                : 'bg-amber-100 text-amber-800'
+                                        }`}>
+                                            {item.read ? 'مقروء' : 'جديد'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 }

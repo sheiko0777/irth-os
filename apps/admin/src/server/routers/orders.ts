@@ -1,5 +1,5 @@
 import { router, protectedProcedure } from '../trpc';
-import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum } from '@irth/db';
+import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum, notifications } from '@irth/db';
 import { eq, and, desc, sql, count, ilike, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
@@ -145,6 +145,16 @@ export const ordersRouter = router({
                     changes: { from: order.status, to: input.status }
                 }
             );
+
+            // Trigger notification for status change
+            await ctx.db.insert(notifications).values({
+                orgId: ctx.orgId,
+                userId: ctx.userId,
+                type: 'order_status',
+                title: `تحديث الطلب ${order.orderNumber}`,
+                body: `تم تغيير حالة الطلب إلى: ${input.status}`,
+                read: false,
+            });
 
             return { data: result, error: null, meta: null };
         }),

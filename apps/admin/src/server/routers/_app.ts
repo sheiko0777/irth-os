@@ -15,6 +15,7 @@ import { customersRouter } from './customers';
 import { analyticsRouter } from './analytics';
 import { couponsRouter } from './coupons';
 import { bulkRouter } from './bulk';
+import { notificationsRouter } from './notifications';
 
 export const appRouter = router({
     dashboard: dashboardRouter,
@@ -33,6 +34,7 @@ export const appRouter = router({
     analytics: analyticsRouter,
     coupons: couponsRouter,
     bulk: bulkRouter,
+    notifications: notificationsRouter,
 });
 
 export type AppRouter = typeof appRouter;
