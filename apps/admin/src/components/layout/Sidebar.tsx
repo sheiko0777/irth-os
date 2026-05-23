@@ -20,6 +20,7 @@ export function Sidebar({ locale }: { locale: string }) {
     { href: `/${locale}/integrations`, label: 'التكاملات' },
     { href: `/${locale}/finance`, label: 'المالية والتقارير' },
     { href: `/${locale}/analytics`, label: 'التقارير والتحليلات' },
+    { href: `/${locale}/coupons`, label: 'الكوبونات والخصومات' },
     { href: `/${locale}/products`, label: 'المنتجات' },
     { href: `/${locale}/categories`, label: 'التصنيفات' },
     { href: `/${locale}/notifications`, label: 'الإشعارات' },
