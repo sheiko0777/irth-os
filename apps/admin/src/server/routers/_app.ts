@@ -11,6 +11,7 @@ import { etaRouter } from './eta';
 import { courierRouter } from './courier';
 import { returnsRouter } from './returns';
 import { purchasingRouter } from './purchasing';
+import { customersRouter } from './customers';
 
 export const appRouter = router({
     dashboard: dashboardRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
     courier: courierRouter,
     returns: returnsRouter,
     purchasing: purchasingRouter,
+    customers: customersRouter,
 });
 
 export type AppRouter = typeof appRouter;
