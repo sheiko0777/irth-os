@@ -12,8 +12,8 @@ export default async function CouponsPage({ searchParams }: { searchParams: { pa
     const caller = await serverCaller();
     const data = await caller.coupons.list({ page, pageSize });
 
-    const totalActive = data.items.filter((c: any) => c.isActive).length;
-    const totalUses = data.items.reduce((acc: any, c: any) => acc + c.usedCount, 0);
+    const totalActive = data.items.filter((c) => c.isActive).length;
+    const totalUses = data.items.reduce((acc: number, c) => acc + (c.usedCount ?? 0), 0);
 
     const typeLabels: Record<string, string> = {
         'percentage': 'خصم نسبة مئوية',
@@ -72,7 +72,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { pa
                                     <td colSpan={8} className="px-4 py-8 text-center text-[var(--t2)]">لا توجد كوبونات</td>
                                 </tr>
                             ) : (
-                                data.items.map((coupon: any) => (
+                                data.items.map((coupon) => (
                                     <tr key={coupon.id} className="hover:bg-gray-50/50">
                                         <td className="px-4 py-3 text-sm font-medium font-mono text-[var(--t1)]" dir="ltr">{coupon.code}</td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]">{typeLabels[coupon.type]}</td>

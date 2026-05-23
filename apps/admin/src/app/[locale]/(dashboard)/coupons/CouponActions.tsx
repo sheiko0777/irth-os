@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { ReactNode, FormEvent } from 'react';
 import { trpc } from '@/lib/trpc';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
-export function CreateCouponDialog({ children }: { children: React.ReactNode }) {
+export function CreateCouponDialog({ children }: { children: ReactNode }) {
     const [open, setOpen] = useState(false);
     const utils = trpc.useUtils();
     const createMutation = trpc.coupons.create.useMutation({
@@ -19,8 +20,8 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
             utils.coupons.list.invalidate();
             setOpen(false);
         },
-        onError: (err: any) => {
-            toast.error(err.message || 'حدث خطأ أثناء إنشاء الكوبون');
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء الكوبون');
         }
     });
 
@@ -34,7 +35,7 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
         description: '',
     });
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
         createMutation.mutate({
             code: formData.code.toUpperCase(),
@@ -63,7 +64,7 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
                             id="code"
                             required
                             value={formData.code}
-                            onChange={(e: any) => setFormData(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+                            onChange={(e: { target: { value: string } }) => setFormData(p => ({ ...p, code: e.target.value.toUpperCase() }))}
                             placeholder="مثال: SUMMER20"
                             dir="ltr"
                             className="text-left uppercase"
@@ -73,7 +74,7 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
                         <Label htmlFor="type" className="text-right block">نوع الخصم</Label>
                         <Select
                             value={formData.type}
-                            onValueChange={(val: any) => setFormData(p => ({ ...p, type: val }))}
+                            onValueChange={(val: 'percentage' | 'fixed' | 'free_shipping') => setFormData(p => ({ ...p, type: val }))}
                             dir="rtl"
                         >
                             <SelectTrigger>
@@ -94,7 +95,7 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
                             step="0.01"
                             required={formData.type !== 'free_shipping'}
                             value={formData.value}
-                            onChange={(e: any) => setFormData(p => ({ ...p, value: e.target.value }))}
+                            onChange={(e: { target: { value: string } }) => setFormData(p => ({ ...p, value: e.target.value }))}
                             placeholder="القيمة"
                             dir="ltr"
                             className="text-left"
@@ -107,7 +108,7 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
                             type="number"
                             step="0.01"
                             value={formData.minOrderAmount}
-                            onChange={(e: any) => setFormData(p => ({ ...p, minOrderAmount: e.target.value }))}
+                            onChange={(e: { target: { value: string } }) => setFormData(p => ({ ...p, minOrderAmount: e.target.value }))}
                             dir="ltr"
                             className="text-left"
                         />
@@ -118,7 +119,7 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
                             id="maxUses"
                             type="number"
                             value={formData.maxUses}
-                            onChange={(e: any) => setFormData(p => ({ ...p, maxUses: e.target.value }))}
+                            onChange={(e: { target: { value: string } }) => setFormData(p => ({ ...p, maxUses: e.target.value }))}
                             dir="ltr"
                             className="text-left"
                         />
@@ -129,7 +130,7 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
                             id="expiresAt"
                             type="date"
                             value={formData.expiresAt}
-                            onChange={(e: any) => setFormData(p => ({ ...p, expiresAt: e.target.value }))}
+                            onChange={(e: { target: { value: string } }) => setFormData(p => ({ ...p, expiresAt: e.target.value }))}
                             dir="ltr"
                             className="text-left"
                         />
@@ -139,7 +140,7 @@ export function CreateCouponDialog({ children }: { children: React.ReactNode }) 
                         <Textarea
                             id="description"
                             value={formData.description}
-                            onChange={(e: any) => setFormData(p => ({ ...p, description: e.target.value }))}
+                            onChange={(e: { target: { value: string } }) => setFormData(p => ({ ...p, description: e.target.value }))}
                         />
                     </div>
                     <DialogFooter className="sm:justify-start">
@@ -160,8 +161,8 @@ export function ToggleCouponButton({ id, isActive }: { id: string, isActive: boo
             toast.success('تم تغيير حالة الكوبون');
             utils.coupons.list.invalidate();
         },
-        onError: (err: any) => {
-            toast.error(err.message || 'حدث خطأ');
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : 'حدث خطأ');
         }
     });
 
@@ -185,8 +186,8 @@ export function DeleteCouponButton({ id }: { id: string }) {
             toast.success('تم حذف الكوبون');
             utils.coupons.list.invalidate();
         },
-        onError: (err: any) => {
-            toast.error(err.message || 'حدث خطأ');
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : 'حدث خطأ');
         }
     });
 

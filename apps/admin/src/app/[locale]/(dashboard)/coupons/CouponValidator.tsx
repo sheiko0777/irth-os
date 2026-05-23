@@ -35,7 +35,7 @@ export function CouponValidator() {
                         <Input
                             id="test-code"
                             value={code}
-                            onChange={(e: any) => setCode(e.target.value.toUpperCase())}
+                            onChange={(e: { target: { value: string } }) => setCode(e.target.value.toUpperCase())}
                             placeholder="الكود المراد اختباره"
                             dir="ltr"
                             className="text-left uppercase"
@@ -48,7 +48,7 @@ export function CouponValidator() {
                             type="number"
                             step="0.01"
                             value={orderAmount}
-                            onChange={(e: any) => setOrderAmount(e.target.value)}
+                            onChange={(e: { target: { value: string } }) => setOrderAmount(e.target.value)}
                             placeholder="قيمة الطلب الإجمالية"
                             dir="ltr"
                             className="text-left"
