@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
 
 const ordersRoute = new Hono();
@@ -29,28 +29,38 @@ ordersRoute.post('/', async (c: Context) => {
   let totalAmount = 0;
   const itemsToInsert: { orgId: string, variantId: string, quantity: number, price: string }[] = [];
   
-  for (const item of data.items) {
-    const variantResult = await db.select({
+  // ⚡ Bolt: Prevent N+1 queries by batching reads with inArray() for O(1) lookups
+  if (data.items.length > 0) {
+    const variantIds = data.items.map(item => item.variantId);
+    const variants = await db.select({
       id: productVariants.id,
       price: productVariants.price,
       productId: productVariants.productId
     })
     .from(productVariants)
     .innerJoin(products, eq(productVariants.productId, products.id))
-    .where(and(eq(productVariants.id, item.variantId), eq(products.orgId, orgId)));
-    if (!variantResult.length) {
-      return c.json({ data: null, error: 'variant_not_found', meta: null }, 404);
+    .where(and(
+      inArray(productVariants.id, variantIds),
+      eq(products.orgId, orgId)
+    ));
+
+    const variantMap = new Map(variants.map(v => [v.id, v]));
+
+    for (const item of data.items) {
+      const variant = variantMap.get(item.variantId);
+      if (!variant) {
+        return c.json({ data: null, error: 'variant_not_found', meta: null }, 404);
+      }
+      const price = Number(variant.price);
+      totalAmount += price * item.quantity;
+
+      itemsToInsert.push({
+        orgId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        price: variant.price!,
+      });
     }
-    const variant = variantResult[0];
-    const price = Number(variant.price);
-    totalAmount += price * item.quantity;
-    
-    itemsToInsert.push({
-      orgId,
-      variantId: item.variantId,
-      quantity: item.quantity,
-      price: variant.price!,
-    });
   }
 
   const existingOrders = await db.select().from(orders).where(eq(orders.orgId, orgId));
@@ -74,11 +84,14 @@ ordersRoute.post('/', async (c: Context) => {
     changes: { items: itemsToInsert }
   });
 
-  for (const item of itemsToInsert) {
-    await db.insert(orderItems).values({
-      ...item,
-      orderId: newOrder.id
-    });
+  // ⚡ Bolt: Batch insert items instead of iterating and inserting one by one
+  if (itemsToInsert.length > 0) {
+    await db.insert(orderItems).values(
+      itemsToInsert.map(item => ({
+        ...item,
+        orderId: newOrder.id
+      }))
+    );
   }
 
   return c.json({ data: newOrder, error: null, meta: null });
