@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
 
 const ordersRoute = new Hono();
@@ -28,20 +28,31 @@ ordersRoute.post('/', async (c: Context) => {
 
   let totalAmount = 0;
   const itemsToInsert: { orgId: string, variantId: string, quantity: number, price: string }[] = [];
+
+  // ⚡ Bolt: Eliminate N+1 queries by collecting all variant IDs and fetching them in a single batch query
+  const variantIds = data.items.map(item => item.variantId);
   
-  for (const item of data.items) {
-    const variantResult = await db.select({
+  let variantMap = new Map<string, {id: string, price: string | null, productId: string}>();
+  if (variantIds.length > 0) {
+    const variants = await db.select({
       id: productVariants.id,
       price: productVariants.price,
       productId: productVariants.productId
     })
     .from(productVariants)
     .innerJoin(products, eq(productVariants.productId, products.id))
-    .where(and(eq(productVariants.id, item.variantId), eq(products.orgId, orgId)));
-    if (!variantResult.length) {
+    .where(and(inArray(productVariants.id, variantIds), eq(products.orgId, orgId)));
+
+    // ⚡ Bolt: Construct an in-memory hash map for O(1) lookups during validation
+    variantMap = new Map(variants.map(v => [v.id, v]));
+  }
+
+  for (const item of data.items) {
+    const variant = variantMap.get(item.variantId);
+    if (!variant) {
       return c.json({ data: null, error: 'variant_not_found', meta: null }, 404);
     }
-    const variant = variantResult[0];
+
     const price = Number(variant.price);
     totalAmount += price * item.quantity;
     
@@ -74,11 +85,14 @@ ordersRoute.post('/', async (c: Context) => {
     changes: { items: itemsToInsert }
   });
 
-  for (const item of itemsToInsert) {
-    await db.insert(orderItems).values({
-      ...item,
-      orderId: newOrder.id
-    });
+  // ⚡ Bolt: Use a bulk `.values([])` insert instead of an iteration to reduce database round trips
+  if (itemsToInsert.length > 0) {
+    await db.insert(orderItems).values(
+      itemsToInsert.map(item => ({
+        ...item,
+        orderId: newOrder.id
+      }))
+    );
   }
 
   return c.json({ data: newOrder, error: null, meta: null });
