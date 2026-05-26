@@ -38,24 +38,26 @@ export const ordersRouter = router({
                 conditions.push(lte(orders.createdAt, dateRange.to));
             }
 
-            const data = await ctx.db
-                .select()
-                .from(orders)
-                .where(and(...conditions))
-                .orderBy(desc(orders.createdAt))
-                .limit(pageSize)
-                .offset(offset);
-
-            const totalQuery = await ctx.db
-                .select({ count: count() })
-                .from(orders)
-                .where(and(...conditions));
+            // ⚡ Bolt: Execute data fetch and total count queries concurrently to reduce database latency
+            const [data, totalQuery] = await Promise.all([
+                ctx.db
+                    .select()
+                    .from(orders)
+                    .where(and(...conditions))
+                    .orderBy(desc(orders.createdAt))
+                    .limit(pageSize)
+                    .offset(offset),
+                ctx.db
+                    .select({ count: count() })
+                    .from(orders)
+                    .where(and(...conditions))
+            ]);
 
             return {
                 data,
                 error: null,
                 meta: {
-                    total: totalQuery[0].count,
+                    total: totalQuery[0]?.count ?? 0,
                     page,
                     pageSize,
                 }
