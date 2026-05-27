@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
 
 const ordersRoute = new Hono();
@@ -29,19 +29,27 @@ ordersRoute.post('/', async (c: Context) => {
   let totalAmount = 0;
   const itemsToInsert: { orgId: string, variantId: string, quantity: number, price: string }[] = [];
   
+  if (data.items.length === 0) {
+    return c.json({ data: null, error: 'empty_order', meta: null }, 400);
+  }
+
+  const variantIds = data.items.map(item => item.variantId);
+  const variants = await db.select({
+    id: productVariants.id,
+    price: productVariants.price,
+    productId: productVariants.productId
+  })
+  .from(productVariants)
+  .innerJoin(products, eq(productVariants.productId, products.id))
+  .where(and(inArray(productVariants.id, variantIds), eq(products.orgId, orgId)));
+
+  const variantMap = new Map(variants.map(v => [v.id, v]));
+
   for (const item of data.items) {
-    const variantResult = await db.select({
-      id: productVariants.id,
-      price: productVariants.price,
-      productId: productVariants.productId
-    })
-    .from(productVariants)
-    .innerJoin(products, eq(productVariants.productId, products.id))
-    .where(and(eq(productVariants.id, item.variantId), eq(products.orgId, orgId)));
-    if (!variantResult.length) {
+    const variant = variantMap.get(item.variantId);
+    if (!variant) {
       return c.json({ data: null, error: 'variant_not_found', meta: null }, 404);
     }
-    const variant = variantResult[0];
     const price = Number(variant.price);
     totalAmount += price * item.quantity;
     
@@ -53,8 +61,10 @@ ordersRoute.post('/', async (c: Context) => {
     });
   }
 
-  const existingOrders = await db.select().from(orders).where(eq(orders.orgId, orgId));
-  const seq = (existingOrders.length + 1).toString().padStart(4, '0');
+  const existingOrdersCount = await db.select({ count: sql<number>`count(*)` })
+    .from(orders)
+    .where(eq(orders.orgId, orgId));
+  const seq = (Number(existingOrdersCount[0].count) + 1).toString().padStart(4, '0');
   const orderNumber = `IRT-2026-${seq}`;
 
   const newOrder = await withAudit(db, async () => {
@@ -74,11 +84,13 @@ ordersRoute.post('/', async (c: Context) => {
     changes: { items: itemsToInsert }
   });
 
-  for (const item of itemsToInsert) {
-    await db.insert(orderItems).values({
-      ...item,
-      orderId: newOrder.id
-    });
+  if (itemsToInsert.length > 0) {
+    await db.insert(orderItems).values(
+      itemsToInsert.map(item => ({
+        ...item,
+        orderId: newOrder.id
+      }))
+    );
   }
 
   return c.json({ data: newOrder, error: null, meta: null });
