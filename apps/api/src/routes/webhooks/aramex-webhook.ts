@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { db } from '../../db';
 import { courierShipments } from '@irth/db';
 import { eq } from 'drizzle-orm';
+import crypto from 'node:crypto';
 
 export const aramexWebhookRoute = new Hono();
 
@@ -13,7 +14,15 @@ aramexWebhookRoute.post('/', async (c: Context) => {
   }
 
   const headerToken = c.req.header('X-Aramex-Token');
-  if (headerToken !== token) {
+  if (!headerToken) {
+    return c.json({ data: null, error: 'missing_token', meta: null }, 401);
+  }
+
+  // Hash both sides to constant length to prevent length-based timing leaks
+  const hashedToken = crypto.createHash('sha256').update(token).digest();
+  const hashedHeaderToken = crypto.createHash('sha256').update(headerToken).digest();
+
+  if (!crypto.timingSafeEqual(hashedHeaderToken, hashedToken)) {
     return c.json({ data: null, error: 'invalid_token', meta: null }, 401);
   }
 
