@@ -1,0 +1,4 @@
+## 2024-05-18 - Constant-Time Comparisons in Webhooks
+**Vulnerability:** Timing attacks on webhook signature and token verifications in `bosta-webhook.ts` and `aramex-webhook.ts`. Length differences could be detected early, and `timingSafeEqual` was either missing or used after a length check which leaks length information.
+**Learning:** Comparing authentication tokens or HMAC signatures using standard string comparison (or failing early on length checks before calling `timingSafeEqual`) allows attackers to brute-force the expected value by measuring response times.
+**Prevention:** Both the provided signature/token and the expected signature/token must first be hashed to a constant length buffer (e.g., using `crypto.createHash('sha256')`) before being compared using `crypto.timingSafeEqual`. This ensures the comparison time is identical regardless of input length or content.
