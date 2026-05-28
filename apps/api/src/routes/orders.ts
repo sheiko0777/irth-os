@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, count } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
 
 const ordersRoute = new Hono();
@@ -53,8 +53,9 @@ ordersRoute.post('/', async (c: Context) => {
     });
   }
 
-  const existingOrders = await db.select().from(orders).where(eq(orders.orgId, orgId));
-  const seq = (existingOrders.length + 1).toString().padStart(4, '0');
+  // Use count() aggregate to prevent loading all orders into memory just to determine sequence number
+  const [{ count: ordersCount }] = await db.select({ count: count() }).from(orders).where(eq(orders.orgId, orgId));
+  const seq = (ordersCount + 1).toString().padStart(4, '0');
   const orderNumber = `IRT-2026-${seq}`;
 
   const newOrder = await withAudit(db, async () => {
