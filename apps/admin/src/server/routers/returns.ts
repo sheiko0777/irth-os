@@ -60,7 +60,7 @@ export const returnsRouter = router({
         }
       });
 
-      let items = [];
+      let items: any[] = [];
       if (returnObj) {
         items = await db.select().from(returnItems).where(eq(returnItems.returnId, returnObj.id));
       }
@@ -211,9 +211,24 @@ export const returnsRouter = router({
     .query(async ({ ctx }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const returns = await db.select().from(orderReturns).where(eq(orderReturns.orgId, ctx.orgId));
+      const [statusCounts, pendingRefunds, totalResult] = await Promise.all([
+        db.select({
+            status: orderReturns.status,
+            count: count()
+          })
+          .from(orderReturns)
+          .where(eq(orderReturns.orgId, ctx.orgId))
+          .groupBy(orderReturns.status),
+        db.select({ total: sum(orderReturns.refundAmount) })
+          .from(orderReturns)
+          .where(and(eq(orderReturns.orgId, ctx.orgId), eq(orderReturns.status, 'approved'))),
+        db.select({ count: count() })
+          .from(orderReturns)
+          .where(eq(orderReturns.orgId, ctx.orgId))
+      ]);
 
-      const total = returns.length;
+      const total = totalResult[0]?.count ?? 0;
+
       const byStatus = {
         requested: 0,
         approved: 0,
@@ -224,16 +239,13 @@ export const returnsRouter = router({
         exchanged: 0,
       };
 
-      let pendingRefundAmount = 0;
-
-      for (const r of returns) {
-        if (byStatus[r.status as keyof typeof byStatus] !== undefined) {
-           byStatus[r.status as keyof typeof byStatus]++;
-        }
-        if (r.status === 'approved' && r.refundAmount) {
-          pendingRefundAmount += parseFloat(r.refundAmount);
+      for (const row of statusCounts) {
+        if (row.status && byStatus[row.status as keyof typeof byStatus] !== undefined) {
+          byStatus[row.status as keyof typeof byStatus] = row.count;
         }
       }
+
+      const pendingRefundAmount = parseFloat((pendingRefunds[0]?.total as unknown as string) ?? '0');
 
       return {
         data: {

@@ -1,0 +1,3 @@
+## 2026-05-29 - Array Materialization Bottlenecks in Drizzle ORM
+**Learning:** In Drizzle ORM, fetching an entire table (e.g. `const returns = await db.select().from(...)`) into memory solely to count records via `.length` or sum properties creates a severe N+1 materialization bottleneck. It consumes excessive memory and significantly degrades performance.
+**Action:** Always use aggregate database functions like `count()` and `sum()` inside queries (e.g. `db.select({ count: count() })`), and batch independent aggregations using `Promise.all` to fetch metrics concurrently.
