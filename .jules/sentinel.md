@@ -1,0 +1,4 @@
+## 2025-05-30 - Fix Timing Attack in Aramex Webhook
+**Vulnerability:** The Aramex webhook token was being verified using the strict inequality operator (`!==`). This is vulnerable to timing attacks, where an attacker could deduce the token one character at a time based on the time it takes for the comparison to fail.
+**Learning:** Comparing sensitive strings like secrets, API keys, and webhook tokens directly exposes them to timing attacks.
+**Prevention:** Always use `crypto.timingSafeEqual` for comparing secrets. If the strings can be of different lengths, first hash them using SHA-256 to ensure a constant length before passing them to `timingSafeEqual`.
