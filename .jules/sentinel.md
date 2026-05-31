@@ -1,0 +1,4 @@
+## 2025-05-24 - Length-based timing leak in Node.js timingSafeEqual
+**Vulnerability:** Comparing an HMAC signature from a webhook header directly with an expected signature using `crypto.timingSafeEqual` without verifying their lengths first can throw a `RangeError` if the lengths mismatch. This crashes the server (DoS risk) and can be used for length-based timing attacks by measuring response variations.
+**Learning:** `crypto.timingSafeEqual` mandates both buffers to have exactly the same length. Even checking the length via an early return branch before comparison (`if (a.length !== b.length)`) can introduce slight timing variations.
+**Prevention:** Always use `crypto.createHash('sha256')` to hash both the provided signature and the expected signature to a constant length before passing them to `timingSafeEqual`, guaranteeing safe execution regardless of input length.
