@@ -1,0 +1,4 @@
+## 2025-05-31 - Fix timing attacks in webhook verification
+**Vulnerability:** Timing attack vulnerability due to length-based comparison and early exit string comparison in webhook signature verification (Aramex, Bosta).
+**Learning:** Comparing HMAC signatures using a direct string comparison (`!==`) or checking their lengths (`sig.length !== exp.length`) before using a constant-time comparison leaks timing information. An attacker can use this information to forge signatures by guessing them character-by-character.
+**Prevention:** Always hash values to a constant length first (e.g. using `crypto.createHash('sha256')`) before comparing them with `crypto.timingSafeEqual()`, to prevent any length-based or string comparison timing leaks.
