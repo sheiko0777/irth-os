@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
 
 const ordersRoute = new Hono();
@@ -29,19 +29,30 @@ ordersRoute.post('/', async (c: Context) => {
   let totalAmount = 0;
   const itemsToInsert: { orgId: string, variantId: string, quantity: number, price: string }[] = [];
   
-  for (const item of data.items) {
-    const variantResult = await db.select({
+  // ⚡ Bolt: Optimize N+1 selects by fetching all variants in a single query
+  const variantIds = data.items.map(item => item.variantId);
+
+  const variantsMap = new Map();
+  if (variantIds.length > 0) {
+    const variantsResult = await db.select({
       id: productVariants.id,
       price: productVariants.price,
       productId: productVariants.productId
     })
     .from(productVariants)
     .innerJoin(products, eq(productVariants.productId, products.id))
-    .where(and(eq(productVariants.id, item.variantId), eq(products.orgId, orgId)));
-    if (!variantResult.length) {
+    .where(and(inArray(productVariants.id, variantIds), eq(products.orgId, orgId)));
+
+    for (const v of variantsResult) {
+      variantsMap.set(v.id, v);
+    }
+  }
+
+  for (const item of data.items) {
+    const variant = variantsMap.get(item.variantId);
+    if (!variant) {
       return c.json({ data: null, error: 'variant_not_found', meta: null }, 404);
     }
-    const variant = variantResult[0];
     const price = Number(variant.price);
     totalAmount += price * item.quantity;
     
@@ -74,11 +85,13 @@ ordersRoute.post('/', async (c: Context) => {
     changes: { items: itemsToInsert }
   });
 
-  for (const item of itemsToInsert) {
-    await db.insert(orderItems).values({
+  // ⚡ Bolt: Optimize N+1 inserts by batching them into a single query
+  if (itemsToInsert.length > 0) {
+    const orderItemsData = itemsToInsert.map(item => ({
       ...item,
       orderId: newOrder.id
-    });
+    }));
+    await db.insert(orderItems).values(orderItemsData);
   }
 
   return c.json({ data: newOrder, error: null, meta: null });
