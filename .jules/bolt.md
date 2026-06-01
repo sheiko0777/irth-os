@@ -1,0 +1,3 @@
+## 2025-02-24 - N+1 Queries & Memory Bottlenecks in Order Creation
+**Learning:** Found multiple performance anti-patterns in `apps/api/src/routes/orders.ts`: N+1 lookups for variants, pulling full table data just for a row count `.length` to generate order numbers, and N+1 inserts for order items. In cloud environments like Cloudflare Workers with limited memory/CPU, doing `select()` to pull the entire orders table into memory just to count rows is highly inefficient.
+**Action:** Replace looped individual select lookups with `inArray()` + Map mapping, use `select({ count: count() })` for total row counts, and batch insert child records using `.values(array)`.
