@@ -1,0 +1,3 @@
+## 2024-05-18 - Optimize Drizzle ORM Create Operations
+**Learning:** Performing database queries and inserts sequentially inside loops (N+1 queries/inserts) is a severe performance bottleneck. Similarly, loading entire result sets into memory just to determine the count of rows is highly inefficient and risks memory exhaustion.
+**Action:** When using Drizzle ORM, avoid N+1 queries by batching reads with `inArray()` to construct in-memory hash maps for `O(1)` lookups. Avoid N+1 inserts by batching inserts using `.values([])` outside loops. Compute scalar metrics like row counts by executing aggregate database functions (e.g., `count(*)`) rather than materializing results into application memory.
