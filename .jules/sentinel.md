@@ -1,0 +1,4 @@
+## 2025-05-18 - Prevent Timing Attacks in Token/Key Comparisons
+**Vulnerability:** A simple strict equality check (`===` or `!==`) was being used to compare incoming webhook tokens (`X-Aramex-Token`) against the configured secret token.
+**Learning:** Standard string equality operators fail fast. They return `false` as soon as a mismatch is found, meaning an attacker can infer the exact length of the matching prefix by measuring the time the check takes (timing attack). This exposes the secret.
+**Prevention:** Never use standard equality operators to compare webhook tokens, API keys, or other secrets. Always hash both the incoming value and the expected secret to a constant length (e.g., using `crypto.createHash('sha256')`) and then securely compare them using a constant-time check like `crypto.timingSafeEqual()` or `crypto.subtle.verify()`.
