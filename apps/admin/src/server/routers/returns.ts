@@ -24,17 +24,19 @@ export const returnsRouter = router({
 
       const offset = (input.page - 1) * input.pageSize;
 
-      const data = await db.query.orderReturns.findMany({
-        where: and(...conditions),
-        orderBy: [desc(orderReturns.createdAt)],
-        limit: input.pageSize,
-        offset,
-      });
-
-      const [{ count: total }] = await db
-        .select({ count: count() })
-        .from(orderReturns)
-        .where(and(...conditions));
+      // Execute list query and total count query concurrently to reduce latency
+      const [data, [{ count: total }]] = await Promise.all([
+        db.query.orderReturns.findMany({
+          where: and(...conditions),
+          orderBy: [desc(orderReturns.createdAt)],
+          limit: input.pageSize,
+          offset,
+        }),
+        db
+          .select({ count: count() })
+          .from(orderReturns)
+          .where(and(...conditions))
+      ]);
 
       return {
         data,
@@ -60,7 +62,7 @@ export const returnsRouter = router({
         }
       });
 
-      let items = [];
+      let items: typeof returnItems.$inferSelect[] = [];
       if (returnObj) {
         items = await db.select().from(returnItems).where(eq(returnItems.returnId, returnObj.id));
       }
