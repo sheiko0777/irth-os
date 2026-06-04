@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
+import { ChatBot } from '@/components/chatbot/ChatBot';
 import { ReactNode } from 'react';
 
 export default async function DashboardLayout({
@@ -20,6 +21,7 @@ export default async function DashboardLayout({
           {children}
         </main>
       </div>
+      <ChatBot locale={locale} />
     </div>
   );
 }
