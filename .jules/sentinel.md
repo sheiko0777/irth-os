@@ -1,0 +1,4 @@
+## 2025-05-19 - Timing Attack Vulnerability on Webhook Secret Comparison
+**Vulnerability:** A timing attack vulnerability was identified in the Aramex webhook where `!==` was used directly on the incoming header token and the expected environment token secret (`headerToken !== token`).
+**Learning:** Using standard strict equality operators (`===` or `!==`) to compare secrets or tokens exposes the application to timing attacks, as they return immediately upon the first non-matching character, allowing an attacker to determine the secret character by character by measuring response times.
+**Prevention:** Always compare webhook tokens, API keys, and other secrets using a constant-time comparison approach. Hash both the expected and provided secrets to a constant length first (e.g., via `crypto.createHash('sha256')`) and then use `crypto.timingSafeEqual()` or `crypto.subtle.verify()` to safely perform the comparison.
