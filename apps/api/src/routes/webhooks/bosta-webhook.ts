@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import { db } from '../../db';
 import { courierShipments } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
-import { timingSafeEqual } from 'node:crypto';
+import crypto, { timingSafeEqual } from 'node:crypto';
 
 export const bostaWebhookRoute = new Hono();
 
@@ -21,24 +21,15 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   const bodyRaw = await c.req.text();
 
   // Verify HMAC-SHA256
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-
-  const expectedBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(bodyRaw));
-  const expectedHex = Array.from(new Uint8Array(expectedBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  const expectedHex = crypto.createHmac('sha256', secret).update(bodyRaw).digest('hex');
 
   const sigBuf = Buffer.from(signature, 'hex');
   const expBuf = Buffer.from(expectedHex, 'hex');
 
-  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+  const hashedSig = crypto.createHash('sha256').update(sigBuf).digest();
+  const hashedExp = crypto.createHash('sha256').update(expBuf).digest();
+
+  if (!timingSafeEqual(hashedSig, hashedExp)) {
     return c.json({ data: null, error: 'invalid_signature', meta: null }, 401);
   }
 

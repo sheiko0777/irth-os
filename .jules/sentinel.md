@@ -1,0 +1,4 @@
+## 2024-06-06 - Prevent Timing Attacks in Webhook Signature Comparisons
+**Vulnerability:** Comparing webhook signatures or authentication tokens using standard equality operators (e.g., `!==`) or `timingSafeEqual` directly on variable-length buffers exposes the comparison to timing attacks, allowing an attacker to progressively guess the valid signature or token.
+**Learning:** Even when using `timingSafeEqual`, if the lengths of the two buffers differ, `timingSafeEqual` will throw an error immediately, creating a length-based timing leak. Furthermore, an early return if lengths differ gives away information.
+**Prevention:** Always hash both the expected and provided signatures/tokens to a constant length (e.g., SHA-256) before passing them to `crypto.timingSafeEqual`. This ensures the buffers being compared are always the exact same length, regardless of the input length, entirely mitigating timing vulnerabilities.
