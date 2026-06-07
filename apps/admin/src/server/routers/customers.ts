@@ -27,18 +27,22 @@ export const customersRouter = router({
           )
         : eq(customers.orgId, ctx.orgId);
 
-      const data = await ctx.db
-        .select()
-        .from(customers)
-        .where(whereClause)
-        .orderBy(desc(customers.createdAt))
-        .limit(input.pageSize)
-        .offset(offset);
+      // ⚡ Bolt: Batch independent queries to reduce latency
+      const [data, totalRowData] = await Promise.all([
+        ctx.db
+          .select()
+          .from(customers)
+          .where(whereClause)
+          .orderBy(desc(customers.createdAt))
+          .limit(input.pageSize)
+          .offset(offset),
+        ctx.db
+          .select({ count: count() })
+          .from(customers)
+          .where(whereClause)
+      ]);
 
-      const [totalRow] = await ctx.db
-        .select({ count: count() })
-        .from(customers)
-        .where(whereClause);
+      const totalRow = totalRowData[0];
 
       return {
         data,
@@ -168,7 +172,7 @@ export const customersRouter = router({
 
       const newBalance = (customer.loyaltyPoints ?? 0) + input.points;
 
-      // @ts-expect-error Drizzle transaction generic
+
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
           .update(customers)
@@ -216,7 +220,7 @@ export const customersRouter = router({
 
       const newBalance = currentBalance - input.points;
 
-      // @ts-expect-error Drizzle transaction generic
+
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
           .update(customers)
@@ -260,7 +264,7 @@ export const customersRouter = router({
       const newTotal = (customer.totalOrders ?? 0) + 1;
       const newSpent = (parseFloat(customer.totalSpent ?? '0') + input.orderAmount).toFixed(2);
 
-      // @ts-expect-error Drizzle transaction generic
+
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
           .update(customers)

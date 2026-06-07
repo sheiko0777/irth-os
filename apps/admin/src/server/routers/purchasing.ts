@@ -27,7 +27,7 @@ export const purchasingRouter = router({
       )
       .mutation(async ({ ctx, input }) => {
         const result = await withAudit(
-          ctx.db,
+          ctx.db as any,
           async () => {
             const [supplier] = await ctx.db
               .insert(suppliers)
@@ -80,7 +80,7 @@ export const purchasingRouter = router({
         };
 
         const result = await withAudit(
-          ctx.db,
+          ctx.db as any,
           async () => {
             const [updated] = await ctx.db
               .update(suppliers)
@@ -120,7 +120,7 @@ export const purchasingRouter = router({
         }
 
         const result = await withAudit(
-          ctx.db,
+          ctx.db as any,
           async () => {
             const [deleted] = await ctx.db
               .delete(suppliers)
@@ -248,7 +248,7 @@ export const purchasingRouter = router({
         const poNumber = `PO-${year}-${seq.toString().padStart(4, '0')}`;
         const totalAmt = typeof input.totalAmount === 'number' ? input.totalAmount.toString() : input.totalAmount;
 
-        // @ts-expect-error Drizzle transaction generic
+
         const result = await ctx.db.transaction(async (tx) => {
           const [po] = await tx
             .insert(purchaseOrders)
@@ -318,7 +318,7 @@ export const purchasingRouter = router({
         }
 
         const result = await withAudit(
-          ctx.db,
+          ctx.db as any,
           async () => {
             const [updated] = await ctx.db
               .update(purchaseOrders)
