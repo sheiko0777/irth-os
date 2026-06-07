@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import crypto from 'node:crypto';
 import { db } from '../../db';
 import { courierShipments } from '@irth/db';
 import { eq } from 'drizzle-orm';
@@ -13,7 +14,15 @@ aramexWebhookRoute.post('/', async (c: Context) => {
   }
 
   const headerToken = c.req.header('X-Aramex-Token');
-  if (headerToken !== token) {
+  if (!headerToken) {
+    return c.json({ data: null, error: 'missing_token', meta: null }, 401);
+  }
+
+  // Prevent timing attacks by hashing both tokens to constant length before comparison
+  const hashedExpected = crypto.createHash('sha256').update(token).digest();
+  const hashedHeader = crypto.createHash('sha256').update(headerToken).digest();
+
+  if (!crypto.timingSafeEqual(hashedExpected, hashedHeader)) {
     return c.json({ data: null, error: 'invalid_token', meta: null }, 401);
   }
 
