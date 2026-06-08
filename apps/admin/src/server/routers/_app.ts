@@ -1,4 +1,4 @@
-import { router } from '../trpc';
+﻿import { router } from '../trpc';
 import { dashboardRouter } from './dashboard';
 import { ordersRouter } from './orders';
 import { productsRouter } from './products';
@@ -16,6 +16,9 @@ import { analyticsRouter } from './analytics';
 import { couponsRouter } from './coupons';
 import { bulkRouter } from './bulk';
 import { notificationsRouter } from './notifications';
+import { stocktakingRouter } from './stocktaking';
+import { pricelistsRouter } from './pricelists';
+import { shippingRouter } from './shipping';
 
 export const appRouter = router({
     dashboard: dashboardRouter,
@@ -35,6 +38,9 @@ export const appRouter = router({
     coupons: couponsRouter,
     bulk: bulkRouter,
     notifications: notificationsRouter,
+    stocktaking: stocktakingRouter,
+    pricelists: pricelistsRouter,
+    shipping: shippingRouter,
 });
 
 export type AppRouter = typeof appRouter;

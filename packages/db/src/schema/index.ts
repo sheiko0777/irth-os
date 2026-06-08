@@ -1,4 +1,4 @@
-export * from './inventory';
+﻿export * from './inventory';
 export * from './outbox';
 export * from './orgSettings';
 export * from './etaInvoices';
@@ -6,3 +6,6 @@ export * from './couriers';
 export * from './returns';
 export * from './purchasing';
 export * from './coupons';
+export * from './stocktaking';
+export * from './pricelists';
+export * from './shippingZones';

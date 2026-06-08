@@ -1,4 +1,4 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
+﻿import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as baseSchema from './schema';
 import * as inventorySchema from './schema/inventory';
@@ -10,8 +10,11 @@ import * as returnsSchema from './schema/returns';
 import * as purchasingSchema from './schema/purchasing';
 import * as customersSchema from './schema/customers';
 import * as couponsSchema from './schema/coupons';
+import * as stocktakingSchema from './schema/stocktaking';
+import * as pricelistsSchema from './schema/pricelists';
+import * as shippingZonesSchema from './schema/shippingZones';
 
-const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema };
+const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema, ...stocktakingSchema, ...pricelistsSchema, ...shippingZonesSchema };
 import { auditLog } from './schema';
 
 export * from './schema';
@@ -24,6 +27,9 @@ export * from './schema/returns';
 export * from './schema/purchasing';
 export * from './schema/customers';
 export * from './schema/coupons';
+export * from './schema/stocktaking';
+export * from './schema/pricelists';
+export * from './schema/shippingZones';
 
 export const createDb = (url: string) => {
   // prepare: false required for Supabase Transaction pooler (port 6543)
