@@ -1,7 +1,7 @@
-﻿import { z } from 'zod';
+import { z } from 'zod';
 import { protectedProcedure, router } from '../trpc';
 import { priceLists, priceListItems } from '@irth/db';
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, inArray } from 'drizzle-orm';
 
 export const pricelistsRouter = router({
   list: protectedProcedure
@@ -13,19 +13,35 @@ export const pricelistsRouter = router({
         .where(eq(priceLists.orgId, ctx.orgId))
         .orderBy(desc(priceLists.createdAt));
 
-      const listsWithCounts = await Promise.all(
-        lists.map(async (pl) => {
-          const [{ cnt }] = await ctx.db
-            .select({ cnt: count(priceListItems.id) })
-            .from(priceListItems)
-            .where(eq(priceListItems.priceListId, pl.id));
-          return {
-            ...pl,
-            itemCount: Number(cnt ?? 0),
-            discountPercent: pl.discountPercent ? Number(pl.discountPercent) : null,
-          };
+      if (lists.length === 0) {
+        return [];
+      }
+
+      const listIds = lists.map((pl) => pl.id);
+
+      const counts = await ctx.db
+        .select({
+          priceListId: priceListItems.priceListId,
+          cnt: count(priceListItems.id),
         })
-      );
+        .from(priceListItems)
+        .where(inArray(priceListItems.priceListId, listIds))
+        .groupBy(priceListItems.priceListId);
+
+      const countsMap = new Map<string, number>();
+      for (const row of counts) {
+        if (row.priceListId) {
+          countsMap.set(row.priceListId, Number(row.cnt));
+        }
+      }
+
+      const listsWithCounts = lists.map((pl) => {
+        return {
+          ...pl,
+          itemCount: countsMap.get(pl.id) ?? 0,
+          discountPercent: pl.discountPercent ? Number(pl.discountPercent) : null,
+        };
+      });
 
       return listsWithCounts;
     }),

@@ -1,7 +1,7 @@
-﻿import { z } from 'zod';
+import { z } from 'zod';
 import { protectedProcedure, router } from '../trpc';
 import { shippingZones, shippingRates } from '@irth/db';
-import { eq, and, count } from 'drizzle-orm';
+import { eq, and, count, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const shippingRouter = router({
@@ -15,19 +15,35 @@ export const shippingRouter = router({
           .where(eq(shippingZones.orgId, ctx.orgId))
           .orderBy(shippingZones.name);
 
-        const zonesWithCounts = await Promise.all(
-          zones.map(async (zone) => {
-            const [{ cnt }] = await ctx.db
-              .select({ cnt: count(shippingRates.id) })
-              .from(shippingRates)
-              .where(eq(shippingRates.zoneId, zone.id));
-            return {
-              ...zone,
-              countries: (zone.countries as string[]) ?? [],
-              rateCount: Number(cnt ?? 0),
-            };
+        if (zones.length === 0) {
+          return { data: [], error: null };
+        }
+
+        const zoneIds = zones.map((z) => z.id);
+
+        const counts = await ctx.db
+          .select({
+            zoneId: shippingRates.zoneId,
+            cnt: count(shippingRates.id),
           })
-        );
+          .from(shippingRates)
+          .where(inArray(shippingRates.zoneId, zoneIds))
+          .groupBy(shippingRates.zoneId);
+
+        const countsMap = new Map<string, number>();
+        for (const row of counts) {
+          if (row.zoneId) {
+            countsMap.set(row.zoneId, Number(row.cnt));
+          }
+        }
+
+        const zonesWithCounts = zones.map((zone) => {
+          return {
+            ...zone,
+            countries: (zone.countries as string[]) ?? [],
+            rateCount: countsMap.get(zone.id) ?? 0,
+          };
+        });
 
         return { data: zonesWithCounts, error: null };
       }),

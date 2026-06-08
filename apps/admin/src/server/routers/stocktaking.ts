@@ -1,7 +1,7 @@
-﻿import { z } from 'zod';
+import { z } from 'zod';
 import { protectedProcedure, router } from '../trpc';
 import { stocktakingSessions, stocktakingItems } from '@irth/db';
-import { eq, and, desc, count, sql } from 'drizzle-orm';
+import { eq, and, desc, count, sql, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const stocktakingRouter = router({
@@ -16,22 +16,40 @@ export const stocktakingRouter = router({
           .orderBy(desc(stocktakingSessions.createdAt))
           .limit(50);
 
-        const sessionsWithCounts = await Promise.all(
-          sessions.map(async (s) => {
-            const [counts] = await ctx.db
-              .select({
-                itemCount: count(stocktakingItems.id),
-                varianceCount: sql<number>`COALESCE(COUNT(CASE WHEN ${stocktakingItems.variance} != 0 AND ${stocktakingItems.actualQuantity} IS NOT NULL THEN 1 END), 0)`,
-              })
-              .from(stocktakingItems)
-              .where(eq(stocktakingItems.sessionId, s.id));
-            return {
-              ...s,
-              itemCount: Number(counts?.itemCount ?? 0),
-              varianceCount: Number(counts?.varianceCount ?? 0),
-            };
+        if (sessions.length === 0) {
+          return { data: [], error: null };
+        }
+
+        const sessionIds = sessions.map((s) => s.id);
+
+        const counts = await ctx.db
+          .select({
+            sessionId: stocktakingItems.sessionId,
+            itemCount: count(stocktakingItems.id),
+            varianceCount: sql<number>`COALESCE(COUNT(CASE WHEN ${stocktakingItems.variance} != 0 AND ${stocktakingItems.actualQuantity} IS NOT NULL THEN 1 END), 0)`,
           })
-        );
+          .from(stocktakingItems)
+          .where(inArray(stocktakingItems.sessionId, sessionIds))
+          .groupBy(stocktakingItems.sessionId);
+
+        const countsMap = new Map<string, { itemCount: number; varianceCount: number }>();
+        for (const row of counts) {
+          if (row.sessionId) {
+            countsMap.set(row.sessionId, {
+              itemCount: Number(row.itemCount),
+              varianceCount: Number(row.varianceCount),
+            });
+          }
+        }
+
+        const sessionsWithCounts = sessions.map((s) => {
+          const c = countsMap.get(s.id);
+          return {
+            ...s,
+            itemCount: c?.itemCount ?? 0,
+            varianceCount: c?.varianceCount ?? 0,
+          };
+        });
 
         return { data: sessionsWithCounts, error: null };
       }),

@@ -19,13 +19,7 @@ const QUICK_ACTIONS = [
   { label: 'التقارير', icon: 'R', href: '/analytics', keyword: 'analytics' },
 ];
 
-const HELP_TEXT = الأوامر المتاحة:
-• "طلبات" أو "orders" — الانتقال للطلبات
-• "منتجات" أو "products" — الانتقال للمنتجات
-• "عملاء" أو "customers" — الانتقال للعملاء
-• "مخزون" أو "inventory" — الانتقال للمخزون
-• "ابحث عن [كلمة]" — البحث في النظام
-• "مساعدة" — عرض هذه القائمة;
+const HELP_TEXT = `الأوامر المتاحة:\n• "طلبات" أو "orders" — الانتقال للطلبات\n• "منتجات" أو "products" — الانتقال للمنتجات\n• "عملاء" أو "customers" — الانتقال للعملاء\n• "مخزون" أو "inventory" — الانتقال للمخزون\n• "ابحث عن [كلمة]" — البحث في النظام\n• "مساعدة" — عرض هذه القائمة`;
 
 function matchIntent(text: string): { type: string; query: string } {
   const t = text.trim().toLowerCase();
