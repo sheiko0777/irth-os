@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRTH OS — Wireframe</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f0f0f0; color: #333; }
+
+  /* --- WIREFRAME PALETTE --- */
+  :root {
+    --wf-bg: #f5f5f5;
+    --wf-surface: #ffffff;
+    --wf-border: #bbb;
+    --wf-muted: #ddd;
+    --wf-accent: #555;
+    --wf-label: #888;
+    --wf-dark: #333;
+    --wf-fill: #e8e8e8;
+  }
+
+  /* layout */
+  .page { display: flex; flex-direction: column; gap: 48px; padding: 40px; max-width: 1200px; margin: 0 auto; }
+  .screen-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #999; margin-bottom: 8px; }
+  .screen-label { font-size: 13px; color: #aaa; margin-top: 6px; }
+
+  .frame { border: 2px solid var(--wf-border); background: var(--wf-surface); border-radius: 8px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+
+  /* APP SHELL */
+  .shell { display: flex; height: 580px; }
+
+  .sidebar { width: 200px; min-width: 200px; background: var(--wf-fill); border-right: 2px solid var(--wf-border); display: flex; flex-direction: column; }
+  .sidebar-logo { height: 52px; border-bottom: 1px solid var(--wf-border); display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+  .logo-box { width: 28px; height: 28px; background: var(--wf-accent); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; font-size: 13px; flex-shrink: 0; }
+  .logo-text { font-weight: 700; font-size: 13px; color: var(--wf-dark); }
+  .nav { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  .nav-item { padding: 7px 12px; border-radius: 5px; font-size: 12px; color: var(--wf-label); display: flex; align-items: center; gap: 6px; }
+  .nav-item.active { background: #ddd; color: var(--wf-dark); font-weight: 600; border-right: 3px solid var(--wf-accent); }
+  .nav-item .dot { width: 7px; height: 7px; background: currentColor; border-radius: 50%; opacity: 0.4; flex-shrink: 0; }
+  .nav-item.active .dot { opacity: 1; }
+  .nav-group { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: #ccc; padding: 8px 12px 3px; }
+  .sidebar-footer { border-top: 1px solid var(--wf-border); padding: 12px 8px; }
+  .user-line { display: flex; align-items: center; gap: 8px; padding: 6px 8px; }
+  .avatar { width: 26px; height: 26px; background: var(--wf-accent); border-radius: 50%; flex-shrink: 0; }
+  .user-email { font-size: 10px; color: var(--wf-label); }
+  .logout-btn { width: 100%; padding: 6px; border: 1px solid var(--wf-border); border-radius: 5px; font-size: 11px; color: #999; background: transparent; text-align: center; margin-top: 4px; }
+
+  .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { height: 52px; border-bottom: 1px solid var(--wf-border); display: flex; align-items: center; padding: 0 20px; gap: 12px; background: var(--wf-surface); }
+  .topbar-title { font-size: 14px; font-weight: 700; color: var(--wf-dark); flex: 1; }
+  .topbar-action { padding: 6px 14px; background: var(--wf-accent); color: #fff; border-radius: 5px; font-size: 11px; }
+  .topbar-search { height: 30px; border: 1px solid var(--wf-border); border-radius: 5px; width: 160px; background: var(--wf-fill); }
+  .content { flex: 1; padding: 20px; overflow: hidden; background: var(--wf-bg); display: flex; flex-direction: column; gap: 16px; }
+
+  /* KPI CARDS */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .kpi { background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 6px; padding: 14px 16px; }
+  .kpi-label { font-size: 10px; color: var(--wf-label); letter-spacing: 0.5px; }
+  .kpi-value { font-size: 22px; font-weight: 700; color: var(--wf-dark); margin: 6px 0 2px; }
+  .kpi-sub { font-size: 10px; color: var(--wf-label); }
+  .kpi-bar { height: 3px; border-radius: 2px; background: var(--wf-muted); margin-top: 8px; }
+  .kpi-bar span { display: block; height: 100%; border-radius: 2px; background: var(--wf-accent); }
+
+  /* TABLE */
+  .table-card { background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 6px; overflow: hidden; }
+  .table-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--wf-muted); gap: 10px; }
+  .table-title { font-size: 13px; font-weight: 600; flex: 1; }
+  .filter-chip { padding: 4px 10px; border: 1px solid var(--wf-border); border-radius: 20px; font-size: 10px; color: var(--wf-label); }
+  .filter-chip.active { background: var(--wf-accent); color: #fff; border-color: var(--wf-accent); }
+  .tbl { width: 100%; }
+  .tbl thead tr { background: var(--wf-fill); }
+  .tbl th, .tbl td { padding: 8px 12px; font-size: 11px; text-align: left; border-bottom: 1px solid var(--wf-muted); }
+  .tbl th { color: var(--wf-label); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; font-size: 10px; }
+  .tbl tr:last-child td { border-bottom: none; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; border: 1px solid; }
+  .pill-pending { color: #a07000; border-color: #e0c060; background: #fffbe6; }
+  .pill-shipped { color: #006040; border-color: #60c080; background: #e6fff5; }
+  .pill-cancelled { color: #900; border-color: #e06060; background: #fff0f0; }
+  .pill-member { color: #444; border-color: #aaa; background: #f5f5f5; }
+  .pill-admin { color: #004080; border-color: #6090d0; background: #e8f0ff; }
+
+  /* CHARTS */
+  .chart-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+  .chart-box { background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 6px; padding: 16px; }
+  .chart-title { font-size: 12px; font-weight: 600; margin-bottom: 12px; color: var(--wf-dark); }
+  .bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 80px; padding-top: 8px; }
+  .bar { flex: 1; background: var(--wf-muted); border-radius: 3px 3px 0 0; }
+  .bar-label { font-size: 9px; color: #ccc; text-align: center; margin-top: 4px; }
+  .donut { width: 80px; height: 80px; border-radius: 50%; background: conic-gradient(var(--wf-accent) 0% 45%, #ccc 45% 70%, #999 70% 85%, #ddd 85% 100%); margin: 0 auto; }
+  .legend { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--wf-label); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* FORM / DETAIL */
+  .detail-layout { display: grid; grid-template-columns: 1fr 280px; gap: 16px; height: 100%; }
+  .form-card { background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 6px; padding: 16px; }
+  .form-title { font-size: 13px; font-weight: 600; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--wf-muted); }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 10px; color: var(--wf-label); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .field-input { height: 32px; border: 1px solid var(--wf-border); border-radius: 4px; background: var(--wf-fill); }
+  .field-input.tall { height: 64px; }
+  .sidebar-card { background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 6px; padding: 14px; margin-bottom: 10px; }
+  .sidebar-card-title { font-size: 11px; font-weight: 600; margin-bottom: 10px; color: var(--wf-dark); }
+  .meta-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .meta-key { font-size: 10px; color: var(--wf-label); }
+  .meta-val { font-size: 10px; font-weight: 600; }
+  .action-btn { width: 100%; padding: 7px; border-radius: 5px; font-size: 11px; margin-bottom: 6px; text-align: center; border: 1px solid var(--wf-border); }
+  .action-btn.primary { background: var(--wf-accent); color: #fff; border-color: var(--wf-accent); }
+
+  /* SETTINGS */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* CHATBOT BUBBLE */
+  .chatbot { position: absolute; bottom: 16px; left: 16px; width: 44px; height: 44px; background: var(--wf-accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; box-shadow: 0 3px 10px rgba(0,0,0,0.2); }
+
+  /* LOGIN */
+  .login-shell { display: flex; height: 400px; align-items: center; justify-content: center; background: var(--wf-bg); }
+  .login-card { width: 340px; background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 8px; padding: 32px; }
+  .login-logo { text-align: center; margin-bottom: 24px; }
+  .login-logo .logo-box { margin: 0 auto 8px; width: 40px; height: 40px; font-size: 18px; }
+  .login-title { font-size: 16px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+  .login-sub { font-size: 11px; color: var(--wf-label); text-align: center; margin-bottom: 24px; }
+  .login-field { margin-bottom: 14px; }
+  .login-field label { font-size: 11px; color: var(--wf-label); display: block; margin-bottom: 4px; font-weight: 600; }
+  .login-field .field-input { width: 100%; }
+  .login-btn { width: 100%; padding: 9px; background: var(--wf-accent); color: #fff; border: none; border-radius: 5px; font-size: 13px; font-weight: 600; margin-top: 6px; }
+
+  /* MOBILE */
+  .mobile-shell { display: flex; border: 2px solid var(--wf-border); border-radius: 24px; overflow: hidden; width: 280px; height: 560px; flex-direction: column; background: var(--wf-surface); }
+  .mobile-status { height: 28px; background: var(--wf-fill); border-bottom: 1px solid var(--wf-muted); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-size: 9px; color: var(--wf-label); }
+  .mobile-nav { height: 52px; border-top: 1px solid var(--wf-border); background: var(--wf-fill); display: flex; }
+  .mobile-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 9px; color: var(--wf-label); border-right: 1px solid var(--wf-muted); }
+  .mobile-tab:last-child { border-right: none; }
+  .mobile-tab.active { color: var(--wf-dark); font-weight: 600; }
+  .tab-icon { width: 16px; height: 16px; background: currentColor; border-radius: 3px; opacity: 0.5; }
+  .mobile-tab.active .tab-icon { opacity: 1; }
+  .mobile-content { flex: 1; overflow: hidden; padding: 14px 12px; background: var(--wf-bg); display: flex; flex-direction: column; gap: 10px; }
+  .mobile-header { font-size: 14px; font-weight: 700; color: var(--wf-dark); }
+  .mobile-kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mobile-kpi { background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 6px; padding: 10px 12px; }
+  .mobile-kpi-val { font-size: 18px; font-weight: 700; color: var(--wf-dark); }
+  .mobile-kpi-lbl { font-size: 9px; color: var(--wf-label); }
+  .mobile-list { display: flex; flex-direction: column; gap: 6px; }
+  .mobile-row { background: var(--wf-surface); border: 1px solid var(--wf-border); border-radius: 5px; padding: 9px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .mobile-row-title { font-size: 11px; font-weight: 600; color: var(--wf-dark); }
+  .mobile-row-sub { font-size: 9px; color: var(--wf-label); margin-top: 2px; }
+
+  /* ANNOTATIONS */
+  .annotation { display: flex; align-items: flex-start; gap: 8px; background: #fffde7; border: 1px solid #f0e060; border-radius: 5px; padding: 10px 14px; font-size: 11px; color: #555; }
+  .annotation::before { content: '📌'; font-size: 13px; flex-shrink: 0; }
+
+  /* section dividers */
+  .section { margin-bottom: 56px; }
+  .section > h2 { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #aaa; margin-bottom: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; }
+
+  .screens-row { display: flex; gap: 40px; flex-wrap: wrap; }
+  .screen-wrap { flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div style="text-align:center; padding: 20px 0 10px;">
+    <h1 style="font-size:28px; font-weight:900; color:#333;">IRTH OS — Admin Dashboard</h1>
+    <p style="color:#999; font-size:13px; margin-top:6px;">Wireframe · All screens · v1.0</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>1 · App Shell (Global Layout)</h2>
+    <div class="frame shell" style="position:relative;">
+
+      <!-- SIDEBAR -->
+      <div class="sidebar">
+        <div class="sidebar-logo">
+          <div class="logo-box">إ</div>
+          <span class="logo-text">نظام إرث</span>
+        </div>
+        <div class="nav">
+          <span class="nav-group">Main</span>
+          <div class="nav-item active"><span class="dot"></span> الرئيسية (Dashboard)</div>
+          <div class="nav-item"><span class="dot"></span> الطلبات (Orders)</div>
+          <div class="nav-item"><span class="dot"></span> المخزون (Inventory)</div>
+          <div class="nav-item"><span class="dot"></span> المنتجات (Products)</div>
+          <div class="nav-item"><span class="dot"></span> التصنيفات (Categories)</div>
+          <div class="nav-item"><span class="dot"></span> العملاء (Customers)</div>
+          <span class="nav-group">Finance</span>
+          <div class="nav-item"><span class="dot"></span> المالية والتقارير</div>
+          <div class="nav-item"><span class="dot"></span> التقارير والتحليلات</div>
+          <div class="nav-item"><span class="dot"></span> المشتريات</div>
+          <div class="nav-item"><span class="dot"></span> المرتجعات</div>
+          <div class="nav-item"><span class="dot"></span> التسوية والشحن</div>
+          <span class="nav-group">Config</span>
+          <div class="nav-item"><span class="dot"></span> الكوبونات والخصومات</div>
+          <div class="nav-item"><span class="dot"></span> الإشعارات</div>
+          <div class="nav-item"><span class="dot"></span> الفواتير الإلكترونية</div>
+          <div class="nav-item"><span class="dot"></span> التكاملات</div>
+          <div class="nav-item"><span class="dot"></span> الإعدادات</div>
+          <div class="nav-item"><span class="dot"></span> الأعضاء</div>
+        </div>
+        <div class="sidebar-footer">
+          <div class="user-line">
+            <div class="avatar"></div>
+            <span class="user-email">user@org.com</span>
+          </div>
+          <div class="logout-btn">تسجيل الخروج</div>
+        </div>
+      </div>
+
+      <!-- MAIN AREA -->
+      <div class="main-area">
+        <div class="topbar">
+          <span class="topbar-title">لوحة التحكم</span>
+          <div class="topbar-search"></div>
+          <div class="topbar-action">+ إضافة</div>
+        </div>
+        <div class="content">
+          <!-- KPIs -->
+          <div class="kpi-row">
+            <div class="kpi">
+              <div class="kpi-label">طلبات اليوم</div>
+              <div class="kpi-value">42</div>
+              <div class="kpi-sub">مقارنة بالأمس</div>
+              <div class="kpi-bar"><span style="width:65%"></span></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">الإيرادات اليوم</div>
+              <div class="kpi-value">18,400 ج.م</div>
+              <div class="kpi-sub">إجمالي الدخل اليومي</div>
+              <div class="kpi-bar"><span style="width:80%"></span></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">طلبات معلقة</div>
+              <div class="kpi-value">7</div>
+              <div class="kpi-sub">في انتظار المراجعة</div>
+              <div class="kpi-bar"><span style="width:30%"></span></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">منتجات نشطة</div>
+              <div class="kpi-value">236</div>
+              <div class="kpi-sub">منتجات متاحة للبيع</div>
+              <div class="kpi-bar"><span style="width:90%"></span></div>
+            </div>
+          </div>
+          <!-- Charts -->
+          <div class="chart-row">
+            <div class="chart-box">
+              <div class="chart-title">الطلبات — آخر 7 أيام</div>
+              <div class="bar-chart">
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:40%"></div><div class="bar-label">Sat</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:65%"></div><div class="bar-label">Sun</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:55%"></div><div class="bar-label">Mon</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:80%"></div><div class="bar-label">Tue</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:50%"></div><div class="bar-label">Wed</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:90%"></div><div class="bar-label">Thu</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:70%; background:#555"></div><div class="bar-label">Fri</div></div>
+              </div>
+            </div>
+            <div class="chart-box">
+              <div class="chart-title">حالة الطلبات</div>
+              <div class="donut"></div>
+              <div class="legend">
+                <div class="legend-item"><div class="legend-dot" style="background:#555"></div>مؤكدة 45%</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#ccc"></div>معلقة 25%</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#999"></div>مشحونة 15%</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#ddd"></div>ملغاة 15%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHATBOT -->
+      <div class="chatbot">💬</div>
+    </div>
+    <div class="annotation">Sidebar is fixed-width 240px · RTL layout with gold accent active state · Chatbot floating button fixed bottom-left · Header shows page title + search + primary CTA</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>2 · Orders List Page</h2>
+    <div class="frame" style="height:480px; display:flex; flex-direction:column;">
+      <div class="topbar">
+        <span class="topbar-title">الطلبات (Orders)</span>
+        <div class="filter-chip active">الكل</div>
+        <div class="filter-chip">معلقة</div>
+        <div class="filter-chip">مشحونة</div>
+        <div class="filter-chip">ملغاة</div>
+        <div style="flex:1"></div>
+        <div class="topbar-search"></div>
+        <div class="topbar-action">تصدير CSV</div>
+      </div>
+      <div style="flex:1; padding:16px; background:var(--wf-bg); overflow:hidden;">
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title">قائمة الطلبات</span>
+            <span style="font-size:10px; color:#aaa;">42 طلب</span>
+          </div>
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>#</th><th>رقم الطلب</th><th>العميل</th><th>المنتجات</th><th>الإجمالي</th><th>الحالة</th><th>التاريخ</th><th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><input type="checkbox" style="width:12px; height:12px;"></td>
+                <td style="font-weight:600; font-size:11px;">IRT-2026-0042</td>
+                <td style="font-size:11px;">أحمد محمد</td>
+                <td style="font-size:11px;">3 منتجات</td>
+                <td style="font-weight:600; font-size:11px;">450 ج.م</td>
+                <td><span class="pill pill-pending">معلق</span></td>
+                <td style="font-size:10px; color:#aaa;">2026-06-09</td>
+                <td style="display:flex; gap:4px;">
+                  <span style="font-size:10px; color:#555; border:1px solid #ddd; padding:2px 8px; border-radius:4px;">عرض</span>
+                  <span style="font-size:10px; color:#555; border:1px solid #ddd; padding:2px 8px; border-radius:4px;">طباعة</span>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" style="width:12px; height:12px;"></td>
+                <td style="font-weight:600; font-size:11px;">IRT-2026-0041</td>
+                <td style="font-size:11px;">سارة علي</td>
+                <td style="font-size:11px;">1 منتج</td>
+                <td style="font-weight:600; font-size:11px;">120 ج.م</td>
+                <td><span class="pill pill-shipped">مشحون</span></td>
+                <td style="font-size:10px; color:#aaa;">2026-06-08</td>
+                <td style="display:flex; gap:4px;">
+                  <span style="font-size:10px; color:#555; border:1px solid #ddd; padding:2px 8px; border-radius:4px;">عرض</span>
+                  <span style="font-size:10px; color:#555; border:1px solid #ddd; padding:2px 8px; border-radius:4px;">طباعة</span>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" style="width:12px; height:12px;"></td>
+                <td style="font-weight:600; font-size:11px;">IRT-2026-0040</td>
+                <td style="font-size:11px;">محمود حسن</td>
+                <td style="font-size:11px;">5 منتجات</td>
+                <td style="font-weight:600; font-size:11px;">980 ج.م</td>
+                <td><span class="pill pill-cancelled">ملغي</span></td>
+                <td style="font-size:10px; color:#aaa;">2026-06-07</td>
+                <td style="display:flex; gap:4px;">
+                  <span style="font-size:10px; color:#555; border:1px solid #ddd; padding:2px 8px; border-radius:4px;">عرض</span>
+                  <span style="font-size:10px; color:#555; border:1px solid #ddd; padding:2px 8px; border-radius:4px;">طباعة</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="8" style="text-align:center; padding:20px; color:#ccc; font-size:11px;">— المزيد من الطلبات —</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">Status filter chips · Checkbox bulk selection · CSV export · Pagination implied · Row actions: view detail + print invoice</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>3 · Order Detail Page</h2>
+    <div class="frame" style="height:520px; display:flex; flex-direction:column;">
+      <div class="topbar">
+        <span style="font-size:11px; color:#aaa;">← الطلبات /</span>
+        <span class="topbar-title">IRT-2026-0042 · تفاصيل الطلب</span>
+        <span class="pill pill-pending">معلق</span>
+        <div style="flex:1"></div>
+        <div class="topbar-action">تأكيد الطلب</div>
+      </div>
+      <div style="flex:1; padding:16px; background:var(--wf-bg); overflow:hidden;">
+        <div class="detail-layout">
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="form-card">
+              <div class="form-title">بنود الطلب (Order Items)</div>
+              <table class="tbl">
+                <thead><tr><th>المنتج</th><th>SKU</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td style="font-size:11px;">تمر مجدول فاخر 500g</td>
+                    <td style="font-size:10px; color:#aaa;">IRTH-001</td>
+                    <td style="font-size:11px;">2</td>
+                    <td style="font-size:11px;">150 ج.م</td>
+                    <td style="font-weight:600; font-size:11px;">300 ج.م</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:11px;">زيت العود الطبيعي 50ml</td>
+                    <td style="font-size:10px; color:#aaa;">IRTH-045</td>
+                    <td style="font-size:11px;">1</td>
+                    <td style="font-size:11px;">150 ج.م</td>
+                    <td style="font-weight:600; font-size:11px;">150 ج.م</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="form-card">
+              <div class="form-title">عنوان الشحن</div>
+              <div class="field-row">
+                <div class="field"><label>الاسم</label><div class="field-input"></div></div>
+                <div class="field"><label>الهاتف</label><div class="field-input"></div></div>
+              </div>
+              <div class="field"><label>العنوان</label><div class="field-input tall"></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="sidebar-card">
+              <div class="sidebar-card-title">ملخص الطلب</div>
+              <div class="meta-row"><span class="meta-key">المجموع الفرعي</span><span class="meta-val">450 ج.م</span></div>
+              <div class="meta-row"><span class="meta-key">الشحن</span><span class="meta-val">30 ج.م</span></div>
+              <div class="meta-row"><span class="meta-key">الخصم</span><span class="meta-val">-20 ج.م</span></div>
+              <div class="meta-row" style="border-top:1px solid #eee; padding-top:8px; margin-top:4px;">
+                <span class="meta-key" style="font-weight:700;">الإجمالي</span>
+                <span class="meta-val" style="font-size:13px;">460 ج.م</span>
+              </div>
+            </div>
+            <div class="sidebar-card">
+              <div class="sidebar-card-title">إجراءات</div>
+              <div class="action-btn primary">✓ تأكيد الطلب</div>
+              <div class="action-btn">🚚 تعيين شحن</div>
+              <div class="action-btn">🖨 طباعة الفاتورة</div>
+              <div class="action-btn" style="color:#900; border-color:#e06060;">✕ إلغاء الطلب</div>
+            </div>
+            <div class="sidebar-card">
+              <div class="sidebar-card-title">بيانات العميل</div>
+              <div class="meta-row"><span class="meta-key">الاسم</span><span class="meta-val">أحمد محمد</span></div>
+              <div class="meta-row"><span class="meta-key">الطلبات السابقة</span><span class="meta-val">12</span></div>
+              <div class="meta-row"><span class="meta-key">إجمالي الإنفاق</span><span class="meta-val">3,200 ج.م</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">Two-column layout: left = order items + shipping address · right = summary sidebar with order total, actions, customer info · Print invoice navigates to /orders/[id]/print</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>4 · Products Page</h2>
+    <div class="frame" style="height:460px; display:flex; flex-direction:column;">
+      <div class="topbar">
+        <span class="topbar-title">المنتجات (Products)</span>
+        <div class="filter-chip active">الكل</div>
+        <div class="filter-chip">نشط</div>
+        <div class="filter-chip">مسودة</div>
+        <div style="flex:1"></div>
+        <div class="topbar-search"></div>
+        <div class="topbar-action">+ منتج جديد</div>
+      </div>
+      <div style="flex:1; padding:16px; background:var(--wf-bg); overflow:hidden;">
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title">قائمة المنتجات</span>
+            <div class="filter-chip">الفئة ▾</div>
+            <div class="filter-chip">السعر ▾</div>
+          </div>
+          <table class="tbl">
+            <thead>
+              <tr><th></th><th>الصورة</th><th>الاسم</th><th>SKU</th><th>الفئة</th><th>السعر</th><th>المخزون</th><th>الحالة</th><th>إجراءات</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><input type="checkbox" style="width:12px; height:12px;"></td>
+                <td><div style="width:32px;height:32px;background:#ddd;border-radius:4px;"></div></td>
+                <td style="font-size:11px; font-weight:600;">تمر مجدول 500g</td>
+                <td style="font-size:10px; color:#aaa;">IRTH-001</td>
+                <td style="font-size:11px;">تمور</td>
+                <td style="font-size:11px; font-weight:600;">150 ج.م</td>
+                <td style="font-size:11px;">84</td>
+                <td><span class="pill pill-shipped">نشط</span></td>
+                <td style="display:flex; gap:4px;">
+                  <span style="font-size:10px; border:1px solid #ddd; padding:2px 7px; border-radius:4px;">تعديل</span>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" style="width:12px; height:12px;"></td>
+                <td><div style="width:32px;height:32px;background:#ddd;border-radius:4px;"></div></td>
+                <td style="font-size:11px; font-weight:600;">زيت العود 50ml</td>
+                <td style="font-size:10px; color:#aaa;">IRTH-045</td>
+                <td style="font-size:11px;">عطور</td>
+                <td style="font-size:11px; font-weight:600;">150 ج.م</td>
+                <td style="font-size:11px; color:#a00;">2 ⚠</td>
+                <td><span class="pill pill-shipped">نشط</span></td>
+                <td style="display:flex; gap:4px;">
+                  <span style="font-size:10px; border:1px solid #ddd; padding:2px 7px; border-radius:4px;">تعديل</span>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" style="width:12px; height:12px;"></td>
+                <td><div style="width:32px;height:32px;background:#ddd;border-radius:4px;"></div></td>
+                <td style="font-size:11px; font-weight:600;">عسل السدر الملكي</td>
+                <td style="font-size:10px; color:#aaa;">IRTH-072</td>
+                <td style="font-size:11px;">عسل</td>
+                <td style="font-size:11px; font-weight:600;">320 ج.م</td>
+                <td style="font-size:11px;">0</td>
+                <td><span class="pill pill-pending">مسودة</span></td>
+                <td style="display:flex; gap:4px;">
+                  <span style="font-size:10px; border:1px solid #ddd; padding:2px 7px; border-radius:4px;">تعديل</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">Product thumbnail · Low stock warning (⚠) on inventory &lt; 5 · Edit navigates to /products/[id]/edit · New product → /products/new</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>5 · Settings — Members Page</h2>
+    <div class="frame" style="height:360px; display:flex; flex-direction:column;">
+      <div class="topbar">
+        <span class="topbar-title">الإعدادات / الأعضاء</span>
+      </div>
+      <div style="flex:1; padding:16px; background:var(--wf-bg); overflow:hidden;">
+        <div class="settings-grid">
+          <div class="form-card">
+            <div class="form-title">الأعضاء الحاليين</div>
+            <table class="tbl">
+              <thead><tr><th>معرف المستخدم</th><th>الدور الحالي</th><th>تغيير الدور</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="font-size:11px;">user-1</td>
+                  <td><span class="pill pill-cancelled" style="color:#700; border-color:#c08080; background:#fff0f0;">owner</span></td>
+                  <td style="font-size:10px; color:#aaa;">— (محمي)</td>
+                </tr>
+                <tr>
+                  <td style="font-size:11px;">user-2</td>
+                  <td><span class="pill pill-member">member</span></td>
+                  <td>
+                    <select style="border:1px solid #ddd; border-radius:4px; padding:3px 6px; font-size:11px; background:#f5f5f5;">
+                      <option>admin</option>
+                      <option selected>member</option>
+                    </select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="form-card">
+            <div class="form-title">دعوة عضو جديد</div>
+            <div class="field" style="margin-bottom:10px;"><label>البريد الإلكتروني</label><div class="field-input"></div></div>
+            <div class="field" style="margin-bottom:14px;"><label>الدور</label>
+              <select style="height:32px; border:1px solid #ddd; border-radius:4px; font-size:11px; background:#f5f5f5; width:100%;">
+                <option>admin</option><option selected>member</option>
+              </select>
+            </div>
+            <div class="action-btn primary">إرسال الدعوة</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">Owner role is protected — no select shown · Non-owners get admin/member dropdown (calls members.changeRole tRPC mutation on change) · Invite form sends email via Resend API</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>6 · Finance & Analytics Pages</h2>
+    <div class="screens-row">
+      <div class="screen-wrap">
+        <div class="screen-title">Finance Report</div>
+        <div class="frame" style="width:520px; height:340px; display:flex; flex-direction:column;">
+          <div class="topbar"><span class="topbar-title">المالية والتقارير</span><div style="flex:1"></div><div class="topbar-action">تصدير</div></div>
+          <div style="flex:1; padding:14px; background:var(--wf-bg); display:flex; flex-direction:column; gap:10px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+              <div class="kpi"><div class="kpi-label">الإيرادات</div><div class="kpi-value" style="font-size:16px;">84,200</div><div class="kpi-sub">ج.م هذا الشهر</div></div>
+              <div class="kpi"><div class="kpi-label">المصروفات</div><div class="kpi-value" style="font-size:16px;">12,400</div><div class="kpi-sub">ج.م هذا الشهر</div></div>
+              <div class="kpi"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="font-size:16px;">71,800</div><div class="kpi-sub">ج.م هذا الشهر</div></div>
+            </div>
+            <div class="chart-box" style="flex:1;">
+              <div class="chart-title">الإيرادات الشهرية</div>
+              <div class="bar-chart" style="height:100px;">
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:50%"></div><div class="bar-label">Jan</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:70%"></div><div class="bar-label">Feb</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:60%"></div><div class="bar-label">Mar</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:85%"></div><div class="bar-label">Apr</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:75%; background:#555"></div><div class="bar-label">May</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;flex:1"><div class="bar" style="height:95%; background:#555"></div><div class="bar-label">Jun</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen-wrap">
+        <div class="screen-title">Analytics / Coupons Tabs</div>
+        <div class="frame" style="width:360px; height:340px; display:flex; flex-direction:column;">
+          <div style="height:36px; border-bottom:1px solid #ddd; display:flex; align-items:flex-end;">
+            <div style="padding:8px 16px; font-size:11px; border-bottom:2px solid #555; font-weight:700; color:#333;">المبيعات</div>
+            <div style="padding:8px 16px; font-size:11px; color:#aaa;">المنتجات</div>
+            <div style="padding:8px 16px; font-size:11px; color:#aaa;">العملاء</div>
+          </div>
+          <div style="flex:1; padding:14px; background:var(--wf-bg); display:flex; flex-direction:column; gap:10px; overflow:hidden;">
+            <div class="kpi-row" style="grid-template-columns:1fr 1fr;">
+              <div class="kpi"><div class="kpi-label">إجمالي المبيعات</div><div class="kpi-value" style="font-size:16px;">1,240</div></div>
+              <div class="kpi"><div class="kpi-label">متوسط قيمة الطلب</div><div class="kpi-value" style="font-size:16px;">340</div><div class="kpi-sub">ج.م</div></div>
+            </div>
+            <div class="chart-box" style="flex:1;">
+              <div class="chart-title">أفضل المنتجات مبيعاً</div>
+              <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+                <div style="display:flex; align-items:center; gap:8px;"><div style="width:60%; height:8px; background:#555; border-radius:4px;"></div><span style="font-size:10px; color:#666;">تمر مجدول</span></div>
+                <div style="display:flex; align-items:center; gap:8px;"><div style="width:40%; height:8px; background:#999; border-radius:4px;"></div><span style="font-size:10px; color:#666;">زيت عود</span></div>
+                <div style="display:flex; align-items:center; gap:8px;"><div style="width:25%; height:8px; background:#bbb; border-radius:4px;"></div><span style="font-size:10px; color:#666;">عسل سدر</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>7 · Login Page</h2>
+    <div class="frame" style="height:420px; background:var(--wf-bg); display:flex; align-items:center; justify-content:center;">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="logo-box" style="margin:0 auto 8px; display:flex;">إ</div>
+          <div class="login-title">نظام إرث</div>
+          <div class="login-sub">تسجيل الدخول إلى لوحة التحكم</div>
+        </div>
+        <div class="login-field">
+          <label>البريد الإلكتروني</label>
+          <div class="field-input" style="width:100%;"></div>
+        </div>
+        <div class="login-field">
+          <label>كلمة المرور</label>
+          <div class="field-input" style="width:100%;"></div>
+        </div>
+        <button class="login-btn">دخول</button>
+        <div style="text-align:center; margin-top:14px; font-size:10px; color:#aaa;">مدعوم بـ Better Auth · JWT Sessions</div>
+      </div>
+    </div>
+    <div class="annotation">Auth via Better Auth · Redirect to /{locale}/login when session missing · CVE-2025-29927 mitigation: session verified server-side via headers on every dashboard load</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>8 · Chatbot Panel (Floating Widget)</h2>
+    <div class="screens-row" style="align-items:flex-start;">
+      <div>
+        <div class="screen-title">Collapsed State</div>
+        <div style="position:relative; width:100px; height:100px; border:1px dashed #ccc; border-radius:8px; background:#f9f9f9; display:flex; align-items:flex-end; justify-content:flex-start; padding:12px;">
+          <div class="chatbot">💬</div>
+        </div>
+      </div>
+      <div>
+        <div class="screen-title">Expanded Chat Panel</div>
+        <div class="frame" style="width:320px; height:440px; display:flex; flex-direction:column;">
+          <div style="padding:12px 14px; background:#555; color:#fff;">
+            <div style="font-size:13px; font-weight:700;">مساعد IRTH</div>
+            <div style="font-size:10px; opacity:0.8; margin-top:2px;">بحث ومساعدة داخل النظام</div>
+          </div>
+          <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; gap:6px; flex-wrap:wrap;">
+            <div class="filter-chip" style="font-size:9px;">الطلبات</div>
+            <div class="filter-chip" style="font-size:9px;">المنتجات</div>
+            <div class="filter-chip" style="font-size:9px;">العملاء</div>
+            <div class="filter-chip" style="font-size:9px;">المخزون</div>
+            <div class="filter-chip" style="font-size:9px;">التقارير</div>
+          </div>
+          <div style="flex:1; padding:12px; display:flex; flex-direction:column; gap:8px; overflow:hidden;">
+            <div style="background:#eee; padding:8px 10px; border-radius:10px 10px 2px 10px; font-size:11px; max-width:80%; align-self:flex-end;">مرحباً! أنا مساعد IRTH. كيف أقدر أساعدك؟</div>
+            <div style="background:#f5f5f5; padding:8px 10px; border-radius:10px 10px 10px 2px; font-size:11px; max-width:80%; border:1px solid #e0e0e0; align-self:flex-start;">عرض الطلبات المعلقة</div>
+            <div style="background:#eee; padding:8px 10px; border-radius:10px 10px 2px 10px; font-size:11px; max-width:85%; align-self:flex-end;">
+              يمكنك الانتقال إلى الطلبات
+              <div style="margin-top:6px;"><span style="font-size:10px; border:1px solid #555; color:#555; padding:3px 10px; border-radius:5px;">انتقل إلى الطلبات ←</span></div>
+            </div>
+          </div>
+          <div style="padding:10px; border-top:1px solid #eee; display:flex; gap:8px;">
+            <div style="flex:1; height:32px; border:1px solid #ddd; border-radius:6px; background:#f9f9f9;"></div>
+            <div style="padding:8px 14px; background:#555; color:#fff; border-radius:6px; font-size:11px;">ارسال</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="screen-title">Help Text Output</div>
+        <div class="frame" style="width:240px; padding:14px; font-size:11px; color:#555; line-height:1.8;">
+          <div style="font-weight:600; margin-bottom:8px; font-size:12px;">الأوامر المتاحة:</div>
+          <div>• "طلبات" أو "orders"</div>
+          <div>• "منتجات" أو "products"</div>
+          <div>• "عملاء" أو "customers"</div>
+          <div>• "مخزون" أو "inventory"</div>
+          <div>• "ابحث عن [كلمة]"</div>
+          <div>• "مساعدة" — هذه القائمة</div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation">Intent matching (Arabic + English keywords) · Nav commands route to /{locale}/[section] · Search commands build URL with ?search= param · Help text now correctly a template literal string</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="section">
+    <h2>9 · Route Map</h2>
+    <div class="frame" style="padding:24px; background:var(--wf-surface);">
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; font-size:11px;">
+        <div>
+          <div style="font-weight:700; font-size:12px; margin-bottom:10px; color:#555; border-bottom:1px solid #eee; padding-bottom:6px;">🛍 Commerce</div>
+          <div style="display:flex; flex-direction:column; gap:4px; color:#666;">
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/orders</code> — Orders list</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/orders/[id]</code> — Order detail</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/orders/[id]/print</code> — Invoice print</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/products</code> — Product list</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/products/new</code> — Create product</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/products/[id]/edit</code> — Edit product</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/categories</code> — Categories</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/customers</code> — Customer list</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/customers/[id]</code> — Customer detail</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/inventory</code> — Inventory</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/returns</code> — Returns list</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/returns/[id]</code> — Return detail</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-weight:700; font-size:12px; margin-bottom:10px; color:#555; border-bottom:1px solid #eee; padding-bottom:6px;">💰 Finance</div>
+          <div style="display:flex; flex-direction:column; gap:4px; color:#666;">
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/finance</code> — Finance reports</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/analytics</code> — Analytics</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/purchasing</code> — Purchase orders</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/courier</code> — COD settlement</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/coupons</code> — Discounts/coupons</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/eta</code> — e-Invoices (Egypt)</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/pricelists</code> — Price lists *</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/stocktaking</code> — Stocktaking *</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/shipping</code> — Shipping zones *</div>
+          </div>
+          <div style="font-size:9px; color:#aaa; margin-top:8px;">* hidden from sidebar nav</div>
+        </div>
+        <div>
+          <div style="font-weight:700; font-size:12px; margin-bottom:10px; color:#555; border-bottom:1px solid #eee; padding-bottom:6px;">⚙ Config & Auth</div>
+          <div style="display:flex; flex-direction:column; gap:4px; color:#666;">
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/settings</code> — Org settings</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/settings/members</code> — Team members</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/integrations</code> — API integrations</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/notifications</code> — Notifications</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/campaigns</code> — Campaigns *</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/login</code> — Auth (Better Auth)</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/api/auth/*</code> — Auth API</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">/api/trpc/*</code> — tRPC API</div>
+          </div>
+          <div style="margin-top:16px; font-weight:700; font-size:12px; margin-bottom:10px; color:#555; border-bottom:1px solid #eee; padding-bottom:6px;">📡 API (Hono)</div>
+          <div style="display:flex; flex-direction:column; gap:4px; color:#666;">
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">POST /orgs</code> — Create org</div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">GET /orgs/:id/members</code></div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">POST /orgs/:id/invite</code></div>
+            <div><code style="background:#f0f0f0; padding:1px 5px; border-radius:3px;">POST /orgs/invite/accept</code></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center; padding:20px; color:#bbb; font-size:11px;">
+    IRTH OS Admin Dashboard Wireframe · Generated 2026-06-09 · Next.js 15 + tRPC + Drizzle ORM + Better Auth
+  </div>
+
+</div>
+</body>
+</html>
