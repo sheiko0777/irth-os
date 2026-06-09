@@ -20,6 +20,7 @@ import { stocktakingRouter } from './stocktaking';
 import { pricelistsRouter } from './pricelists';
 import { shippingRouter } from './shipping';
 import { campaignsRouter } from './campaigns';
+import { membersRouter } from './members';
 
 export const appRouter = router({
     dashboard: dashboardRouter,
@@ -43,6 +44,7 @@ export const appRouter = router({
     pricelists: pricelistsRouter,
     shipping: shippingRouter,
     campaigns: campaignsRouter,
+    members: membersRouter,
 });
 
 export type AppRouter = typeof appRouter;
