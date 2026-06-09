@@ -1,0 +1,4 @@
+## 2024-03-24 - Webhook Authentication Timing Attack
+**Vulnerability:** Aramex webhook token validation used standard string comparison (`!==`) to compare the incoming token with the configured secret.
+**Learning:** Standard string comparison operators fail early when they find a mismatched character. An attacker can exploit this by measuring the time it takes for the comparison to fail, allowing them to guess the secret character by character (timing attack).
+**Prevention:** Never use standard equality operators (`===` or `!==`) to compare tokens, API keys, HMAC signatures, or passwords. Always hash both the expected value and the provided value to a constant length (e.g., using `crypto.createHash('sha256')`) and use `crypto.timingSafeEqual()` to perform a constant-time comparison.
