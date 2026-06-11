@@ -1,0 +1,4 @@
+## 2024-06-11 - Timing attack caused by length checks in Webhooks
+**Vulnerability:** A timing attack vulnerability was present in the bosta webhook signature verification. The comparison was preceded by `sigBuf.length !== expBuf.length`, which short-circuited the timing-safe equality check and leaked the expected signature's length, making it susceptible to timing attacks.
+**Learning:** Short-circuiting `crypto.timingSafeEqual` with a length check invalidates the constant-time guarantee. For webhooks, the correct approach is to hash both the expected and provided signature (e.g. `crypto.createHash('sha256')`) to ensure they have the same length before performing `crypto.timingSafeEqual`.
+**Prevention:** Never perform early length checks before comparing signatures or tokens. Always hash both values to a constant length first, and then compare them directly using a timing-safe function.
