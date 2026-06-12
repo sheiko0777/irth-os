@@ -1,0 +1,4 @@
+## 2024-05-24 - Cryptographic Timing Vulnerabilities in Webhooks
+**Vulnerability:** Webhook verification endpoints were vulnerable to timing attacks due to early length return short-circuiting in HMAC validation, and simple string comparisons for token checking.
+**Learning:** Checking length before a constant-time comparison (e.g., `if (a.length !== b.length || !timingSafeEqual(a, b))`) negates the constant-time guarantee because an attacker can infer the exact expected string length based on execution time. Standard comparison operators (`===` or `!==`) are also inherently vulnerable to timing side channels because they exit at the first mismatched byte.
+**Prevention:** Before comparing any cryptographic secrets, API keys, or signatures, always hash both the provided and expected values to a constant length (e.g., using `crypto.createHash('sha256')`) and compare the resulting hashes using `crypto.timingSafeEqual()`. Do not include early returns based on length.
