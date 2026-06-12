@@ -18,17 +18,27 @@ export const campaignsRouter = router({
     }),
 
   summary: protectedProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db
-      .select({ status: campaigns.status, deliveredCount: campaigns.deliveredCount, totalRecipients: campaigns.totalRecipients })
+    // ⚡ Bolt: Replaced O(N) memory allocation and array methods with a single database aggregate query
+    // This resolves potential OOM errors and reduces CPU load when returning many campaigns.
+    const [result] = await ctx.db
+      .select({
+        total: count(campaigns.id),
+        sent: sql<number>`COALESCE(SUM(CASE WHEN ${campaigns.status} = 'sent' THEN 1 ELSE 0 END), 0)::integer`,
+        inProgress: sql<number>`COALESCE(SUM(CASE WHEN ${campaigns.status} IN ('sending', 'scheduled') THEN 1 ELSE 0 END), 0)::integer`,
+        totalDelivered: sql<number>`COALESCE(SUM(${campaigns.deliveredCount}), 0)::integer`,
+      })
       .from(campaigns)
       .where(eq(campaigns.orgId, ctx.orgId));
 
-    const total = rows.length;
-    const sent = rows.filter((r) => r.status === 'sent').length;
-    const inProgress = rows.filter((r) => r.status === 'sending' || r.status === 'scheduled').length;
-    const totalDelivered = rows.reduce((sum, r) => sum + r.deliveredCount, 0);
-
-    return { data: { total, sent, inProgress, totalDelivered }, error: null };
+    return {
+      data: {
+        total: result?.total || 0,
+        sent: result?.sent || 0,
+        inProgress: result?.inProgress || 0,
+        totalDelivered: result?.totalDelivered || 0
+      },
+      error: null
+    };
   }),
 
   create: protectedProcedure
