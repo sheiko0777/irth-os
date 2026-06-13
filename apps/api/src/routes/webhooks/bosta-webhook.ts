@@ -4,6 +4,7 @@ import { db } from '../../db';
 import { courierShipments } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { timingSafeEqual } from 'node:crypto';
+import crypto from 'node:crypto';
 
 export const bostaWebhookRoute = new Hono();
 
@@ -38,7 +39,10 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   const sigBuf = Buffer.from(signature, 'hex');
   const expBuf = Buffer.from(expectedHex, 'hex');
 
-  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+  const hashedSig = crypto.createHash('sha256').update(sigBuf).digest();
+  const hashedExp = crypto.createHash('sha256').update(expBuf).digest();
+
+  if (!timingSafeEqual(hashedSig, hashedExp)) {
     return c.json({ data: null, error: 'invalid_signature', meta: null }, 401);
   }
 

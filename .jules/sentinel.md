@@ -1,0 +1,4 @@
+## 2025-02-28 - Webhook Validation Timing Attack Vulnerabilities
+**Vulnerability:** Aramex webhook token was validated using a basic string comparison (`!==`). Bosta webhook used `timingSafeEqual` but short-circuited if lengths didn't match (`sigBuf.length !== expBuf.length`). Both expose the system to timing attacks.
+**Learning:** Simple string comparison leaks validation information byte-by-byte via timing differences. Short-circuiting `timingSafeEqual` on length mismatches re-introduces the timing leak by exposing the length of the expected hash.
+**Prevention:** Always use `timingSafeEqual` for cryptographic string/token comparisons. When comparing values that might be of different lengths, hash both values to a constant length (e.g., using `crypto.createHash('sha256')`) *before* applying `timingSafeEqual` to avoid both error throws and length-based timing leaks.
