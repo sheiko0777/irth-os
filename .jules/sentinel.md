@@ -1,0 +1,4 @@
+## 2025-05-18 - Webhook Token Comparison Timing Attacks
+**Vulnerability:** Webhook endpoints used standard string equality (`!==`) or early length checks (`sigBuf.length !== expBuf.length`) before calling `crypto.timingSafeEqual` when verifying tokens/signatures.
+**Learning:** Standard string equality operators and early length exits compare strings/buffers character-by-character or return immediately if lengths differ. This leaks the length and the point of mismatch in execution time, making the application vulnerable to timing attacks where attackers can guess the secret incrementally.
+**Prevention:** Always use constant-time comparison (e.g., `crypto.timingSafeEqual`). If comparing values of potentially varying lengths (like strings or buffers before verification), hash both values to a constant length first (e.g., using SHA-256) and then compare the hashes using `crypto.timingSafeEqual`.
