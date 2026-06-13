@@ -38,18 +38,20 @@ export const ordersRouter = router({
                 conditions.push(lte(orders.createdAt, dateRange.to));
             }
 
-            const data = await ctx.db
-                .select()
-                .from(orders)
-                .where(and(...conditions))
-                .orderBy(desc(orders.createdAt))
-                .limit(pageSize)
-                .offset(offset);
-
-            const totalQuery = await ctx.db
-                .select({ count: count() })
-                .from(orders)
-                .where(and(...conditions));
+            // Batch independent queries to reduce overall latency
+            const [data, totalQuery] = await Promise.all([
+                ctx.db
+                    .select()
+                    .from(orders)
+                    .where(and(...conditions))
+                    .orderBy(desc(orders.createdAt))
+                    .limit(pageSize)
+                    .offset(offset),
+                ctx.db
+                    .select({ count: count() })
+                    .from(orders)
+                    .where(and(...conditions))
+            ]);
 
             return {
                 data,
@@ -78,28 +80,30 @@ export const ordersRouter = router({
                 throw new TRPCError({ code: 'NOT_FOUND' });
             }
 
-            const items = await ctx.db
-                .select({
-                    id: orderItems.id,
-                    quantity: orderItems.quantity,
-                    price: orderItems.price,
-                    sku: productVariants.sku,
-                })
-                .from(orderItems)
-                .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-                .where(and(
-                    eq(orderItems.orderId, order.id),
-                    eq(orderItems.orgId, ctx.orgId)
-                ));
-            
-            const history = await ctx.db
-                .select()
-                .from(shipmentTracking)
-                .where(and(
-                    eq(shipmentTracking.orderId, order.id),
-                    eq(shipmentTracking.orgId, ctx.orgId)
-                ))
-                .orderBy(desc(shipmentTracking.createdAt));
+            // Batch independent queries to reduce overall latency
+            const [items, history] = await Promise.all([
+                ctx.db
+                    .select({
+                        id: orderItems.id,
+                        quantity: orderItems.quantity,
+                        price: orderItems.price,
+                        sku: productVariants.sku,
+                    })
+                    .from(orderItems)
+                    .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
+                    .where(and(
+                        eq(orderItems.orderId, order.id),
+                        eq(orderItems.orgId, ctx.orgId)
+                    )),
+                ctx.db
+                    .select()
+                    .from(shipmentTracking)
+                    .where(and(
+                        eq(shipmentTracking.orderId, order.id),
+                        eq(shipmentTracking.orgId, ctx.orgId)
+                    ))
+                    .orderBy(desc(shipmentTracking.createdAt))
+            ]);
 
             return {
                 data: { order, items, history },
