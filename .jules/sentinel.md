@@ -1,0 +1,4 @@
+## 2024-06-14 - Webhook Token/Signature Length-Based Timing Leaks
+**Vulnerability:** Comparing webhook tokens or HMAC signatures using standard equality operators (`!==`, `===`) or short-circuiting constant-time comparisons (`crypto.timingSafeEqual`) with early length checks (`sigBuf.length !== expBuf.length`) exposes the comparison to length-based timing attacks. Attackers can deduce the correct length and subsequently the value of secrets.
+**Learning:** Even when using `timingSafeEqual`, verifying the length beforehand introduces a timing leak, defeating the purpose of the constant-time operation. Standard equality strings or arrays checks inherently short-circuit on length and character mismatches.
+**Prevention:** Always hash both values being compared to a constant length (e.g., using `crypto.createHash('sha256')`) *before* applying `crypto.timingSafeEqual()`. Never perform early length validation on cryptographic material or comparison values.
