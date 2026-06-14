@@ -1,0 +1,4 @@
+## 2024-05-18 - Prevent Timing Attacks in Webhook Token Comparisons
+**Vulnerability:** Timing attacks due to early exits in cryptographic comparisons (using `!==` strings and `length !== length` checks before `timingSafeEqual`).
+**Learning:** Comparing webhook tokens, API keys, or signatures with standard equality operators (`===` or `!==`) or short-circuiting constant-time checks using `.length` comparisons reintroduces timing vulnerabilities. Attackers can incrementally guess valid tokens by observing slight differences in response times based on when the comparison fails.
+**Prevention:** Never use standard equality checks or early length checks for secrets. Always hash both the provided value and the expected value to a constant length first (e.g., using `crypto.createHash('sha256')`), and then strictly compare the resulting fixed-length hashes using `crypto.timingSafeEqual()`.
