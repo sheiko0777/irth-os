@@ -1,0 +1,4 @@
+## 2024-06-15 - Prevent Timing Attacks in Webhook Verification
+**Vulnerability:** Timing attacks due to insecure secret comparison. In the webhooks, an early return length check (`sigBuf.length !== expBuf.length`) and standard equality checks (`headerToken !== token`) were used before constant-time comparison operations.
+**Learning:** Short-circuiting constant-time comparisons (like `crypto.timingSafeEqual`) with early length checks, or using standard equality operators for secrets, reintroduces length-based timing leak vulnerabilities. An attacker can determine the length of the secret first, and then iteratively deduce the actual value byte-by-byte.
+**Prevention:** Never use `!==` or early `.length` checks for comparing secrets. Both sides must be hashed to a constant length first (e.g., using `crypto.createHash('sha256')`) and then compared directly using `crypto.timingSafeEqual()`.
