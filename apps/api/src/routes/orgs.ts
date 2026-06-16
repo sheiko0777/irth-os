@@ -23,9 +23,9 @@ orgsRouter.post('/', async (c: Context) => {
   try {
     const body = await c.req.json();
     const { name, slug } = createOrgSchema.parse(body);
-    // Dummy user ID for now since we don't have full auth setup context here yet
-    // In real app, we'd get this from Better Auth context
-    const userId = c.req.header('user_id') || 'system';
+    // Identity comes from the verified session (authContext), never the client.
+    const userId = c.get('userId') as string | undefined;
+    if (!userId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const org = await withAudit(db, async () => {
       const [insertedOrg] = await db.insert(organizations).values({ name, slug }).returning();
@@ -52,13 +52,11 @@ orgsRouter.post('/', async (c: Context) => {
 orgsRouter.get('/:id/members', async (c: Context) => {
   try {
     const id = c.req.param('id');
-    const orgId = c.req.header('org_id') || id; // enforce org_id rule if header is present
+    const orgId = c.get('orgId') as string | undefined;
+    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    if (id !== orgId) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
 
-    if (id !== orgId && c.req.header('org_id')) {
-        return c.json({ data: null, error: 'Unauthorized', meta: null }, 403);
-    }
-
-    const members = await db.select().from(orgMembers).where(eq(orgMembers.orgId, id as string));
+    const members = await db.select().from(orgMembers).where(eq(orgMembers.orgId, orgId));
     return c.json({ data: members, error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
@@ -73,15 +71,14 @@ const inviteSchema = z.object({
 orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const id = c.req.param('id');
-    const orgId = c.req.header('org_id') || id;
-    if (id !== orgId && c.req.header('org_id')) {
-        return c.json({ data: null, error: 'Unauthorized', meta: null }, 403);
-    }
+    const orgId = c.get('orgId') as string | undefined;
+    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    if (id !== orgId) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
 
     const body = await c.req.json();
     const { email, role } = inviteSchema.parse(body);
 
-    const [org] = await db.select().from(organizations).where(eq(organizations.id, id as string));
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
     if (!org) {
        return c.json({ data: null, error: 'Organization not found', meta: null }, 404);
     }
@@ -91,7 +88,7 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
 
     const [invite] = await db.insert(orgInvites).values({
-      orgId: id as string,
+      orgId,
       email,
       token,
       role,
@@ -111,13 +108,17 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
 
 const acceptInviteSchema = z.object({
   token: z.string(),
-  userId: z.string(), // We need to know who is accepting it
 });
 
 orgsRouter.post('/invite/accept', async (c: Context) => {
   try {
+    // The accepting user is the authenticated session user — never trust a
+    // userId supplied in the request body.
+    const userId = c.get('userId') as string | undefined;
+    if (!userId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+
     const body = await c.req.json();
-    const { token, userId } = acceptInviteSchema.parse(body);
+    const { token } = acceptInviteSchema.parse(body);
 
     const [invite] = await db.select().from(orgInvites).where(eq(orgInvites.token, token));
     if (!invite) {
@@ -149,13 +150,13 @@ const updateRoleSchema = z.object({
 
 orgsRouter.patch('/members/:memberId/role', requireRole('owner'), async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     const memberId = c.req.param('memberId');
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const body = await c.req.json();
     const { role } = updateRoleSchema.parse(body);
-    const userId = c.req.header('user_id') || 'system';
+    const userId = c.get('userId') as string;
 
     const result = await withAudit(db, async () => {
       const [updated] = await db.update(orgMembers)

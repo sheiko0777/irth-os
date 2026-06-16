@@ -9,8 +9,8 @@ import { issueInvoice } from '../services/eta';
 
 const ordersRoute = new Hono();
 
-const getOrgId = (c: Context): string => (c.get('orgId') as string) || '00000000-0000-0000-0000-000000000000';
-const getUserId = (c: Context): string => (c.get('userId') as string) || '00000000-0000-0000-0000-000000000000';
+const getOrgId = (c: Context): string | undefined => c.get('orgId') as string | undefined;
+const getUserId = (c: Context): string | undefined => c.get('userId') as string | undefined;
 
 const createOrderSchema = z.object({
   items: z.array(z.object({
@@ -22,8 +22,11 @@ const createOrderSchema = z.object({
 ordersRoute.post('/', async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
+  if (!orgId || !userId) {
+    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+  }
   const body = await c.req.json();
-  
+
   const data = createOrderSchema.parse(body);
 
   let totalAmount = 0;
@@ -86,12 +89,14 @@ ordersRoute.post('/', async (c: Context) => {
 
 ordersRoute.get('/', async (c: Context) => {
   const orgId = getOrgId(c);
+  if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
   const list = await db.select().from(orders).where(eq(orders.orgId, orgId)).orderBy(desc(orders.createdAt));
   return c.json({ data: list, error: null, meta: null });
 });
 
 ordersRoute.get('/:id', async (c: Context) => {
   const orgId = getOrgId(c);
+  if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
   const id = c.req.param('id');
   const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
   
@@ -108,6 +113,9 @@ const updateStatusSchema = z.object({
 ordersRoute.patch('/:id/status', async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
+  if (!orgId || !userId) {
+    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+  }
   const id = c.req.param('id');
   const body = await c.req.json();
   
@@ -134,7 +142,7 @@ ordersRoute.patch('/:id/status', async (c: Context) => {
   });
 
   if (status === 'delivered') {
-      issueInvoice(updatedOrder).catch(e => console.error(e));
+      issueInvoice(updatedOrder).catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));
   }
 
   return c.json({ data: updatedOrder, error: null, meta: null });

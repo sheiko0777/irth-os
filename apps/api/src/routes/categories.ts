@@ -11,7 +11,7 @@ export const categoriesRouter = new Hono();
 
 categoriesRouter.get('/', async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const data = await db.select().from(categories).where(eq(categories.orgId, orgId));
@@ -30,10 +30,10 @@ const createCategorySchema = z.object({
 
 categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
-    const userId = c.req.header('user_id') || 'system';
+    const userId = (c.get('userId') as string | undefined) ?? 'system';
     const body = await c.req.json();
     const data = createCategorySchema.parse(body);
 
@@ -59,12 +59,12 @@ categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => 
 
 categoriesRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
-    const userId = c.req.header('user_id') || 'system';
+    const userId = (c.get('userId') as string | undefined) ?? 'system';
 
     const result = await withAudit(db, async () => {
       const [deleted] = await db.delete(categories).where(and(

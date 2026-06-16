@@ -13,6 +13,7 @@ import { categoriesRouter } from './routes/categories'
 import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
+import { authContext } from './middlewares/authContext'
 
 const app = new Hono()
 
@@ -21,6 +22,9 @@ app.use('*', securityHeaders)
 const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT || '0', 10);
 app.use('/api/*', rateLimit(100, 60_000, trustedProxyCount))
 app.use('/api/auth/*', rateLimit(10, 60_000, trustedProxyCount))
+// Establish trusted identity (userId/orgId/role) from the session before audit
+// and route handlers run. Skips /api/auth, webhooks, and /health internally.
+app.use('*', authContext())
 app.use('*', auditMiddleware())
 
 app.get('/health', (c) => {

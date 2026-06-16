@@ -1,6 +1,10 @@
 import { createDb } from '@irth/db';
 
-export const db = createDb(process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/irth');
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not set');
+}
+
+export const db = createDb(process.env.DATABASE_URL);
 
 // Drizzle doesn't have a global hook for ALL operations (like Prisma middleware) directly built-in 
 // that captures generic inserts/updates across all tables out-of-the-box in a simple way without $onUpdateFn

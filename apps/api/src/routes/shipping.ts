@@ -7,8 +7,8 @@ import { eq, and } from 'drizzle-orm';
 
 const shippingRoute = new Hono();
 
-const getOrgId = (c: Context): string => (c.get('orgId') as string) || '00000000-0000-0000-0000-000000000000';
-const getUserId = (c: Context): string => (c.get('userId') as string) || '00000000-0000-0000-0000-000000000000';
+const getOrgId = (c: Context): string | undefined => c.get('orgId') as string | undefined;
+const getUserId = (c: Context): string | undefined => c.get('userId') as string | undefined;
 
 const createShippingSchema = z.object({
   orderId: z.string().uuid()
@@ -17,6 +17,9 @@ const createShippingSchema = z.object({
 shippingRoute.post('/create', async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
+  if (!orgId || !userId) {
+    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+  }
   const body = await c.req.json();
 
   const { orderId } = createShippingSchema.parse(body);
@@ -79,7 +82,7 @@ shippingRoute.post('/create', async (c: Context) => {
 
      return c.json({ data: shipment, error: null, meta: null });
   } catch (error) {
-     console.error('Bosta API failed', error);
+     console.error('Bosta API failed:', error instanceof Error ? error.message : 'unknown error');
      return c.json({ data: null, error: 'shipping_unavailable', meta: null }, 200);
   }
 });

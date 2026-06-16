@@ -11,14 +11,15 @@ export const productsRouter = new Hono();
 
 productsRouter.get('/', async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const page = parseInt(c.req.query('page') || '1', 10);
     const limit = parseInt(c.req.query('limit') || '20', 10);
     const category = c.req.query('category');
     const status = c.req.query('status');
-    const q = c.req.query('q');
+    // Cap free-text search length to avoid expensive scans from oversized input.
+    const q = c.req.query('q')?.slice(0, 100);
 
     const offset = (page - 1) * limit;
 
@@ -42,24 +43,24 @@ productsRouter.get('/', async (c: Context) => {
 
 const createProductSchema = z.object({
   categoryId: z.string().uuid().optional(),
-  name: z.string().min(1),
-  nameAr: z.string().optional(),
-  sku: z.string().min(1),
-  description: z.string().optional(),
-  descriptionAr: z.string().optional(),
+  name: z.string().min(1).max(200),
+  nameAr: z.string().max(200).optional(),
+  sku: z.string().min(1).max(100),
+  description: z.string().max(5000).optional(),
+  descriptionAr: z.string().max(5000).optional(),
   price: z.number().or(z.string()),
-  currency: z.string().default('USD'),
+  currency: z.string().max(10).default('USD'),
   stock: z.number().int().default(0),
-  status: z.string().default('active'),
+  status: z.string().max(20).default('active'),
   images: z.array(z.any()).default([]),
 });
 
 productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
-    const userId = c.req.header('user_id') || 'system';
+    const userId = (c.get('userId') as string | undefined) ?? 'system';
     const body = await c.req.json();
     const data = createProductSchema.parse(body);
 
@@ -88,7 +89,7 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
 
 productsRouter.get('/:id', async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
     
     const id = c.req.param('id');
@@ -110,26 +111,26 @@ productsRouter.get('/:id', async (c: Context) => {
 
 const updateProductSchema = z.object({
   categoryId: z.string().uuid().optional(),
-  name: z.string().min(1).optional(),
-  nameAr: z.string().optional(),
-  sku: z.string().min(1).optional(),
-  description: z.string().optional(),
-  descriptionAr: z.string().optional(),
+  name: z.string().min(1).max(200).optional(),
+  nameAr: z.string().max(200).optional(),
+  sku: z.string().min(1).max(100).optional(),
+  description: z.string().max(5000).optional(),
+  descriptionAr: z.string().max(5000).optional(),
   price: z.number().or(z.string()).optional(),
-  currency: z.string().optional(),
+  currency: z.string().max(10).optional(),
   stock: z.number().int().optional(),
-  status: z.string().optional(),
+  status: z.string().max(20).optional(),
   images: z.array(z.any()).optional(),
 });
 
 productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
-    const userId = c.req.header('user_id') || 'system';
+    const userId = (c.get('userId') as string | undefined) ?? 'system';
     const body = await c.req.json();
     const data = updateProductSchema.parse(body);
 
@@ -162,12 +163,12 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
 
 productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
-    const userId = c.req.header('user_id') || 'system';
+    const userId = (c.get('userId') as string | undefined) ?? 'system';
 
     const result = await withAudit(db, async () => {
       const [updated] = await db.update(products)
@@ -193,7 +194,7 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
 
 productsRouter.get('/:id/variants', async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const id = c.req.param('id');
@@ -224,12 +225,12 @@ const createVariantSchema = z.object({
 
 productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Context) => {
   try {
-    const orgId = c.req.header('org_id');
+    const orgId = c.get('orgId') as string | undefined;
     if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
-    const userId = c.req.header('user_id') || 'system';
+    const userId = (c.get('userId') as string | undefined) ?? 'system';
     
     // Verify product exists for org
     const product = await db.query.products.findFirst({
