@@ -25,28 +25,29 @@ export const productsRouter = router({
                 conditions.push(eq(products.status, status));
             }
 
-            const data = await ctx.db
-                .select({
-                    id: products.id,
-                    name: products.name,
-                    sku: products.sku,
-                    price: products.price,
-                    stock: products.stock,
-                    status: products.status,
-                    category: categories.name,
-                    brand: products.brand,
-                })
-                .from(products)
-                .leftJoin(categories, eq(products.categoryId, categories.id))
-                .where(and(...conditions))
-                .orderBy(desc(products.createdAt))
-                .limit(pageSize)
-                .offset(offset);
-
-            const totalQuery = await ctx.db
-                .select({ count: count() })
-                .from(products)
-                .where(and(...conditions));
+            const [data, totalQuery] = await Promise.all([
+                ctx.db
+                    .select({
+                        id: products.id,
+                        name: products.name,
+                        sku: products.sku,
+                        price: products.price,
+                        stock: products.stock,
+                        status: products.status,
+                        category: categories.name,
+                        brand: products.brand,
+                    })
+                    .from(products)
+                    .leftJoin(categories, eq(products.categoryId, categories.id))
+                    .where(and(...conditions))
+                    .orderBy(desc(products.createdAt))
+                    .limit(pageSize)
+                    .offset(offset),
+                ctx.db
+                    .select({ count: count() })
+                    .from(products)
+                    .where(and(...conditions))
+            ]);
 
             return {
                 data,
