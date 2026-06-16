@@ -1,23 +1,18 @@
 import { MiddlewareHandler } from 'hono';
-import { db } from '../db';
-import { orgMembers } from '@irth/db';
-import { eq, and } from 'drizzle-orm';
 import { Role } from '@irth/db/src/permissions';
 
+// Authorizes the request against the trusted role established by authContext.
+// Relies on c.get('orgId'/'role') — never on client-supplied headers.
 export function requireRole(...allowedRoles: Role[]): MiddlewareHandler {
   return async (c, next) => {
-    const orgId = c.req.header('org_id');
-    const userId = c.req.header('user_id');
+    const orgId = c.get('orgId') as string | undefined;
+    const role = c.get('role') as Role | undefined;
 
-    if (!orgId || !userId) {
+    if (!orgId || !role) {
       return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
     }
 
-    const [member] = await db.select()
-      .from(orgMembers)
-      .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId)));
-
-    if (!member || !allowedRoles.includes(member.role as Role)) {
+    if (!allowedRoles.includes(role)) {
       return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
     }
 

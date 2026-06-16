@@ -9,8 +9,8 @@ export const notificationsRouter = new Hono();
 
 // GET / - List unread notifications for current user
 notificationsRouter.get('/', async (c) => {
-  const orgId = c.req.header('org_id');
-  const userId = c.req.header('user_id') || 'system';
+  const orgId = c.get('orgId') as string | undefined;
+  const userId = (c.get('userId') as string | undefined) ?? 'system';
 
   if (!orgId) {
     return c.json({ error: 'Missing org_id header', data: null, meta: null }, 401);
@@ -35,8 +35,8 @@ notificationsRouter.get('/', async (c) => {
 
 // PATCH /:id/read - Mark single notification as read
 notificationsRouter.patch('/:id/read', async (c) => {
-  const orgId = c.req.header('org_id');
-  const userId = c.req.header('user_id') || 'system';
+  const orgId = c.get('orgId') as string | undefined;
+  const userId = (c.get('userId') as string | undefined) ?? 'system';
   const notificationId = c.req.param('id');
 
   if (!orgId) {
@@ -66,8 +66,8 @@ notificationsRouter.patch('/:id/read', async (c) => {
 
 // PATCH /read-all - Mark all unread as read
 notificationsRouter.patch('/read-all', async (c) => {
-  const orgId = c.req.header('org_id');
-  const userId = c.req.header('user_id') || 'system';
+  const orgId = c.get('orgId') as string | undefined;
+  const userId = (c.get('userId') as string | undefined) ?? 'system';
 
   if (!orgId) {
     return c.json({ error: 'Missing org_id header', data: null, meta: null }, 401);
@@ -96,7 +96,7 @@ const activityQuerySchema = z.object({
 
 // GET /activity - List activity log entries (paginated)
 notificationsRouter.get('/activity', async (c) => {
-  const orgId = c.req.header('org_id');
+  const orgId = c.get('orgId') as string | undefined;
 
   if (!orgId) {
     return c.json({ error: 'Missing org_id header', data: null, meta: null }, 401);
