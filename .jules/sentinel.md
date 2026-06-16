@@ -1,0 +1,4 @@
+## 2026-06-16 - Timing Attack Vulnerability in Webhook Verifications
+**Vulnerability:** Comparing webhook tokens or HMAC signatures directly using standard string comparison (e.g., `!==`) or by first checking lengths before using `timingSafeEqual`.
+**Learning:** Standard string/buffer comparisons (`!==`) and early length checks leak the length or parts of the correct token/signature because they return as soon as a mismatch is found. This enables an attacker to infer the expected value or its length via timing attacks.
+**Prevention:** Always hash both values to a constant length first (e.g., using `crypto.createHash('sha256')`), and then compare the resulting constant-length digests directly using `crypto.timingSafeEqual()` without any prior length checks.
