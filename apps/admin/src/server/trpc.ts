@@ -1,25 +1,50 @@
 import { initTRPC, TRPCError } from '@trpc/server';
-import { db } from '@irth/db';
+import { db, orgMembers } from '@irth/db';
+import { and, eq } from 'drizzle-orm';
+import type { Role } from '@irth/db/src/permissions';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
-    // Re-verify session per CVE-2025-29927
+    // Re-verify session per CVE-2025-29927.
     const session = await verifySession();
-    
+
     if (!session || !session.user) {
         throw new TRPCError({ code: 'UNAUTHORIZED' });
     }
 
-    // In a real scenario, this would come from the session context 
-    // after user is authenticated to a specific org.
-    const orgId = session.user.orgId || '00000000-0000-0000-0000-000000000000';
     const userId = session.user.id;
+
+    // Better Auth does not put orgId/role on the user — derive the tenant scope
+    // and role from the user's org membership. Prefer the active organization
+    // from the session, falling back to the user's first membership.
+    const activeOrgId = session.session?.activeOrganizationId;
+
+    let membership;
+    if (activeOrgId) {
+        [membership] = await db
+            .select()
+            .from(orgMembers)
+            .where(and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, activeOrgId)))
+            .limit(1);
+    }
+    if (!membership) {
+        [membership] = await db
+            .select()
+            .from(orgMembers)
+            .where(eq(orgMembers.userId, userId))
+            .limit(1);
+    }
+
+    if (!membership) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'No organization membership.' });
+    }
 
     return {
         db,
         session,
-        orgId,
+        orgId: membership.orgId,
         userId,
+        role: membership.role as Role,
     };
 };
 
@@ -34,7 +59,7 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     if (!ctx.session || !ctx.session.user) {
         throw new TRPCError({ code: 'UNAUTHORIZED' });
     }
-    
+
     // Ensure orgId is present
     if (!ctx.orgId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'No organization scope available.' });
@@ -47,6 +72,23 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
             session: ctx.session,
             orgId: ctx.orgId,
             userId: ctx.userId,
+            role: ctx.role,
         },
     });
+});
+
+// Requires the caller to be an owner or admin of the active org.
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+    if (ctx.role !== 'owner' && ctx.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin role required.' });
+    }
+    return next({ ctx });
+});
+
+// Requires the caller to be the owner of the active org.
+export const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
+    if (ctx.role !== 'owner') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Owner role required.' });
+    }
+    return next({ ctx });
 });

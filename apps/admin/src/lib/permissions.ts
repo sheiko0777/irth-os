@@ -15,8 +15,13 @@ export function useRole(): Role | null {
 
   if (!session) return null;
 
-  // Adapt to how BetterAuth stores the org role (typically in session.user.role or similar custom field, or activeOrganization)
-  const role = (session.user as { role?: string })?.role || 'owner';
+  // Read the role from wherever Better Auth surfaces it for the active org.
+  // Default to null (most-restrictive) when absent — never assume 'owner'.
+  // Server-side procedures (adminProcedure/ownerProcedure) are the source of
+  // truth; this only gates UI affordances.
+  const user = session.user as { role?: string };
+  const sess = session.session as { activeOrganizationRole?: string; role?: string } | undefined;
+  const role = user?.role || sess?.activeOrganizationRole || sess?.role;
 
-  return role as Role;
+  return role ? (role as Role) : null;
 }
