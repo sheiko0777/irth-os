@@ -1,35 +1,52 @@
-// Re-verify session Next.js CVE-2025-29927
+// Re-verify session per Next.js CVE-2025-29927.
+// Server Components must actively fetch and verify the session against the auth
+// provider (not just read the cookie) so revoked/expired sessions are rejected.
 import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
 
-export async function verifySession() {
+export type SessionUser = {
+    id: string;
+    email?: string;
+    name?: string;
+    role?: string;
+};
+
+export type VerifiedSession = {
+    user: SessionUser;
+    session: {
+        id: string;
+        activeOrganizationId?: string;
+    };
+};
+
+export async function verifySession(): Promise<VerifiedSession | null> {
     const headersList = await headers();
-    // Assuming better-auth setup here, typically we check session token
-    // For CVE-2025-29927 in Next.js Server Components, we must actively fetch and verify the session 
-    // against the DB/auth provider, not just read the cookie, to ensure it's still valid 
-    // and hasn't been revoked. 
-    
-    // We mock the betterAuth client call here for the admin panel
-    // import { auth } from '@irth/api/src/auth'; 
-    // const session = await auth.api.getSession({ headers: headersList });
-    
     const cookie = headersList.get('cookie');
-    
+
     if (!cookie || !cookie.includes('better-auth.session_token')) {
-        // Unauthenticated
         return null;
     }
 
-    // In a real app we fetch to our API /api/auth/get-session or call auth DB directly
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
     try {
-        // Mock verification
-        // const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/get-session`, { headers: { cookie } });
-        // if (!res.ok) throw new Error('Invalid session');
-        // const data = await res.json();
-        
-        // Mock success
-        return { user: { id: 'mock', orgId: 'mock' } };
-    } catch (e) {
+        // Validate against Better Auth's get-session endpoint, forwarding the
+        // cookie and x-forwarded-host (CVE-2025-29927 host-resolution mitigation).
+        const res = await fetch(`${appUrl}/api/auth/get-session`, {
+            headers: {
+                cookie,
+                'x-forwarded-host':
+                    headersList.get('x-forwarded-host') || headersList.get('host') || '',
+            },
+            cache: 'no-store',
+        });
+
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        if (!data || !data.session || !data.user) return null;
+
+        return data as VerifiedSession;
+    } catch {
         return null;
     }
 }
