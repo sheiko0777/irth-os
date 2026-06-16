@@ -108,13 +108,17 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
 
 const acceptInviteSchema = z.object({
   token: z.string(),
-  userId: z.string(), // We need to know who is accepting it
 });
 
 orgsRouter.post('/invite/accept', async (c: Context) => {
   try {
+    // The accepting user is the authenticated session user — never trust a
+    // userId supplied in the request body.
+    const userId = c.get('userId') as string | undefined;
+    if (!userId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+
     const body = await c.req.json();
-    const { token, userId } = acceptInviteSchema.parse(body);
+    const { token } = acceptInviteSchema.parse(body);
 
     const [invite] = await db.select().from(orgInvites).where(eq(orgInvites.token, token));
     if (!invite) {

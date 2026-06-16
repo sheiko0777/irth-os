@@ -142,7 +142,7 @@ ordersRoute.patch('/:id/status', async (c: Context) => {
   });
 
   if (status === 'delivered') {
-      issueInvoice(updatedOrder).catch(e => console.error(e));
+      issueInvoice(updatedOrder).catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));
   }
 
   return c.json({ data: updatedOrder, error: null, meta: null });

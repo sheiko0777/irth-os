@@ -6,30 +6,23 @@ const hits = new Map<string, { count: number; resetAt: number }>();
 
 export function rateLimit(max: number, windowMs: number, trustedProxiesCount: number = 0): MiddlewareHandler {
   return async (c, next) => {
+    // Prefer the platform-provided client IP (trusted on Cloudflare).
     let key = c.req.header('CF-Connecting-IP');
     if (!key) {
-      const forwardedFor = c.req.header('X-Forwarded-For');
-      if (forwardedFor) {
-        const ips = forwardedFor.split(',').map(ip => ip.trim());
-        // E.g. client, proxy1, proxy2
-        // If trustedProxiesCount is 1, we trust the rightmost proxy (proxy2),
-        // so we take the IP just before it (proxy1).
-        // Since we are looking for the client IP securely, we just fall back
-        // to the rightmost IP that we don't consider a trusted proxy.
-        // Actually, the simplest is to take the (length - trustedProxiesCount - 1) index,
-        // or just the first trusted proxy IP if that's what was requested.
-        // The user asked to "fall back to first trusted proxy IP only".
-        // If trustedProxiesCount > 0, we can take ips[ips.length - trustedProxiesCount] or similar.
-        // Let's implement standard parsing.
-        if (trustedProxiesCount > 0 && ips.length >= trustedProxiesCount) {
-             key = ips[ips.length - trustedProxiesCount];
-        } else {
-             // Fallback to the rightmost IP (the closest proxy) if no trusted proxies configured
-             key = ips[ips.length - 1] || 'unknown';
+      // Only honor X-Forwarded-For when trusted proxies are explicitly configured.
+      // With no trusted proxies the header is client-spoofable, so trusting it
+      // would let an attacker rotate it to bypass the limit — fall back to a
+      // shared 'unknown' bucket instead.
+      if (trustedProxiesCount > 0) {
+        const forwardedFor = c.req.header('X-Forwarded-For');
+        if (forwardedFor) {
+          const ips = forwardedFor.split(',').map(ip => ip.trim()).filter(Boolean);
+          // Trust the rightmost `trustedProxiesCount` hops (added by our own
+          // infrastructure); take the IP recorded by the outermost trusted hop.
+          key = ips.length >= trustedProxiesCount ? ips[ips.length - trustedProxiesCount] : ips[0];
         }
-      } else {
-        key = 'unknown';
       }
+      if (!key) key = 'unknown';
     }
     const now = Date.now();
     const entry = hits.get(key);
