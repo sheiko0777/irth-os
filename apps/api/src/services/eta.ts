@@ -90,7 +90,7 @@ export const issueInvoice = async (order: { id: string; orgId: string; totalAmou
         console.log(`ETA invoice submitted for order ${order.id}. UUID: ${accepted?.uuid}`);
         return { uuid: accepted?.uuid ?? `mock-${order.id}`, longId: accepted?.longId };
     } catch (err) {
-        console.error('Failed to issue ETA invoice:', err);
+        console.error('Failed to issue ETA invoice:', err instanceof Error ? err.message : 'unknown error');
         return null;
     }
 };
@@ -105,7 +105,7 @@ export const getInvoiceStatus = async (uuid: string): Promise<{ status: string; 
         const data = await res.json() as EtaStatusResponse;
         return { status: data.status ?? 'Valid', qrCodeData: data.qrCodeData, longId: data.longId };
     } catch (err) {
-        console.error('Failed to fetch ETA invoice status:', err);
+        console.error('Failed to fetch ETA invoice status:', err instanceof Error ? err.message : 'unknown error');
         return { status: 'Error' };
     }
 };
@@ -121,7 +121,7 @@ export const cancelInvoice = async (uuid: string, reason: string): Promise<boole
         });
         return res.ok;
     } catch (err) {
-        console.error('Failed to cancel ETA invoice:', err);
+        console.error('Failed to cancel ETA invoice:', err instanceof Error ? err.message : 'unknown error');
         return false;
     }
 };

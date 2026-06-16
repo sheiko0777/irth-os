@@ -82,7 +82,7 @@ shippingRoute.post('/create', async (c: Context) => {
 
      return c.json({ data: shipment, error: null, meta: null });
   } catch (error) {
-     console.error('Bosta API failed', error);
+     console.error('Bosta API failed:', error instanceof Error ? error.message : 'unknown error');
      return c.json({ data: null, error: 'shipping_unavailable', meta: null }, 200);
   }
 });

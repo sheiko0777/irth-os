@@ -59,7 +59,7 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
 
         if (newOrderStatus === 'delivered') {
            // Call issueInvoice on delivered
-           issueInvoice(updatedOrder).catch(e => console.error(e));
+           issueInvoice(updatedOrder).catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));
         }
     }
   }
