@@ -30,7 +30,7 @@ export default async function MembersPage() {
               {members.map((member) => (
                 <div key={member.id} className="flex justify-between items-center border-b pb-2">
                   <span>{member.userId}</span>
-                  <MemberRoleSelect role={member.role} />
+                  <MemberRoleSelect memberId={member.id} role={member.role} />
                 </div>
               ))}
             </div>
