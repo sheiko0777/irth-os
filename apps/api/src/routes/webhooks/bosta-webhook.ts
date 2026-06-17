@@ -38,7 +38,11 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   const sigBuf = Buffer.from(signature, 'hex');
   const expBuf = Buffer.from(expectedHex, 'hex');
 
-  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+  const { createHash } = await import('node:crypto');
+  const hashedSig = createHash('sha256').update(sigBuf).digest();
+  const hashedExp = createHash('sha256').update(expBuf).digest();
+
+  if (!timingSafeEqual(hashedSig, hashedExp)) {
     return c.json({ data: null, error: 'invalid_signature', meta: null }, 401);
   }
 
