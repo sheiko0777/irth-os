@@ -1,9 +1,11 @@
 export { ErrorBoundary } from "expo-router";
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
 import { apiFetch } from '../../../lib/api';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
@@ -13,16 +15,23 @@ type Order = {
   displayId: string;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   total: number;
+  createdAt: string;
 };
 
 export default function OrdersScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['orders'],
     queryFn: () => apiFetch<Order[]>('/api/orders'),
   });
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    refetch().finally(() => setRefreshing(false));
+  }, [refetch]);
 
   if (isLoading) {
     return (
@@ -53,13 +62,19 @@ export default function OrdersScreen() {
                 <Text style={styles.orderId}>{item.displayId}</Text>
                 <Badge status={item.status} label={t(`status.${item.status}`, item.status)} />
               </View>
-              <Text style={styles.total}>{t('orders.total')}: {item.total}</Text>
+              <Text style={styles.detailText}>{t('orders.total')}: {item.total}</Text>
+              {item.createdAt && (
+                <Text style={styles.detailText}>{t('orders.createdAt')}: {format(new Date(item.createdAt), 'PP', { locale: ar })}</Text>
+              )}
             </Card>
           </TouchableOpacity>
         )}
         ListEmptyComponent={() => (
           <Text style={styles.emptyText}>{t('orders.empty')}</Text>
         )}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
     </View>
   );
@@ -96,9 +111,13 @@ const styles = StyleSheet.create({
   orderId: {
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Cairo',
   },
-  total: {
+  detailText: {
     fontSize: 14,
     color: '#374151',
+    marginTop: 4,
+    fontFamily: 'Cairo',
+    textAlign: 'auto', 
   },
 });
