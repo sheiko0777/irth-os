@@ -1,21 +1,24 @@
-import { Hono } from 'hono';
-import type { Context } from 'hono';
-import { db } from '../../db';
-import { courierShipments } from '@irth/db';
-import { eq, and } from 'drizzle-orm';
-import { timingSafeEqual } from 'node:crypto';
+import { Hono } from "hono";
+import type { Context } from "hono";
+import { db } from "../../db";
+import { courierShipments } from "@irth/db";
+import { eq, and } from "drizzle-orm";
+import { timingSafeEqual, createHash } from "node:crypto";
 
 export const bostaWebhookRoute = new Hono();
 
-bostaWebhookRoute.post('/', async (c: Context) => {
+bostaWebhookRoute.post("/", async (c: Context) => {
   const secret = process.env.BOSTA_WEBHOOK_SECRET;
   if (!secret) {
-    return c.json({ data: null, error: 'webhook_secret_not_configured', meta: null }, 500);
+    return c.json(
+      { data: null, error: "webhook_secret_not_configured", meta: null },
+      500,
+    );
   }
 
-  const signature = c.req.header('X-Bosta-Signature');
+  const signature = c.req.header("X-Bosta-Signature");
   if (!signature) {
-    return c.json({ data: null, error: 'missing_signature', meta: null }, 401);
+    return c.json({ data: null, error: "missing_signature", meta: null }, 401);
   }
 
   const bodyRaw = await c.req.text();
@@ -23,23 +26,30 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   // Verify HMAC-SHA256
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
+    { name: "HMAC", hash: "SHA-256" },
     false,
-    ['sign']
+    ["sign"],
   );
 
-  const expectedBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(bodyRaw));
+  const expectedBuffer = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(bodyRaw),
+  );
   const expectedHex = Array.from(new Uint8Array(expectedBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
-  const sigBuf = Buffer.from(signature, 'hex');
-  const expBuf = Buffer.from(expectedHex, 'hex');
+  const sigBuf = Buffer.from(signature, "hex");
+  const expBuf = Buffer.from(expectedHex, "hex");
 
-  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
-    return c.json({ data: null, error: 'invalid_signature', meta: null }, 401);
+  const hashedSig = createHash("sha256").update(sigBuf).digest();
+  const hashedExp = createHash("sha256").update(expBuf).digest();
+
+  if (!timingSafeEqual(hashedSig, hashedExp)) {
+    return c.json({ data: null, error: "invalid_signature", meta: null }, 401);
   }
 
   // Parse payload
@@ -47,24 +57,30 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   try {
     payload = JSON.parse(bodyRaw);
   } catch (e) {
-    return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+    return c.json({ data: null, error: "invalid_json", meta: null }, 400);
   }
 
   const data = payload?.data;
   if (!data || !data.trackingNumber) {
-    return c.json({ data: null, error: 'missing_tracking_number', meta: null }, 400);
+    return c.json(
+      { data: null, error: "missing_tracking_number", meta: null },
+      400,
+    );
   }
 
   const trackingNumber = data.trackingNumber as string;
   const state = data.state as string;
-  const cashOnDelivery = data.cashOnDelivery ? parseFloat(data.cashOnDelivery) : 0;
+  const cashOnDelivery = data.cashOnDelivery
+    ? parseFloat(data.cashOnDelivery)
+    : 0;
 
   // Map states
-  let courierStatus = 'created';
-  if (state === 'DELIVERED') courierStatus = 'delivered';
-  else if (state === 'RETURNED') courierStatus = 'returned';
-  else if (state === 'RECEIVED_AT_WAREHOUSE' || state === 'OUT_FOR_DELIVERY') courierStatus = 'in_transit';
-  else if (state === 'PACKAGE_PICKED_UP') courierStatus = 'picked_up';
+  let courierStatus = "created";
+  if (state === "DELIVERED") courierStatus = "delivered";
+  else if (state === "RETURNED") courierStatus = "returned";
+  else if (state === "RECEIVED_AT_WAREHOUSE" || state === "OUT_FOR_DELIVERY")
+    courierStatus = "in_transit";
+  else if (state === "PACKAGE_PICKED_UP") courierStatus = "picked_up";
 
   // We need the org_id and order_id to upsert. Since it's by trackingNumber, we must find the shipment first.
   // The spec says "Upsert courier_shipments by tracking_number" but tracking_number is not unique.
@@ -82,7 +98,14 @@ bostaWebhookRoute.post('/', async (c: Context) => {
     // Let's assume businessReference is the order_id.
     const businessReference = data.businessReference;
     if (!businessReference) {
-      return c.json({ data: null, error: 'shipment_not_found_and_no_reference', meta: null }, 404);
+      return c.json(
+        {
+          data: null,
+          error: "shipment_not_found_and_no_reference",
+          meta: null,
+        },
+        404,
+      );
     }
 
     // In a real scenario we should get orgId from the order.
@@ -92,44 +115,51 @@ bostaWebhookRoute.post('/', async (c: Context) => {
 
   if (existingShipment) {
     const updatedEvents = [...(existingShipment.webhookEvents || []), payload];
-    const isDeliveredAndCod = state === 'DELIVERED' && cashOnDelivery > 0;
+    const isDeliveredAndCod = state === "DELIVERED" && cashOnDelivery > 0;
 
-    await db.update(courierShipments)
+    await db
+      .update(courierShipments)
       .set({
         courierStatus,
         codCollected: isDeliveredAndCod ? true : existingShipment.codCollected,
         webhookEvents: updatedEvents,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(courierShipments.id, existingShipment.id));
   } else if (data.businessReference) {
     // Attempt to parse businessReference as order_id
     // Need to get orgId from somewhere, let's look up the order
-    const { orders } = await import('@irth/db');
-    const [order] = await db.select().from(orders).where(eq(orders.id, data.businessReference));
+    const { orders } = await import("@irth/db");
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, data.businessReference));
 
     if (order) {
-        const isDeliveredAndCod = state === 'DELIVERED' && cashOnDelivery > 0;
-        const { sql } = await import('drizzle-orm');
-        await db.insert(courierShipments).values({
-            orgId: order.orgId,
-            orderId: order.id,
-            courier: 'bosta',
-            trackingNumber: trackingNumber,
+      const isDeliveredAndCod = state === "DELIVERED" && cashOnDelivery > 0;
+      const { sql } = await import("drizzle-orm");
+      await db
+        .insert(courierShipments)
+        .values({
+          orgId: order.orgId,
+          orderId: order.id,
+          courier: "bosta",
+          trackingNumber: trackingNumber,
+          courierStatus,
+          codAmount: cashOnDelivery.toString(),
+          codCollected: isDeliveredAndCod,
+          webhookEvents: [payload],
+        })
+        .onConflictDoUpdate({
+          target: courierShipments.orderId,
+          set: {
             courierStatus,
+            trackingNumber,
             codAmount: cashOnDelivery.toString(),
             codCollected: isDeliveredAndCod,
-            webhookEvents: [payload]
-        }).onConflictDoUpdate({
-            target: courierShipments.orderId,
-            set: {
-                courierStatus,
-                trackingNumber,
-                codAmount: cashOnDelivery.toString(),
-                codCollected: isDeliveredAndCod,
-                webhookEvents: sql`${courierShipments.webhookEvents} || ${JSON.stringify([payload])}::jsonb`,
-                updatedAt: new Date()
-            }
+            webhookEvents: sql`${courierShipments.webhookEvents} || ${JSON.stringify([payload])}::jsonb`,
+            updatedAt: new Date(),
+          },
         });
     }
   }
