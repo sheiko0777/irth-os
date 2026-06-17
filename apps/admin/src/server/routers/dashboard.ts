@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from '../trpc';
 import { orders, orderItems, shipmentTracking, productVariants, products } from '@irth/db';
-import { eq, and, desc, sql, count, sum, ilike, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, sql, count, sum, ilike, gte, lte, lt } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const dashboardRouter = router({
@@ -44,5 +44,22 @@ export const dashboardRouter = router({
             error: null,
             meta: null
         };
-    })
+    }),
+
+    getRecentOrders: protectedProcedure.query(async ({ ctx }) => {
+        const recentOrders = await ctx.db
+            .select({
+                id: orders.id,
+                orderNumber: orders.orderNumber,
+                status: orders.status,
+                totalAmount: orders.totalAmount,
+                createdAt: orders.createdAt,
+            })
+            .from(orders)
+            .where(eq(orders.orgId, ctx.orgId))
+            .orderBy(desc(orders.createdAt))
+            .limit(6);
+
+        return { data: recentOrders, error: null, meta: null };
+    }),
 });
