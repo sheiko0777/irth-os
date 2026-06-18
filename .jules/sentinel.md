@@ -1,0 +1,4 @@
+## 2026-06-18 - [Timing Attack in Webhook Verification]
+**Vulnerability:** The Aramex webhook route (`apps/api/src/routes/webhooks/aramex-webhook.ts`) used a standard string inequality check (`!==`) to compare the incoming token with the expected token.
+**Learning:** Standard string comparisons fail fast upon finding a mismatch, which can leak information about the token's content or length through timing differences, making the webhook susceptible to timing attacks.
+**Prevention:** Always use a constant-time comparison mechanism like `crypto.timingSafeEqual` for sensitive token or signature verifications. Furthermore, ensure both values are hashed to a constant length (e.g., via SHA-256) before using `timingSafeEqual` to prevent early length checks from reintroducing timing leaks or causing application crashes due to unequal buffer lengths.
