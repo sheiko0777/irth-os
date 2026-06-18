@@ -30,9 +30,12 @@ productsRouter.get('/', async (c: Context) => {
 
     const whereClause = and(...conditions);
 
-    const data = await db.select().from(products).where(whereClause).limit(limit).offset(offset).orderBy(desc(products.createdAt));
+    // ⚡ Bolt: Execute data fetch and count queries concurrently to reduce overall latency.
+    const [data, countResult] = await Promise.all([
+      db.select().from(products).where(whereClause).limit(limit).offset(offset).orderBy(desc(products.createdAt)),
+      db.select({ count: sql<number>`count(*)` }).from(products).where(whereClause)
+    ]);
     
-    const countResult = await db.select({ count: sql<number>`count(*)` }).from(products).where(whereClause);
     const total = Number(countResult[0].count);
 
     return c.json({ data, error: null, meta: { total, page, limit } });
