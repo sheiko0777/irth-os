@@ -21,6 +21,8 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    // Attach token as cookie for better-auth
+    headers['Cookie'] = `better-auth.session_token=${token}`;
   }
 
   const response = await fetch(`${API_URL}${endpoint}`, {

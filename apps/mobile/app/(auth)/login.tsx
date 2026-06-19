@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { setSessionToken, setOrgId } from '../../lib/auth';
+import { setSessionToken } from '../../lib/auth';
 import { apiFetch } from '../../lib/api';
 
 export default function LoginScreen() {
@@ -14,14 +14,17 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     try {
-      // Simulate API call to /api/auth/sign-in
-      const response = await apiFetch<{ token: string; orgId: string }>('/api/auth/sign-in', {
+      // API call to better-auth
+      const response = await apiFetch<{ token: string; user: any; session: any }>('/api/auth/sign-in/email', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
 
-      await setSessionToken(response.token);
-      await setOrgId(response.orgId);
+      // better-auth might return token inside session or directly
+      const token = response.token || (response.session && response.session.token);
+      if (token) {
+        await setSessionToken(token);
+      }
       
       router.replace('/(tabs)/orders');
     } catch (error) {
@@ -33,19 +36,21 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>{t('auth.login')}</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, styles.rtlText]}
         placeholder={t('auth.email')}
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
+        textAlign="right"
       />
       <TextInput
-        style={styles.input}
+        style={[styles.input, styles.rtlText]}
         placeholder={t('auth.password')}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        textAlign="right"
       />
       <Button title={t('auth.submit')} onPress={handleLogin} />
     </View>
@@ -64,6 +69,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 24,
     textAlign: 'center',
+    fontFamily: 'Cairo',
   },
   input: {
     borderWidth: 1,
@@ -71,5 +77,9 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
     borderRadius: 8,
+  },
+  rtlText: {
+    textAlign: 'right',
+    fontFamily: 'Cairo',
   },
 });

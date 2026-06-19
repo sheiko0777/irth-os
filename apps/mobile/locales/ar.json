@@ -11,16 +11,28 @@
       "orders": "الطلبات",
       "products": "المنتجات"
     },
+    "status": {
+      "pending": "معلق",
+      "processing": "جاري التجهيز",
+      "confirmed": "مؤكد",
+      "shipped": "مشحون",
+      "delivered": "تم التسليم",
+      "cancelled": "ملغى"
+    },
     "orders": {
       "title": "الطلبات",
       "details": "تفاصيل الطلب",
       "status": "حالة الطلب",
       "total": "الإجمالي",
+      "createdAt": "تاريخ الطلب",
       "empty": "لا توجد طلبات"
     },
     "products": {
       "title": "المنتجات",
-      "empty": "لا توجد منتجات"
+      "empty": "لا توجد منتجات",
+      "searchPlaceholder": "ابحث عن منتج...",
+      "price": "السعر",
+      "stock": "المخزون"
     },
     "common": {
       "loading": "جاري التحميل...",
