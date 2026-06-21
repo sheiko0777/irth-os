@@ -65,7 +65,7 @@ orgsRouter.get('/:id/members', async (c: Context) => {
 
 const inviteSchema = z.object({
   email: z.string().email(),
-  role: z.string().default('member'),
+  role: z.enum(['owner', 'admin', 'member']).default('member'),
 });
 
 orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context) => {
@@ -77,6 +77,11 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
 
     const body = await c.req.json();
     const { email, role } = inviteSchema.parse(body);
+
+    const userRole = c.get('role') as string;
+    if (userRole === 'admin' && role === 'owner') {
+      return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
+    }
 
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
     if (!org) {
