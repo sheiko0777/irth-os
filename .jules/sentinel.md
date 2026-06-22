@@ -1,0 +1,4 @@
+## 2025-02-23 - Prevent Cross-Tenant Relations (IDOR) on Foreign Keys
+**Vulnerability:** In `apps/api/src/routes/categories.ts`, when creating a new category with a `parentId`, there was no validation to check if the referenced `parentId` belonged to the same organization (`orgId`). This could allow an attacker to nest their categories under a category belonging to another organization (an Insecure Direct Object Reference).
+**Learning:** Even when inputs are validated for type (e.g. `z.string().uuid()`), relational fields (foreign keys) that point to entities belonging to a tenant must be explicitly validated to ensure they belong to the current authenticated tenant (`orgId`), before inserting the new entity into the database.
+**Prevention:** Always perform a `db.select()` check to verify ownership and tenant isolation (`orgId`) of any user-provided ID that references another record (like `parentId`, `variantId`, `orderId`) before using it in inserts or updates.
