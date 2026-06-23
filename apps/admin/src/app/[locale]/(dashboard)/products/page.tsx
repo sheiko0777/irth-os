@@ -1,5 +1,6 @@
 import { serverCaller } from "@/server/caller";
 import { ProductsClient } from "./ProductsClient";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 export default async function ProductsPage() {
     const caller = await serverCaller();
@@ -10,11 +11,11 @@ export default async function ProductsPage() {
     ]);
 
     if (productsResponse.error) {
-        return <div dir="rtl" className="font-cairo text-[var(--crimson)]">Error loading products</div>;
+        return <ErrorState message="تعذّر تحميل المنتجات." />;
     }
-    
+
     if (categoriesResponse.error) {
-         return <div dir="rtl" className="font-cairo text-[var(--crimson)]">Error loading categories</div>;
+        return <ErrorState message="تعذّر تحميل الفئات." />;
     }
 
     return (

@@ -4,6 +4,7 @@ import Link from "next/link";
 import CustomerActions from "./CustomerActions";
 import { ExportButton } from "@/components/ExportButton";
 import { PaginationNav } from "@/components/ui/PaginationNav";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 const PAGE_SIZE = 50;
 
@@ -20,7 +21,7 @@ export default async function CustomersPage({
   const summary = await caller.customers.summary();
 
   if (response.error) {
-    return <div>Error loading customers</div>;
+    return <ErrorState message="تعذّر تحميل قائمة العملاء." />;
   }
 
   const customerList = response.data;

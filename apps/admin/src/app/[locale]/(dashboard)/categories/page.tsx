@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { PermissionGate } from "@/components/PermissionGate";
 import { CategoriesClient } from "./CategoriesClient";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 export default async function CategoriesPage() {
     const t = await getTranslations("categories");
@@ -10,7 +11,7 @@ export default async function CategoriesPage() {
     const categoriesResponse = await caller.categories.list();
 
     if (categoriesResponse.error) {
-        return <div>Error loading categories</div>;
+        return <ErrorState message="تعذّر تحميل الفئات." />;
     }
 
     const { data: categories } = categoriesResponse;
