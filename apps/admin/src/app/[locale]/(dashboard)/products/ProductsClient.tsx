@@ -10,6 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PermissionGate } from "@/components/PermissionGate";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Pagination } from "@/components/ui/Pagination";
+import { SkeletonRow } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 export interface Product {
     id: string;
@@ -32,7 +36,9 @@ export interface Category {
 export function ProductsClient({ products: initialProducts, categories }: { products: Product[], categories: Category[] }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
+    const [page, setPage] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const PAGE_SIZE = 50;
     
     // Modal state for form
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,33 +52,46 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
     const utils = trpc.useUtils();
 
     // Queries
-    const { data: productsData } = trpc.products.list.useQuery(
-        { page: 1, pageSize: 50, q: searchQuery, status: statusFilter === "all" ? undefined : statusFilter },
-        { initialData: { data: initialProducts, meta: { total: initialProducts.length, page: 1, pageSize: 50 }, error: null } }
+    const { data: productsData, isFetching } = trpc.products.list.useQuery(
+        { page, pageSize: PAGE_SIZE, q: searchQuery, status: statusFilter === "all" ? undefined : statusFilter },
+        { initialData: { data: initialProducts, meta: { total: initialProducts.length, page: 1, pageSize: PAGE_SIZE }, error: null } }
     );
-    
+
     const products = productsData?.data || initialProducts;
+    const total = productsData?.meta?.total ?? products.length;
 
     // Mutations
     const createMutation = trpc.products.create.useMutation({
         onSuccess: () => {
+            toast.success("تم إنشاء المنتج بنجاح");
             utils.products.list.invalidate();
             setIsModalOpen(false);
             resetForm();
+        },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء إنشاء المنتج");
         }
     });
 
     const updateMutation = trpc.products.update.useMutation({
         onSuccess: () => {
+            toast.success("تم تحديث المنتج بنجاح");
             utils.products.list.invalidate();
             setIsModalOpen(false);
             resetForm();
+        },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء تحديث المنتج");
         }
     });
 
     const deactivateMutation = trpc.products.deactivate.useMutation({
         onSuccess: () => {
+            toast.success("تم تعطيل المنتج");
             utils.products.list.invalidate();
+        },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء التعطيل");
         }
     });
 
@@ -238,7 +257,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                 </div>
             </div>
 
-            <div className="rounded-md border bg-white">
+            <div className="rounded-md border border-[var(--rim1)] bg-[var(--card-bg)]">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -252,7 +271,19 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {products.length === 0 ? (
+                        {isFetching && products.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={7} className="py-2">
+                                    <div className="space-y-1">
+                                        <SkeletonRow />
+                                        <SkeletonRow />
+                                        <SkeletonRow />
+                                        <SkeletonRow />
+                                        <SkeletonRow />
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : products.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="text-center py-8" style={{ color: 'var(--t2)' }}>
                                     لا توجد منتجات
@@ -274,15 +305,22 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                                     تعديل
                                                 </Button>
                                                 {p.status === 'active' && (
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="sm" 
-                                                        style={{ color: 'var(--crimson)' }}
-                                                        onClick={() => deactivateMutation.mutate({ id: p.id })}
-                                                        disabled={deactivateMutation.isPending}
+                                                    <ConfirmDialog
+                                                        title="تعطيل المنتج"
+                                                        description={`سيتم تعطيل المنتج «${p.name}». لن يظهر للبيع بعد ذلك.`}
+                                                        confirmLabel="تعطيل"
+                                                        pending={deactivateMutation.isPending}
+                                                        onConfirm={() => deactivateMutation.mutate({ id: p.id })}
                                                     >
-                                                        تعطيل
-                                                    </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            style={{ color: 'var(--crimson)' }}
+                                                            disabled={deactivateMutation.isPending}
+                                                        >
+                                                            تعطيل
+                                                        </Button>
+                                                    </ConfirmDialog>
                                                 )}
                                             </div>
                                         </PermissionGate>
@@ -293,6 +331,13 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                     </TableBody>
                 </Table>
             </div>
+
+            <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={total}
+                onPageChange={setPage}
+            />
         </div>
     );
 }

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { toast } from 'sonner';
 
 export function CreateCouponDialog({ children }: { children: ReactNode }) {
@@ -191,20 +192,21 @@ export function DeleteCouponButton({ id }: { id: string }) {
         }
     });
 
-    const handleDelete = () => {
-        if (confirm('هل أنت متأكد من حذف هذا الكوبون؟')) {
-            deleteMutation.mutate({ id });
-        }
-    };
-
     return (
-        <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
+        <ConfirmDialog
+            title="حذف الكوبون"
+            description="هل أنت متأكد من حذف هذا الكوبون؟ لا يمكن التراجع عن هذا الإجراء."
+            confirmLabel="حذف"
+            pending={deleteMutation.isPending}
+            onConfirm={() => deleteMutation.mutate({ id })}
         >
-            حذف
-        </Button>
+            <Button
+                variant="destructive"
+                size="sm"
+                disabled={deleteMutation.isPending}
+            >
+                حذف
+            </Button>
+        </ConfirmDialog>
     );
 }

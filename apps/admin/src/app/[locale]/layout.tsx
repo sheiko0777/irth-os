@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { IBM_Plex_Sans_Arabic, Cairo } from 'next/font/google';
 import { ReactNode } from 'react';
+import { Toaster } from 'sonner';
 import './globals.css';
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
@@ -60,6 +61,13 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           {children}
         </NextIntlClientProvider>
+        <Toaster
+          position="top-center"
+          richColors
+          dir={locale === 'ar' ? 'rtl' : 'ltr'}
+          theme="dark"
+          toastOptions={{ style: { fontFamily: 'var(--font-cairo)' } }}
+        />
       </body>
     </html>
   );
