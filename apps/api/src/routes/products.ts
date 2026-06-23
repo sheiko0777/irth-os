@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { products, productVariants, withAudit } from '@irth/db';
+import { products, productVariants, categories, withAudit } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
 
@@ -63,6 +63,13 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
     const userId = (c.get('userId') as string | undefined) ?? 'system';
     const body = await c.req.json();
     const data = createProductSchema.parse(body);
+
+    if (data.categoryId) {
+      const [category] = await db.select().from(categories).where(and(eq(categories.id, data.categoryId), eq(categories.orgId, orgId)));
+      if (!category) {
+        return c.json({ data: null, error: 'Invalid category', meta: null }, 400);
+      }
+    }
 
     const priceStr = typeof data.price === 'number' ? data.price.toString() : data.price;
 
@@ -133,6 +140,13 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
     const userId = (c.get('userId') as string | undefined) ?? 'system';
     const body = await c.req.json();
     const data = updateProductSchema.parse(body);
+
+    if (data.categoryId) {
+      const [category] = await db.select().from(categories).where(and(eq(categories.id, data.categoryId), eq(categories.orgId, orgId)));
+      if (!category) {
+        return c.json({ data: null, error: 'Invalid category', meta: null }, 400);
+      }
+    }
 
     const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
     if (data.price !== undefined) {

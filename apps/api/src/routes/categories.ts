@@ -37,6 +37,13 @@ categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => 
     const body = await c.req.json();
     const data = createCategorySchema.parse(body);
 
+    if (data.parentId) {
+      const [parent] = await db.select().from(categories).where(and(eq(categories.id, data.parentId), eq(categories.orgId, orgId)));
+      if (!parent) {
+        return c.json({ data: null, error: 'Invalid parent category', meta: null }, 400);
+      }
+    }
+
     const result = await withAudit(db, async () => {
       const [inserted] = await db.insert(categories).values({
         orgId,
