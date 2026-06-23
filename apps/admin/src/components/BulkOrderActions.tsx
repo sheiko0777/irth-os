@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const STATUS_OPTIONS = [
     { value: 'pending',        label: 'قيد الانتظار' },
@@ -21,19 +23,20 @@ interface Props {
 
 export function BulkOrderActions({ selectedIds, onSuccess }: Props) {
     const [status, setStatus] = useState<StatusValue>('confirmed');
-    const [error, setError] = useState<string | null>(null);
 
     const mutation = trpc.bulk.bulkUpdateOrderStatus.useMutation({
         onSuccess: () => {
-            setError(null);
+            toast.success(`تم تحديث ${selectedIds.length} طلب بنجاح`);
             onSuccess();
         },
         onError: (err: unknown) => {
-            setError(err instanceof Error ? err.message : 'حدث خطأ');
+            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء التحديث');
         },
     });
 
     if (selectedIds.length === 0) return null;
+
+    const statusLabel = STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
 
     return (
         <div
@@ -59,17 +62,21 @@ export function BulkOrderActions({ selectedIds, onSuccess }: Props) {
                     ))}
                 </select>
 
-                <button
-                    onClick={() => mutation.mutate({ ids: selectedIds, status })}
-                    disabled={mutation.isPending}
-                    className="bg-[var(--gold)] text-white text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50 cursor-pointer transition-opacity"
+                <ConfirmDialog
+                    title="تأكيد تحديث الحالة"
+                    description={`سيتم تغيير حالة ${selectedIds.length} طلب إلى «${statusLabel}». هل تريد المتابعة؟`}
+                    confirmLabel="تطبيق"
+                    destructive={false}
+                    pending={mutation.isPending}
+                    onConfirm={() => mutation.mutate({ ids: selectedIds, status })}
                 >
-                    {mutation.isPending ? 'جارٍ التحديث...' : 'تطبيق'}
-                </button>
-
-                {error && (
-                    <span className="text-sm text-[var(--crimson)]">{error}</span>
-                )}
+                    <button
+                        disabled={mutation.isPending}
+                        className="bg-[var(--gold)] text-white text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50 cursor-pointer transition-opacity"
+                    >
+                        {mutation.isPending ? 'جارٍ التحديث...' : 'تطبيق'}
+                    </button>
+                </ConfirmDialog>
             </div>
         </div>
     );

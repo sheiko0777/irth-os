@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export type ShippingZone = {
@@ -90,7 +92,13 @@ export function ShippingClient({ zones: initialZones }: Props) {
   });
 
   const deleteRateMutation = trpc.shipping.rates.delete.useMutation({
-    onSuccess: () => ratesQuery.refetch(),
+    onSuccess: () => {
+      toast.success('تم حذف سعر الشحن');
+      ratesQuery.refetch();
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الحذف');
+    },
   });
 
   const selectedZone = initialZones.find(z => z.id === selectedZoneId) ?? null;
@@ -116,9 +124,6 @@ export function ShippingClient({ zones: initialZones }: Props) {
     });
   };
 
-  const handleDeleteRate = (id: string) => {
-    if (confirm('حذف سعر الشحن هذا؟')) deleteRateMutation.mutate({ id });
-  };
 
   const showCountries = (countries: string[]) => {
     if (countries.length <= 3) return countries.join('، ');
@@ -222,15 +227,22 @@ export function ShippingClient({ zones: initialZones }: Props) {
                             : '—'}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteRate(rate.id)}
-                            disabled={deleteRateMutation.isPending}
-                            style={{ color: 'var(--crimson)' }}
+                          <ConfirmDialog
+                            title="حذف سعر الشحن"
+                            description="هل أنت متأكد من حذف سعر الشحن هذا؟"
+                            confirmLabel="حذف"
+                            pending={deleteRateMutation.isPending}
+                            onConfirm={() => deleteRateMutation.mutate({ id: rate.id })}
                           >
-                            حذف
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={deleteRateMutation.isPending}
+                              style={{ color: 'var(--crimson)' }}
+                            >
+                              حذف
+                            </Button>
+                          </ConfirmDialog>
                         </TableCell>
                       </TableRow>
                     ))}

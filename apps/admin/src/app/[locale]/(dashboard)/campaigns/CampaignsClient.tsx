@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export type Campaign = {
   id: string;
@@ -87,23 +89,35 @@ export default function CampaignsClient({
 
   const createMutation = trpc.campaigns.create.useMutation({
     onSuccess: (res) => {
+      toast.success('تم إنشاء الحملة بنجاح');
       if (res.data) setCampaigns((prev) => [res.data as Campaign, ...prev]);
       setIsCreateOpen(false);
       setForm({ name: '', message: '', channel: 'whatsapp', targetSegment: 'all', scheduledAt: '' });
       router.refresh();
     },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء الحملة');
+    },
   });
 
   const sendMutation = trpc.campaigns.send.useMutation({
     onSuccess: (res) => {
+      toast.success('تم إرسال الحملة');
       if (res.data) setCampaigns((prev) => prev.map((c) => (c.id === res.data?.id ? (res.data as Campaign) : c)));
       router.refresh();
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الإرسال');
     },
   });
 
   const deleteMutation = trpc.campaigns.delete.useMutation({
     onSuccess: (_: unknown, vars: { id: string }) => {
+      toast.success('تم حذف الحملة');
       setCampaigns((prev) => prev.filter((c) => c.id !== vars.id));
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الحذف');
     },
   });
 
@@ -174,20 +188,33 @@ export default function CampaignsClient({
                 <td className="px-4 py-3">
                   <div className="flex gap-2 justify-end">
                     {(c.status === 'draft' || c.status === 'scheduled') && (
-                      <button
-                        onClick={() => { if (window.confirm('إرسال الحملة الآن؟')) sendMutation.mutate({ id: c.id }); }}
-                        className="px-3 py-1 rounded text-xs font-semibold"
-                        style={{ background: 'var(--emerald)', color: '#fff' }}>
-                        إرسال
-                      </button>
+                      <ConfirmDialog
+                        title="إرسال الحملة"
+                        description={`سيتم إرسال الحملة «${c.name}» الآن إلى جميع المستلمين المستهدفين.`}
+                        confirmLabel="إرسال"
+                        destructive={false}
+                        pending={sendMutation.isPending}
+                        onConfirm={() => sendMutation.mutate({ id: c.id })}>
+                        <button
+                          className="px-3 py-1 rounded text-xs font-semibold"
+                          style={{ background: 'var(--emerald)', color: '#fff' }}>
+                          إرسال
+                        </button>
+                      </ConfirmDialog>
                     )}
                     {c.status !== 'sending' && (
-                      <button
-                        onClick={() => { if (window.confirm('حذف هذه الحملة؟')) deleteMutation.mutate({ id: c.id }); }}
-                        className="px-3 py-1 rounded text-xs"
-                        style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--crimson)' }}>
-                        حذف
-                      </button>
+                      <ConfirmDialog
+                        title="حذف الحملة"
+                        description={`هل أنت متأكد من حذف الحملة «${c.name}»؟`}
+                        confirmLabel="حذف"
+                        pending={deleteMutation.isPending}
+                        onConfirm={() => deleteMutation.mutate({ id: c.id })}>
+                        <button
+                          className="px-3 py-1 rounded text-xs"
+                          style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--crimson)' }}>
+                          حذف
+                        </button>
+                      </ConfirmDialog>
                     )}
                   </div>
                 </td>

@@ -12,8 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().email("البريد الإلكتروني غير صحيح"),
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -27,7 +27,7 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    formState: { isSubmitting, errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
   });
@@ -72,18 +72,24 @@ export default function LoginPage() {
                 type="email"
                 {...register("email")}
                 disabled={isSubmitting}
-                className="text-start"
+                className={`text-start ${errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               />
+              {errors.email && (
+                <p className="text-xs text-red-500">{errors.email.message}</p>
+              )}
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-sm font-medium">{t("password")}</label>
               <Input
                 type="password"
                 {...register("password")}
                 disabled={isSubmitting}
-                className="text-start"
+                className={`text-start ${errors.password ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               />
+              {errors.password && (
+                <p className="text-xs text-red-500">{errors.password.message}</p>
+              )}
             </div>
             
             <Button type="submit" className="w-full" disabled={isSubmitting}>

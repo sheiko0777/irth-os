@@ -1,12 +1,13 @@
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 export default async function SuppliersPage() {
   const caller = await serverCaller();
   const response = await caller.purchasing.suppliers.list();
 
   if (response.error) {
-    return <div>Error loading suppliers</div>;
+    return <ErrorState message="تعذّر تحميل قائمة الموردين." />;
   }
 
   const suppliers = response.data;

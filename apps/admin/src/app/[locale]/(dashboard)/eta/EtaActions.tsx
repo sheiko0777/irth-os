@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { submitPendingAction } from "./actions";
 
 interface EtaActionsProps {
@@ -11,38 +12,41 @@ interface EtaActionsProps {
 }
 
 export default function EtaActions({ orderId, invoiceStatus }: EtaActionsProps) {
-    const [message, setMessage] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const submitMutation = trpc.eta.submit.useMutation({
-        onSuccess: (res) => setMessage(res.error ? `خطأ: ${res.error}` : 'تم إرسال الفاتورة بنجاح'),
-        onError: () => setMessage('فشل الإرسال'),
+        onSuccess: (res) => {
+            if (res.error) toast.error(`خطأ: ${res.error}`);
+            else toast.success('تم إرسال الفاتورة بنجاح');
+        },
+        onError: () => toast.error('فشل إرسال الفاتورة'),
     });
 
     const checkMutation = trpc.eta.checkStatus.useMutation({
-        onSuccess: (res) => setMessage(res.error ? `خطأ: ${res.error}` : `الحالة: ${res.data?.status}`),
-        onError: () => setMessage('فشل التحقق'),
+        onSuccess: (res) => {
+            if (res.error) toast.error(`خطأ: ${res.error}`);
+            else toast.success(`الحالة: ${res.data?.status ?? 'غير معروف'}`);
+        },
+        onError: () => toast.error('فشل التحقق من الحالة'),
     });
 
     if (!orderId) {
         return (
-            <div className="flex gap-2 items-center">
-                <Button
-                    size="sm"
-                    variant="outline"
-                    className="font-cairo text-xs"
-                    disabled={isPending}
-                    onClick={() => {
-                        startTransition(async () => {
-                            const result = await submitPendingAction();
-                            setMessage(result.error ? `خطأ: ${result.error}` : `تم إرسال ${result.data?.submitted} فاتورة`);
-                        });
-                    }}
-                >
-                    {isPending ? 'جارٍ الإرسال…' : 'إرسال الطلبات المعلقة'}
-                </Button>
-                {message && <span className="text-xs text-[var(--t2)] font-cairo">{message}</span>}
-            </div>
+            <Button
+                size="sm"
+                variant="outline"
+                className="font-cairo text-xs"
+                disabled={isPending}
+                onClick={() => {
+                    startTransition(async () => {
+                        const result = await submitPendingAction();
+                        if (result.error) toast.error(`خطأ: ${result.error}`);
+                        else toast.success(`تم إرسال ${result.data?.submitted} فاتورة`);
+                    });
+                }}
+            >
+                {isPending ? 'جارٍ الإرسال…' : 'إرسال الطلبات المعلقة'}
+            </Button>
         );
     }
 
@@ -70,7 +74,6 @@ export default function EtaActions({ orderId, invoiceStatus }: EtaActionsProps) 
                     {checkMutation.isPending ? '…' : 'تحقق'}
                 </Button>
             )}
-            {message && <span className="text-xs text-[var(--t2)]">{message}</span>}
         </div>
     );
 }

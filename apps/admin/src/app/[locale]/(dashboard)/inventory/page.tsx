@@ -3,6 +3,7 @@ import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ExportButton } from "@/components/ExportButton";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 export default async function InventoryPage() {
     const t = await getTranslations();
@@ -14,7 +15,7 @@ export default async function InventoryPage() {
     ]);
 
     if (itemsResponse.error || alertsResponse.error) {
-        return <div>Error loading inventory</div>;
+        return <ErrorState message="تعذّر تحميل بيانات المخزون." />;
     }
 
     const { data: items } = itemsResponse;

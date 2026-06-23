@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { BulkOrderActions } from '@/components/BulkOrderActions';
 import { ExportButton } from '@/components/ExportButton';
+import { PaginationNav } from '@/components/ui/PaginationNav';
 
 const STATUS_LABELS: Record<string, string> = {
     pending:        'قيد الانتظار',
@@ -34,9 +35,12 @@ export interface OrderRow {
 interface Props {
     orders: OrderRow[];
     locale: string;
+    page: number;
+    pageSize: number;
+    total: number;
 }
 
-export function OrdersClient({ orders, locale }: Props) {
+export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [key, setKey] = useState(0);
 
@@ -159,6 +163,8 @@ export function OrdersClient({ orders, locale }: Props) {
 
             {/* Fixed bulk bar — only visible when rows selected */}
             <BulkOrderActions selectedIds={selectedIds} onSuccess={handleSuccess} />
+
+            <PaginationNav page={page} pageSize={pageSize} total={total} />
         </div>
     );
 }

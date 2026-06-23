@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 type ReturnStatus = 'requested' | 'approved' | 'rejected' | 'received' | 'restocked' | 'refunded' | 'exchanged';
 
@@ -25,21 +26,18 @@ export default function UpdateStatusForm({
   const [status, setStatus] = useState<ReturnStatus>(currentStatus as ReturnStatus);
   const [adminNotes, setAdminNotes] = useState<string>(initialAdminNotes);
   const [refundAmount, setRefundAmount] = useState<string>(initialRefundAmount);
-  const [error, setError] = useState<string | null>(null);
-
   const updateMutation = trpc.returns.updateStatus.useMutation({
     onSuccess: () => {
+      toast.success('تم حفظ التغييرات بنجاح');
       router.refresh();
-      setError(null);
     },
     onError: (err: unknown) => {
-      setError(err instanceof Error ? err.message : 'حدث خطأ');
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الحفظ');
     }
   });
 
   const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
-    setError(null);
 
     updateMutation.mutate({
       id: returnId,
@@ -91,12 +89,6 @@ export default function UpdateStatusForm({
           placeholder="أدخل ملاحظات داخلية (Internal notes)..."
         />
       </div>
-
-      {error && (
-        <div className="text-[var(--crimson)] text-sm bg-[var(--crimson)]/10 p-2 rounded">
-          {error}
-        </div>
-      )}
 
       <button
         type="submit"

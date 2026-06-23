@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PermissionGate } from '@/components/PermissionGate';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { toast } from 'sonner';
 
 export interface Category {
     id: string;
@@ -30,17 +32,25 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
 
     const createMutation = trpc.categories.create.useMutation({
         onSuccess: () => {
+            toast.success('تم إضافة الفئة بنجاح');
             utils.categories.list.invalidate();
             setIsModalOpen(false);
             setName('');
             setSlug('');
             setParentId('');
+        },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء إضافة الفئة');
         }
     });
 
     const deleteMutation = trpc.categories.delete.useMutation({
         onSuccess: () => {
+            toast.success('تم حذف الفئة');
             utils.categories.list.invalidate();
+        },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الحذف');
         }
     });
 
@@ -48,12 +58,6 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
         const val = e.target.value;
         setName(val);
         setSlug(val.toLowerCase().replace(/\s+/g, '-'));
-    };
-
-    const handleDelete = (id: string) => {
-        if (confirm('هل أنت متأكد من حذف هذه الفئة؟')) {
-            deleteMutation.mutate({ id });
-        }
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -104,15 +108,22 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                                     <TableCell className="text-[var(--t2)]">{getParentName(category.parentId)}</TableCell>
                                     <TableCell>
                                         <PermissionGate resource="categories" action="delete">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleDelete(category.id)}
-                                                className="text-[var(--crimson)] hover:text-[var(--crimson)] hover:bg-red-50"
-                                                disabled={deleteMutation.isPending}
+                                            <ConfirmDialog
+                                                title="حذف الفئة"
+                                                description={`هل أنت متأكد من حذف الفئة «${category.name}»؟`}
+                                                confirmLabel="حذف"
+                                                pending={deleteMutation.isPending}
+                                                onConfirm={() => deleteMutation.mutate({ id: category.id })}
                                             >
-                                                حذف
-                                            </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-[var(--crimson)] hover:text-[var(--crimson)]"
+                                                    disabled={deleteMutation.isPending}
+                                                >
+                                                    حذف
+                                                </Button>
+                                            </ConfirmDialog>
                                         </PermissionGate>
                                     </TableCell>
                                 </TableRow>

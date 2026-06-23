@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export type CourierShipment = {
     id: string;
@@ -104,10 +105,11 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
         if (selectedShipmentIds.size === 0) return;
         try {
             await markRemittedMutation.mutateAsync({ shipmentIds: Array.from(selectedShipmentIds) });
+            toast.success(`تم تسجيل تسوية ${selectedShipmentIds.size} شحنة بنجاح`);
             setSelectedShipmentIds(new Set());
             handleInvalidate();
         } catch (error) {
-            console.error(error);
+            toast.error(error instanceof Error ? error.message : 'حدث خطأ أثناء التسوية');
         }
     };
 
@@ -121,6 +123,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                 shipmentCount: parseInt(newRemCount) || 0,
                 expectedDate: newRemExpectedDate ? new Date(newRemExpectedDate) : undefined,
             });
+            toast.success('تم إنشاء التسوية بنجاح');
             setIsDialogOpen(false);
             setNewRemCourier('');
             setNewRemRef('');
@@ -129,16 +132,17 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
             setNewRemExpectedDate('');
             handleInvalidate();
         } catch (error) {
-            console.error(error);
+            toast.error(error instanceof Error ? error.message : 'حدث خطأ أثناء إنشاء التسوية');
         }
     };
 
     const handleReconcile = async (id: string) => {
         try {
             await reconcileMutation.mutateAsync({ id, receivedDate: new Date().toISOString() });
+            toast.success('تمت المطابقة بنجاح');
             handleInvalidate();
         } catch (error) {
-            console.error(error);
+            toast.error(error instanceof Error ? error.message : 'حدث خطأ أثناء المطابقة');
         }
     };
 

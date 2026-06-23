@@ -5,6 +5,7 @@ import { updateOrderStatusAction } from "./actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTranslations } from "next-intl";
 import { OrderStatus, STATUS_COLUMNS } from "@/lib/orderTypes";
+import { toast } from "sonner";
 
 export function StatusUpdater({ orderId, currentStatus }: { orderId: string, currentStatus: string }) {
     const t = useTranslations("orders.status");
@@ -16,7 +17,12 @@ export function StatusUpdater({ orderId, currentStatus }: { orderId: string, cur
                 defaultValue={currentStatus}
                 onValueChange={(val) => {
                     startTransition(async () => {
-                        await updateOrderStatusAction(orderId, val as OrderStatus);
+                        try {
+                            await updateOrderStatusAction(orderId, val as OrderStatus);
+                            toast.success('تم تحديث حالة الطلب بنجاح');
+                        } catch {
+                            toast.error('حدث خطأ أثناء تحديث الحالة');
+                        }
                     });
                 }}
             >

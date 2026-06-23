@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { serverCaller } from "@/server/caller";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Activity, DollarSign, Package, ShoppingCart } from "lucide-react";
 
 // Revalidate every 60 seconds
@@ -39,7 +40,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ loca
     const stats = await caller.dashboard.getStats();
 
     if (stats.error) {
-        return <div>Error loading dashboard stats</div>;
+        return <ErrorState message="تعذّر تحميل إحصائيات لوحة التحكم." />;
     }
 
     const { ordersToday, revenueToday, pendingOrders, activeProducts } = stats.data;

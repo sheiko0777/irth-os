@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export type PriceList = {
     id: string;
@@ -52,6 +54,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
 
     const createMutation = trpcClient.pricelists.create.useMutation({
         onSuccess: () => {
+            toast.success('تم إنشاء قائمة الأسعار بنجاح');
             setIsCreateModalOpen(false);
             setCreateForm({
                 name: '',
@@ -63,11 +66,18 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
             });
             router.refresh();
         },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الإنشاء');
+        },
     });
 
     const deleteMutation = trpcClient.pricelists.delete.useMutation({
         onSuccess: () => {
+            toast.success('تم حذف قائمة الأسعار');
             router.refresh();
+        },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الحذف');
         },
     });
 
@@ -88,11 +98,6 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
         });
     };
 
-    const handleDelete = (id: string) => {
-        if (window.confirm('هل أنت متأكد من حذف قائمة الأسعار هذه؟')) {
-            deleteMutation?.mutate({ id });
-        }
-    };
 
     return (
         <div dir="rtl" className="font-cairo p-6" style={{ backgroundColor: 'var(--surface)' }}>
@@ -154,13 +159,19 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                     >
                                         عرض المنتجات
                                     </button>
-                                    <button
-                                        onClick={() => handleDelete(list.id)}
-                                        className="px-3 py-1 rounded text-sm text-white"
-                                        style={{ backgroundColor: 'var(--crimson)' }}
+                                    <ConfirmDialog
+                                        title="حذف قائمة الأسعار"
+                                        description={`هل أنت متأكد من حذف قائمة الأسعار «${list.name}»؟`}
+                                        confirmLabel="حذف"
+                                        onConfirm={() => deleteMutation?.mutate({ id: list.id })}
                                     >
-                                        حذف
-                                    </button>
+                                        <button
+                                            className="px-3 py-1 rounded text-sm text-white"
+                                            style={{ backgroundColor: 'var(--crimson)' }}
+                                        >
+                                            حذف
+                                        </button>
+                                    </ConfirmDialog>
                                 </td>
                             </tr>
                         ))}

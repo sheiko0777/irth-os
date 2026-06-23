@@ -3,14 +3,25 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Link from "next/link";
 import CustomerActions from "./CustomerActions";
 import { ExportButton } from "@/components/ExportButton";
+import { PaginationNav } from "@/components/ui/PaginationNav";
+import { ErrorState } from "@/components/ui/ErrorState";
 
-export default async function CustomersPage() {
+const PAGE_SIZE = 50;
+
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: pageStr } = await searchParams;
+  const page = Math.max(1, parseInt(pageStr ?? '1', 10));
+
   const caller = await serverCaller();
-  const response = await caller.customers.list({ page: 1, pageSize: 100 });
+  const response = await caller.customers.list({ page, pageSize: PAGE_SIZE });
   const summary = await caller.customers.summary();
 
   if (response.error) {
-    return <div>Error loading customers</div>;
+    return <ErrorState message="تعذّر تحميل قائمة العملاء." />;
   }
 
   const customerList = response.data;
@@ -80,6 +91,8 @@ export default async function CustomersPage() {
           </TableBody>
         </Table>
       </div>
+
+      <PaginationNav page={page} pageSize={PAGE_SIZE} total={response.meta?.total ?? 0} />
     </div>
   );
 }

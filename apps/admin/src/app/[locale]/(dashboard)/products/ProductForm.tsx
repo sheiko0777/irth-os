@@ -11,17 +11,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { trpc } from "@/lib/trpc";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 
 const productSchema = z.object({
-    name: z.string().min(1, "Name is required"),
+    name: z.string().min(1, "اسم المنتج مطلوب"),
     nameAr: z.string().optional(),
-    sku: z.string().min(1, "SKU is required"),
+    sku: z.string().min(1, "رمز المنتج (SKU) مطلوب"),
     categoryId: z.string().uuid().optional(),
     description: z.string().optional(),
     descriptionAr: z.string().optional(),
-    price: z.preprocess((val) => Number(val), z.number().min(0)),
+    price: z.preprocess((val) => Number(val), z.number().min(0, "السعر يجب أن يكون 0 أو أكثر")),
     currency: z.string().default("USD"),
-    stock: z.preprocess((val) => Number(val), z.number().int().min(0)),
+    stock: z.preprocess((val) => Number(val), z.number().int().min(0, "المخزون يجب أن يكون 0 أو أكثر")),
     status: z.string().default("active"),
 });
 
@@ -47,16 +48,24 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
 
     const createMutation = trpc.products.create.useMutation({
         onSuccess: () => {
+            toast.success("تم إضافة المنتج بنجاح");
             router.push("/ar/products");
             router.refresh();
-        }
+        },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء إضافة المنتج");
+        },
     });
 
     const updateMutation = trpc.products.update.useMutation({
         onSuccess: () => {
+            toast.success("تم تحديث المنتج بنجاح");
             router.push("/ar/products");
             router.refresh();
-        }
+        },
+        onError: (err: unknown) => {
+            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء تحديث المنتج");
+        },
     });
 
     const onSubmit = (data: z.infer<typeof productSchema>) => {
@@ -67,12 +76,18 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
         }
     };
 
+    const { errors } = form.formState;
+
     return (
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>{t("form.name")}</Label>
-                    <Input {...form.register("name")} />
+                    <Input
+                        {...form.register("name")}
+                        className={errors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    />
+                    {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label>{t("form.nameAr")}</Label>
@@ -83,7 +98,11 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>{t("form.sku")}</Label>
-                    <Input {...form.register("sku")} />
+                    <Input
+                        {...form.register("sku")}
+                        className={errors.sku ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    />
+                    {errors.sku && <p className="text-xs text-red-500">{errors.sku.message}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label>{t("form.categoryId")}</Label>
@@ -106,7 +125,13 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
             <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                     <Label>{t("form.price")}</Label>
-                    <Input type="number" step="0.01" {...form.register("price")} />
+                    <Input
+                        type="number"
+                        step="0.01"
+                        {...form.register("price")}
+                        className={errors.price ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    />
+                    {errors.price && <p className="text-xs text-red-500">{errors.price.message}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label>{t("form.currency")}</Label>
@@ -114,7 +139,12 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
                 </div>
                 <div className="space-y-2">
                     <Label>{t("form.stock")}</Label>
-                    <Input type="number" {...form.register("stock")} />
+                    <Input
+                        type="number"
+                        {...form.register("stock")}
+                        className={errors.stock ? "border-red-500 focus-visible:ring-red-500" : ""}
+                    />
+                    {errors.stock && <p className="text-xs text-red-500">{errors.stock.message}</p>}
                 </div>
             </div>
 
@@ -146,8 +176,11 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
             </div>
 
             <div className="flex gap-4">
-                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                    {t("form.submit")}
+                <Button
+                    type="submit"
+                    disabled={createMutation.isPending || updateMutation.isPending || form.formState.isSubmitting}
+                >
+                    {(createMutation.isPending || updateMutation.isPending) ? "جاري الحفظ..." : t("form.submit")}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => router.push("/ar/products")}>
                     {t("form.cancel")}
