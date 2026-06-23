@@ -24,17 +24,21 @@ export const returnsRouter = router({
 
       const offset = (input.page - 1) * input.pageSize;
 
-      const data = await db.query.orderReturns.findMany({
-        where: and(...conditions),
-        orderBy: [desc(orderReturns.createdAt)],
-        limit: input.pageSize,
-        offset,
-      });
+      // Execute list and count queries concurrently to reduce latency
+      const [data, totalResult] = await Promise.all([
+        db.query.orderReturns.findMany({
+          where: and(...conditions),
+          orderBy: [desc(orderReturns.createdAt)],
+          limit: input.pageSize,
+          offset,
+        }),
+        db
+          .select({ count: count() })
+          .from(orderReturns)
+          .where(and(...conditions))
+      ]);
 
-      const [{ count: total }] = await db
-        .select({ count: count() })
-        .from(orderReturns)
-        .where(and(...conditions));
+      const total = totalResult[0].count;
 
       return {
         data,

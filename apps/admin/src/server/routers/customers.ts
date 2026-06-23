@@ -27,18 +27,22 @@ export const customersRouter = router({
           )
         : eq(customers.orgId, ctx.orgId);
 
-      const data = await ctx.db
-        .select()
-        .from(customers)
-        .where(whereClause)
-        .orderBy(desc(customers.createdAt))
-        .limit(input.pageSize)
-        .offset(offset);
+      // Execute list and count queries concurrently to reduce latency
+      const [data, totalRowResult] = await Promise.all([
+        ctx.db
+          .select()
+          .from(customers)
+          .where(whereClause)
+          .orderBy(desc(customers.createdAt))
+          .limit(input.pageSize)
+          .offset(offset),
+        ctx.db
+          .select({ count: count() })
+          .from(customers)
+          .where(whereClause)
+      ]);
 
-      const [totalRow] = await ctx.db
-        .select({ count: count() })
-        .from(customers)
-        .where(whereClause);
+      const totalRow = totalRowResult[0];
 
       return {
         data,
