@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type Supplier = {
   id: string;
@@ -47,13 +49,23 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
   const [supplierForm, setSupplierForm] = useState({ name: "", email: "", phone: "", address: "" });
   const createSupplier = trpc.purchasing.suppliers.create.useMutation({
     onSuccess: () => {
+      toast.success("تم إضافة المورد بنجاح");
       utils.purchasing.suppliers.list.invalidate();
       setIsSupplierOpen(false);
       setSupplierForm({ name: "", email: "", phone: "", address: "" });
     },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء إضافة المورد");
+    },
   });
   const deleteSupplier = trpc.purchasing.suppliers.delete.useMutation({
-    onSuccess: () => utils.purchasing.suppliers.list.invalidate(),
+    onSuccess: () => {
+      toast.success("تم حذف المورد");
+      utils.purchasing.suppliers.list.invalidate();
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء الحذف");
+    },
   });
 
   // PO Form State
@@ -186,18 +198,21 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                       <TableCell className="text-[var(--t2)]" dir="ltr">{s.phone || "-"}</TableCell>
                       <TableCell className="text-[var(--t2)]" dir="ltr">{s.email || "-"}</TableCell>
                       <TableCell>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm("هل أنت متأكد من حذف هذا المورد؟")) {
-                              deleteSupplier.mutate({ id: s.id });
-                            }
-                          }}
-                          disabled={deleteSupplier.isPending}
+                        <ConfirmDialog
+                          title="حذف المورد"
+                          description={`هل أنت متأكد من حذف المورد «${s.name}»؟`}
+                          confirmLabel="حذف"
+                          pending={deleteSupplier.isPending}
+                          onConfirm={() => deleteSupplier.mutate({ id: s.id })}
                         >
-                          حذف
-                        </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={deleteSupplier.isPending}
+                          >
+                            حذف
+                          </Button>
+                        </ConfirmDialog>
                       </TableCell>
                     </TableRow>
                   ))
