@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 type ActionType = 'create' | 'addPoints' | 'redeemPoints';
 
@@ -17,7 +18,6 @@ interface CustomerActionsProps {
 export default function CustomerActions({ actionType, customerId, customerName, currentPoints }: CustomerActionsProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Create form state
   const [name, setName] = useState('');
@@ -33,43 +33,42 @@ export default function CustomerActions({ actionType, customerId, customerName, 
 
   const createMutation = trpc.customers.create.useMutation({
     onSuccess: () => {
+      toast.success('تم إضافة العميل بنجاح');
       router.refresh();
       setIsOpen(false);
       setName(''); setEmail(''); setPhone(''); setAddress(''); setNotes('');
-      setError(null);
     },
     onError: (err: unknown) => {
-      setError(err instanceof Error ? err.message : 'حدث خطأ');
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء إضافة العميل');
     },
   });
 
   const addPointsMutation = trpc.customers.addPoints.useMutation({
     onSuccess: () => {
+      toast.success('تم إضافة النقاط بنجاح');
       router.refresh();
       setIsOpen(false);
       setPoints(''); setPointsNote('');
-      setError(null);
     },
     onError: (err: unknown) => {
-      setError(err instanceof Error ? err.message : 'حدث خطأ');
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ');
     },
   });
 
   const redeemPointsMutation = trpc.customers.redeemPoints.useMutation({
     onSuccess: () => {
+      toast.success('تم استخدام النقاط بنجاح');
       router.refresh();
       setIsOpen(false);
       setPoints(''); setPointsNote('');
-      setError(null);
     },
     onError: (err: unknown) => {
-      setError(err instanceof Error ? err.message : 'حدث خطأ');
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ');
     },
   });
 
   const handleCreateSubmit = (e: { preventDefault: () => void }) => {
     e.preventDefault();
-    setError(null);
     createMutation.mutate({
       name,
       email: email || undefined,
@@ -81,10 +80,9 @@ export default function CustomerActions({ actionType, customerId, customerName, 
 
   const handlePointsSubmit = (e: { preventDefault: () => void }) => {
     e.preventDefault();
-    setError(null);
     const pts = parseInt(points, 10);
     if (!customerId || isNaN(pts) || pts <= 0) {
-      setError('يرجى إدخال عدد نقاط صحيح');
+      toast.error('يرجى إدخال عدد نقاط صحيح');
       return;
     }
     if (pointsAction === 'add') {
@@ -151,7 +149,6 @@ export default function CustomerActions({ actionType, customerId, customerName, 
                     className="w-full bg-[var(--surface)] border border-[var(--rim1)] text-[var(--t1)] rounded-md px-3 py-2 outline-none focus:border-[var(--t2)] resize-none"
                   />
                 </div>
-                {error && <p className="text-[var(--crimson)] text-sm">{error}</p>}
                 <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
@@ -231,7 +228,6 @@ export default function CustomerActions({ actionType, customerId, customerName, 
                   className="w-full bg-[var(--surface)] border border-[var(--rim1)] text-[var(--t1)] rounded-md px-3 py-2 outline-none focus:border-[var(--t2)]"
                 />
               </div>
-              {error && <p className="text-[var(--crimson)] text-sm">{error}</p>}
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
