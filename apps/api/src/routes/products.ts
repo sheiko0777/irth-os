@@ -64,6 +64,16 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
     const body = await c.req.json();
     const data = createProductSchema.parse(body);
 
+    if (data.categoryId) {
+      // Validate category belongs to the same org
+      const category = await db.query.categories.findFirst({
+        where: (cats, { eq, and }) => and(eq(cats.id, data.categoryId!), eq(cats.orgId, orgId))
+      });
+      if (!category) {
+        return c.json({ data: null, error: 'Invalid categoryId', meta: null }, 400);
+      }
+    }
+
     const priceStr = typeof data.price === 'number' ? data.price.toString() : data.price;
 
     const result = await withAudit(db, async () => {
@@ -133,6 +143,16 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
     const userId = (c.get('userId') as string | undefined) ?? 'system';
     const body = await c.req.json();
     const data = updateProductSchema.parse(body);
+
+    if (data.categoryId) {
+      // Validate category belongs to the same org
+      const category = await db.query.categories.findFirst({
+        where: (cats, { eq, and }) => and(eq(cats.id, data.categoryId!), eq(cats.orgId, orgId))
+      });
+      if (!category) {
+        return c.json({ data: null, error: 'Invalid categoryId', meta: null }, 400);
+      }
+    }
 
     const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
     if (data.price !== undefined) {
