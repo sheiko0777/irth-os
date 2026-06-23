@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 export interface Return {
   id: string;
@@ -78,11 +79,13 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
   
   const updateStatus = trpc.returns.updateStatus.useMutation({
     onSuccess: (_, variables) => {
+      toast.success('تم تحديث الحالة بنجاح');
       void utils.returns.list.invalidate();
       void utils.returns.summary.invalidate();
       setPendingIds(prev => ({ ...prev, [variables.id]: false }));
     },
-    onError: (_, variables) => {
+    onError: (err: unknown, variables) => {
+      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء تحديث الحالة');
       setPendingIds(prev => ({ ...prev, [variables.id]: false }));
     }
   });
