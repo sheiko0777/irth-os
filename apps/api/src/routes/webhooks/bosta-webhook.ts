@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db } from '../../db';
-import { courierShipments } from '@irth/db';
-import { eq, and } from 'drizzle-orm';
-import { timingSafeEqual } from 'node:crypto';
+import { courierShipments, orders } from '@irth/db';
+import { eq, and, sql } from 'drizzle-orm';
+import { timingSafeEqual, createHash } from 'node:crypto';
 
 export const bostaWebhookRoute = new Hono();
 
@@ -38,7 +38,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   const sigBuf = Buffer.from(signature, 'hex');
   const expBuf = Buffer.from(expectedHex, 'hex');
 
-  const { createHash } = await import('node:crypto');
+  // Opt: use static import instead of dynamic import for better performance
   const hashedSig = createHash('sha256').update(sigBuf).digest();
   const hashedExp = createHash('sha256').update(expBuf).digest();
 
@@ -109,12 +109,10 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   } else if (data.businessReference) {
     // Attempt to parse businessReference as order_id
     // Need to get orgId from somewhere, let's look up the order
-    const { orders } = await import('@irth/db');
     const [order] = await db.select().from(orders).where(eq(orders.id, data.businessReference));
 
     if (order) {
         const isDeliveredAndCod = state === 'DELIVERED' && cashOnDelivery > 0;
-        const { sql } = await import('drizzle-orm');
         await db.insert(courierShipments).values({
             orgId: order.orgId,
             orderId: order.id,
