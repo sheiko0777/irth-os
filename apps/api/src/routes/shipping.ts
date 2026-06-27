@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { orders, shipmentTracking, auditLog } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
+import { requireRole } from '../middlewares/requireRole';
 
 const shippingRoute = new Hono();
 
@@ -14,7 +15,7 @@ const createShippingSchema = z.object({
   orderId: z.string().uuid()
 });
 
-shippingRoute.post('/create', async (c: Context) => {
+shippingRoute.post('/create', requireRole('owner', 'admin'), async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
   if (!orgId || !userId) {
