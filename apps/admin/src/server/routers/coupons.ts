@@ -14,16 +14,18 @@ export const couponsRouter = router({
             const limit = input.pageSize;
             const offset = (input.page - 1) * input.pageSize;
 
-            const results = await db.select()
-                .from(coupons)
-                .where(eq(coupons.orgId, ctx.orgId))
-                .limit(limit)
-                .offset(offset)
-                .orderBy(desc(coupons.createdAt));
-
-            const totalResult = await db.select({ count: sql<number>`count(*)` })
-                .from(coupons)
-                .where(eq(coupons.orgId, ctx.orgId));
+            // Batch list and total count queries to reduce latency
+            const [results, totalResult] = await Promise.all([
+                db.select()
+                    .from(coupons)
+                    .where(eq(coupons.orgId, ctx.orgId))
+                    .limit(limit)
+                    .offset(offset)
+                    .orderBy(desc(coupons.createdAt)),
+                db.select({ count: sql<number>`count(*)` })
+                    .from(coupons)
+                    .where(eq(coupons.orgId, ctx.orgId))
+            ]);
 
             return {
                 items: results,
