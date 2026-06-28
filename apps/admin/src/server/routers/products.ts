@@ -104,6 +104,15 @@ export const productsRouter = router({
             brand: z.enum(brandEnum.enumValues).default('irth'),
         }))
         .mutation(async ({ ctx, input }) => {
+            if (input.categoryId) {
+                const category = await ctx.db.query.categories.findFirst({
+                    where: (cats, { eq, and }) => and(eq(cats.id, input.categoryId!), eq(cats.orgId, ctx.orgId))
+                });
+                if (!category) {
+                    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid categoryId' });
+                }
+            }
+
             const priceStr = typeof input.price === 'number' ? input.price.toString() : input.price;
 
             const result = await withAudit(
@@ -164,6 +173,15 @@ export const productsRouter = router({
 
             if (!product) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
+            }
+
+            if (input.categoryId) {
+                const category = await ctx.db.query.categories.findFirst({
+                    where: (cats, { eq, and }) => and(eq(cats.id, input.categoryId!), eq(cats.orgId, ctx.orgId))
+                });
+                if (!category) {
+                    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid categoryId' });
+                }
             }
 
             const { id: _id, ...rest } = input;
