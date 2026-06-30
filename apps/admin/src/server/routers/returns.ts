@@ -215,35 +215,34 @@ export const returnsRouter = router({
     .query(async ({ ctx }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const returns = await db.select().from(orderReturns).where(eq(orderReturns.orgId, ctx.orgId));
-
-      const total = returns.length;
-      const byStatus = {
-        requested: 0,
-        approved: 0,
-        rejected: 0,
-        received: 0,
-        restocked: 0,
-        refunded: 0,
-        exchanged: 0,
-      };
-
-      let pendingRefundAmount = 0;
-
-      for (const r of returns) {
-        if (byStatus[r.status as keyof typeof byStatus] !== undefined) {
-           byStatus[r.status as keyof typeof byStatus]++;
-        }
-        if (r.status === 'approved' && r.refundAmount) {
-          pendingRefundAmount += parseFloat(r.refundAmount);
-        }
-      }
+      const [summaryData] = await db
+        .select({
+          total: count(),
+          requested: sql<number>`COALESCE(SUM(CASE WHEN ${orderReturns.status} = 'requested' THEN 1 ELSE 0 END), 0)::integer`,
+          approved: sql<number>`COALESCE(SUM(CASE WHEN ${orderReturns.status} = 'approved' THEN 1 ELSE 0 END), 0)::integer`,
+          rejected: sql<number>`COALESCE(SUM(CASE WHEN ${orderReturns.status} = 'rejected' THEN 1 ELSE 0 END), 0)::integer`,
+          received: sql<number>`COALESCE(SUM(CASE WHEN ${orderReturns.status} = 'received' THEN 1 ELSE 0 END), 0)::integer`,
+          restocked: sql<number>`COALESCE(SUM(CASE WHEN ${orderReturns.status} = 'restocked' THEN 1 ELSE 0 END), 0)::integer`,
+          refunded: sql<number>`COALESCE(SUM(CASE WHEN ${orderReturns.status} = 'refunded' THEN 1 ELSE 0 END), 0)::integer`,
+          exchanged: sql<number>`COALESCE(SUM(CASE WHEN ${orderReturns.status} = 'exchanged' THEN 1 ELSE 0 END), 0)::integer`,
+          pendingRefundAmount: sql<number>`COALESCE(SUM(CASE WHEN ${orderReturns.status} = 'approved' THEN CAST(NULLIF(${orderReturns.refundAmount}, '') AS NUMERIC) ELSE 0 END), 0)`,
+        })
+        .from(orderReturns)
+        .where(eq(orderReturns.orgId, ctx.orgId));
 
       return {
         data: {
-          total,
-          byStatus,
-          pendingRefundAmount
+          total: summaryData?.total ?? 0,
+          byStatus: {
+            requested: summaryData?.requested ?? 0,
+            approved: summaryData?.approved ?? 0,
+            rejected: summaryData?.rejected ?? 0,
+            received: summaryData?.received ?? 0,
+            restocked: summaryData?.restocked ?? 0,
+            refunded: summaryData?.refunded ?? 0,
+            exchanged: summaryData?.exchanged ?? 0,
+          },
+          pendingRefundAmount: Number(summaryData?.pendingRefundAmount ?? 0)
         },
         error: null,
         meta: null
