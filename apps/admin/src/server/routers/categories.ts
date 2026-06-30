@@ -28,6 +28,19 @@ export const categoriesRouter = router({
             parentId: z.string().uuid().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
+            if (input.parentId) {
+                const parentCategory = await ctx.db.query.categories.findFirst({
+                    where: and(
+                        eq(categories.id, input.parentId),
+                        eq(categories.orgId, ctx.orgId)
+                    )
+                });
+
+                if (!parentCategory) {
+                    throw new TRPCError({ code: 'FORBIDDEN', message: 'Parent category not found or does not belong to your organization' });
+                }
+            }
+
             const result = await withAudit(
                 ctx.db,
                 async () => {
