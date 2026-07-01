@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { requireRole } from '../middlewares/requireRole';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
@@ -135,7 +136,7 @@ const updateStatusSchema = z.object({
   status: z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'])
 });
 
-ordersRoute.patch('/:id/status', async (c: Context) => {
+ordersRoute.patch('/:id/status', requireRole('owner', 'admin'), async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
   if (!orgId || !userId) {
