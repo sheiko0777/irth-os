@@ -86,22 +86,23 @@ export const stocktakingRouter = router({
   }),
 
   summary: protectedProcedure.query(async ({ ctx }) => {
-    const allSessions = await ctx.db
+    // ⚡ Bolt: Replaced materializing all sessions in memory with an optimized database aggregation query to improve latency and reduce memory usage.
+    const [result] = await ctx.db
       .select({
-        status: stocktakingSessions.status,
-        completedAt: stocktakingSessions.completedAt,
+        totalSessions: count(),
+        activeSessions: sql<number>`COALESCE(SUM(CASE WHEN ${stocktakingSessions.status} = 'in_progress' THEN 1 ELSE 0 END), 0)::integer`,
+        lastCompletedAt: sql<Date | null>`MAX(CASE WHEN ${stocktakingSessions.status} = 'completed' THEN ${stocktakingSessions.completedAt} ELSE NULL END)`,
       })
       .from(stocktakingSessions)
       .where(eq(stocktakingSessions.orgId, ctx.orgId));
 
-    const totalSessions = allSessions.length;
-    const activeSessions = allSessions.filter((s) => s.status === 'in_progress').length;
-    const completed = allSessions.filter((s) => s.status === 'completed' && s.completedAt);
-    const lastCompletedAt =
-      completed.length > 0
-        ? completed.reduce((a, b) => (a.completedAt! > b.completedAt! ? a : b)).completedAt
-        : null;
-
-    return { data: { totalSessions, activeSessions, lastCompletedAt }, error: null };
+    return {
+      data: {
+        totalSessions: result?.totalSessions ?? 0,
+        activeSessions: result?.activeSessions ?? 0,
+        lastCompletedAt: result?.lastCompletedAt ?? null,
+      },
+      error: null,
+    };
   }),
 });
