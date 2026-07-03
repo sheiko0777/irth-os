@@ -175,31 +175,25 @@ export const purchasingRouter = router({
     get: protectedProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
-        const order = await ctx.db.query.purchaseOrders.findFirst({
-          where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)),
-          with: {
-            supplier: true, // Assuming relation exists, but since not defined in schema relation we need left join or separate query
-          }
-        });
-
-        // Since no relations object is created in schema, query separately:
-        const poRows = await ctx.db
-            .select({
-                order: purchaseOrders,
-                supplier: suppliers
-            })
-            .from(purchaseOrders)
-            .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-            .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
-            .limit(1);
+        // Batch independent queries to reduce latency
+        const [poRows, items] = await Promise.all([
+            ctx.db
+                .select({
+                    order: purchaseOrders,
+                    supplier: suppliers
+                })
+                .from(purchaseOrders)
+                .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+                .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
+                .limit(1),
+            ctx.db
+                .select()
+                .from(purchaseOrderItems)
+                .where(eq(purchaseOrderItems.poId, input.id))
+        ]);
 
         const po = poRows[0];
         if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
-
-        const items = await ctx.db
-          .select()
-          .from(purchaseOrderItems)
-          .where(eq(purchaseOrderItems.poId, po.order.id));
 
         return { data: { ...po.order, supplier: po.supplier, items }, error: null, meta: null };
       }),

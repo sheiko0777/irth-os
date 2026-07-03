@@ -69,39 +69,39 @@ export const ordersRouter = router({
             id: z.string().uuid()
         }))
         .query(async ({ ctx, input }) => {
-            const order = await ctx.db.query.orders.findFirst({
-                where: and(
-                    eq(orders.id, input.id),
-                    eq(orders.orgId, ctx.orgId)
-                )
-            });
+            const [order, items, history] = await Promise.all([
+                ctx.db.query.orders.findFirst({
+                    where: and(
+                        eq(orders.id, input.id),
+                        eq(orders.orgId, ctx.orgId)
+                    )
+                }),
+                ctx.db
+                    .select({
+                        id: orderItems.id,
+                        quantity: orderItems.quantity,
+                        price: orderItems.price,
+                        sku: productVariants.sku,
+                    })
+                    .from(orderItems)
+                    .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
+                    .where(and(
+                        eq(orderItems.orderId, input.id),
+                        eq(orderItems.orgId, ctx.orgId)
+                    )),
+                ctx.db
+                    .select()
+                    .from(shipmentTracking)
+                    .where(and(
+                        eq(shipmentTracking.orderId, input.id),
+                        eq(shipmentTracking.orgId, ctx.orgId)
+                    ))
+                    .orderBy(desc(shipmentTracking.createdAt))
+            ]);
 
             if (!order) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
             }
-
-            const items = await ctx.db
-                .select({
-                    id: orderItems.id,
-                    quantity: orderItems.quantity,
-                    price: orderItems.price,
-                    sku: productVariants.sku,
-                })
-                .from(orderItems)
-                .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-                .where(and(
-                    eq(orderItems.orderId, order.id),
-                    eq(orderItems.orgId, ctx.orgId)
-                ));
-            
-            const history = await ctx.db
-                .select()
-                .from(shipmentTracking)
-                .where(and(
-                    eq(shipmentTracking.orderId, order.id),
-                    eq(shipmentTracking.orgId, ctx.orgId)
-                ))
-                .orderBy(desc(shipmentTracking.createdAt));
 
             return {
                 data: { order, items, history },
