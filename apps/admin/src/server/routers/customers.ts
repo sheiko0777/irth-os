@@ -54,18 +54,19 @@ export const customersRouter = router({
   get: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const customer = await ctx.db.query.customers.findFirst({
-        where: and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)),
-      });
+      const [customer, transactions] = await Promise.all([
+        ctx.db.query.customers.findFirst({
+          where: and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)),
+        }),
+        ctx.db
+          .select()
+          .from(loyaltyTransactions)
+          .where(eq(loyaltyTransactions.customerId, input.id))
+          .orderBy(desc(loyaltyTransactions.createdAt))
+          .limit(10)
+      ]);
 
       if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
-
-      const transactions = await ctx.db
-        .select()
-        .from(loyaltyTransactions)
-        .where(eq(loyaltyTransactions.customerId, input.id))
-        .orderBy(desc(loyaltyTransactions.createdAt))
-        .limit(10);
 
       return { data: { ...customer, transactions }, error: null, meta: null };
     }),
