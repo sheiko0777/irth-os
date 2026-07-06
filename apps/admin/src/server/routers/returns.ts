@@ -57,17 +57,16 @@ export const returnsRouter = router({
     .query(async ({ ctx, input }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const returnObj = await db.query.orderReturns.findFirst({
-        where: and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)),
-        with: {
-          returnItems: true, // Assuming relation exists, else manual fetch
-        }
-      });
-
-      let items = [];
-      if (returnObj) {
-        items = await db.select().from(returnItems).where(eq(returnItems.returnId, returnObj.id));
-      }
+      // Batch independent queries by using input.id for relations
+      const [returnObj, items] = await Promise.all([
+        db.query.orderReturns.findFirst({
+          where: and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)),
+          with: {
+            returnItems: true, // Assuming relation exists, else manual fetch
+          }
+        }),
+        db.select().from(returnItems).where(eq(returnItems.returnId, input.id))
+      ]);
 
       const data = returnObj ? { ...returnObj, items } : null;
 
