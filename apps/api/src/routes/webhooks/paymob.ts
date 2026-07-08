@@ -19,7 +19,14 @@ paymobRoute.post('/', async (c: Context) => {
   }
 
   const bodyRaw = await c.req.text();
-  const body = JSON.parse(bodyRaw);
+
+  let body;
+  try {
+    body = JSON.parse(bodyRaw);
+  } catch (e) {
+    // 🛡️ Security: Prevent unhandled exception (DoS risk) on invalid JSON
+    return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+  }
   
   const { obj } = body;
   if (!obj) {
