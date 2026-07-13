@@ -3,14 +3,17 @@ import PlatformAdminClient, { type OrgRow } from './PlatformAdminClient';
 
 export const metadata = { title: 'لوحة الأدمن | IRTH' };
 
-export default async function PlatformAdminPage() {
+interface Props { params: Promise<{ locale: string }> }
+
+export default async function PlatformAdminPage({ params }: Props) {
+  const { locale } = await params;
   try {
     const caller = await serverCaller();
     const res = await caller.platformAdmin.listOrgs({});
     const initialOrgs = (res.data ?? []) as OrgRow[];
     return (
       <div dir="rtl">
-        <PlatformAdminClient initialOrgs={initialOrgs} />
+        <PlatformAdminClient initialOrgs={initialOrgs} locale={locale} />
       </div>
     );
   } catch {

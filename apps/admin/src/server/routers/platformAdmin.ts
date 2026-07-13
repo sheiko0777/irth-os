@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { platformAdminProcedure, router } from '../trpc';
-import { organizations, orgMembers, orgFeatureFlags } from '@irth/db';
-import { eq, count } from 'drizzle-orm';
+import { organizations, orgMembers, orgFeatureFlags, orgInvites } from '@irth/db';
+import { eq, count, desc } from 'drizzle-orm';
 
 const orgPlanSchema = z.enum(['starter', 'growth', 'enterprise']);
 
@@ -23,7 +23,7 @@ export const platformAdminRouter = router({
         .orderBy(organizations.name);
 
       const configs = await ctx.db.select().from(orgFeatureFlags);
-      const configMap: Record<string, typeof configs[number]> = {};
+      const configMap: Record<string, (typeof configs)[number]> = {};
       for (const c of configs) configMap[c.orgId] = c;
 
       return {
@@ -71,9 +71,68 @@ export const platformAdminRouter = router({
   resetConfig: platformAdminProcedure
     .input(z.object({ orgId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db
-        .delete(orgFeatureFlags)
-        .where(eq(orgFeatureFlags.orgId, input.orgId));
+      await ctx.db.delete(orgFeatureFlags).where(eq(orgFeatureFlags.orgId, input.orgId));
       return { data: { reset: true }, error: null };
+    }),
+
+  // --- Account creation ---
+
+  createOrg: platformAdminProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(100),
+        slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 'slug: lowercase letters, numbers, hyphens only'),
+        ownerEmail: z.string().email(),
+        plan: orgPlanSchema,
+        enabledScreens: z.array(z.string()),
+        disabledScreens: z.array(z.string()),
+        maxUsers: z.number().int().positive().nullable(),
+        notes: z.string().max(1000).nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [org] = await ctx.db
+        .insert(organizations)
+        .values({ name: input.name, slug: input.slug, brand: 'irth' })
+        .returning();
+
+      await ctx.db.insert(orgFeatureFlags).values({
+        orgId: org.id,
+        plan: input.plan,
+        enabledScreens: input.enabledScreens,
+        disabledScreens: input.disabledScreens,
+        maxUsers: input.maxUsers,
+        notes: input.notes,
+      });
+
+      const token = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await ctx.db.insert(orgInvites).values({
+        orgId: org.id,
+        email: input.ownerEmail,
+        token,
+        role: 'owner',
+        expiresAt,
+      });
+
+      return { data: { orgId: org.id, orgName: org.name, inviteToken: token }, error: null };
+    }),
+
+  listInvites: platformAdminProcedure
+    .input(z.object({ orgId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const invites = await ctx.db
+        .select()
+        .from(orgInvites)
+        .where(eq(orgInvites.orgId, input.orgId))
+        .orderBy(desc(orgInvites.createdAt));
+      return { data: invites, error: null };
+    }),
+
+  revokeInvite: platformAdminProcedure
+    .input(z.object({ inviteId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.delete(orgInvites).where(eq(orgInvites.id, input.inviteId));
+      return { data: { revoked: true }, error: null };
     }),
 });
