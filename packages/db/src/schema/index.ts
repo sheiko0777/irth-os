@@ -11,3 +11,4 @@ export * from './pricelists';
 export * from './shippingZones';
 export * from './campaigns';
 export * from './giftCards';
+export * from './customerSegments';

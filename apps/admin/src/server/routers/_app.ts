@@ -1,4 +1,4 @@
-﻿import { router } from '../trpc';
+import { router } from '../trpc';
 import { dashboardRouter } from './dashboard';
 import { ordersRouter } from './orders';
 import { productsRouter } from './products';
@@ -20,11 +20,9 @@ import { stocktakingRouter } from './stocktaking';
 import { pricelistsRouter } from './pricelists';
 import { shippingRouter } from './shipping';
 import { campaignsRouter } from './campaigns';
-<<<<<<< HEAD
 import { membersRouter } from './members';
-=======
 import { giftCardsRouter } from './giftCards';
->>>>>>> e8ce956 (feat: Phase 37 — Gift Cards & Store Credit (بطاقات الهدايا والرصيد))
+import { customerSegmentsRouter } from './customerSegments';
 
 export const appRouter = router({
     dashboard: dashboardRouter,
@@ -48,11 +46,9 @@ export const appRouter = router({
     pricelists: pricelistsRouter,
     shipping: shippingRouter,
     campaigns: campaignsRouter,
-<<<<<<< HEAD
     members: membersRouter,
-=======
     giftCards: giftCardsRouter,
->>>>>>> e8ce956 (feat: Phase 37 — Gift Cards & Store Credit (بطاقات الهدايا والرصيد))
+    customerSegments: customerSegmentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

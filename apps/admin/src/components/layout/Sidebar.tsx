@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -10,7 +10,7 @@ import {
   Plug2, BarChart2, PieChart, Tag, Box, FolderOpen,
   Bell, Settings, UserCog, FileText, Truck, RotateCcw,
   LogOut, ChevronDown, Warehouse, DollarSign, Megaphone,
-  ClipboardList, List, MapPin, Gift,
+  ClipboardList, List, MapPin, Gift, UsersRound, Building2, Zap, Star, History,
 } from 'lucide-react';
 
 type NavItem = { href: string; label: string; icon: React.ElementType };
@@ -28,6 +28,7 @@ export function Sidebar({ locale }: { locale: string }) {
         { href: `/${locale}`, label: 'الرئيسية', icon: Home },
         { href: `/${locale}/orders`, label: 'الطلبات', icon: ShoppingCart },
         { href: `/${locale}/customers`, label: 'العملاء', icon: Users },
+        { href: `/${locale}/customer-segments`, label: 'شرائح العملاء', icon: UsersRound },
         { href: `/${locale}/notifications`, label: 'الإشعارات', icon: Bell },
       ],
     },

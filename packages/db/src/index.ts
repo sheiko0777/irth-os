@@ -15,8 +15,9 @@ import * as pricelistsSchema from './schema/pricelists';
 import * as shippingZonesSchema from './schema/shippingZones';
 import * as campaignsSchema from './schema/campaigns';
 import * as giftCardsSchema from './schema/giftCards';
+import * as customerSegmentsSchema from './schema/customerSegments';
 
-const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema, ...stocktakingSchema, ...pricelistsSchema, ...shippingZonesSchema, ...campaignsSchema, ...giftCardsSchema };
+const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema, ...stocktakingSchema, ...pricelistsSchema, ...shippingZonesSchema, ...campaignsSchema, ...giftCardsSchema, ...customerSegmentsSchema };
 import { auditLog } from './schema';
 
 export * from './schema';
@@ -34,6 +35,7 @@ export * from './schema/pricelists';
 export * from './schema/shippingZones';
 export * from './schema/campaigns';
 export * from './schema/giftCards';
+export * from './schema/customerSegments';
 
 export const createDb = (url: string) => {
   const client = postgres(url, { prepare: false });
