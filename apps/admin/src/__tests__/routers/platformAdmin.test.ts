@@ -52,11 +52,11 @@ describe('platformAdmin router — input validation', () => {
   });
 
   it('setOrgConfig: rejects negative maxUsers', () => {
-    expect(() => setOrgConfigSchema.parse({ orgId: '00000000-0000-0000-0000-000000000001', plan: 'starter', isActive: true, enabledScreens: [], disabledScreens: [], maxUsers: -1, notes: null })).toThrow();
+    expect(() => setOrgConfigSchema.parse({ orgId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', plan: 'starter', isActive: true, enabledScreens: [], disabledScreens: [], maxUsers: -1, notes: null })).toThrow();
   });
 
   it('setOrgConfig: allows null maxUsers (unlimited)', () => {
-    const r = setOrgConfigSchema.parse({ orgId: '00000000-0000-0000-0000-000000000001', plan: 'enterprise', isActive: true, enabledScreens: ['orders'], disabledScreens: [], maxUsers: null, notes: 'VIP' });
+    const r = setOrgConfigSchema.parse({ orgId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', plan: 'enterprise', isActive: true, enabledScreens: ['orders'], disabledScreens: [], maxUsers: null, notes: 'VIP' });
     expect(r.maxUsers).toBeNull();
   });
 });

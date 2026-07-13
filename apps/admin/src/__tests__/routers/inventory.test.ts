@@ -20,16 +20,16 @@ describe('inventory router — input validation', () => {
   });
 
   it('adjust: rejects invalid reason', () => {
-    expect(() => adjustSchema.parse({ productId: '00000000-0000-0000-0000-000000000001', quantity: 5, reason: 'unknown' })).toThrow();
+    expect(() => adjustSchema.parse({ productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', quantity: 5, reason: 'unknown' })).toThrow();
   });
 
   it('adjust: allows negative quantity (outbound)', () => {
-    const r = adjustSchema.parse({ productId: '00000000-0000-0000-0000-000000000001', quantity: -5, reason: 'sale' });
+    const r = adjustSchema.parse({ productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', quantity: -5, reason: 'sale' });
     expect(r.quantity).toBe(-5);
   });
 
   it('adjust: allows positive quantity (inbound)', () => {
-    const r = adjustSchema.parse({ productId: '00000000-0000-0000-0000-000000000001', quantity: 50, reason: 'purchase' });
+    const r = adjustSchema.parse({ productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', quantity: 50, reason: 'purchase' });
     expect(r.quantity).toBe(50);
   });
 

@@ -28,8 +28,8 @@ describe('categories router — input validation', () => {
   });
 
   it('create: accepts optional parentId as uuid', () => {
-    const r = createSchema.parse({ name: 'Sub', slug: 'sub', parentId: '00000000-0000-0000-0000-000000000001' });
-    expect(r.parentId).toBe('00000000-0000-0000-0000-000000000001');
+    const r = createSchema.parse({ name: 'Sub', slug: 'sub', parentId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' });
+    expect(r.parentId).toBe('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
   });
 
   it('create: rejects invalid parentId', () => {

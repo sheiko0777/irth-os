@@ -43,7 +43,7 @@ describe('products router — input validation', () => {
       sku: 'DATE-001',
       price: 120,
       compareAtPrice: 150,
-      categoryId: '00000000-0000-0000-0000-000000000001',
+      categoryId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       isActive: true,
     });
     expect(r.name).toBe('تمر مدينة');
@@ -54,7 +54,7 @@ describe('products router — input validation', () => {
   });
 
   it('update: allows partial fields', () => {
-    const r = updateProductSchema.parse({ id: '00000000-0000-0000-0000-000000000001', price: 99 });
+    const r = updateProductSchema.parse({ id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', price: 99 });
     expect(r.price).toBe(99);
   });
 

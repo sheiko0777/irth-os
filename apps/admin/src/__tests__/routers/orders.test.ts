@@ -35,11 +35,11 @@ describe('orders router — input validation', () => {
   });
 
   it('updateStatus: rejects invalid status', () => {
-    expect(() => updateStatusSchema.parse({ id: '00000000-0000-0000-0000-000000000001', status: 'unknown' })).toThrow();
+    expect(() => updateStatusSchema.parse({ id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', status: 'unknown' })).toThrow();
   });
 
   it('updateStatus: accepts valid input', () => {
-    const r = updateStatusSchema.parse({ id: '00000000-0000-0000-0000-000000000001', status: 'delivered' });
+    const r = updateStatusSchema.parse({ id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', status: 'delivered' });
     expect(r.status).toBe('delivered');
   });
 });

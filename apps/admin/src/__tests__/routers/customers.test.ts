@@ -46,6 +46,6 @@ describe('customers router — input validation', () => {
   });
 
   it('addTag: rejects empty tag', () => {
-    expect(() => addTagSchema.parse({ customerId: '00000000-0000-0000-0000-000000000001', tag: '' })).toThrow();
+    expect(() => addTagSchema.parse({ customerId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', tag: '' })).toThrow();
   });
 });
