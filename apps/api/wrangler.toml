@@ -1,5 +1,5 @@
 name = "irth-api"
-account_id = "818207e7f84041b17b7ef2d505f663a1"
+# account_id: set CLOUDFLARE_ACCOUNT_ID env or run: wrangler login
 compatibility_date = "2024-03-20"
 compatibility_flags = ["nodejs_compat"]
 main = "src/index.ts"
