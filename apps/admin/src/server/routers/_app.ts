@@ -23,6 +23,7 @@ import { campaignsRouter } from './campaigns';
 import { membersRouter } from './members';
 import { giftCardsRouter } from './giftCards';
 import { customerSegmentsRouter } from './customerSegments';
+import { platformAdminRouter } from './platformAdmin';
 
 export const appRouter = router({
     dashboard: dashboardRouter,
@@ -49,6 +50,7 @@ export const appRouter = router({
     members: membersRouter,
     giftCards: giftCardsRouter,
     customerSegments: customerSegmentsRouter,
+    platformAdmin: platformAdminRouter,
 });
 
 export type AppRouter = typeof appRouter;

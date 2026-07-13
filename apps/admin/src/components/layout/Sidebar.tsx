@@ -10,7 +10,7 @@ import {
   Plug2, BarChart2, PieChart, Tag, Box, FolderOpen,
   Bell, Settings, UserCog, FileText, Truck, RotateCcw,
   LogOut, ChevronDown, Warehouse, DollarSign, Megaphone,
-  ClipboardList, List, MapPin, Gift, UsersRound, Building2, Zap, Star, History,
+  ClipboardList, List, MapPin, Gift, UsersRound, Building2, Zap, Star, History, Shield,
 } from 'lucide-react';
 
 type NavItem = { href: string; label: string; icon: React.ElementType };
@@ -120,6 +120,28 @@ export function Sidebar({ locale }: { locale: string }) {
             </div>
           </div>
         ))}
+        {process.env.NEXT_PUBLIC_PLATFORM_ADMIN_EMAIL &&
+          session?.user?.email === process.env.NEXT_PUBLIC_PLATFORM_ADMIN_EMAIL && (
+          <div className="mt-2">
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--t4)]">
+              النظام
+            </p>
+            <div className="space-y-0.5">
+              <Link
+                href={`/${locale}/platform-admin`}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors border-r-2',
+                  pathname.startsWith(`/${locale}/platform-admin`)
+                    ? 'bg-[var(--gold-bg)] text-[var(--gold)] border-[var(--gold)] font-semibold'
+                    : 'text-[var(--t2)] hover:bg-[var(--rim1)] hover:text-[var(--t1)] border-transparent'
+                )}
+              >
+                <Shield size={15} className="shrink-0 opacity-80" />
+                <span className="truncate">لوحة الأدمن</span>
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Footer */}

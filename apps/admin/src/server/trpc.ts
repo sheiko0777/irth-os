@@ -92,3 +92,14 @@ export const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
     }
     return next({ ctx });
 });
+// Requires PLATFORM_ADMIN_EMAIL env var to match the caller's email.
+export const platformAdminProcedure = t.procedure.use(({ ctx, next }) => {
+    if (!ctx.session?.user) {
+        throw new TRPCError({ code: 'UNAUTHORIZED' });
+    }
+    const adminEmail = process.env.PLATFORM_ADMIN_EMAIL;
+    if (!adminEmail || ctx.session.user.email !== adminEmail) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Platform admin access required.' });
+    }
+    return next({ ctx });
+});
