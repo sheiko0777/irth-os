@@ -64,10 +64,9 @@ export const returnsRouter = router({
         }
       });
 
-      let items = [];
-      if (returnObj) {
-        items = await db.select().from(returnItems).where(eq(returnItems.returnId, returnObj.id));
-      }
+      const items = returnObj
+        ? await db.select().from(returnItems).where(eq(returnItems.returnId, returnObj.id))
+        : [];
 
       const data = returnObj ? { ...returnObj, items } : null;
 

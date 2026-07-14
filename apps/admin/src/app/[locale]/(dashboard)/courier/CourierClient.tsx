@@ -104,7 +104,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
     const handleBulkRemit = async () => {
         if (selectedShipmentIds.size === 0) return;
         try {
-            await markRemittedMutation.mutateAsync({ shipmentIds: Array.from(selectedShipmentIds) });
+            for (const sid of Array.from(selectedShipmentIds)) { await markRemittedMutation.mutateAsync({ shipmentId: sid, remittanceId: '' }); };
             toast.success(`تم تسجيل تسوية ${selectedShipmentIds.size} شحنة بنجاح`);
             setSelectedShipmentIds(new Set());
             handleInvalidate();
@@ -118,7 +118,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
         try {
             await createRemittanceMutation.mutateAsync({
                 courier: newRemCourier,
-                remittanceReference: newRemRef,
+                reference: newRemRef,
                 amount: newRemAmount,
                 shipmentCount: parseInt(newRemCount) || 0,
                 expectedDate: newRemExpectedDate ? new Date(newRemExpectedDate) : undefined,
@@ -138,7 +138,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
 
     const handleReconcile = async (id: string) => {
         try {
-            await reconcileMutation.mutateAsync({ id, receivedDate: new Date().toISOString() });
+            await reconcileMutation.mutateAsync({ remittanceId: id });
             toast.success('تمت المطابقة بنجاح');
             handleInvalidate();
         } catch (error) {

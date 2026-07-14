@@ -90,7 +90,7 @@ export default function CampaignsClient({
   const createMutation = trpc.campaigns.create.useMutation({
     onSuccess: (res) => {
       toast.success('تم إنشاء الحملة بنجاح');
-      if (res.data) setCampaigns((prev) => [res.data as Campaign, ...prev]);
+      if (res.data) setCampaigns((prev) => [res.data as unknown as Campaign, ...prev]);
       setIsCreateOpen(false);
       setForm({ name: '', message: '', channel: 'whatsapp', targetSegment: 'all', scheduledAt: '' });
       router.refresh();
@@ -103,7 +103,7 @@ export default function CampaignsClient({
   const sendMutation = trpc.campaigns.send.useMutation({
     onSuccess: (res) => {
       toast.success('تم إرسال الحملة');
-      if (res.data) setCampaigns((prev) => prev.map((c) => (c.id === res.data?.id ? (res.data as Campaign) : c)));
+      if (res.data) setCampaigns((prev) => prev.map((c) => (c.id === res.data?.id ? (res.data as unknown as Campaign) : c)));
       router.refresh();
     },
     onError: (err: unknown) => {

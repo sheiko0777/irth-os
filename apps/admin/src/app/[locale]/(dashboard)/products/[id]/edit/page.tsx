@@ -15,7 +15,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         return (
             <div className="space-y-6 max-w-2xl">
                 <h1 className="text-3xl font-bold tracking-tight">{t("edit")}</h1>
-                <ProductForm initialData={productResponse.data.product} categories={categoriesResponse.data} />
+                <ProductForm initialData={productResponse.data.product as never} categories={categoriesResponse.data} />
             </div>
         );
     } catch (e) {

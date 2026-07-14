@@ -11,7 +11,7 @@ export default async function GiftCardsPage() {
       caller.giftCards.summary(),
     ]);
 
-    const initialData = (listRes.data ?? []) as GiftCard[];
+    const initialData = (listRes.data ?? []) as unknown as GiftCard[];
     const summary = (summaryRes.data ?? { total: 0, active: 0, totalIssued: 0, activeBalance: 0 }) as GiftCardSummary;
 
     return (

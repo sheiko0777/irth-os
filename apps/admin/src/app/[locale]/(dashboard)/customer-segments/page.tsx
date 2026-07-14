@@ -7,7 +7,7 @@ export default async function CustomerSegmentsPage() {
   try {
     const caller = await serverCaller();
     const res = await caller.customerSegments.list({});
-    const initialSegments = (res.data ?? []) as CustomerSegment[];
+    const initialSegments = (res.data ?? []) as unknown as CustomerSegment[];
 
     return (
       <div dir="rtl">

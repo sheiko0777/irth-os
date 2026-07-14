@@ -248,7 +248,6 @@ export const purchasingRouter = router({
         const poNumber = `PO-${year}-${seq.toString().padStart(4, '0')}`;
         const totalAmt = typeof input.totalAmount === 'number' ? input.totalAmount.toString() : input.totalAmount;
 
-        // @ts-expect-error Drizzle transaction generic
         const result = await ctx.db.transaction(async (tx) => {
           const [po] = await tx
             .insert(purchaseOrders)
@@ -274,7 +273,7 @@ export const purchasingRouter = router({
           const insertedItems = await tx.insert(purchaseOrderItems).values(itemsData).returning();
 
           await withAudit(
-              tx,
+              tx as unknown as Parameters<typeof withAudit>[0],
               async () => po,
               {
                 orgId: ctx.orgId,
@@ -357,7 +356,6 @@ export const purchasingRouter = router({
         });
         if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
-        // @ts-expect-error Drizzle tx limitation
         const result = await ctx.db.transaction(async (tx) => {
             let fullyReceived = true;
 
@@ -411,7 +409,7 @@ export const purchasingRouter = router({
                 .returning();
 
             await withAudit(
-              tx,
+              tx as unknown as Parameters<typeof withAudit>[0],
               async () => updatedPo,
               {
                 orgId: ctx.orgId,

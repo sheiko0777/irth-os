@@ -172,7 +172,6 @@ export const customersRouter = router({
 
       const newBalance = (customer.loyaltyPoints ?? 0) + input.points;
 
-      // @ts-expect-error Drizzle transaction generic
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
           .update(customers)
@@ -220,7 +219,6 @@ export const customersRouter = router({
 
       const newBalance = currentBalance - input.points;
 
-      // @ts-expect-error Drizzle transaction generic
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
           .update(customers)
@@ -264,7 +262,6 @@ export const customersRouter = router({
       const newTotal = (customer.totalOrders ?? 0) + 1;
       const newSpent = (parseFloat(customer.totalSpent ?? '0') + input.orderAmount).toFixed(2);
 
-      // @ts-expect-error Drizzle transaction generic
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
           .update(customers)

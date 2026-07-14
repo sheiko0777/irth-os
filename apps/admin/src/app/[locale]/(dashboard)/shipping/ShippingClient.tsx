@@ -117,10 +117,10 @@ export function ShippingClient({ zones: initialZones }: Props) {
       name: rateName,
       rateType,
       price: rateType === 'free' ? 0 : parseFloat(ratePrice) || 0,
-      minOrderValue: rateMinOrder ? parseFloat(rateMinOrder) : null,
-      maxOrderValue: rateMaxOrder ? parseFloat(rateMaxOrder) : null,
-      estimatedDaysMin: rateDaysMin ? parseInt(rateDaysMin) : null,
-      estimatedDaysMax: rateDaysMax ? parseInt(rateDaysMax) : null,
+      minOrderValue: rateMinOrder ? parseFloat(rateMinOrder) : undefined,
+      maxOrderValue: rateMaxOrder ? parseFloat(rateMaxOrder) : undefined,
+      estimatedDaysMin: rateDaysMin ? parseInt(rateDaysMin) : undefined,
+      estimatedDaysMax: rateDaysMax ? parseInt(rateDaysMax) : undefined,
     });
   };
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router } from '../trpc';
 import { customerSegments, customerSegmentMembers, customers } from '@irth/db';
-import { eq, and, desc, count, inArray } from 'drizzle-orm';
+import { eq, and, desc, count, inArray, not } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const customerSegmentsRouter = router({
@@ -162,7 +162,7 @@ export const customerSegmentsRouter = router({
         ? await ctx.db
             .select({ id: customers.id, name: customers.name, email: customers.email })
             .from(customers)
-            .where(and(eq(customers.orgId, ctx.orgId), inArray(customers.id, excludeIds).not()))
+            .where(and(eq(customers.orgId, ctx.orgId), not(inArray(customers.id, excludeIds))))
             .orderBy(customers.name)
             .limit(200)
         : await ctx.db

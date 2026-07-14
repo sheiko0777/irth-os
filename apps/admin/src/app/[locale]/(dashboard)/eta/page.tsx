@@ -18,8 +18,8 @@ export default async function EtaPage({ params }: PageProps) {
 
     const invoices: EtaInvoice[] = response.data.map((inv) => ({
         ...inv,
-        createdAt: new Date(inv.createdAt as string | number),
-        submittedAt: inv.submittedAt ? new Date(inv.submittedAt as string | number) : null,
+        createdAt: new Date(inv.createdAt as unknown as string | number),
+        submittedAt: inv.submittedAt ? new Date(inv.submittedAt as unknown as string | number) : null,
     }));
 
     return (

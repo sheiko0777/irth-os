@@ -61,7 +61,7 @@ export function Header({ locale }: { locale: string }) {
       </nav>
 
       <div className="flex items-center gap-4">
-        <NotificationBell locale={locale} />
+        <NotificationBell />
       </div>
     </header>
   );

@@ -48,7 +48,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
   });
   const getItemsQuery = trpc.stocktaking.sessions.getItems.useQuery(
     { sessionId: detailSession?.id ?? '' },
-    { enabled: !!detailSession, onSuccess: (data: SessionItem[]) => setItems(data) }
+    { enabled: !!detailSession }
   );
 
   const statusColor = (s: StocktakingSession['status']): string => {

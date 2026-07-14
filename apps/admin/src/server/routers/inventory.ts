@@ -80,7 +80,6 @@ export const inventoryRouter = router({
         note: z.string().optional(),
       }).parse(input);
 
-      // @ts-expect-error Drizzle transaction generic type inference limitation
       return await ctx.db.transaction(async (tx) => {
         // Fetch item to ensure it belongs to org
         const [item] = await tx
@@ -112,7 +111,7 @@ export const inventoryRouter = router({
         // passing the tx as dbInstance.
         
         await withAudit(
-            tx,
+            tx as unknown as Parameters<typeof withAudit>[0],
             async () => {
               const [updated] = await tx.update(inventoryItems)
                 .set({ quantity: newQuantity, updatedAt: new Date() })

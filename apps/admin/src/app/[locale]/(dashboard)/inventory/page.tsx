@@ -53,7 +53,7 @@ export default async function InventoryPage() {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            items.map((row: { item: { id: string, quantity: number, reorderPoint: number }, product: { name: string, nameAr: string }, variant: { name: string } }) => {
+                            items.map((row: { item: { id: string, quantity: number, reorderPoint: number }, product: { name: string, nameAr: string | null }, variant: { name: string } }) => {
                                 const isLowStock = row.item.quantity <= row.item.reorderPoint;
                                 return (
                                     <TableRow key={row.item.id} className="border-b border-[var(--rim1)]">

@@ -17,9 +17,8 @@ import * as campaignsSchema from './schema/campaigns';
 import * as giftCardsSchema from './schema/giftCards';
 import * as customerSegmentsSchema from './schema/customerSegments';
 import * as orgFeatureFlagsSchema from './schema/orgFeatureFlags';
-import * as notificationsSchema from './schema/notifications';
 
-const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema, ...stocktakingSchema, ...pricelistsSchema, ...shippingZonesSchema, ...campaignsSchema, ...giftCardsSchema, ...customerSegmentsSchema, ...orgFeatureFlagsSchema, ...notificationsSchema };
+const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema, ...stocktakingSchema, ...pricelistsSchema, ...shippingZonesSchema, ...campaignsSchema, ...giftCardsSchema, ...customerSegmentsSchema, ...orgFeatureFlagsSchema };
 import { auditLog } from './schema';
 
 export * from './schema';
@@ -39,7 +38,6 @@ export * from './schema/campaigns';
 export * from './schema/giftCards';
 export * from './schema/customerSegments';
 export * from './schema/orgFeatureFlags';
-export * from './schema/notifications';
 
 export const createDb = (url: string) => {
   const client = postgres(url, { prepare: false });

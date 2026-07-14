@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { trpc } from '@/lib/trpc';
 
 export type CustomerSegment = {
   id: string;
@@ -77,12 +77,12 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
 
   const membersQuery = trpc.customerSegments.getMembers.useQuery(
     { segmentId: activeSegment?.id ?? '' },
-    { enabled: !!activeSegment, onSuccess: (res) => { if (res.data) setMembers(res.data); } }
+    { enabled: !!activeSegment }
   );
 
   const availableQuery = trpc.customerSegments.getCustomersNotInSegment.useQuery(
     { segmentId: activeSegment?.id ?? '' },
-    { enabled: showAddMembers && !!activeSegment, onSuccess: (res) => { if (res.data) setAvailableCustomers(res.data); } }
+    { enabled: showAddMembers && !!activeSegment }
   );
 
   const handleCreate = (e: { preventDefault: () => void }) => {
@@ -233,9 +233,9 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
                   <button
                     style={{ ...btnPrimary, marginTop: '10px', width: '100%' }}
                     onClick={() => addMembersMutation.mutate({ segmentId: activeSegment.id, customerIds: selectedToAdd })}
-                    disabled={addMembersMutation.isLoading}
+                    disabled={addMembersMutation.isPending}
                   >
-                    {addMembersMutation.isLoading ? 'جاري الإضافة...' : `إضافة ${selectedToAdd.length} عميل`}
+                    {addMembersMutation.isPending ? 'جاري الإضافة...' : `إضافة ${selectedToAdd.length} عميل`}
                   </button>
                 )}
               </div>
@@ -329,8 +329,8 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
               {createError && <div style={{ color: 'var(--crimson)', fontSize: '13px' }}>{createError}</div>}
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '6px' }}>
                 <button type="button" style={btnSecondary} onClick={() => { setShowCreate(false); setCreateError(''); }}>إلغاء</button>
-                <button type="submit" style={btnPrimary} disabled={createMutation.isLoading}>
-                  {createMutation.isLoading ? 'جاري الحفظ...' : 'إنشاء الشريحة'}
+                <button type="submit" style={btnPrimary} disabled={createMutation.isPending}>
+                  {createMutation.isPending ? 'جاري الحفظ...' : 'إنشاء الشريحة'}
                 </button>
               </div>
             </form>
