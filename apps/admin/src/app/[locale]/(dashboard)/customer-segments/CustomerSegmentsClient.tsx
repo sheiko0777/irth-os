@@ -28,20 +28,34 @@ type Props = {
 const PRESET_COLORS = ['#B0885E', '#D4AF37', '#2E7D32', '#1565C0', '#6A1B9A', '#C62828', '#00695C', '#4E342E'];
 
 export default function CustomerSegmentsClient({ initialSegments }: Props) {
+  const utils = trpc.useUtils();
   const [segments, setSegments] = useState<CustomerSegment[]>(initialSegments);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', color: '#B0885E', description: '' });
   const [activeSegment, setActiveSegment] = useState<CustomerSegment | null>(null);
-  const [members, setMembers] = useState<SegmentMember[]>([]);
-  const [availableCustomers, setAvailableCustomers] = useState<{ id: string; name: string; email: string | null }[]>([]);
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [createError, setCreateError] = useState('');
 
+  const membersQuery = trpc.customerSegments.getMembers.useQuery(
+    { segmentId: activeSegment?.id ?? '' },
+    { enabled: !!activeSegment }
+  );
+
+  const availableQuery = trpc.customerSegments.getCustomersNotInSegment.useQuery(
+    { segmentId: activeSegment?.id ?? '' },
+    { enabled: showAddMembers && !!activeSegment }
+  );
+
+  // Derive lists from query data — local copies drift (they were never
+  // populated on initial load, only after mutation refetches).
+  const members = (membersQuery.data?.data ?? []) as unknown as SegmentMember[];
+  const availableCustomers = availableQuery.data?.data ?? [];
+
   const createMutation = trpc.customerSegments.create.useMutation({
     onSuccess: (res) => {
       if (res.data) {
-        setSegments((prev) => [{ ...res.data!, memberCount: 0 } as CustomerSegment, ...prev]);
+        setSegments((prev) => [{ ...res.data!, memberCount: 0 } as unknown as CustomerSegment, ...prev]);
         setShowCreate(false);
         setCreateForm({ name: '', color: '#B0885E', description: '' });
         setCreateError('');
@@ -58,32 +72,23 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
   });
 
   const addMembersMutation = trpc.customerSegments.addMembers.useMutation({
-    onSuccess: async () => {
-      if (!activeSegment) return;
+    onSuccess: (_, vars) => {
       setShowAddMembers(false);
       setSelectedToAdd([]);
-      const res = await membersQuery.refetch();
-      if (res.data?.data) setMembers(res.data.data);
-      setSegments((prev) => prev.map((s) => s.id === activeSegment.id ? { ...s, memberCount: s.memberCount + 1 } : s));
+      void utils.customerSegments.getMembers.invalidate({ segmentId: vars.segmentId });
+      void utils.customerSegments.getCustomersNotInSegment.invalidate({ segmentId: vars.segmentId });
+      setSegments((prev) => prev.map((s) => s.id === vars.segmentId ? { ...s, memberCount: s.memberCount + vars.customerIds.length } : s));
     },
   });
 
   const removeMemberMutation = trpc.customerSegments.removeMember.useMutation({
-    onSuccess: (_, vars) => {
-      setMembers((prev) => prev.filter((m) => m.memberId !== vars.memberId));
-      setSegments((prev) => prev.map((s) => s.id === activeSegment?.id ? { ...s, memberCount: s.memberCount - 1 } : s));
+    onSuccess: () => {
+      if (!activeSegment) return;
+      void utils.customerSegments.getMembers.invalidate({ segmentId: activeSegment.id });
+      void utils.customerSegments.getCustomersNotInSegment.invalidate({ segmentId: activeSegment.id });
+      setSegments((prev) => prev.map((s) => s.id === activeSegment.id ? { ...s, memberCount: s.memberCount - 1 } : s));
     },
   });
-
-  const membersQuery = trpc.customerSegments.getMembers.useQuery(
-    { segmentId: activeSegment?.id ?? '' },
-    { enabled: !!activeSegment }
-  );
-
-  const availableQuery = trpc.customerSegments.getCustomersNotInSegment.useQuery(
-    { segmentId: activeSegment?.id ?? '' },
-    { enabled: showAddMembers && !!activeSegment }
-  );
 
   const handleCreate = (e: { preventDefault: () => void }) => {
     e.preventDefault();
