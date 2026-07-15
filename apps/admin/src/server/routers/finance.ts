@@ -1,10 +1,10 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { orders, orderItems, products, productVariants } from '@irth/db';
 import { eq, and, desc, sql, count, sum, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const financeRouter = router({
-    pnl: protectedProcedure
+    pnl: adminProcedure
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
@@ -78,7 +78,7 @@ export const financeRouter = router({
             };
         }),
 
-    codReconciliation: protectedProcedure
+    codReconciliation: adminProcedure
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
@@ -113,7 +113,7 @@ export const financeRouter = router({
             };
         }),
 
-    vatReport: protectedProcedure
+    vatReport: adminProcedure
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
@@ -155,7 +155,7 @@ export const financeRouter = router({
             };
         }),
 
-    askAi: protectedProcedure
+    askAi: adminProcedure
         .input(z.object({
             question: z.string().max(500),
         }))

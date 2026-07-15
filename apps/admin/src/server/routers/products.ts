@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { products, productVariants, categories, brandEnum } from '@irth/db';
 import { eq, and, desc, sql, count, ilike } from 'drizzle-orm';
 import { z } from 'zod';
@@ -89,7 +89,7 @@ export const productsRouter = router({
             };
         }),
 
-    create: protectedProcedure
+    create: adminProcedure
         .input(z.object({
             name: z.string().min(1),
             nameAr: z.string().optional(),
@@ -140,7 +140,7 @@ export const productsRouter = router({
             return { data: result, error: null, meta: null };
         }),
 
-    update: protectedProcedure
+    update: adminProcedure
         .input(z.object({
             id: z.string().uuid(),
             name: z.string().min(1).optional(),
@@ -196,7 +196,7 @@ export const productsRouter = router({
             return { data: result, error: null, meta: null };
         }),
 
-    deactivate: protectedProcedure
+    deactivate: ownerProcedure
         .input(z.object({
             id: z.string().uuid()
         }))

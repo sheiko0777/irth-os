@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count, ilike, or } from 'drizzle-orm';
 import { customers, loyaltyTransactions, withAudit } from '@irth/db';
@@ -70,7 +70,7 @@ export const customersRouter = router({
       return { data: { ...customer, transactions }, error: null, meta: null };
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -108,7 +108,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  update: protectedProcedure
+  update: adminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -155,7 +155,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  addPoints: protectedProcedure
+  addPoints: adminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -194,7 +194,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  redeemPoints: protectedProcedure
+  redeemPoints: adminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -241,7 +241,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  linkOrder: protectedProcedure
+  linkOrder: adminProcedure
     .input(
       z.object({
         customerId: z.string().uuid(),

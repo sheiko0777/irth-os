@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, withAudit } from '@irth/db';
@@ -15,7 +15,7 @@ export const purchasingRouter = router({
       return { data, error: null, meta: null };
     }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(
         z.object({
           name: z.string().min(1),
@@ -53,7 +53,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    update: protectedProcedure
+    update: adminProcedure
       .input(
         z.object({
           id: z.string().uuid(),
@@ -100,7 +100,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    delete: protectedProcedure
+    delete: ownerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const supplier = await ctx.db.query.suppliers.findFirst({
@@ -204,7 +204,7 @@ export const purchasingRouter = router({
         return { data: { ...po.order, supplier: po.supplier, items }, error: null, meta: null };
       }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(
         z.object({
           supplierId: z.string().uuid().optional(),
@@ -273,7 +273,7 @@ export const purchasingRouter = router({
           const insertedItems = await tx.insert(purchaseOrderItems).values(itemsData).returning();
 
           await withAudit(
-              tx as unknown as Parameters<typeof withAudit>[0],
+              tx,
               async () => po,
               {
                 orgId: ctx.orgId,
@@ -290,7 +290,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    updateStatus: protectedProcedure
+    updateStatus: adminProcedure
       .input(
         z.object({
           id: z.string().uuid(),
@@ -337,7 +337,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    receive: protectedProcedure
+    receive: adminProcedure
       .input(
         z.object({
           id: z.string().uuid(),
@@ -409,7 +409,7 @@ export const purchasingRouter = router({
                 .returning();
 
             await withAudit(
-              tx as unknown as Parameters<typeof withAudit>[0],
+              tx,
               async () => updatedPo,
               {
                 orgId: ctx.orgId,

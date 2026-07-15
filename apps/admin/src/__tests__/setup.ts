@@ -15,6 +15,9 @@ vi.mock('@irth/db', async () => {
     orgMembers: { id: 'orgMembers.id', orgId: 'orgMembers.orgId', userId: 'orgMembers.userId', role: 'orgMembers.role' },
     orgFeatureFlags: { orgId: 'orgFeatureFlags.orgId' },
     orgInvites: { id: 'orgInvites.id', orgId: 'orgInvites.orgId', email: 'orgInvites.email', token: 'orgInvites.token', role: 'orgInvites.role', expiresAt: 'orgInvites.expiresAt', createdAt: 'orgInvites.createdAt' },
+    // Enums referenced inside router input schemas (evaluated at import)
+    brandEnum: { enumValues: ['irth'] as const },
+    orderStatusEnum: { enumValues: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'returned'] as const },
     createDb: () => mockDb,
   };
 });

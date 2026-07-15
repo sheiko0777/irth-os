@@ -1,5 +1,5 @@
-﻿import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { z } from 'zod';
+import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { stocktakingSessions, stocktakingItems } from '@irth/db';
 import { eq, and, desc, count, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -36,7 +36,7 @@ export const stocktakingRouter = router({
         return { data: sessionsWithCounts, error: null };
       }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({ notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
         const [session] = await ctx.db
@@ -51,7 +51,7 @@ export const stocktakingRouter = router({
         return { data: session, error: null };
       }),
 
-    complete: protectedProcedure
+    complete: adminProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const [session] = await ctx.db

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { db, orderReturns, returnItems, inventoryItems, orderItems } from '@irth/db';
 import { eq, and, count, sum, sql, desc } from 'drizzle-orm';
 
@@ -73,7 +73,7 @@ export const returnsRouter = router({
       return { data, error: null, meta: null };
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(z.object({
       orderId: z.string(),
       reason: z.enum(['damaged', 'wrong_item', 'not_as_described', 'changed_mind', 'other']),
@@ -122,7 +122,7 @@ export const returnsRouter = router({
       return { data: createdReturn, error: null, meta: null };
     }),
 
-  updateStatus: protectedProcedure
+  updateStatus: adminProcedure
     .input(z.object({
       id: z.string(),
       status: z.enum(['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged']),
@@ -156,7 +156,7 @@ export const returnsRouter = router({
       return { data: updated, error: null, meta: null };
     }),
 
-  restock: protectedProcedure
+  restock: adminProcedure
     .input(z.object({
       returnId: z.string(),
       itemId: z.string(),

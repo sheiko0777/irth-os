@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { customerSegments, customerSegmentMembers, customers } from '@irth/db';
 import { eq, and, desc, count, inArray, not } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -29,7 +29,7 @@ export const customerSegmentsRouter = router({
       return { data: segments, error: null };
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         name: z.string().min(1).max(100),
@@ -50,7 +50,7 @@ export const customerSegmentsRouter = router({
       return { data: segment, error: null };
     }),
 
-  update: protectedProcedure
+  update: adminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -70,7 +70,7 @@ export const customerSegmentsRouter = router({
       return { data: updated, error: null };
     }),
 
-  delete: protectedProcedure
+  delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [deleted] = await ctx.db
@@ -108,7 +108,7 @@ export const customerSegmentsRouter = router({
       return { data: members, error: null };
     }),
 
-  addMembers: protectedProcedure
+  addMembers: adminProcedure
     .input(z.object({ segmentId: z.string().uuid(), customerIds: z.array(z.string().uuid()).min(1) }))
     .mutation(async ({ ctx, input }) => {
       const seg = await ctx.db
@@ -132,7 +132,7 @@ export const customerSegmentsRouter = router({
       return { data: { added: input.customerIds.length }, error: null };
     }),
 
-  removeMember: protectedProcedure
+  removeMember: adminProcedure
     .input(z.object({ memberId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [deleted] = await ctx.db

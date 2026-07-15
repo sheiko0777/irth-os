@@ -1,5 +1,5 @@
-﻿import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { z } from 'zod';
+import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { campaigns } from '@irth/db';
 import { eq, and, desc, count, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -41,7 +41,7 @@ export const campaignsRouter = router({
     };
   }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -67,7 +67,7 @@ export const campaignsRouter = router({
       return { data: campaign, error: null };
     }),
 
-  send: protectedProcedure
+  send: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [existing] = await ctx.db
@@ -91,7 +91,7 @@ export const campaignsRouter = router({
       return { data: campaign, error: null };
     }),
 
-  delete: protectedProcedure
+  delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [existing] = await ctx.db

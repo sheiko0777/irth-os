@@ -48,8 +48,12 @@ export type DbInstance = ReturnType<typeof createDb>;
 
 export const db = createDb(process.env.DATABASE_URL!);
 
+// Accepts the plain db or a transaction handle — both expose the same
+// insert() shape, and passing tx keeps the audit row in the transaction.
+type AuditWriter = Pick<DbInstance, 'insert'>;
+
 export async function withAudit<T extends { id?: string }>(
-    dbInstance: DbInstance,
+    dbInstance: AuditWriter,
     operation: () => Promise<T>,
     auditData: { orgId: string, userId: string | null, action: string, tableName: string, changes: Record<string, unknown> }
 ) {

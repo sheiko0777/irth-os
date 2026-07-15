@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { categories } from '@irth/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
@@ -21,7 +21,7 @@ export const categoriesRouter = router({
             };
         }),
 
-    create: protectedProcedure
+    create: adminProcedure
         .input(z.object({
             name: z.string().min(1),
             slug: z.string().min(1),
@@ -53,7 +53,7 @@ export const categoriesRouter = router({
             return { data: result, error: null, meta: null };
         }),
 
-    delete: protectedProcedure
+    delete: ownerProcedure
         .input(z.object({
             id: z.string().uuid()
         }))

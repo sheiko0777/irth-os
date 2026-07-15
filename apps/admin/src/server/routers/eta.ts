@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { etaInvoices, orders } from '@irth/db';
 import { eq, and, desc, isNull, or } from 'drizzle-orm';
 import { issueInvoice, getInvoiceStatus, cancelInvoice } from '../services/eta';
@@ -19,7 +19,7 @@ export const etaRouter = router({
             return { data: rows, error: null, meta: null };
         }),
 
-    submit: protectedProcedure
+    submit: adminProcedure
         .input(z.object({ orderId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             const [order] = await ctx.db
@@ -87,7 +87,7 @@ export const etaRouter = router({
             return { data: row, error: null, meta: null };
         }),
 
-    checkStatus: protectedProcedure
+    checkStatus: adminProcedure
         .input(z.object({ orderId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             const [invoice] = await ctx.db
@@ -110,7 +110,7 @@ export const etaRouter = router({
             return { data: { ...invoice, status: statusResult.status }, error: null, meta: null };
         }),
 
-    cancel: protectedProcedure
+    cancel: adminProcedure
         .input(z.object({ orderId: z.string().uuid(), reason: z.string().min(1) }))
         .mutation(async ({ ctx, input }) => {
             const [invoice] = await ctx.db
@@ -130,7 +130,7 @@ export const etaRouter = router({
             return { data: { cancelled: ok }, error: ok ? null : 'Cancel failed', meta: null };
         }),
 
-    submitPending: protectedProcedure
+    submitPending: adminProcedure
         .mutation(async ({ ctx }) => {
             const pendingOrders = await ctx.db
                 .select({ id: orders.id, totalAmount: orders.totalAmount })

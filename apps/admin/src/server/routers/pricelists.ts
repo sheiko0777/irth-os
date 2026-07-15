@@ -1,5 +1,5 @@
-﻿import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { z } from 'zod';
+import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { priceLists, priceListItems } from '@irth/db';
 import { eq, and, desc, count } from 'drizzle-orm';
 
@@ -30,7 +30,7 @@ export const pricelistsRouter = router({
       return listsWithCounts;
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -57,7 +57,7 @@ export const pricelistsRouter = router({
       return pl;
     }),
 
-  delete: protectedProcedure
+  delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db

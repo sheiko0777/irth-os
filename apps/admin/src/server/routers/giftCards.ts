@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { giftCards, giftCardTransactions } from '@irth/db';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -45,7 +45,7 @@ export const giftCardsRouter = router({
     return { data: { total, active, totalIssued, activeBalance }, error: null };
   }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         initialAmount: z.number().positive(),
@@ -85,7 +85,7 @@ export const giftCardsRouter = router({
       return { data: card, error: null };
     }),
 
-  topup: protectedProcedure
+  topup: adminProcedure
     .input(z.object({ id: z.string().uuid(), amount: z.number().positive() }))
     .mutation(async ({ ctx, input }) => {
       const [card] = await ctx.db
@@ -113,7 +113,7 @@ export const giftCardsRouter = router({
       return { data: updated, error: null };
     }),
 
-  cancel: protectedProcedure
+  cancel: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [card] = await ctx.db

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { db, coupons, withAudit } from '@irth/db';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -44,7 +44,7 @@ export const couponsRouter = router({
             return result[0];
         }),
 
-    create: protectedProcedure
+    create: adminProcedure
         .input(z.object({
             code: z.string().min(1).transform(s => s.toUpperCase()),
             type: z.enum(['percentage', 'fixed', 'free_shipping']),
@@ -78,7 +78,7 @@ export const couponsRouter = router({
             });
         }),
 
-    update: protectedProcedure
+    update: adminProcedure
         .input(z.object({
             id: z.string().uuid(),
             code: z.string().min(1).transform(s => s.toUpperCase()).optional(),
@@ -114,7 +114,7 @@ export const couponsRouter = router({
             });
         }),
 
-    toggleActive: protectedProcedure
+    toggleActive: adminProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             return withAudit(db, async () => {
@@ -141,7 +141,7 @@ export const couponsRouter = router({
             });
         }),
 
-    delete: protectedProcedure
+    delete: ownerProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             return withAudit(db, async () => {
@@ -214,7 +214,9 @@ export const couponsRouter = router({
             };
         }),
 
-    apply: protectedProcedure
+    // Named `redeem` — `apply` is a reserved word in tRPC v11 router({})
+    // and made the whole appRouter throw at import.
+    redeem: adminProcedure
         .input(z.object({
             couponId: z.string().uuid(),
             orderId: z.string().uuid().optional(), // For auditing if needed

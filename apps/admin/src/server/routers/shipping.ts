@@ -1,5 +1,5 @@
-﻿import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { z } from 'zod';
+import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { shippingZones, shippingRates } from '@irth/db';
 import { eq, and, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -32,7 +32,7 @@ export const shippingRouter = router({
         return { data: zonesWithCounts, error: null };
       }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(
         z.object({
           name: z.string().min(1),
@@ -47,7 +47,7 @@ export const shippingRouter = router({
         return { data: zone, error: null };
       }),
 
-    setActive: protectedProcedure
+    setActive: adminProcedure
       .input(z.object({ id: z.string().uuid(), isActive: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const [zone] = await ctx.db
@@ -88,7 +88,7 @@ export const shippingRouter = router({
         };
       }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(
         z.object({
           zoneId: z.string().uuid(),
@@ -123,7 +123,7 @@ export const shippingRouter = router({
         return { data: rate, error: null };
       }),
 
-    delete: protectedProcedure
+    delete: ownerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         await ctx.db
