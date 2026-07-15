@@ -3,29 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { NotificationBell } from './NotificationBell';
 import { ChevronLeft } from 'lucide-react';
-
-const routeLabels: Record<string, string> = {
-  orders:        'الطلبات',
-  products:      'المنتجات',
-  inventory:     'المخزون',
-  customers:     'العملاء',
-  purchasing:    'المشتريات',
-  integrations:  'التكاملات',
-  finance:       'المالية والتقارير',
-  analytics:     'التحليلات',
-  coupons:       'الكوبونات',
-  categories:    'التصنيفات',
-  notifications: 'الإشعارات',
-  settings:      'الإعدادات',
-  members:       'الأعضاء',
-  eta:           'الفواتير الإلكترونية',
-  courier:       'الشحن والتسوية',
-  returns:       'المرتجعات',
-  campaigns:     'الحملات',
-  stocktaking:   'الجرد',
-  pricelists:    'قوائم الأسعار',
-  shipping:      'مناطق الشحن',
-};
+import { routeLabels } from '@/lib/routeLabels';
 
 export function Header({ locale }: { locale: string }) {
   const pathname = usePathname();

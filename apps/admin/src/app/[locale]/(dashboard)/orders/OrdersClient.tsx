@@ -5,24 +5,7 @@ import Link from 'next/link';
 import { BulkOrderActions } from '@/components/BulkOrderActions';
 import { ExportButton } from '@/components/ExportButton';
 import { PaginationNav } from '@/components/ui/PaginationNav';
-
-const STATUS_LABELS: Record<string, string> = {
-    pending:        'قيد الانتظار',
-    confirmed:      'مؤكد',
-    payment_failed: 'فشل الدفع',
-    shipped:        'تم الشحن',
-    delivered:      'تم التسليم',
-    cancelled:      'ملغي',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-    pending:        'bg-amber-100 text-amber-800',
-    confirmed:      'bg-blue-100 text-blue-800',
-    payment_failed: 'bg-red-100 text-red-800',
-    shipped:        'bg-purple-100 text-purple-800',
-    delivered:      'bg-green-100 text-green-800',
-    cancelled:      'bg-gray-100 text-gray-700',
-};
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export interface OrderRow {
     id: string;
@@ -116,13 +99,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
                                             {order.orderNumber}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            <span
-                                                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                    STATUS_COLORS[order.status] ?? 'bg-gray-100 text-gray-700'
-                                                }`}
-                                            >
-                                                {STATUS_LABELS[order.status] ?? order.status}
-                                            </span>
+                                            <StatusBadge status={order.status} domain="order" />
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t1)]" dir="ltr">
                                             {Number(order.totalAmount).toLocaleString('ar-EG', {
