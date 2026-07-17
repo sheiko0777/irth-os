@@ -1,4 +1,6 @@
 import { Hono } from 'hono'
+import { sql } from 'drizzle-orm'
+import { db } from './db'
 import { auth } from './auth'
 import { ordersRoute } from './routes/orders'
 import { shippingRoute } from './routes/shipping'
@@ -27,8 +29,17 @@ app.use('/api/auth/*', rateLimit(10, 60_000, trustedProxyCount))
 app.use('*', authContext())
 app.use('*', auditMiddleware())
 
-app.get('/health', (c) => {
-  return c.json({ data: { status: 'ok', environment: 'development' }, error: null, meta: null })
+app.get('/health', async (c) => {
+  const environment = process.env.NODE_ENV || 'development'
+  try {
+    await db.execute(sql`select 1`)
+    return c.json({ data: { status: 'ok', db: 'up', environment }, error: null, meta: null })
+  } catch {
+    return c.json(
+      { data: { status: 'degraded', db: 'down', environment }, error: 'db_unreachable', meta: null },
+      503,
+    )
+  }
 })
 
 app.on(['POST', 'GET'], '/api/auth/**', (c) => {
