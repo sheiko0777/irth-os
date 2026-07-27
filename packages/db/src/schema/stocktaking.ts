@@ -8,6 +8,9 @@ export const stocktakingSessions = pgTable("stocktaking_sessions", {
   status: stocktakingStatusEnum("status").notNull().default('draft'),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
+  // Set when the counted quantities were written to inventory. Distinct from
+  // completedAt so a future flow could complete without reconciling.
+  appliedAt: timestamp("applied_at"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -24,6 +27,9 @@ export const stocktakingItems = pgTable("stocktaking_items", {
   expectedQuantity: integer("expected_quantity").notNull().default(0),
   actualQuantity: integer("actual_quantity"),
   variance: integer("variance"),
+  // The quantity actually written to inventory. NULL means nothing was applied
+  // for this line (unresolvable variant or missing inventory record).
+  appliedQuantity: integer("applied_quantity"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
