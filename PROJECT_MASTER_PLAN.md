@@ -579,6 +579,27 @@ lane owns `apps/admin`. One known conflict point: `packages/db/src/index.ts` —
 removed three `as unknown` casts at its call sites. Do not revert that
 signature while doing the migration-runner work.
 
+### 9.0.1 Parallel agent sessions (Jules) — state as of 2026-07-25
+
+| Session | Scope | Status | Disposition |
+|---|---|---|---|
+| `15259304603292000948` | Stocktaking inventory reconciliation | running | pull + path-filter when done |
+| `17054544894219494798` | ShippingClient split (last R5 item) | awaiting plan approval, 11 days | approve at jules.google.com |
+| 5× R5 component splits | SettingsForm, PlatformAdmin, Segments, CustomerActions, platform cleanup | completed | ✅ integrated in `ece3800` |
+| 3× "Phase 2/3/4 router tests" | vitest for stocktaking/returns/coupons/campaigns/analytics/finance | stale | **close** — superseded by the 131 local tests, which use a different mock (`importOriginal`, real schema) and would conflict |
+| Phase 39 — Loyalty points | completed, never pulled | **deferred** | conflicts head-on with the `addPoints`/`redeemPoints` atomic-guard rewrite; revisit only after this branch merges |
+| Phase 40 — Audit log viewer | completed, never pulled | **deferred** | same reason: don't work the same files from three directions |
+| Phase 41 — Flash sales | completed, never pulled | **deferred** | as above |
+| Phase 38 — B2B corporate accounts | awaiting user feedback, incomplete | **deferred** | unfinished; re-scope after merge |
+
+**Why 38–41 are deferred rather than pulled:** their patches are cumulative
+diffs from an older `main`, so integrating them means the same path-filtered
+reconciliation the R5 splits needed. Doing that while the money-path rewrites
+are still unmerged would mean three sources editing `customers.ts`,
+`inventory` and the routers simultaneously. Sequence: merge this branch → then
+pull 38–41 one at a time, keeping the local definitions where they collide
+(notably `customers.ts` already owns `loyaltyTransactions`).
+
 ### Constraints (all phases)
 
 - No `any` types
