@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { db, coupons, withAudit } from '@irth/db';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, or, isNull, lt, gt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const couponsRouter = router({
@@ -223,22 +223,41 @@ export const couponsRouter = router({
         }))
         .mutation(async ({ ctx, input }) => {
             return withAudit(db, async () => {
-                const coupon = await db.select()
-                    .from(coupons)
-                    .where(and(eq(coupons.id, input.couponId), eq(coupons.orgId, ctx.orgId)))
-                    .limit(1);
-
-                if (!coupon.length) {
-                    throw new TRPCError({ code: 'NOT_FOUND', message: 'Coupon not found' });
-                }
-
+                // `validate` is a separate query, so its checks are stale by the
+                // time this runs — and this mutation is callable without it.
+                // Re-assert redeemability inside the UPDATE's WHERE so the check
+                // and the increment cannot be split: without this an expired,
+                // deactivated, or fully-used coupon still increments and reports
+                // success, and concurrent redemptions blow past maxUses.
                 const result = await db.update(coupons)
                     .set({
                         usedCount: sql`used_count + 1`,
                         updatedAt: new Date()
                     })
-                    .where(and(eq(coupons.id, input.couponId), eq(coupons.orgId, ctx.orgId)))
+                    .where(and(
+                        eq(coupons.id, input.couponId),
+                        eq(coupons.orgId, ctx.orgId),
+                        eq(coupons.isActive, true),
+                        or(isNull(coupons.expiresAt), gt(coupons.expiresAt, new Date())),
+                        or(isNull(coupons.maxUses), lt(coupons.usedCount, coupons.maxUses)),
+                    ))
                     .returning();
+
+                if (!result.length) {
+                    // Distinguish "no such coupon" from "not redeemable" only
+                    // after the atomic attempt has already failed.
+                    const [existing] = await db.select({ id: coupons.id })
+                        .from(coupons)
+                        .where(and(eq(coupons.id, input.couponId), eq(coupons.orgId, ctx.orgId)))
+                        .limit(1);
+                    if (!existing) {
+                        throw new TRPCError({ code: 'NOT_FOUND', message: 'Coupon not found' });
+                    }
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'Coupon is not redeemable (inactive, expired, or usage limit reached)',
+                    });
+                }
 
                 return result[0];
             }, {

@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sql } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { mockDb } from '../helpers/mockDb';
 
 const { returnsRouter } = await import('@/server/routers/returns');
 const { giftCardsRouter } = await import('@/server/routers/giftCards');
+const { couponsRouter } = await import('@/server/routers/coupons');
+const { campaignsRouter } = await import('@/server/routers/campaigns');
+const { customersRouter } = await import('@/server/routers/customers');
 
 function ctx(): Context {
   return {
@@ -83,5 +87,57 @@ describe('giftCards.topup — decimal safety', () => {
     expect(typeof balance).not.toBe('string');
     expect(typeof balance).not.toBe('number');
     expect(balance?.constructor?.name).toBe(sql``.constructor.name);
+  });
+});
+
+// The shared regression these three guard: the eligibility check must live in
+// the UPDATE's WHERE clause, not in a SELECT that runs first. A pre-read on the
+// success path is the signature of the check-then-update pattern coming back —
+// which is what lets two concurrent calls both pass the same check.
+describe('atomic guards — no read-before-write on the success path', () => {
+  it('coupons.redeem updates under guard without pre-reading the coupon', async () => {
+    const selectSpy = vi.fn(() => chainOf([]));
+    mockDb.select = selectSpy;
+    mockDb.update = vi.fn(() => chainOf([{ id: UUID, usedCount: 1 }]));
+
+    await couponsRouter.createCaller(ctx()).redeem({ couponId: UUID });
+
+    expect(mockDb.update).toHaveBeenCalled();
+    expect(selectSpy).not.toHaveBeenCalled();
+  });
+
+  it('coupons.redeem rejects instead of silently succeeding when the guard matches nothing', async () => {
+    // Update matches no row (inactive / expired / maxUses reached), then the
+    // follow-up select finds the coupon exists -> must be BAD_REQUEST.
+    mockDb.update = vi.fn(() => chainOf([]));
+    mockDb.select = vi.fn(() => chainOf([{ id: UUID }]));
+
+    await expect(
+      couponsRouter.createCaller(ctx()).redeem({ couponId: UUID })
+    ).rejects.toSatisfy((e: unknown) => e instanceof TRPCError && e.code === 'BAD_REQUEST');
+  });
+
+  it('campaigns.send transitions under guard without pre-reading the campaign', async () => {
+    const selectSpy = vi.fn(() => chainOf([]));
+    mockDb.select = selectSpy;
+    mockDb.update = vi.fn(() => chainOf([{ id: UUID, status: 'sending' }]));
+
+    await campaignsRouter.createCaller(ctx()).send({ id: UUID });
+
+    expect(mockDb.update).toHaveBeenCalled();
+    expect(selectSpy).not.toHaveBeenCalled();
+  });
+
+  it('customers.redeemPoints decrements under guard without pre-reading the balance', async () => {
+    // mockDb.query is {}, so any pre-read via db.query.customers.findFirst would
+    // throw — reaching the ledger insert proves the balance check moved into SQL.
+    mockDb.update = vi.fn(() => chainOf([{ id: UUID, loyaltyPoints: 50 }]));
+    mockDb.insert = vi.fn(() => chainOf([]));
+    mockDb.transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(mockDb));
+
+    const res = await customersRouter.createCaller(ctx()).redeemPoints({ id: UUID, points: 50 });
+
+    expect(res.data).toMatchObject({ loyaltyPoints: 50 });
+    expect(mockDb.insert).toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { stocktakingSessions, stocktakingItems } from '@irth/db';
-import { eq, and, desc, count, sql } from 'drizzle-orm';
+import { eq, and, desc, count, sql, ne } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const stocktakingRouter = router({
@@ -54,17 +54,32 @@ export const stocktakingRouter = router({
     complete: adminProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
+        // Only an open session can be completed — re-completing would reset
+        // completedAt, and would double-apply counts if stock reconciliation is
+        // ever added here (see the TODO below).
         const [session] = await ctx.db
           .update(stocktakingSessions)
           .set({ status: 'completed', completedAt: new Date(), updatedAt: new Date() })
           .where(
             and(
               eq(stocktakingSessions.id, input.id),
-              eq(stocktakingSessions.orgId, ctx.orgId)
+              eq(stocktakingSessions.orgId, ctx.orgId),
+              ne(stocktakingSessions.status, 'completed')
             )
           )
           .returning();
-        if (!session) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+        if (!session) {
+          const [existing] = await ctx.db
+            .select({ status: stocktakingSessions.status })
+            .from(stocktakingSessions)
+            .where(and(
+              eq(stocktakingSessions.id, input.id),
+              eq(stocktakingSessions.orgId, ctx.orgId)
+            ))
+            .limit(1);
+          if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Session already completed' });
+        }
         return { data: session, error: null };
       }),
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { campaigns } from '@irth/db';
-import { eq, and, desc, count, sql } from 'drizzle-orm';
+import { eq, and, desc, count, sql, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const campaignsRouter = router({
@@ -70,23 +70,30 @@ export const campaignsRouter = router({
   send: adminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.db
-        .select()
-        .from(campaigns)
-        .where(and(eq(campaigns.id, input.id), eq(campaigns.orgId, ctx.orgId)))
-        .limit(1);
-
-      if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'Campaign not found' });
-      if (existing.status !== 'draft' && existing.status !== 'scheduled') {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Campaign already sent or sending' });
-      }
-
+      // The draft/scheduled guard lives in the WHERE clause: checking first and
+      // updating after lets two concurrent sends both observe 'draft' and both
+      // transition the campaign, which downstream means the dispatch worker can
+      // send the same blast to customers twice.
       // Mark as sending — actual dispatch handled by outbox/360dialog worker
       const [campaign] = await ctx.db
         .update(campaigns)
         .set({ status: 'sending', sentAt: new Date(), updatedAt: new Date() })
-        .where(eq(campaigns.id, input.id))
+        .where(and(
+          eq(campaigns.id, input.id),
+          eq(campaigns.orgId, ctx.orgId),
+          or(eq(campaigns.status, 'draft'), eq(campaigns.status, 'scheduled')),
+        ))
         .returning();
+
+      if (!campaign) {
+        const [existing] = await ctx.db
+          .select({ id: campaigns.id })
+          .from(campaigns)
+          .where(and(eq(campaigns.id, input.id), eq(campaigns.orgId, ctx.orgId)))
+          .limit(1);
+        if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'Campaign not found' });
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Campaign already sent or sending' });
+      }
 
       return { data: campaign, error: null };
     }),
