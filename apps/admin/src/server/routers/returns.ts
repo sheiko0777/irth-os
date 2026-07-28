@@ -215,9 +215,29 @@ export const returnsRouter = router({
     .query(async ({ ctx }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const returns = await db.select().from(orderReturns).where(eq(orderReturns.orgId, ctx.orgId));
+      // ⚡ Bolt: Use SQL aggregation instead of materializing all records in memory
+      const [statusCounts, refundTotals] = await Promise.all([
+        db
+          .select({
+            status: orderReturns.status,
+            count: count(),
+          })
+          .from(orderReturns)
+          .where(eq(orderReturns.orgId, ctx.orgId))
+          .groupBy(orderReturns.status),
+        db
+          .select({
+            pendingRefundAmount: sql<number>`COALESCE(SUM(${orderReturns.refundAmount}), 0)::float`,
+          })
+          .from(orderReturns)
+          .where(
+            and(
+              eq(orderReturns.orgId, ctx.orgId),
+              eq(orderReturns.status, 'approved')
+            )
+          )
+      ]);
 
-      const total = returns.length;
       const byStatus = {
         requested: 0,
         approved: 0,
@@ -228,16 +248,16 @@ export const returnsRouter = router({
         exchanged: 0,
       };
 
-      let pendingRefundAmount = 0;
-
-      for (const r of returns) {
-        if (byStatus[r.status as keyof typeof byStatus] !== undefined) {
-           byStatus[r.status as keyof typeof byStatus]++;
-        }
-        if (r.status === 'approved' && r.refundAmount) {
-          pendingRefundAmount += parseFloat(r.refundAmount);
+      let total = 0;
+      for (const row of statusCounts) {
+        const countNum = Number(row.count);
+        total += countNum;
+        if (byStatus[row.status as keyof typeof byStatus] !== undefined) {
+          byStatus[row.status as keyof typeof byStatus] = countNum;
         }
       }
+
+      const pendingRefundAmount = refundTotals[0]?.pendingRefundAmount ?? 0;
 
       return {
         data: {
