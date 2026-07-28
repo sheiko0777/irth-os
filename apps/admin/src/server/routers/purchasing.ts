@@ -1,7 +1,7 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, withAudit } from '@irth/db';
+import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 
 export const purchasingRouter = router({
@@ -15,7 +15,7 @@ export const purchasingRouter = router({
       return { data, error: null, meta: null };
     }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(
         z.object({
           name: z.string().min(1),
@@ -53,7 +53,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    update: protectedProcedure
+    update: adminProcedure
       .input(
         z.object({
           id: z.string().uuid(),
@@ -100,7 +100,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    delete: protectedProcedure
+    delete: ownerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const supplier = await ctx.db.query.suppliers.findFirst({
@@ -204,7 +204,7 @@ export const purchasingRouter = router({
         return { data: { ...po.order, supplier: po.supplier, items }, error: null, meta: null };
       }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(
         z.object({
           supplierId: z.string().uuid().optional(),
@@ -248,7 +248,6 @@ export const purchasingRouter = router({
         const poNumber = `PO-${year}-${seq.toString().padStart(4, '0')}`;
         const totalAmt = typeof input.totalAmount === 'number' ? input.totalAmount.toString() : input.totalAmount;
 
-        // @ts-expect-error Drizzle transaction generic
         const result = await ctx.db.transaction(async (tx) => {
           const [po] = await tx
             .insert(purchaseOrders)
@@ -291,7 +290,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    updateStatus: protectedProcedure
+    updateStatus: adminProcedure
       .input(
         z.object({
           id: z.string().uuid(),
@@ -338,7 +337,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    receive: protectedProcedure
+    receive: adminProcedure
       .input(
         z.object({
           id: z.string().uuid(),
@@ -357,7 +356,6 @@ export const purchasingRouter = router({
         });
         if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
-        // @ts-expect-error Drizzle tx limitation
         const result = await ctx.db.transaction(async (tx) => {
             let fullyReceived = true;
 
@@ -379,15 +377,25 @@ export const purchasingRouter = router({
 
                 // Update inventory if requested and SKU exists
                 if (itemInput.updateInventory && poItem.sku && itemInput.receivedQuantity > 0) {
-                    // Find variant by SKU
-                    const [variant] = await tx.select().from(productVariants).where(eq(productVariants.sku, poItem.sku)).limit(1);
+                    // Scope the SKU lookup to this org by joining through products:
+                    // productVariants has no orgId and `sku` is globally unique, so an
+                    // unscoped lookup silently resolves another tenant's variant and the
+                    // org-scoped inventory read below then finds nothing — received stock
+                    // would vanish with no error.
+                    const [variant] = await tx.select({ id: productVariants.id })
+                        .from(productVariants)
+                        .innerJoin(products, eq(productVariants.productId, products.id))
+                        .where(and(eq(productVariants.sku, poItem.sku), eq(products.orgId, ctx.orgId)))
+                        .limit(1);
                     if (variant) {
                         // Find inventory item
                         const [invItem] = await tx.select().from(inventoryItems).where(and(eq(inventoryItems.variantId, variant.id), eq(inventoryItems.orgId, ctx.orgId))).limit(1);
                         if (invItem) {
+                            // Increment in SQL — reading the quantity and writing back an
+                            // absolute value loses concurrent receipts.
                             await tx.update(inventoryItems)
                                 .set({
-                                    quantity: invItem.quantity + itemInput.receivedQuantity,
+                                    quantity: sql`${inventoryItems.quantity} + ${itemInput.receivedQuantity}`,
                                     updatedAt: new Date()
                                 })
                                 .where(eq(inventoryItems.id, invItem.id));

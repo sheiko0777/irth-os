@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { IBM_Plex_Sans_Arabic, Cairo } from 'next/font/google';
 import { ReactNode } from 'react';
 import { Toaster } from 'sonner';
+import { TrpcProvider } from '@/components/providers/TrpcProvider';
 import './globals.css';
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
@@ -59,7 +60,9 @@ export default async function LocaleLayout({
     <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} className={`${ibmPlexSansArabic.variable} ${cairo.variable}`}>
       <body className="bg-[var(--ink)] text-[var(--t2)] font-sans antialiased">
         <NextIntlClientProvider messages={messages}>
-          {children}
+          <TrpcProvider>
+            {children}
+          </TrpcProvider>
         </NextIntlClientProvider>
         <Toaster
           position="top-center"

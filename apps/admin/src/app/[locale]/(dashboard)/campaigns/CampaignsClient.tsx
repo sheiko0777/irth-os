@@ -29,35 +29,8 @@ export type CampaignSummary = {
   totalDelivered: number;
 };
 
-const CHANNEL_LABELS: Record<string, string> = {
-  whatsapp: 'واتساب',
-  sms: 'رسالة نصية',
-  email: 'بريد إلكتروني',
-};
-
-const SEGMENT_LABELS: Record<string, string> = {
-  all: 'جميع العملاء',
-  vip: 'عملاء VIP',
-  inactive: 'عملاء غير نشطين',
-  new: 'عملاء جدد',
-  custom: 'مخصص',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: 'مسودة',
-  scheduled: 'مجدول',
-  sending: 'جاري الإرسال',
-  sent: 'تم الإرسال',
-  failed: 'فشل',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'var(--t2)',
-  scheduled: '#3b82f6',
-  sending: 'var(--gold)',
-  sent: 'var(--emerald)',
-  failed: 'var(--crimson)',
-};
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { statusLabel } from '@/lib/statusMaps';
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -90,7 +63,7 @@ export default function CampaignsClient({
   const createMutation = trpc.campaigns.create.useMutation({
     onSuccess: (res) => {
       toast.success('تم إنشاء الحملة بنجاح');
-      if (res.data) setCampaigns((prev) => [res.data as Campaign, ...prev]);
+      if (res.data) setCampaigns((prev) => [res.data as unknown as Campaign, ...prev]);
       setIsCreateOpen(false);
       setForm({ name: '', message: '', channel: 'whatsapp', targetSegment: 'all', scheduledAt: '' });
       router.refresh();
@@ -103,7 +76,7 @@ export default function CampaignsClient({
   const sendMutation = trpc.campaigns.send.useMutation({
     onSuccess: (res) => {
       toast.success('تم إرسال الحملة');
-      if (res.data) setCampaigns((prev) => prev.map((c) => (c.id === res.data?.id ? (res.data as Campaign) : c)));
+      if (res.data) setCampaigns((prev) => prev.map((c) => (c.id === res.data?.id ? (res.data as unknown as Campaign) : c)));
       router.refresh();
     },
     onError: (err: unknown) => {
@@ -176,12 +149,10 @@ export default function CampaignsClient({
                 <td className="px-4 py-3 font-medium">
                   <button onClick={() => setPreviewCampaign(c)} className="hover:underline" style={{ color: 'var(--gold)' }}>{c.name}</button>
                 </td>
-                <td className="px-4 py-3" style={{ color: 'var(--t2)' }}>{CHANNEL_LABELS[c.channel]}</td>
-                <td className="px-4 py-3" style={{ color: 'var(--t2)' }}>{SEGMENT_LABELS[c.targetSegment]}</td>
+                <td className="px-4 py-3" style={{ color: 'var(--t2)' }}>{statusLabel('campaignChannel', c.channel)}</td>
+                <td className="px-4 py-3" style={{ color: 'var(--t2)' }}>{statusLabel('campaignSegment', c.targetSegment)}</td>
                 <td className="px-4 py-3">
-                  <span className="px-2 py-1 rounded-full text-xs font-semibold" style={{ background: STATUS_COLORS[c.status] + '22', color: STATUS_COLORS[c.status] }}>
-                    {STATUS_LABELS[c.status]}
-                  </span>
+                  <StatusBadge status={c.status} domain="campaign" />
                 </td>
                 <td className="px-4 py-3 text-center">{c.totalRecipients > 0 ? c.deliveredCount + '/' + c.totalRecipients : '—'}</td>
                 <td className="px-4 py-3" style={{ color: 'var(--t2)' }}>{c.sentAt ? new Date(c.sentAt).toLocaleDateString('ar-EG') : '—'}</td>
@@ -300,15 +271,15 @@ export default function CampaignsClient({
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span style={{ color: 'var(--t2)' }}>القناة:</span>
-                <span>{CHANNEL_LABELS[previewCampaign.channel]}</span>
+                <span>{statusLabel('campaignChannel', previewCampaign.channel)}</span>
               </div>
               <div className="flex justify-between">
                 <span style={{ color: 'var(--t2)' }}>الشريحة:</span>
-                <span>{SEGMENT_LABELS[previewCampaign.targetSegment]}</span>
+                <span>{statusLabel('campaignSegment', previewCampaign.targetSegment)}</span>
               </div>
               <div className="flex justify-between">
                 <span style={{ color: 'var(--t2)' }}>الحالة:</span>
-                <span style={{ color: STATUS_COLORS[previewCampaign.status] }}>{STATUS_LABELS[previewCampaign.status]}</span>
+                <StatusBadge status={previewCampaign.status} domain="campaign" />
               </div>
               <hr style={{ borderColor: 'var(--rim1)' }} />
               <div>

@@ -1,7 +1,8 @@
 ﻿'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { trpc } from '@/lib/trpc';
+import { matchIntent } from '@/lib/chatIntents';
+import { routeLabel } from '@/lib/routeLabels';
 
 type Message = {
   id: number;
@@ -26,35 +27,6 @@ const HELP_TEXT = `الأوامر المتاحة:
 • "مخزون" أو "inventory" — الانتقال للمخزون
 • "ابحث عن [كلمة]" — البحث في النظام
 • "مساعدة" — عرض هذه القائمة`;
-
-function matchIntent(text: string): { type: string; query: string } {
-  const t = text.trim().toLowerCase();
-  if (t.includes('مساعدة') || t === 'help') return { type: 'help', query: '' };
-  if (t.includes('طلب') || t.includes('order')) return { type: 'nav', query: 'orders' };
-  if (t.includes('منتج') || t.includes('product')) return { type: 'nav', query: 'products' };
-  if (t.includes('عميل') || t.includes('customer')) return { type: 'nav', query: 'customers' };
-  if (t.includes('مخزون') || t.includes('inventor')) return { type: 'nav', query: 'inventory' };
-  if (t.includes('فئة') || t.includes('categor')) return { type: 'nav', query: 'categories' };
-  if (t.includes('تقرير') || t.includes('analytic') || t.includes('احصاء')) return { type: 'nav', query: 'analytics' };
-  if (t.includes('ارجاع') || t.includes('return')) return { type: 'nav', query: 'returns' };
-  if (t.includes('شحن') || t.includes('shipping')) return { type: 'nav', query: 'shipping' };
-  if (t.includes('سعر') || t.includes('pricelist')) return { type: 'nav', query: 'pricelists' };
-  if (t.includes('جرد') || t.includes('stocktak')) return { type: 'nav', query: 'stocktaking' };
-  if (t.includes('تسوية') || t.includes('courier')) return { type: 'nav', query: 'courier' };
-  if (t.includes('اشعار') || t.includes('notif')) return { type: 'nav', query: 'notifications' };
-  if (t.includes('ابحث') || t.includes('بحث') || t.includes('search')) {
-    const q = text.replace(/ابحث عن|بحث عن|search for|بحث/gi, '').trim();
-    return { type: 'search', query: q };
-  }
-  return { type: 'unknown', query: text };
-}
-
-const NAV_LABELS: Record<string, string> = {
-  orders: 'الطلبات', products: 'المنتجات', customers: 'العملاء',
-  inventory: 'المخزون', categories: 'الفئات', analytics: 'التقارير',
-  returns: 'المرتجعات', shipping: 'الشحن', pricelists: 'قوائم الأسعار',
-  stocktaking: 'جرد المخزون', courier: 'تسوية COD', notifications: 'الاشعارات',
-};
 
 interface ChatBotProps {
   locale: string;
@@ -96,7 +68,7 @@ export function ChatBot({ locale }: ChatBotProps) {
     }
 
     if (intent.type === 'nav') {
-      const label = NAV_LABELS[intent.query] ?? intent.query;
+      const label = routeLabel(intent.query);
       addMsg({
         role: 'bot',
         text: 'يمكنك الانتقال إلى ' + label,

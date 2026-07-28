@@ -23,7 +23,6 @@ export default async function CategoriesPage() {
             </div>
             
             <PermissionGate resource="categories" action="read">
-                {/* @ts-expect-error Data structure matches */}
                 <CategoriesClient categories={categories} />
             </PermissionGate>
         </div>

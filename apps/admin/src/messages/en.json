@@ -6,6 +6,183 @@
     "title": "Login",
     "email": "Email",
     "password": "Password",
-    "submit": "Submit"
+    "submit": "Sign in"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "orders": "Orders",
+    "inventory": "Inventory",
+    "products": "Products",
+    "settings": "Settings",
+    "integrations": "Integrations",
+    "finance": "Finance & Reports"
+  },
+  "finance": {
+    "title": "Finance & Reports",
+    "pnl": "Profit & Loss Summary",
+    "cod": "Cash-on-Delivery Reconciliation",
+    "vat": "VAT Report (14%)",
+    "ai": "AI Sales Query"
+  },
+  "inventory": {
+    "title": "Inventory Management",
+    "alerts_banner": "Alert: {count} products have reached their reorder point",
+    "columns": {
+      "product": "Product",
+      "variant": "Variant",
+      "quantity": "Available Quantity",
+      "reorderPoint": "Reorder Point",
+      "status": "Status"
+    },
+    "status": {
+      "low": "Low",
+      "ok": "In Stock"
+    }
+  },
+  "integrations": {
+    "title": "Integrations",
+    "outbox": "Outbox Events",
+    "empty": "No pending events",
+    "columns": {
+      "id": "ID",
+      "type": "Type",
+      "attempts": "Attempts",
+      "date": "Date"
+    }
+  },
+  "settings": {
+    "title": "System Settings",
+    "members": "Members",
+    "invite": "Invite Member",
+    "inviteSuccess": "Invitation sent",
+    "sections": {
+      "general": "General",
+      "product": "Product Numbering",
+      "pricing": "Pricing & Tax",
+      "shipping": "Shipping",
+      "integrations": "Integrations"
+    },
+    "fields": {
+      "org_name": "Organization Name",
+      "org_currency": "Currency",
+      "org_phone": "Phone",
+      "org_email": "Email",
+      "sku_prefix": "SKU Prefix",
+      "sku_next_number": "Next Number",
+      "sku_pad_length": "Pad Length",
+      "sku_preview": "Numbering Preview",
+      "vat_rate": "VAT Rate (%)",
+      "global_pct": "Global Discount (%)",
+      "max_pct": "Maximum Discount (%)",
+      "shipping_provider": "Shipping Provider",
+      "shipping_flat_rate": "Flat Shipping Rate",
+      "shipping_free_threshold": "Free Shipping Threshold",
+      "fawry_merchant_code": "Fawry Merchant Code",
+      "fawry_base_url": "Fawry Base URL",
+      "whatsapp_api_key": "WhatsApp API Key",
+      "resend_api_key": "Resend API Key",
+      "resend_from": "Resend From Email",
+      "cf_account_id": "Cloudflare Account ID",
+      "cf_r2_bucket": "Cloudflare R2 Bucket",
+      "cf_r2_public_url": "Cloudflare R2 Public URL"
+    },
+    "actions": {
+      "save": "Save",
+      "saveSuccess": "Saved successfully",
+      "saveError": "An error occurred while saving"
+    }
+  },
+  "dashboard": {
+    "title": "Overview",
+    "ordersToday": "Orders Today",
+    "revenueToday": "Revenue Today (EGP)",
+    "pendingOrders": "Pending Orders",
+    "activeProducts": "Active Products"
+  },
+  "orders": {
+    "title": "Orders",
+    "search": "Search by order number...",
+    "statusFilter": "Filter by status",
+    "allStatuses": "All statuses",
+    "table": {
+      "orderNumber": "Order Number",
+      "status": "Status",
+      "totalAmount": "Total",
+      "createdAt": "Created",
+      "actions": "Actions"
+    },
+    "detail": {
+      "title": "Order Details",
+      "items": "Items",
+      "history": "Status History",
+      "updateStatus": "Update Status"
+    },
+    "status": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "payment_failed": "Payment Failed",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled"
+    }
+  },
+  "products": {
+    "title": "Products",
+    "create": "Add Product",
+    "edit": "Edit Product",
+    "table": {
+      "name": "Name",
+      "brand": "Brand",
+      "variants": "Variants",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "form": {
+      "name": "Product Name",
+      "description": "Description",
+      "brand": "Brand",
+      "isActive": "Product active?",
+      "submit": "Save",
+      "cancel": "Cancel",
+      "variants": "Variants",
+      "addVariant": "Add Variant",
+      "sku": "SKU",
+      "price": "Price",
+      "stock": "Stock"
+    }
+  },
+  "common": {
+    "view": "View",
+    "edit": "Edit",
+    "delete": "Delete",
+    "currency": "EGP"
+  },
+  "shipping": {
+    "error": {
+      "unavailable": "Shipping service is currently unavailable"
+    }
+  },
+  "payment": {
+    "error": {
+      "failed": "The payment did not complete"
+    }
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "login": "Sign in",
+    "logout": "Sign out",
+    "loginError": "Invalid credentials, please try again",
+    "loginSuccess": "Welcome"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications",
+    "markAllRead": "Mark all as read",
+    "viewAll": "View all notifications"
   }
 }

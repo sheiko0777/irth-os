@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
-import { giftCards, giftCardTransactions } from '@irth/db';
+import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
+import { giftCards, giftCardTransactions, withAudit } from '@irth/db';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
@@ -45,7 +45,7 @@ export const giftCardsRouter = router({
     return { data: { total, active, totalIssued, activeBalance }, error: null };
   }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         initialAmount: z.number().positive(),
@@ -85,7 +85,7 @@ export const giftCardsRouter = router({
       return { data: card, error: null };
     }),
 
-  topup: protectedProcedure
+  topup: adminProcedure
     .input(z.object({ id: z.string().uuid(), amount: z.number().positive() }))
     .mutation(async ({ ctx, input }) => {
       const [card] = await ctx.db
@@ -96,24 +96,48 @@ export const giftCardsRouter = router({
       if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: 'البطاقة غير موجودة' });
       if (card.status === 'cancelled') throw new TRPCError({ code: 'BAD_REQUEST', message: 'البطاقة ملغاة' });
 
-      const newBalance = parseFloat(card.balance ?? '0') + input.amount;
-      const [updated] = await ctx.db
-        .update(giftCards)
-        .set({ balance: String(newBalance), status: 'active', updatedAt: new Date() })
-        .where(eq(giftCards.id, input.id))
-        .returning();
+      // Balance is numeric(12,2); reading it into a JS float and writing the
+      // result back loses that precision and races with concurrent top-ups
+      // (read-modify-write). Let Postgres do the decimal arithmetic in place.
+      const amount = input.amount.toFixed(2);
 
-      await ctx.db.insert(giftCardTransactions).values({
-        giftCardId: input.id,
-        orgId: ctx.orgId,
-        amount: String(input.amount),
-        txType: 'topup',
+      const updated = await ctx.db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(giftCards)
+          .set({
+            balance: sql`${giftCards.balance} + ${amount}::numeric`,
+            status: 'active',
+            updatedAt: new Date(),
+          })
+          .where(and(eq(giftCards.id, input.id), eq(giftCards.orgId, ctx.orgId)))
+          .returning();
+
+        await tx.insert(giftCardTransactions).values({
+          giftCardId: input.id,
+          orgId: ctx.orgId,
+          amount,
+          txType: 'topup',
+        });
+
+        await withAudit(
+          tx,
+          async () => ({ id: input.id }),
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'TOPUP_GIFT_CARD',
+            tableName: 'gift_cards',
+            changes: { giftCardId: input.id, amount },
+          }
+        );
+
+        return row;
       });
 
       return { data: updated, error: null };
     }),
 
-  cancel: protectedProcedure
+  cancel: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [card] = await ctx.db

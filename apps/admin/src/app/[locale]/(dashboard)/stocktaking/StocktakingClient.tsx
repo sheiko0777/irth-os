@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export type StocktakingSession = {
   id: string;
@@ -24,10 +25,6 @@ export type StocktakingSummary = {
 
 type SessionItem = { productName: string; sku: string; expectedQty: number; countedQty: number; };
 
-const STATUS_LABELS: Record<StocktakingSession['status'], string> = {
-  draft: 'مسودة', in_progress: 'جارٍ', completed: 'مكتمل', cancelled: 'ملغى',
-};
-
 function formatDate(d: Date | null): string {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -48,15 +45,8 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
   });
   const getItemsQuery = trpc.stocktaking.sessions.getItems.useQuery(
     { sessionId: detailSession?.id ?? '' },
-    { enabled: !!detailSession, onSuccess: (data: SessionItem[]) => setItems(data) }
+    { enabled: !!detailSession }
   );
-
-  const statusColor = (s: StocktakingSession['status']): string => {
-    if (s === 'draft') return 'var(--t2)';
-    if (s === 'in_progress') return 'var(--gold)';
-    if (s === 'completed') return 'var(--emerald)';
-    return 'var(--crimson)';
-  };
 
   return (
     <div className="font-cairo" dir="rtl">
@@ -95,9 +85,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
             ) : initialSessions.map(session => (
               <TableRow key={session.id} className="border-b border-[var(--rim1)]">
                 <TableCell>
-                  <span className="px-2 py-1 rounded text-xs font-semibold" style={{ color: statusColor(session.status) }}>
-                    {STATUS_LABELS[session.status]}
-                  </span>
+                  <StatusBadge status={session.status} domain="stocktaking" />
                 </TableCell>
                 <TableCell className="text-[var(--t2)]">{formatDate(session.startedAt)}</TableCell>
                 <TableCell className="text-[var(--t1)]">{session.itemCount}</TableCell>

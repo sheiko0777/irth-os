@@ -18,3 +18,9 @@ pnpm-debug.log*
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Analysis artifacts (graphify / CodeFlow) and stale nested clone
+graphify-out/
+codeflow-*
+hazy-spinning-blum.md
+/irth-os/

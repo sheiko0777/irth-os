@@ -23,14 +23,7 @@ interface EtaClientProps {
     invoices: EtaInvoice[];
 }
 
-const STATUS_COLORS: Record<string, string> = {
-    pending: 'bg-[var(--gold)] text-black',
-    submitted: 'bg-[var(--emerald)] text-white',
-    valid: 'bg-[var(--emerald)] text-white',
-    rejected: 'bg-[var(--crimson)] text-white',
-    cancelled: 'bg-[var(--rim1)] text-[var(--t2)]',
-    error: 'bg-[var(--crimson)] text-white',
-};
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 const TAB_OPTIONS = [
     { label: 'الكل', value: 'all' },
@@ -158,9 +151,7 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex flex-col gap-1 items-start">
-                                                <Badge className={`${STATUS_COLORS[inv.status] ?? 'bg-[var(--rim1)]'}`}>
-                                                    {inv.status}
-                                                </Badge>
+                                                <StatusBadge status={inv.status} domain="eta" />
                                                 {inv.status === 'error' && inv.errorMessage && (
                                                     <span className="text-[10px] text-[var(--crimson)] font-cairo">
                                                         {inv.errorMessage}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { trpc } from '@/lib/trpc';
 
 export type GiftCard = {
   id: string;
@@ -24,19 +24,7 @@ export type GiftCardSummary = {
   activeBalance: number;
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  active: 'نشطة',
-  redeemed: 'مستخدمة',
-  expired: 'منتهية',
-  cancelled: 'ملغاة',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  active: 'var(--emerald)',
-  redeemed: 'var(--t2)',
-  expired: 'var(--t3)',
-  cancelled: 'var(--crimson)',
-};
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -185,15 +173,7 @@ export default function GiftCardsClient({
                     {card.recipientName || '—'}
                   </td>
                   <td className='px-4 py-3'>
-                    <span
-                      className='inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium'
-                      style={{
-                        color: STATUS_COLORS[card.status],
-                        background: STATUS_COLORS[card.status] + '22',
-                      }}
-                    >
-                      {STATUS_LABELS[card.status] ?? card.status}
-                    </span>
+                    <StatusBadge status={card.status} domain="giftCard" />
                   </td>
                   <td className='px-4 py-3 text-[var(--t2)] text-xs'>
                     {new Date(card.createdAt).toLocaleDateString('ar-EG')}

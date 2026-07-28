@@ -1,6 +1,6 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
-import { courierShipments, courierRemittances } from '@irth/db';
+import { courierShipments, courierRemittances, withAudit } from '@irth/db';
 import { eq, and, sql, sum, inArray, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
@@ -28,20 +28,33 @@ export const courierRouter = router({
         return { data, error: null, meta: null };
       }),
 
-    markRemitted: protectedProcedure
+    markRemitted: adminProcedure
       .input(z.object({
         shipmentId: z.string().uuid(),
         remittanceId: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const [updated] = await ctx.db
-          .update(courierShipments)
-          .set({ codRemitted: true, remittanceId: input.remittanceId })
-          .where(and(
-            eq(courierShipments.id, input.shipmentId),
-            eq(courierShipments.orgId, ctx.orgId)
-          ))
-          .returning();
+        const updated = await withAudit(
+          ctx.db,
+          async () => {
+            const [row] = await ctx.db
+              .update(courierShipments)
+              .set({ codRemitted: true, remittanceId: input.remittanceId })
+              .where(and(
+                eq(courierShipments.id, input.shipmentId),
+                eq(courierShipments.orgId, ctx.orgId)
+              ))
+              .returning();
+            return row;
+          },
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'MARK_SHIPMENT_REMITTED',
+            tableName: 'courier_shipments',
+            changes: input,
+          }
+        );
 
         return { data: updated, error: null, meta: null };
       }),
@@ -66,7 +79,7 @@ export const courierRouter = router({
         return { data, error: null, meta: null };
       }),
 
-    create: protectedProcedure
+    create: adminProcedure
       .input(z.object({
         courier: z.string(),
         reference: z.string(),
@@ -75,23 +88,36 @@ export const courierRouter = router({
         expectedDate: z.date().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const [newRemittance] = await ctx.db
-          .insert(courierRemittances)
-          .values({
+        const newRemittance = await withAudit(
+          ctx.db,
+          async () => {
+            const [row] = await ctx.db
+              .insert(courierRemittances)
+              .values({
+                orgId: ctx.orgId,
+                courier: input.courier,
+                remittanceReference: input.reference,
+                amount: input.amount,
+                shipmentCount: input.shipmentCount,
+                expectedDate: input.expectedDate,
+                status: 'pending',
+              })
+              .returning();
+            return row;
+          },
+          {
             orgId: ctx.orgId,
-            courier: input.courier,
-            remittanceReference: input.reference,
-            amount: input.amount,
-            shipmentCount: input.shipmentCount,
-            expectedDate: input.expectedDate,
-            status: 'pending',
-          })
-          .returning();
+            userId: ctx.userId,
+            action: 'CREATE_REMITTANCE',
+            tableName: 'courier_remittances',
+            changes: input as unknown as Record<string, unknown>,
+          }
+        );
 
         return { data: newRemittance, error: null, meta: null };
       }),
 
-    reconcile: protectedProcedure
+    reconcile: adminProcedure
       .input(z.object({
         remittanceId: z.string().uuid(),
       }))
@@ -108,11 +134,24 @@ export const courierRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Remittance not found' });
         }
 
-        const [updatedRemittance] = await ctx.db
-          .update(courierRemittances)
-          .set({ status: 'reconciled', receivedDate: new Date() })
-          .where(eq(courierRemittances.id, remittance.id))
-          .returning();
+        const updatedRemittance = await withAudit(
+          ctx.db,
+          async () => {
+            const [row] = await ctx.db
+              .update(courierRemittances)
+              .set({ status: 'reconciled', receivedDate: new Date() })
+              .where(eq(courierRemittances.id, remittance.id))
+              .returning();
+            return row;
+          },
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'RECONCILE_REMITTANCE',
+            tableName: 'courier_remittances',
+            changes: { remittanceId: input.remittanceId },
+          }
+        );
 
         await ctx.db
           .update(courierShipments)

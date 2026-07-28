@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum, notifications } from '@irth/db';
 import { eq, and, desc, sql, count, ilike, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
@@ -110,7 +110,7 @@ export const ordersRouter = router({
             };
         }),
 
-    updateStatus: protectedProcedure
+    updateStatus: adminProcedure
         .input(z.object({
             id: z.string().uuid(),
             status: statusEnum

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
 import { eq, and, desc, asc, lte } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -65,7 +65,7 @@ export const inventoryRouter = router({
       return { data: movements, error: null, meta: null };
     }),
 
-  adjust: protectedProcedure
+  adjust: adminProcedure
     .input(z.object({
       itemId: z.string().uuid(),
       type: z.enum(['in', 'out', 'adjustment']),
@@ -80,7 +80,6 @@ export const inventoryRouter = router({
         note: z.string().optional(),
       }).parse(input);
 
-      // @ts-expect-error Drizzle transaction generic type inference limitation
       return await ctx.db.transaction(async (tx) => {
         // Fetch item to ensure it belongs to org
         const [item] = await tx
@@ -107,10 +106,6 @@ export const inventoryRouter = router({
           newQuantity = parsedInput.quantity;
         }
 
-        // We use withAudit here although it is mostly for standalone ops, 
-        // since we are in a transaction we can just insert the audit log directly or use withAudit 
-        // passing the tx as dbInstance.
-        
         await withAudit(
             tx,
             async () => {

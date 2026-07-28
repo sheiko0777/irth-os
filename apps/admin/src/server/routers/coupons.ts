@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { db, coupons, withAudit } from '@irth/db';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, or, isNull, lt, gt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const couponsRouter = router({
@@ -44,7 +44,7 @@ export const couponsRouter = router({
             return result[0];
         }),
 
-    create: protectedProcedure
+    create: adminProcedure
         .input(z.object({
             code: z.string().min(1).transform(s => s.toUpperCase()),
             type: z.enum(['percentage', 'fixed', 'free_shipping']),
@@ -78,7 +78,7 @@ export const couponsRouter = router({
             });
         }),
 
-    update: protectedProcedure
+    update: adminProcedure
         .input(z.object({
             id: z.string().uuid(),
             code: z.string().min(1).transform(s => s.toUpperCase()).optional(),
@@ -114,7 +114,7 @@ export const couponsRouter = router({
             });
         }),
 
-    toggleActive: protectedProcedure
+    toggleActive: adminProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             return withAudit(db, async () => {
@@ -141,7 +141,7 @@ export const couponsRouter = router({
             });
         }),
 
-    delete: protectedProcedure
+    delete: ownerProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             return withAudit(db, async () => {
@@ -214,29 +214,50 @@ export const couponsRouter = router({
             };
         }),
 
-    apply: protectedProcedure
+    // Named `redeem` — `apply` is a reserved word in tRPC v11 router({})
+    // and made the whole appRouter throw at import.
+    redeem: adminProcedure
         .input(z.object({
             couponId: z.string().uuid(),
             orderId: z.string().uuid().optional(), // For auditing if needed
         }))
         .mutation(async ({ ctx, input }) => {
             return withAudit(db, async () => {
-                const coupon = await db.select()
-                    .from(coupons)
-                    .where(and(eq(coupons.id, input.couponId), eq(coupons.orgId, ctx.orgId)))
-                    .limit(1);
-
-                if (!coupon.length) {
-                    throw new TRPCError({ code: 'NOT_FOUND', message: 'Coupon not found' });
-                }
-
+                // `validate` is a separate query, so its checks are stale by the
+                // time this runs — and this mutation is callable without it.
+                // Re-assert redeemability inside the UPDATE's WHERE so the check
+                // and the increment cannot be split: without this an expired,
+                // deactivated, or fully-used coupon still increments and reports
+                // success, and concurrent redemptions blow past maxUses.
                 const result = await db.update(coupons)
                     .set({
                         usedCount: sql`used_count + 1`,
                         updatedAt: new Date()
                     })
-                    .where(and(eq(coupons.id, input.couponId), eq(coupons.orgId, ctx.orgId)))
+                    .where(and(
+                        eq(coupons.id, input.couponId),
+                        eq(coupons.orgId, ctx.orgId),
+                        eq(coupons.isActive, true),
+                        or(isNull(coupons.expiresAt), gt(coupons.expiresAt, new Date())),
+                        or(isNull(coupons.maxUses), lt(coupons.usedCount, coupons.maxUses)),
+                    ))
                     .returning();
+
+                if (!result.length) {
+                    // Distinguish "no such coupon" from "not redeemable" only
+                    // after the atomic attempt has already failed.
+                    const [existing] = await db.select({ id: coupons.id })
+                        .from(coupons)
+                        .where(and(eq(coupons.id, input.couponId), eq(coupons.orgId, ctx.orgId)))
+                        .limit(1);
+                    if (!existing) {
+                        throw new TRPCError({ code: 'NOT_FOUND', message: 'Coupon not found' });
+                    }
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'Coupon is not redeemable (inactive, expired, or usage limit reached)',
+                    });
+                }
 
                 return result[0];
             }, {

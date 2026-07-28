@@ -1,10 +1,10 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { orders, customers, inventoryItems, productVariants, products, orderStatusEnum, withAudit } from '@irth/db';
 import { inArray, and, eq, gte, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const bulkRouter = router({
-    bulkUpdateOrderStatus: protectedProcedure
+    bulkUpdateOrderStatus: adminProcedure
         .input(z.object({
             ids: z.array(z.string().uuid()).min(1).max(100),
             status: z.enum(orderStatusEnum.enumValues),

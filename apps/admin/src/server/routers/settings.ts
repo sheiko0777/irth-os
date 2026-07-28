@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
+import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
-import { orgSettings } from '@irth/db';
+import { orgSettings, withAudit } from '@irth/db';
 import { DEFAULT_SETTINGS, SENSITIVE_KEYS } from '../../lib/settings';
 
 const MASK_STRING = '••••••••';
@@ -26,7 +26,7 @@ export const settingsRouter = router({
     return { data: settingsMap, error: null, meta: null };
   }),
 
-  set: protectedProcedure
+  set: adminProcedure
     .input(z.object({
       key: z.string(),
       value: z.string()
@@ -34,27 +34,44 @@ export const settingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const parsedInput = z.object({ key: z.string(), value: z.string() }).parse(input);
 
-      await ctx.db
-        .insert(orgSettings)
-        .values({
+      await withAudit(
+        ctx.db,
+        async () => {
+          await ctx.db
+            .insert(orgSettings)
+            .values({
+              orgId: ctx.orgId,
+              key: parsedInput.key,
+              value: parsedInput.value,
+              updatedBy: ctx.userId,
+            })
+            .onConflictDoUpdate({
+              target: [orgSettings.orgId, orgSettings.key],
+              set: {
+                value: parsedInput.value,
+                updatedBy: ctx.userId,
+                updatedAt: new Date(),
+              },
+            });
+          return {};
+        },
+        {
           orgId: ctx.orgId,
-          key: parsedInput.key,
-          value: parsedInput.value,
-          updatedBy: ctx.userId,
-        })
-        .onConflictDoUpdate({
-          target: [orgSettings.orgId, orgSettings.key],
-          set: {
-            value: parsedInput.value,
-            updatedBy: ctx.userId,
-            updatedAt: new Date(),
+          userId: ctx.userId,
+          action: 'UPDATE_SETTING',
+          tableName: 'org_settings',
+          // Never write secret values into the audit trail.
+          changes: {
+            key: parsedInput.key,
+            value: (SENSITIVE_KEYS as readonly string[]).includes(parsedInput.key) ? MASK_STRING : parsedInput.value,
           },
-        });
+        }
+      );
 
       return { data: { success: true }, error: null, meta: null };
     }),
 
-  setMany: protectedProcedure
+  setMany: adminProcedure
     .input(z.array(z.object({
       key: z.string(),
       value: z.string()
@@ -62,6 +79,7 @@ export const settingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const parsedInput = z.array(z.object({ key: z.string(), value: z.string() })).parse(input);
 
+      const writtenKeys: string[] = [];
       for (const item of parsedInput) {
         if ((SENSITIVE_KEYS as readonly string[]).includes(item.key) && item.value === MASK_STRING) {
           continue;
@@ -83,6 +101,22 @@ export const settingsRouter = router({
               updatedAt: new Date(),
             },
           });
+        writtenKeys.push(item.key);
+      }
+
+      if (writtenKeys.length > 0) {
+        await withAudit(
+          ctx.db,
+          async () => ({}),
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'UPDATE_SETTINGS',
+            tableName: 'org_settings',
+            // Key names only — values may contain secrets.
+            changes: { keys: writtenKeys },
+          }
+        );
       }
 
       return { data: { success: true }, error: null, meta: null };

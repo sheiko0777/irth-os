@@ -41,25 +41,7 @@ interface ReturnsClientProps {
   locale: string;
 }
 
-const badgeColors: Record<string, string> = {
-  requested: 'var(--gold)',
-  approved: 'var(--emerald)',
-  rejected: 'var(--crimson)',
-  received: 'var(--gold)',
-  restocked: 'var(--emerald)',
-  refunded: 'var(--emerald)',
-  exchanged: 'var(--emerald)',
-};
-
-const statusLabels: Record<string, string> = {
-  requested: 'معلقة',
-  approved: 'موافق',
-  rejected: 'مرفوض',
-  received: 'مستلم',
-  restocked: 'مُعاد تخزين',
-  refunded: 'مسترد',
-  exchanged: 'مستبدل'
-};
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 const tabOptions = [
   { value: 'all', label: 'الكل' },
@@ -213,15 +195,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
                       <td className="px-6 py-4 text-[var(--t2)] font-mono">{ret.orderId.substring(0, 8)}...</td>
                       <td className="px-6 py-4 text-[var(--t1)] capitalize">{ret.reason.replace('_', ' ')}</td>
                       <td className="px-6 py-4">
-                        <span
-                          className="px-2 py-1 rounded-full text-xs font-medium border text-black"
-                          style={{
-                            backgroundColor: badgeColors[ret.status] || 'var(--rim1)',
-                            borderColor: 'rgba(0,0,0,0.1)'
-                          }}
-                        >
-                          {statusLabels[ret.status] || ret.status}
-                        </span>
+                        <StatusBadge status={ret.status} domain="return" />
                       </td>
                       <td className="px-6 py-4 text-[var(--t2)]">
                         {ret.createdAt ? new Date(ret.createdAt).toLocaleDateString('ar-EG') : '-'}

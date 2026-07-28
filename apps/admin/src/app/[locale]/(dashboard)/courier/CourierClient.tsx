@@ -46,20 +46,7 @@ type Summary = {
     activeRemittances: number;
 };
 
-const STATUS_COLORS: Record<string, string> = {
-    delivered: 'bg-[var(--emerald)] text-white',
-    returned: 'bg-[var(--crimson)] text-white',
-    in_transit: 'bg-[var(--gold)] text-black',
-    picked_up: 'bg-[var(--gold)] text-black',
-    created: 'bg-[var(--rim1)] text-[var(--t2)]',
-    failed: 'bg-[var(--crimson)] text-white',
-};
-
-const REMITTANCE_STATUS_COLORS: Record<string, string> = {
-    pending: 'bg-[var(--gold)] text-black',
-    received: 'bg-[var(--gold)] text-black',
-    reconciled: 'bg-[var(--emerald)] text-white',
-};
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 interface Props {
     summary: Summary;
@@ -104,7 +91,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
     const handleBulkRemit = async () => {
         if (selectedShipmentIds.size === 0) return;
         try {
-            await markRemittedMutation.mutateAsync({ shipmentIds: Array.from(selectedShipmentIds) });
+            for (const sid of Array.from(selectedShipmentIds)) { await markRemittedMutation.mutateAsync({ shipmentId: sid, remittanceId: '' }); };
             toast.success(`تم تسجيل تسوية ${selectedShipmentIds.size} شحنة بنجاح`);
             setSelectedShipmentIds(new Set());
             handleInvalidate();
@@ -118,7 +105,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
         try {
             await createRemittanceMutation.mutateAsync({
                 courier: newRemCourier,
-                remittanceReference: newRemRef,
+                reference: newRemRef,
                 amount: newRemAmount,
                 shipmentCount: parseInt(newRemCount) || 0,
                 expectedDate: newRemExpectedDate ? new Date(newRemExpectedDate) : undefined,
@@ -138,7 +125,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
 
     const handleReconcile = async (id: string) => {
         try {
-            await reconcileMutation.mutateAsync({ id, receivedDate: new Date().toISOString() });
+            await reconcileMutation.mutateAsync({ remittanceId: id });
             toast.success('تمت المطابقة بنجاح');
             handleInvalidate();
         } catch (error) {
@@ -248,9 +235,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                                                 </TableCell>
                                                 <TableCell className="text-sm text-[var(--t1)] capitalize">{ship.courier}</TableCell>
                                                 <TableCell>
-                                                    <Badge className={STATUS_COLORS[ship.courierStatus] ?? 'bg-[var(--rim1)]'}>
-                                                        {ship.courierStatus}
-                                                    </Badge>
+                                                    <StatusBadge status={ship.courierStatus} domain="courierShipment" />
                                                 </TableCell>
                                                 <TableCell className="text-sm text-[var(--t1)]">
                                                     {ship.codAmount ?? '—'}
@@ -389,17 +374,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                                                     : '—'}
                                             </TableCell>
                                             <TableCell>
-                                                <Badge
-                                                    className={`${REMITTANCE_STATUS_COLORS[rem.status] ?? 'bg-[var(--rim1)]'} border-0`}
-                                                >
-                                                    {rem.status === 'reconciled'
-                                                        ? 'تمت التسوية'
-                                                        : rem.status === 'pending'
-                                                          ? 'معلق'
-                                                          : rem.status === 'received'
-                                                            ? 'مستلم'
-                                                            : rem.status}
-                                                </Badge>
+                                                <StatusBadge status={rem.status} domain="remittance" />
                                             </TableCell>
                                             <TableCell>
                                                 {(rem.status === 'pending' || rem.status === 'received') && (

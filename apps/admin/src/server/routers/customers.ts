@@ -1,6 +1,6 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
-import { eq, and, desc, sql, count, ilike, or } from 'drizzle-orm';
+import { eq, and, desc, sql, count, ilike, or, gte } from 'drizzle-orm';
 import { customers, loyaltyTransactions, withAudit } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 
@@ -70,7 +70,7 @@ export const customersRouter = router({
       return { data: { ...customer, transactions }, error: null, meta: null };
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         name: z.string().min(1),
@@ -108,7 +108,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  update: protectedProcedure
+  update: adminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -155,7 +155,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  addPoints: protectedProcedure
+  addPoints: adminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -164,28 +164,27 @@ export const customersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const customer = await ctx.db.query.customers.findFirst({
-        where: and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)),
-      });
-
-      if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
-
-      const newBalance = (customer.loyaltyPoints ?? 0) + input.points;
-
-      // @ts-expect-error Drizzle transaction generic
+      // Increment in SQL rather than read-then-write-absolute: two concurrent
+      // grants both read the same starting balance and the second overwrites
+      // the first, silently dropping points.
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
           .update(customers)
-          .set({ loyaltyPoints: newBalance, updatedAt: new Date() })
+          .set({
+            loyaltyPoints: sql`${customers.loyaltyPoints} + ${input.points}`,
+            updatedAt: new Date(),
+          })
           .where(and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)))
           .returning();
+
+        if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
 
         await tx.insert(loyaltyTransactions).values({
           orgId: ctx.orgId,
           customerId: input.id,
           type: 'earn',
           points: input.points,
-          balanceAfter: newBalance,
+          balanceAfter: updated.loyaltyPoints,
           note: input.note,
         });
 
@@ -195,7 +194,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  redeemPoints: protectedProcedure
+  redeemPoints: adminProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -204,36 +203,43 @@ export const customersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const customer = await ctx.db.query.customers.findFirst({
-        where: and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)),
-      });
-
-      if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
-
-      const currentBalance = customer.loyaltyPoints ?? 0;
-      if (currentBalance < input.points) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Insufficient loyalty points',
-        });
-      }
-
-      const newBalance = currentBalance - input.points;
-
-      // @ts-expect-error Drizzle transaction generic
       const result = await ctx.db.transaction(async (tx) => {
+        // The sufficient-balance check is part of the UPDATE's WHERE clause, so
+        // check and decrement are one atomic step. Checking first and updating
+        // after lets two concurrent redemptions both pass the check and spend
+        // the same points twice, driving the balance negative.
         const [updated] = await tx
           .update(customers)
-          .set({ loyaltyPoints: newBalance, updatedAt: new Date() })
-          .where(and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)))
+          .set({
+            loyaltyPoints: sql`${customers.loyaltyPoints} - ${input.points}`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(customers.id, input.id),
+            eq(customers.orgId, ctx.orgId),
+            gte(customers.loyaltyPoints, input.points),
+          ))
           .returning();
+
+        if (!updated) {
+          // Either no such customer, or the balance was insufficient. Resolve
+          // which, for an accurate error, now that no write can be lost.
+          const existing = await tx.query.customers.findFirst({
+            where: and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)),
+          });
+          if (!existing) throw new TRPCError({ code: 'NOT_FOUND' });
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Insufficient loyalty points',
+          });
+        }
 
         await tx.insert(loyaltyTransactions).values({
           orgId: ctx.orgId,
           customerId: input.id,
           type: 'redeem',
           points: -input.points,
-          balanceAfter: newBalance,
+          balanceAfter: updated.loyaltyPoints,
           note: input.note,
         });
 
@@ -243,7 +249,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  linkOrder: protectedProcedure
+  linkOrder: adminProcedure
     .input(
       z.object({
         customerId: z.string().uuid(),
@@ -264,7 +270,6 @@ export const customersRouter = router({
       const newTotal = (customer.totalOrders ?? 0) + 1;
       const newSpent = (parseFloat(customer.totalSpent ?? '0') + input.orderAmount).toFixed(2);
 
-      // @ts-expect-error Drizzle transaction generic
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
           .update(customers)

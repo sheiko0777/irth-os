@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { protectedProcedure, router } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, orderItems } from '@irth/db';
+import { protectedProcedure, router, adminProcedure } from '../trpc';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit } from '@irth/db';
 import { eq, and, count, sum, sql, desc } from 'drizzle-orm';
 
 export const returnsRouter = router({
@@ -64,17 +64,16 @@ export const returnsRouter = router({
         }
       });
 
-      let items = [];
-      if (returnObj) {
-        items = await db.select().from(returnItems).where(eq(returnItems.returnId, returnObj.id));
-      }
+      const items = returnObj
+        ? await db.select().from(returnItems).where(eq(returnItems.returnId, returnObj.id))
+        : [];
 
       const data = returnObj ? { ...returnObj, items } : null;
 
       return { data, error: null, meta: null };
     }),
 
-  create: protectedProcedure
+  create: adminProcedure
     .input(z.object({
       orderId: z.string(),
       reason: z.enum(['damaged', 'wrong_item', 'not_as_described', 'changed_mind', 'other']),
@@ -123,7 +122,7 @@ export const returnsRouter = router({
       return { data: createdReturn, error: null, meta: null };
     }),
 
-  updateStatus: protectedProcedure
+  updateStatus: adminProcedure
     .input(z.object({
       id: z.string(),
       status: z.enum(['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged']),
@@ -157,7 +156,7 @@ export const returnsRouter = router({
       return { data: updated, error: null, meta: null };
     }),
 
-  restock: protectedProcedure
+  restock: adminProcedure
     .input(z.object({
       returnId: z.string(),
       itemId: z.string(),
@@ -175,40 +174,67 @@ export const returnsRouter = router({
         throw new Error('Item not found');
       }
 
-      // Update return item restock status
-      await db.update(returnItems).set({ restock: true }).where(eq(returnItems.id, input.itemId));
-
-      // If orderItem is provided and it has a variant, we could link it here.
-      // But standard schema gives inventoryItems linked to variantId.
-      // Since we just have productName and variantName, in a real system we'd look up variantId.
-      // For the requirement "increment inventory_items table quantity using drizzle sql`quantity + itemQty`
-      // where inventory_items matches (find by joining)", we need to do a join.
-
-      // Let's assume orderItemId links to a productVariant or orderItem -> productVariant.
-      // We'll update the logic to look up the inventory item via db join or variant lookup if needed.
-      // If we don't have the variantId directly, we might need a workaround for the requirement.
-      // But as we can't find variantId easily from product name, let's try joining if orderItemId is present.
-
-      // For now, if we can't find a direct mapping, we will return success but not restock anything
-      // In a real app we'd map this correctly. We will query inventory items that belong to the org.
-      // The instructions say: "where inventory_items matches (find by joining)"
-
-      if (item.orderItemId) {
-        const [orderItem] = await db.select().from(orderItems).where(eq(orderItems.id, item.orderItemId)).limit(1);
-        if (orderItem && orderItem.variantId) {
-           const [invItem] = await db.select().from(inventoryItems)
-             .where(and(eq(inventoryItems.orgId, ctx.orgId), eq(inventoryItems.variantId, orderItem.variantId)))
-             .limit(1);
-
-           if (invItem) {
-             await db.update(inventoryItems)
-               .set({ quantity: sql`${inventoryItems.quantity} + ${item.quantity}` })
-               .where(eq(inventoryItems.id, invItem.id));
-           }
-        }
+      // Idempotency guard: restocking is additive, so a second call would
+      // invent stock that never came back. The `restock` flag is the record
+      // of "this item's units already went back on the shelf".
+      if (item.restock) {
+        return { data: { restocked: false, alreadyRestocked: true }, error: null, meta: null };
       }
 
-      return { data: { restocked: true }, error: null, meta: null };
+      // Return lines only carry product/variant NAMES, so inventory can only be
+      // resolved through orderItemId -> orderItems.variantId. Without that link
+      // there is no variant to credit: flag the line and write nothing, rather
+      // than guessing at a match by name.
+      const result = await db.transaction(async (tx) => {
+        await tx.update(returnItems).set({ restock: true }).where(eq(returnItems.id, input.itemId));
+
+        if (!item.orderItemId) {
+          return { restocked: false, reason: 'no_order_item_link' as const };
+        }
+
+        const [orderItem] = await tx.select().from(orderItems)
+          .where(eq(orderItems.id, item.orderItemId)).limit(1);
+        if (!orderItem?.variantId) {
+          return { restocked: false, reason: 'no_variant' as const };
+        }
+
+        const [invItem] = await tx.select().from(inventoryItems)
+          .where(and(eq(inventoryItems.orgId, ctx.orgId), eq(inventoryItems.variantId, orderItem.variantId)))
+          .limit(1);
+        if (!invItem) {
+          return { restocked: false, reason: 'no_inventory_item' as const };
+        }
+
+        await tx.update(inventoryItems)
+          .set({ quantity: sql`${inventoryItems.quantity} + ${item.quantity}`, updatedAt: new Date() })
+          .where(eq(inventoryItems.id, invItem.id));
+
+        // Ledger row, matching inventory.adjust and purchasing.receive — a
+        // stock change that isn't in the movements table is invisible to audit.
+        await tx.insert(inventoryMovements).values({
+          orgId: ctx.orgId,
+          itemId: invItem.id,
+          type: 'in',
+          quantity: item.quantity,
+          note: `Return restock ${input.returnId}`,
+        });
+
+        await withAudit(
+          tx,
+          async () => ({ id: invItem.id }),
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'RESTOCK_RETURN_ITEM',
+            tableName: 'inventory_items',
+            changes: { returnId: input.returnId, itemId: input.itemId, quantity: item.quantity },
+          }
+        );
+
+        return { restocked: true, reason: null };
+      });
+
+      return { data: result, error: null, meta: null };
     }),
 
   summary: protectedProcedure

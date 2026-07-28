@@ -1,11 +1,5 @@
 import { serverCaller } from '@/server/caller';
-
-const TYPE_LABELS: Record<string, string> = {
-    order_status:    'تحديث طلب',
-    invite_accepted: 'قبول دعوة',
-    member_joined:   'عضو جديد',
-    system:          'نظام',
-};
+import { statusLabel } from '@/lib/statusMaps';
 
 export default async function NotificationsPage() {
     const caller = await serverCaller();
@@ -46,7 +40,7 @@ export default async function NotificationsPage() {
                             items.map((item) => (
                                 <tr key={item.id} className="hover:bg-gray-50/50">
                                     <td className="px-4 py-3 text-sm text-[var(--t2)]">
-                                        {TYPE_LABELS[item.type] ?? item.type}
+                                        {statusLabel('notificationType', item.type)}
                                     </td>
                                     <td className="px-4 py-3 text-sm font-medium text-[var(--t1)]">
                                         {item.title}
