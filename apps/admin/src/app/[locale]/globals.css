@@ -12,7 +12,9 @@
   --muted:#0e1622; --muted-foreground:#4e7090;
   --border:#1a2840; --input:#223050; --ring:#e09000; --radius:8px;
 }
-html { direction: rtl; }
+/* Direction comes from <html dir> in layout.tsx, which is locale-driven.
+   Hardcoding `direction: rtl` here overrode that attribute, so the English
+   locale still rendered right-to-left. */
 body { background:var(--ink); color:var(--t2); font-family:'IBM Plex Sans Arabic',sans-serif; line-height:1.75; -webkit-font-smoothing:antialiased; }
 h1,h2,h3,h4,h5,h6 { font-family:'Cairo',sans-serif; color:var(--t1); font-weight:700; }
 ::-webkit-scrollbar { width:3px; height:3px; }
