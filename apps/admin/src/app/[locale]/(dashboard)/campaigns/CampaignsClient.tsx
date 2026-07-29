@@ -116,7 +116,7 @@ export default function CampaignsClient({
         <button
           onClick={() => setIsCreateOpen(true)}
           className="px-4 py-2 rounded-lg font-semibold text-sm"
-          style={{ background: 'var(--gold)', color: '#0a0a0a' }}
+          style={{ background: 'var(--gold)', color: 'var(--void)' }}
         >
           + حملة جديدة
         </button>
@@ -168,7 +168,7 @@ export default function CampaignsClient({
                         onConfirm={() => sendMutation.mutate({ id: c.id })}>
                         <button
                           className="px-3 py-1 rounded text-xs font-semibold"
-                          style={{ background: 'var(--emerald)', color: '#fff' }}>
+                          style={{ background: 'var(--emerald)', color: 'var(--void)' }}>
                           إرسال
                         </button>
                       </ConfirmDialog>
@@ -255,7 +255,7 @@ export default function CampaignsClient({
               <button type="button" onClick={() => setIsCreateOpen(false)}
                 className="px-4 py-2 rounded-lg text-sm" style={{ color: 'var(--t2)' }}>إلغاء</button>
               <button type="submit" disabled={createMutation.isPending}
-                className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: 'var(--gold)', color: '#0a0a0a' }}>
+                className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: 'var(--gold)', color: 'var(--void)' }}>
                 {createMutation.isPending ? 'جاري الحفظ...' : 'إنشاء الحملة'}
               </button>
             </div>

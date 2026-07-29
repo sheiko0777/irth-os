@@ -47,7 +47,7 @@ export function KanbanCard({
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="group">
       <div className="absolute left-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <GripVertical size={16} className="text-gray-400" />
+        <GripVertical size={16} className="text-t3" />
       </div>
       <div className="flex flex-col gap-2">
         <div className="flex justify-between items-start">

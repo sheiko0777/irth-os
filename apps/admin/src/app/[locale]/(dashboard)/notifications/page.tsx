@@ -20,7 +20,7 @@ export default async function NotificationsPage() {
 
             <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
                 <table className="w-full text-right">
-                    <thead className="bg-gray-50 border-b border-[var(--rim1)]">
+                    <thead className="bg-raised border-b border-[var(--rim1)]">
                         <tr>
                             <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">النوع</th>
                             <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">العنوان</th>
@@ -38,7 +38,7 @@ export default async function NotificationsPage() {
                             </tr>
                         ) : (
                             items.map((item) => (
-                                <tr key={item.id} className="hover:bg-gray-50/50">
+                                <tr key={item.id} className="hover:bg-raised/50">
                                     <td className="px-4 py-3 text-sm text-[var(--t2)]">
                                         {statusLabel('notificationType', item.type)}
                                     </td>
@@ -56,8 +56,8 @@ export default async function NotificationsPage() {
                                     <td className="px-4 py-3 text-sm">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                             item.read
-                                                ? 'bg-gray-100 text-gray-600'
-                                                : 'bg-amber-100 text-amber-800'
+                                                ? 'bg-rim1 text-t3'
+                                                : 'bg-amber/15 text-amber'
                                         }`}>
                                             {item.read ? 'مقروء' : 'جديد'}
                                         </span>

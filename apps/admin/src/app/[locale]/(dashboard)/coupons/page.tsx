@@ -26,7 +26,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { pa
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-[var(--t1)]">الكوبونات والخصومات</h1>
                 <CreateCouponDialog>
-                    <Button className="bg-[var(--emerald)] hover:bg-emerald-600 text-white">إضافة كوبون جديد</Button>
+                    <Button className="bg-[var(--emerald)] hover:bg-emerald/80 text-white">إضافة كوبون جديد</Button>
                 </CreateCouponDialog>
             </div>
 
@@ -54,7 +54,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { pa
             <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-right">
-                        <thead className="bg-gray-50 border-b border-[var(--rim1)]">
+                        <thead className="bg-raised border-b border-[var(--rim1)]">
                             <tr>
                                 <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">الكود</th>
                                 <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">النوع</th>
@@ -73,7 +73,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { pa
                                 </tr>
                             ) : (
                                 data.items.map((coupon) => (
-                                    <tr key={coupon.id} className="hover:bg-gray-50/50">
+                                    <tr key={coupon.id} className="hover:bg-raised/50">
                                         <td className="px-4 py-3 text-sm font-medium font-mono text-[var(--t1)]" dir="ltr">{coupon.code}</td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]">{typeLabels[coupon.type]}</td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]" dir="ltr">
@@ -89,7 +89,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { pa
                                             {coupon.expiresAt ? format(new Date(coupon.expiresAt), 'yyyy-MM-dd') : '-'}
                                         </td>
                                         <td className="px-4 py-3 text-sm">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${coupon.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${coupon.isActive ? 'bg-emerald/15 text-emerald' : 'bg-crimson/15 text-crimson'}`}>
                                                 {coupon.isActive ? 'نشط' : 'معطل'}
                                             </span>
                                         </td>

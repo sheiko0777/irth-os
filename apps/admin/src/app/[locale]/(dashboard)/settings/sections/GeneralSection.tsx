@@ -78,7 +78,7 @@ export function GeneralSection({ settings, isPending, messages, handleInputChang
           {t("actions.save")}
         </Button>
         {messages['general'] && (
-          <span className={`text-sm ${messages['general'].type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`text-sm ${messages['general'].type === 'success' ? 'text-emerald' : 'text-crimson'}`}>
             {messages['general'].text}
           </span>
         )}

@@ -75,7 +75,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
           <button
             onClick={onClose}
             className="w-full py-2 rounded text-sm font-bold"
-            style={{ background: 'var(--gold)', color: '#fff' }}
+            style={{ background: 'var(--gold)', color: 'var(--void)' }}
           >
             إغلاق
           </button>
@@ -170,7 +170,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
             type="submit"
             disabled={creating}
             className="w-full py-2.5 rounded text-sm font-bold"
-            style={{ background: 'var(--gold)', color: '#fff', opacity: creating ? 0.6 : 1 }}
+            style={{ background: 'var(--gold)', color: 'var(--void)', opacity: creating ? 0.6 : 1 }}
           >
             {creating ? 'جارٍ الإنشاء...' : 'إنشاء الحساب وإرسال دعوة'}
           </button>

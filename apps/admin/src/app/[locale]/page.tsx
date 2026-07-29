@@ -6,7 +6,7 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-24">
       <h1 className="text-4xl font-bold mb-8">{t('title')}</h1>
-      <Link href="/login" className="text-blue-500 hover:underline">
+      <Link href="/login" className="text-azure hover:underline">
         Login
       </Link>
     </div>

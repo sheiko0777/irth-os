@@ -68,7 +68,7 @@ export function CreateProductForm() {
                     <div className="space-y-2">
                         <label className="text-sm font-medium">{t("name")}</label>
                         <Input {...register("name")} />
-                        {errors.name && <span className="text-sm text-red-500">{errors.name.message}</span>}
+                        {errors.name && <span className="text-sm text-crimson">{errors.name.message}</span>}
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">{t("description")}</label>
@@ -94,17 +94,17 @@ export function CreateProductForm() {
                             <div className="flex-1 space-y-2">
                                 <label className="text-xs">{t("sku")}</label>
                                 <Input {...register(`variants.${index}.sku` as const)} />
-                                {errors.variants?.[index]?.sku && <span className="text-xs text-red-500">{errors.variants[index]?.sku?.message}</span>}
+                                {errors.variants?.[index]?.sku && <span className="text-xs text-crimson">{errors.variants[index]?.sku?.message}</span>}
                             </div>
                             <div className="flex-1 space-y-2">
                                 <label className="text-xs">{t("price")}</label>
                                 <Input type="number" step="0.01" {...register(`variants.${index}.price` as const)} />
-                                {errors.variants?.[index]?.price && <span className="text-xs text-red-500">{errors.variants[index]?.price?.message}</span>}
+                                {errors.variants?.[index]?.price && <span className="text-xs text-crimson">{errors.variants[index]?.price?.message}</span>}
                             </div>
                             <div className="flex-1 space-y-2">
                                 <label className="text-xs">{t("stock")}</label>
                                 <Input type="number" {...register(`variants.${index}.stock` as const)} />
-                                {errors.variants?.[index]?.stock && <span className="text-xs text-red-500">{errors.variants[index]?.stock?.message}</span>}
+                                {errors.variants?.[index]?.stock && <span className="text-xs text-crimson">{errors.variants[index]?.stock?.message}</span>}
                             </div>
                             <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}>
                                 X

@@ -64,10 +64,10 @@ export function InviteForm({ orgId }: { orgId: string }) {
         {status === "loading" ? "جاري الإرسال..." : t("invite")}
       </Button>
       {status === "success" && (
-        <p className="text-sm text-green-600">{t("inviteSuccess")}</p>
+        <p className="text-sm text-emerald">{t("inviteSuccess")}</p>
       )}
       {status === "error" && (
-        <p className="text-sm text-red-600">حدث خطأ</p>
+        <p className="text-sm text-crimson">حدث خطأ</p>
       )}
     </form>
   );

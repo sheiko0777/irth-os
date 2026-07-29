@@ -112,7 +112,7 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
           <p style={{ fontSize: '13px', color: 'var(--t2)' }}>تجميع العملاء في مجموعات للحملات والتسويق المستهدف</p>
         </div>
         <button
-          className="bg-[var(--gold)] text-[#111] border-none rounded-lg px-[18px] py-2 text-[13px] font-semibold cursor-pointer"
+          className="bg-[var(--gold)] text-void border-none rounded-lg px-[18px] py-2 text-[13px] font-semibold cursor-pointer"
           onClick={() => setShowCreate(true)}
         >
           + شريحة جديدة

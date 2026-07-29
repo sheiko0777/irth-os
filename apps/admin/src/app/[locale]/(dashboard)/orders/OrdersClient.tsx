@@ -58,7 +58,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
             <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table key={key} className="w-full text-right">
-                        <thead className="bg-gray-50 border-b border-[var(--rim1)]">
+                        <thead className="bg-raised border-b border-[var(--rim1)]">
                             <tr>
                                 <th className="px-4 py-3 w-10">
                                     <input
@@ -85,7 +85,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
                                 </tr>
                             ) : (
                                 orders.map((order) => (
-                                    <tr key={order.id} className="hover:bg-gray-50/50">
+                                    <tr key={order.id} className="hover:bg-raised/50">
                                         <td className="px-4 py-3">
                                             <input
                                                 type="checkbox"

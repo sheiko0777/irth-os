@@ -1,4 +1,26 @@
 @import 'tailwindcss';
+
+/* Design tokens registered with Tailwind v4.
+   This is what makes `bg-surface` / `text-t2` / `border-rim1` work instead of
+   the `bg-[var(--surface)]` arbitrary-value syntax used across the app. Values
+   live here once; the :root block below re-exports the same names for the
+   inline style={{}} call sites that still read var(--x) directly.
+   Changing a colour here changes it everywhere — that is the whole point. */
+@theme {
+  --color-void:#020406;   --color-ink:#060a10;    --color-surface:#0e1622;
+  --color-card:#131e2e;   --color-raised:#182436;
+  --color-rim1:#1a2840;   --color-rim2:#223050;   --color-rim3:#2c3e66;
+  --color-t1:#f0f6ff;     --color-t2:#93b0d0;     --color-t3:#4e7090;  --color-t4:#263a52;
+  --color-gold:#e09000;   --color-gold2:#f5a800;  --color-gold3:#ffc340;
+  --color-emerald:#00c478; --color-crimson:#e83838;
+  --color-azure:#2e8fff;  --color-amber:#f5a500;
+
+  --font-sans:'IBM Plex Sans Arabic', sans-serif;
+  --font-display:'Cairo', sans-serif;
+
+  --radius-token:8px;
+}
+
 :root {
   --void:#020406; --ink:#060a10; --surface:#0e1622; --card-bg:#131e2e; --raised:#182436;
   --rim1:#1a2840; --rim2:#223050; --rim3:#2c3e66;

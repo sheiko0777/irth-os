@@ -61,14 +61,14 @@ export function EditProductForm({ product }: { product: Product }) {
                     <div className="space-y-2">
                         <label className="text-sm font-medium">{t("name")}</label>
                         <Input {...register("name")} />
-                        {errors.name && <span className="text-sm text-red-500">{errors.name.message}</span>}
+                        {errors.name && <span className="text-sm text-crimson">{errors.name.message}</span>}
                     </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">{t("description")}</label>
                         <Input {...register("description")} />
                     </div>
                     <div className="flex items-center space-x-2 space-x-reverse">
-                        <input type="checkbox" id="isActive" {...register("isActive")} className="w-4 h-4 rounded border-gray-300" />
+                        <input type="checkbox" id="isActive" {...register("isActive")} className="w-4 h-4 rounded border-rim1" />
                         <label htmlFor="isActive" className="text-sm font-medium leading-none">{t("isActive")}</label>
                     </div>
                 </CardContent>

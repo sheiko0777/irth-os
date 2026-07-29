@@ -144,7 +144,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <DialogFooter className="sm:justify-start">
-                        <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto bg-[var(--emerald)] hover:bg-emerald-600">
+                        <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto bg-[var(--emerald)] hover:bg-emerald/80">
                             {createMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
                         </Button>
                     </DialogFooter>

@@ -99,7 +99,7 @@ export function NotificationPanel({ open, onClose }: Props) {
                                 <div
                                     key={item.id}
                                     onClick={() => handleMarkRead(item.id)}
-                                    className={`px-4 py-3 cursor-pointer hover:bg-gray-50/50 transition-colors ${isRead ? 'opacity-60' : ''}`}
+                                    className={`px-4 py-3 cursor-pointer hover:bg-raised/50 transition-colors ${isRead ? 'opacity-60' : ''}`}
                                 >
                                     <div className="flex items-start gap-2">
                                         <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${!isRead ? 'bg-[var(--gold)]' : ''}`} />

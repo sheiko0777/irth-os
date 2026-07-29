@@ -87,7 +87,7 @@ export function SKUNumberingSection({ settings, isPending, messages, handleInput
           {t("actions.save")}
         </Button>
         {messages['product'] && (
-          <span className={`text-sm ${messages['product'].type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`text-sm ${messages['product'].type === 'success' ? 'text-emerald' : 'text-crimson'}`}>
             {messages['product'].text}
           </span>
         )}

@@ -107,7 +107,7 @@ export function IntegrationsSection({ settings, isPending, messages, handleInput
           {t("actions.save")}
         </Button>
         {messages['integrations'] && (
-          <span className={`text-sm ${messages['integrations'].type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`text-sm ${messages['integrations'].type === 'success' ? 'text-emerald' : 'text-crimson'}`}>
             {messages['integrations'].text}
           </span>
         )}

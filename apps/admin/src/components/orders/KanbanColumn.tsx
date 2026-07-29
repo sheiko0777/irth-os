@@ -37,7 +37,7 @@ export function KanbanColumn({
         flexDirection: 'column',
       }}
     >
-      <div className="p-3 border-b border-gray-200 flex items-center justify-between">
+      <div className="p-3 border-b border-rim1 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div
             style={{ backgroundColor: color }}
@@ -45,7 +45,7 @@ export function KanbanColumn({
           />
           <h3 className="font-semibold text-sm">{label}</h3>
         </div>
-        <span className="bg-gray-200 text-gray-700 text-xs py-1 px-2 rounded-full font-medium">
+        <span className="bg-raised text-t2 text-xs py-1 px-2 rounded-full font-medium">
           {orders.length}
         </span>
       </div>

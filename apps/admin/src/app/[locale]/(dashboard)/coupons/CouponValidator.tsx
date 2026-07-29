@@ -54,19 +54,19 @@ export function CouponValidator() {
                             className="text-left"
                         />
                     </div>
-                    <Button type="submit" disabled={isFetching || !code || !orderAmount} className="w-full md:w-auto bg-[var(--emerald)] hover:bg-emerald-600">
+                    <Button type="submit" disabled={isFetching || !code || !orderAmount} className="w-full md:w-auto bg-[var(--emerald)] hover:bg-emerald/80">
                         {isFetching ? 'جاري التحقق...' : 'التحقق من الكوبون'}
                     </Button>
                 </form>
 
                 <div className="mt-6">
                     {isError && (
-                        <div className="p-4 rounded-md bg-red-50 text-[var(--crimson)] border border-red-200">
+                        <div className="p-4 rounded-md bg-crimson/10 text-[var(--crimson)] border border-crimson/30">
                             حدث خطأ أثناء التحقق: {error.message}
                         </div>
                     )}
                     {data && (
-                        <div className={`p-4 rounded-md border ${data.valid ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-[var(--crimson)]'}`}>
+                        <div className={`p-4 rounded-md border ${data.valid ? 'bg-emerald/10 border-emerald/30 text-emerald' : 'bg-crimson/10 border-crimson/30 text-[var(--crimson)]'}`}>
                             {data.valid ? (
                                 <div className="space-y-1">
                                     <p className="font-bold">الكوبون صالح!</p>

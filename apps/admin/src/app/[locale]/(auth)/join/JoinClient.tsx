@@ -146,7 +146,7 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
             type="submit"
             disabled={loading}
             className="w-full py-2.5 rounded-lg text-sm font-bold transition-opacity"
-            style={{ background: 'var(--gold)', color: '#fff', opacity: loading ? 0.6 : 1 }}
+            style={{ background: 'var(--gold)', color: 'var(--void)', opacity: loading ? 0.6 : 1 }}
           >
             {loading ? 'جارٍ المعالجة...' : mode === 'signup' ? 'إنشاء الحساب والانضمام' : 'تسجيل الدخول والانضمام'}
           </button>

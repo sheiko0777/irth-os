@@ -61,7 +61,7 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {error && (
-              <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
+              <div className="p-3 text-sm text-crimson bg-crimson/10 rounded-md">
                 {error}
               </div>
             )}
@@ -72,10 +72,10 @@ export default function LoginPage() {
                 type="email"
                 {...register("email")}
                 disabled={isSubmitting}
-                className={`text-start ${errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                className={`text-start ${errors.email ? "border-crimson focus-visible:ring-crimson" : ""}`}
               />
               {errors.email && (
-                <p className="text-xs text-red-500">{errors.email.message}</p>
+                <p className="text-xs text-crimson">{errors.email.message}</p>
               )}
             </div>
 
@@ -85,10 +85,10 @@ export default function LoginPage() {
                 type="password"
                 {...register("password")}
                 disabled={isSubmitting}
-                className={`text-start ${errors.password ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                className={`text-start ${errors.password ? "border-crimson focus-visible:ring-crimson" : ""}`}
               />
               {errors.password && (
-                <p className="text-xs text-red-500">{errors.password.message}</p>
+                <p className="text-xs text-crimson">{errors.password.message}</p>
               )}
             </div>
             

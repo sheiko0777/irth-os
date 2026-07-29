@@ -118,7 +118,7 @@ export function ChatBot({ locale }: ChatBotProps) {
           height: '52px',
           borderRadius: '50%',
           background: 'var(--gold)',
-          color: '#fff',
+          color: 'var(--void)',
           border: 'none',
           cursor: 'pointer',
           fontSize: '22px',
@@ -153,7 +153,7 @@ export function ChatBot({ locale }: ChatBotProps) {
           }}
         >
           {/* Header */}
-          <div style={{ padding: '12px 16px', background: 'var(--gold)', color: '#fff' }}>
+          <div style={{ padding: '12px 16px', background: 'var(--gold)', color: 'var(--void)' }}>
             <p style={{ margin: 0, fontWeight: 700, fontSize: '15px', fontFamily: 'Cairo, sans-serif' }}>
               مساعد IRTH
             </p>
@@ -255,7 +255,7 @@ export function ChatBot({ locale }: ChatBotProps) {
                 padding: '8px 14px',
                 borderRadius: '8px',
                 background: 'var(--gold)',
-                color: '#fff',
+                color: 'var(--void)',
                 border: 'none',
                 cursor: 'pointer',
                 fontSize: '14px',

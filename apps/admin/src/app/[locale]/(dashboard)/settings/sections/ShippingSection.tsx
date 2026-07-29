@@ -70,7 +70,7 @@ export function ShippingSection({ settings, isPending, messages, handleInputChan
           {t("actions.save")}
         </Button>
         {messages['shipping'] && (
-          <span className={`text-sm ${messages['shipping'].type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`text-sm ${messages['shipping'].type === 'success' ? 'text-emerald' : 'text-crimson'}`}>
             {messages['shipping'].text}
           </span>
         )}

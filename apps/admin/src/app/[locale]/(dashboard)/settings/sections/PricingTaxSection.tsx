@@ -65,7 +65,7 @@ export function PricingTaxSection({ settings, isPending, messages, handleInputCh
           {t("actions.save")}
         </Button>
         {messages['pricing'] && (
-          <span className={`text-sm ${messages['pricing'].type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`text-sm ${messages['pricing'].type === 'success' ? 'text-emerald' : 'text-crimson'}`}>
             {messages['pricing'].text}
           </span>
         )}

@@ -57,7 +57,7 @@ export function CreateZoneModal({ open, onClose, onSuccess }: Props) {
           <Button
             type="submit"
             disabled={createZoneMutation.isPending}
-            style={{ background: 'var(--gold)', color: '#fff' }}
+            style={{ background: 'var(--gold)', color: 'var(--void)' }}
           >
             {createZoneMutation.isPending ? '...' : 'إنشاء'}
           </Button>

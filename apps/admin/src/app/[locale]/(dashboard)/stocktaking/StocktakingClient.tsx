@@ -66,7 +66,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
       </div>
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold text-[var(--t1)]">جرد المخزون</h1>
-        <Button onClick={() => createMutation.mutate({})} disabled={createMutation.isPending} style={{ background: 'var(--gold)', color: '#fff' }}>
+        <Button onClick={() => createMutation.mutate({})} disabled={createMutation.isPending} style={{ background: 'var(--gold)', color: 'var(--void)' }}>
           {createMutation.isPending ? '...' : '+ بدء جرد جديد'}
         </Button>
       </div>

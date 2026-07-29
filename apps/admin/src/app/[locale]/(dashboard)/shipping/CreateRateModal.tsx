@@ -144,7 +144,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
           <Button
             type="submit"
             disabled={createRateMutation.isPending}
-            style={{ background: 'var(--emerald)', color: '#fff' }}
+            style={{ background: 'var(--emerald)', color: 'var(--void)' }}
           >
             {createRateMutation.isPending ? '...' : 'إضافة'}
           </Button>

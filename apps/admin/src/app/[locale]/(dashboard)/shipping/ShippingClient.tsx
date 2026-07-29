@@ -54,7 +54,7 @@ export function ShippingClient({ zones }: Props) {
         <div className="w-1/2">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-[var(--t1)]">مناطق الشحن</h2>
-            <Button onClick={() => setShowZoneModal(true)} style={{ background: 'var(--gold)', color: '#fff' }}>
+            <Button onClick={() => setShowZoneModal(true)} style={{ background: 'var(--gold)', color: 'var(--void)' }}>
               + منطقة جديدة
             </Button>
           </div>
@@ -74,7 +74,7 @@ export function ShippingClient({ zones }: Props) {
             <Button
               onClick={() => setShowRateModal(true)}
               disabled={!selectedZoneId}
-              style={{ background: 'var(--gold)', color: '#fff' }}
+              style={{ background: 'var(--gold)', color: 'var(--void)' }}
             >
               + سعر جديد
             </Button>

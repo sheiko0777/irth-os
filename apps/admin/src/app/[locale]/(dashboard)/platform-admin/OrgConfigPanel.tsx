@@ -87,7 +87,7 @@ export function OrgConfigPanel({ selectedOrg, saving, msg, onSave, onReset }: Pr
             onClick={handleSave}
             disabled={saving}
             className="text-xs px-4 py-1.5 rounded font-bold"
-            style={{ background: 'var(--gold)', color: '#fff', opacity: saving ? 0.6 : 1 }}
+            style={{ background: 'var(--gold)', color: 'var(--void)', opacity: saving ? 0.6 : 1 }}
           >
             {saving ? '...' : 'حفظ'}
           </button>

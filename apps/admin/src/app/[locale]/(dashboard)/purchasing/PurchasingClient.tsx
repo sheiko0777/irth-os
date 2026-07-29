@@ -304,7 +304,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                             po.status === "ordered" ? "bg-[var(--gold)] text-black" :
                             po.status === "received" ? "bg-[var(--emerald)] text-white" :
                             po.status === "cancelled" ? "bg-[var(--crimson)] text-white" :
-                            "bg-gray-200 text-gray-800"
+                            "bg-raised text-t1"
                           }
                         >
                           {getStatusLabel(po.status)}

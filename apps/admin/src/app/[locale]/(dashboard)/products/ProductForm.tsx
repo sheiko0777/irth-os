@@ -85,9 +85,9 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
                     <Label>{t("form.name")}</Label>
                     <Input
                         {...form.register("name")}
-                        className={errors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        className={errors.name ? "border-crimson focus-visible:ring-crimson" : ""}
                     />
-                    {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
+                    {errors.name && <p className="text-xs text-crimson">{errors.name.message}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label>{t("form.nameAr")}</Label>
@@ -100,9 +100,9 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
                     <Label>{t("form.sku")}</Label>
                     <Input
                         {...form.register("sku")}
-                        className={errors.sku ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        className={errors.sku ? "border-crimson focus-visible:ring-crimson" : ""}
                     />
-                    {errors.sku && <p className="text-xs text-red-500">{errors.sku.message}</p>}
+                    {errors.sku && <p className="text-xs text-crimson">{errors.sku.message}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label>{t("form.categoryId")}</Label>
@@ -129,9 +129,9 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
                         type="number"
                         step="0.01"
                         {...form.register("price")}
-                        className={errors.price ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        className={errors.price ? "border-crimson focus-visible:ring-crimson" : ""}
                     />
-                    {errors.price && <p className="text-xs text-red-500">{errors.price.message}</p>}
+                    {errors.price && <p className="text-xs text-crimson">{errors.price.message}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label>{t("form.currency")}</Label>
@@ -142,9 +142,9 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
                     <Input
                         type="number"
                         {...form.register("stock")}
-                        className={errors.stock ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        className={errors.stock ? "border-crimson focus-visible:ring-crimson" : ""}
                     />
-                    {errors.stock && <p className="text-xs text-red-500">{errors.stock.message}</p>}
+                    {errors.stock && <p className="text-xs text-crimson">{errors.stock.message}</p>}
                 </div>
             </div>
 

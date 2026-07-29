@@ -79,7 +79,7 @@ export function SegmentMembersPanel({
           </div>
           {selectedToAdd.length > 0 && (
             <button
-              className="bg-[var(--gold)] text-[#111] border-none rounded-lg px-[18px] py-2 text-[13px] font-semibold cursor-pointer w-full mt-[10px]"
+              className="bg-[var(--gold)] text-void border-none rounded-lg px-[18px] py-2 text-[13px] font-semibold cursor-pointer w-full mt-[10px]"
               onClick={onAddMembers}
               disabled={addMembersPending}
             >

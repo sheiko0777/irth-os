@@ -21,7 +21,7 @@ export function OrgListSidebar({ orgs, selectedId, onSelect, onOpenCreate }: Pro
       <div className="p-4 border-b space-y-3" style={{ borderColor: 'var(--rim1)' }}>
         <div className="flex items-center justify-between">
           <h1 className="text-sm font-bold">لوحة الأدمن العام</h1>
-          <button onClick={onOpenCreate} className="text-xs px-2.5 py-1 rounded font-bold" style={{ background: 'var(--gold)', color: '#fff' }}>+ حساب</button>
+          <button onClick={onOpenCreate} className="text-xs px-2.5 py-1 rounded font-bold" style={{ background: 'var(--gold)', color: 'var(--void)' }}>+ حساب</button>
         </div>
         <input
           value={search}

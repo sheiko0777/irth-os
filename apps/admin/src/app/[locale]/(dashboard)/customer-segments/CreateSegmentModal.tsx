@@ -92,7 +92,7 @@ export function CreateSegmentModal({
           </button>
           <button
             type="submit"
-            className="bg-[var(--gold)] text-[#111] border-none rounded-lg px-[18px] py-2 text-[13px] font-semibold cursor-pointer"
+            className="bg-[var(--gold)] text-void border-none rounded-lg px-[18px] py-2 text-[13px] font-semibold cursor-pointer"
             disabled={isPending}
           >
             {isPending ? 'جاري الحفظ...' : 'إنشاء الشريحة'}
