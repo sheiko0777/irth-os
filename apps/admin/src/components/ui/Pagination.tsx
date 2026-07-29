@@ -23,7 +23,6 @@ export function Pagination({ page, pageSize, total, onPageChange }: PaginationPr
 
   return (
     <div
-      dir="rtl"
       className="flex items-center justify-between gap-4 py-3 font-cairo text-sm text-[var(--t2)]"
     >
       <span>

@@ -41,7 +41,6 @@ export function BulkOrderActions({ selectedIds, onSuccess }: Props) {
     return (
         <div
             className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--surface)] border-t border-[var(--rim1)] shadow-lg font-cairo"
-            dir="rtl"
         >
             <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-4">
                 <span className="text-sm text-[var(--t2)]">

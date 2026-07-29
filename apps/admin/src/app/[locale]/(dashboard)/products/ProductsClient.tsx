@@ -158,7 +158,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
     };
 
     return (
-        <div dir="rtl" className="font-cairo space-y-6" style={{ backgroundColor: 'var(--surface)' }}>
+        <div className="font-cairo space-y-6" style={{ backgroundColor: 'var(--surface)' }}>
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--t1)' }}>إدارة المنتجات</h1>
                 <PermissionGate resource="products" action="write">
@@ -169,7 +169,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                         <DialogTrigger asChild>
                             <Button style={{ backgroundColor: 'var(--t1)', color: 'var(--surface)' }}>منتج جديد</Button>
                         </DialogTrigger>
-                        <DialogContent dir="rtl" className="font-cairo">
+                        <DialogContent className="font-cairo">
                             <DialogHeader>
                                 <DialogTitle>{editingId ? "تعديل منتج" : "منتج جديد"}</DialogTitle>
                             </DialogHeader>
@@ -196,7 +196,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent dir="rtl">
+                                        <SelectContent>
                                             <SelectItem value="active">نشط</SelectItem>
                                             <SelectItem value="draft">مسودة</SelectItem>
                                             <SelectItem value="archived">مؤرشف</SelectItem>
@@ -209,7 +209,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                         <SelectTrigger>
                                             <SelectValue placeholder="اختر القسم" />
                                         </SelectTrigger>
-                                        <SelectContent dir="rtl">
+                                        <SelectContent>
                                             <SelectItem value="">لا يوجد قسم</SelectItem>
                                             {categories.map(c => (
                                                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>

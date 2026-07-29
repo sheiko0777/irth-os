@@ -27,7 +27,7 @@ export default async function CourierPage() {
     const remittances = remittancesRes.data as unknown as CourierRemittance[];
 
     return (
-        <div className="space-y-6" dir="rtl">
+        <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold font-cairo text-[var(--t1)]">التسوية والشحن (COD)</h1>
             </div>

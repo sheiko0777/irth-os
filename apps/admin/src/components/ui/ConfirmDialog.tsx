@@ -51,7 +51,7 @@ export function ConfirmDialog({
       <div onClick={() => setOpen(true)} className="contents">
         {children}
       </div>
-      <DialogContent dir="rtl" className="font-cairo sm:max-w-[400px]">
+      <DialogContent className="font-cairo sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle className="text-right text-[var(--t1)]">{title}</DialogTitle>
           {description && (

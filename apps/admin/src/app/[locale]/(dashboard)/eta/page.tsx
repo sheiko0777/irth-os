@@ -23,7 +23,7 @@ export default async function EtaPage({ params }: PageProps) {
     }));
 
     return (
-        <div className="space-y-6" dir="rtl">
+        <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold font-cairo text-[var(--t1)]">الفواتير الإلكترونية (هيئة الزكاة)</h1>
             </div>

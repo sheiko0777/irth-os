@@ -32,7 +32,7 @@ export default async function FinancePage() {
     const vat = vatRes.data;
 
     return (
-        <div className="space-y-8" dir="rtl">
+        <div className="space-y-8">
             <h1 className="text-3xl font-bold text-[var(--t1)]">{t("title")}</h1>
             <p className="text-[var(--t2)]">الفترة: {firstDayOfMonth.toLocaleDateString('ar-EG')} - {today.toLocaleDateString('ar-EG')}</p>
 

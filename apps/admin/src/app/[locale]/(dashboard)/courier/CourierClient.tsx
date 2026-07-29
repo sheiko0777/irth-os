@@ -273,7 +273,6 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                             </DialogTrigger>
                             <DialogContent
                                 className="bg-[var(--surface)] text-[var(--t1)] border-[var(--rim1)] font-cairo"
-                                dir="rtl"
                             >
                                 <DialogHeader>
                                     <DialogTitle>إنشاء تسوية جديدة</DialogTitle>

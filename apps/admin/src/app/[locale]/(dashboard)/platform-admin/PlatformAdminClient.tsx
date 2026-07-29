@@ -102,7 +102,7 @@ export default function PlatformAdminClient({ initialOrgs, locale }: Props) {
   }
 
   return (
-    <div className="flex h-full" dir="rtl">
+    <div className="flex h-full">
       <OrgListSidebar
         orgs={orgs}
         selectedId={selectedId}

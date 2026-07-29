@@ -15,7 +15,7 @@ export default async function PriceListsPage() {
     } catch (error) {
         console.error('Failed to fetch pricelists:', error);
         return (
-            <div dir="rtl" className="font-cairo p-6 text-center" style={{ color: 'var(--crimson)' }}>
+            <div className="font-cairo p-6 text-center" style={{ color: 'var(--crimson)' }}>
                 <p>حدث خطأ أثناء تحميل قوائم الأسعار. يرجى المحاولة مرة أخرى لاحقاً.</p>
             </div>
         );

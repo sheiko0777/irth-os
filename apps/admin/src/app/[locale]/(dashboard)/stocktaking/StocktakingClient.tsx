@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
   );
 
   return (
-    <div className="font-cairo" dir="rtl">
+    <div className="font-cairo">
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-4">
           <p className="text-sm text-[var(--t2)]">اجمالي جلسات الجرد</p>
@@ -109,7 +109,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
       </div>
       {detailSession && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={(e: { target: unknown; currentTarget: unknown }) => { if (e.target === e.currentTarget) setDetailSession(null); }}>
-          <div className="bg-[var(--surface)] p-6 rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto" dir="rtl">
+          <div className="bg-[var(--surface)] p-6 rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-[var(--t1)]">تفاصيل الجرد</h2>
               <button onClick={() => setDetailSession(null)} className="text-[var(--t2)] text-xl px-2">x</button>

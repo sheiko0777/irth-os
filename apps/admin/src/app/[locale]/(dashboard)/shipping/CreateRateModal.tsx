@@ -52,7 +52,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
 
   return (
     <FormDialog open={open} onClose={onClose} title="إضافة سعر شحن">
-      <form onSubmit={handleCreateRate} className="space-y-3" dir="rtl">
+      <form onSubmit={handleCreateRate} className="space-y-3">
         <div>
           <label className="block text-sm text-[var(--t2)] mb-1">الاسم</label>
           <input

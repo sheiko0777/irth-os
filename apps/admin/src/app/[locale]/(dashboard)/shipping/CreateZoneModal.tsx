@@ -31,7 +31,7 @@ export function CreateZoneModal({ open, onClose, onSuccess }: Props) {
 
   return (
     <FormDialog open={open} onClose={onClose} title="منطقة شحن جديدة">
-      <form onSubmit={handleCreateZone} className="space-y-4" dir="rtl">
+      <form onSubmit={handleCreateZone} className="space-y-4">
         <div>
           <label className="block text-sm text-[var(--t2)] mb-1">اسم المنطقة</label>
           <input

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { matchIntent } from '@/lib/chatIntents';
@@ -151,7 +151,6 @@ export function ChatBot({ locale }: ChatBotProps) {
             zIndex: 1000,
             overflow: 'hidden',
           }}
-          dir="rtl"
         >
           {/* Header */}
           <div style={{ padding: '12px 16px', background: 'var(--gold)', color: '#fff' }}>

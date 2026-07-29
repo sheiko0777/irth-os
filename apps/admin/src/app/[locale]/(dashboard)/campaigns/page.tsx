@@ -15,14 +15,14 @@ export default async function CampaignsPage() {
     const summary = (summaryRes.data ?? { total: 0, sent: 0, inProgress: 0, totalDelivered: 0 }) as CampaignSummary;
 
     return (
-      <div dir="rtl" className="p-6">
+      <div className="p-6">
         <CampaignsClient initialData={initialData} summary={summary} />
       </div>
     );
   } catch (error) {
     console.error('Failed to fetch campaigns:', error);
     return (
-      <div dir="rtl" className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
+      <div className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
         حدث خطأ في تحميل الحملات
       </div>
     );

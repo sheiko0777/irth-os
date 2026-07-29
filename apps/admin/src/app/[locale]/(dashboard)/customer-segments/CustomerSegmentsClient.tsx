@@ -105,7 +105,7 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
   };
 
   return (
-    <div dir="rtl" className="font-cairo p-6" style={{ color: 'var(--t1)' }}>
+    <div className="font-cairo p-6" style={{ color: 'var(--t1)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '4px' }}>شرائح العملاء</h1>

@@ -22,7 +22,7 @@ export default async function InventoryPage() {
     const { data: alerts } = alertsResponse;
 
     return (
-        <div className="space-y-6" dir="rtl">
+        <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold font-cairo text-[var(--t1)]">{t('inventory.title')}</h1>
                 <ExportButton type="inventory" label="تصدير المخزون" />

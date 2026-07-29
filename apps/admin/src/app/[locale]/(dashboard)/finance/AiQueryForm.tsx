@@ -40,7 +40,6 @@ export function AiQueryForm() {
                     onChange={(e) => setQuestion(e.target.value)}
                     placeholder="اسألني عن مبيعاتك..."
                     className="w-full min-h-[100px] p-3 rounded-md border border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
-                    dir="rtl"
                 />
                 <Button
                     type="submit"
@@ -60,7 +59,7 @@ export function AiQueryForm() {
             {result && (
                 <div className="mt-4 p-4 rounded-md bg-[var(--obsidian)] border border-[var(--rim1)]">
                     <h3 className="text-[var(--t2)] mb-2 font-semibold">النتيجة:</h3>
-                    <pre className="whitespace-pre-wrap text-[var(--t1)] font-mono text-sm leading-relaxed" dir="rtl">
+                    <pre className="whitespace-pre-wrap text-[var(--t1)] font-mono text-sm leading-relaxed">
                         {result}
                     </pre>
                     {queryStr && (

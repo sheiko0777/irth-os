@@ -127,7 +127,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
   };
 
   return (
-    <div className="flex flex-col gap-6 w-full font-cairo" dir="rtl">
+    <div className="flex flex-col gap-6 w-full font-cairo">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-[var(--t1)]">إدارة المرتجعات</h1>
       </div>

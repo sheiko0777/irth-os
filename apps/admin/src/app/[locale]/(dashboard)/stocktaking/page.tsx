@@ -1,4 +1,4 @@
-﻿import { serverCaller } from '@/server/caller';
+import { serverCaller } from '@/server/caller';
 import { StocktakingClient, type StocktakingSession, type StocktakingSummary } from './StocktakingClient';
 
 export const metadata = { title: 'جرد المخزون | IRTH' };
@@ -12,7 +12,7 @@ export default async function StocktakingPage() {
 
   if (sessionsRes.error || summaryRes.error) {
     return (
-      <div dir="rtl" className="font-cairo p-8 text-[var(--crimson)]">
+      <div className="font-cairo p-8 text-[var(--crimson)]">
         حدث خطأ في تحميل بيانات الجرد
       </div>
     );
@@ -22,7 +22,7 @@ export default async function StocktakingPage() {
   const summary = summaryRes.data as unknown as StocktakingSummary;
 
   return (
-    <div dir="rtl" className="p-6">
+    <div className="p-6">
       <StocktakingClient sessions={sessions} summary={summary} />
     </div>
   );

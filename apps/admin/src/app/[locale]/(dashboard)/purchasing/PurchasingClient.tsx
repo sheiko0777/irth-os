@@ -102,7 +102,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
   };
 
   return (
-    <div className="space-y-6 font-cairo" dir="rtl">
+    <div className="space-y-6 font-cairo">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-[var(--t1)]">المشتريات</h1>
       </div>
@@ -129,7 +129,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
               <DialogTrigger asChild>
                 <Button>إضافة مورد</Button>
               </DialogTrigger>
-              <DialogContent className="z-50 bg-[var(--surface)] text-[var(--t1)]" dir="rtl">
+              <DialogContent className="z-50 bg-[var(--surface)] text-[var(--t1)]">
                 <DialogHeader>
                   <DialogTitle>إضافة مورد جديد</DialogTitle>
                 </DialogHeader>
@@ -230,7 +230,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
               <DialogTrigger asChild>
                 <Button>طلب جديد</Button>
               </DialogTrigger>
-              <DialogContent className="z-50 bg-[var(--surface)] text-[var(--t1)]" dir="rtl">
+              <DialogContent className="z-50 bg-[var(--surface)] text-[var(--t1)]">
                 <DialogHeader>
                   <DialogTitle>طلب شراء جديد</DialogTitle>
                 </DialogHeader>

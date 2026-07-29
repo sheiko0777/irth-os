@@ -76,7 +76,7 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
     };
 
     return (
-        <div className="font-cairo" dir="rtl">
+        <div className="font-cairo">
             <div className="flex justify-between items-center mb-6">
                 <PermissionGate resource="categories" action="write">
                     <Button onClick={() => setIsModalOpen(true)}>إضافة فئة</Button>
@@ -140,7 +140,7 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                         if (e.target === e.currentTarget) setIsModalOpen(false);
                     }}
                 >
-                    <div className="bg-[var(--surface)] p-6 rounded-lg shadow-lg w-full max-w-md" dir="rtl">
+                    <div className="bg-[var(--surface)] p-6 rounded-lg shadow-lg w-full max-w-md">
                         <h2 className="text-xl font-bold mb-4 text-[var(--t1)]">إضافة فئة جديدة</h2>
                         
                         <form onSubmit={handleSubmit} className="space-y-4">

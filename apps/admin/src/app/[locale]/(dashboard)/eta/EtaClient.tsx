@@ -97,7 +97,7 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
     });
 
     return (
-        <div className="space-y-6" dir="rtl">
+        <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div className="flex gap-2 bg-[var(--surface)] p-1 rounded-md border border-[var(--rim1)]">
                     {TAB_OPTIONS.map((tab) => (

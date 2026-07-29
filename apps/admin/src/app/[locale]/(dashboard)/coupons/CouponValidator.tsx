@@ -24,7 +24,7 @@ export function CouponValidator() {
     };
 
     return (
-        <Card className="font-cairo w-full" dir="rtl">
+        <Card className="font-cairo w-full">
             <CardHeader>
                 <CardTitle className="text-xl text-[var(--t1)]">اختبار الكوبون</CardTitle>
             </CardHeader>

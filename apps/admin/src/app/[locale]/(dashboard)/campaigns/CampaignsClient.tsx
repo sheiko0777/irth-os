@@ -106,7 +106,7 @@ export default function CampaignsClient({
   };
 
   return (
-    <div dir="rtl" className="font-cairo p-6" style={{ color: 'var(--t1)' }}>
+    <div className="font-cairo p-6" style={{ color: 'var(--t1)' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

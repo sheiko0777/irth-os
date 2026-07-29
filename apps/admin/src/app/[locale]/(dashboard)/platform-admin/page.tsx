@@ -12,13 +12,13 @@ export default async function PlatformAdminPage({ params }: Props) {
     const res = await caller.platformAdmin.listOrgs({});
     const initialOrgs = (res.data ?? []) as OrgRow[];
     return (
-      <div dir="rtl">
+      <div>
         <PlatformAdminClient initialOrgs={initialOrgs} locale={locale} />
       </div>
     );
   } catch {
     return (
-      <div dir="rtl" className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
+      <div className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
         غير مصرح بالوصول — لوحة الأدمن للنظام فقط
       </div>
     );

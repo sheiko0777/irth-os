@@ -32,7 +32,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6">
       <GeneralSection {...sharedProps} />
       <SKUNumberingSection {...sharedProps} />
       <PricingTaxSection {...sharedProps} />

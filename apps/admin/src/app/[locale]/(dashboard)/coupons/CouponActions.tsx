@@ -54,7 +54,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
             <DialogTrigger asChild>
                 {children}
             </DialogTrigger>
-            <DialogContent className="font-cairo sm:max-w-[425px]" dir="rtl">
+            <DialogContent className="font-cairo sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle className="text-right">إضافة كوبون جديد</DialogTitle>
                 </DialogHeader>
@@ -76,7 +76,6 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         <Select
                             value={formData.type}
                             onValueChange={(val: 'percentage' | 'fixed' | 'free_shipping') => setFormData(p => ({ ...p, type: val }))}
-                            dir="rtl"
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="اختر النوع" />

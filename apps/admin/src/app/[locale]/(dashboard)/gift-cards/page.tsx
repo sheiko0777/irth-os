@@ -15,14 +15,14 @@ export default async function GiftCardsPage() {
     const summary = (summaryRes.data ?? { total: 0, active: 0, totalIssued: 0, activeBalance: 0 }) as GiftCardSummary;
 
     return (
-      <div dir="rtl" className="p-6">
+      <div className="p-6">
         <GiftCardsClient initialData={initialData} summary={summary} />
       </div>
     );
   } catch (error) {
     console.error('Failed to fetch gift cards:', error);
     return (
-      <div dir="rtl" className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
+      <div className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
         حدث خطأ في تحميل بطاقات الهدايا
       </div>
     );
