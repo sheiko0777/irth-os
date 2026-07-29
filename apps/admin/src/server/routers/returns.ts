@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit } from '@irth/db';
-import { eq, and, count, sum, sql, desc } from 'drizzle-orm';
+import { eq, and, count, sql, desc, inArray } from 'drizzle-orm';
 
 export const returnsRouter = router({
   list: protectedProcedure
@@ -38,7 +38,7 @@ export const returnsRouter = router({
           .where(and(...conditions))
       ]);
 
-      const total = totalResult[0].count;
+      const total = totalResult[0]?.count ?? 0;
 
       return {
         data,
@@ -90,11 +90,12 @@ export const returnsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const [{ count: currentCount }] = await db
+      const countResult = await db
         .select({ count: count() })
         .from(orderReturns)
         .where(eq(orderReturns.orgId, ctx.orgId));
 
+      const currentCount = countResult[0]?.count ?? 0;
       const nextNumber = currentCount + 1;
       const returnNumber = `RMA-${String(nextNumber).padStart(4, '0')}`;
 
@@ -241,9 +242,36 @@ export const returnsRouter = router({
     .query(async ({ ctx }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const returns = await db.select().from(orderReturns).where(eq(orderReturns.orgId, ctx.orgId));
+      const statuses = ['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged'] as const;
 
-      const total = returns.length;
+      const [statusCounts, pendingRefundResult, totalResult] = await Promise.all([
+          db.select({
+              status: orderReturns.status,
+              count: count()
+          })
+          .from(orderReturns)
+          .where(and(
+              eq(orderReturns.orgId, ctx.orgId),
+              inArray(orderReturns.status, statuses)
+          ))
+          .groupBy(orderReturns.status),
+
+          db.select({
+              total: sql<number>`COALESCE(SUM(CAST(${orderReturns.refundAmount} AS NUMERIC)), 0)`
+          })
+          .from(orderReturns)
+          .where(and(
+              eq(orderReturns.orgId, ctx.orgId),
+              eq(orderReturns.status, 'approved')
+          )),
+
+          db.select({ count: count() })
+          .from(orderReturns)
+          .where(eq(orderReturns.orgId, ctx.orgId))
+      ]);
+
+      const total = totalResult[0]?.count ?? 0;
+
       const byStatus = {
         requested: 0,
         approved: 0,
@@ -254,16 +282,11 @@ export const returnsRouter = router({
         exchanged: 0,
       };
 
-      let pendingRefundAmount = 0;
-
-      for (const r of returns) {
-        if (byStatus[r.status as keyof typeof byStatus] !== undefined) {
-           byStatus[r.status as keyof typeof byStatus]++;
-        }
-        if (r.status === 'approved' && r.refundAmount) {
-          pendingRefundAmount += parseFloat(r.refundAmount);
-        }
+      for (const row of statusCounts) {
+          byStatus[row.status as keyof typeof byStatus] = Number(row.count);
       }
+
+      const pendingRefundAmount = Number(pendingRefundResult[0]?.total ?? 0);
 
       return {
         data: {
