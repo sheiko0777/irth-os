@@ -10,10 +10,30 @@
   --color-void:#020406;   --color-ink:#060a10;    --color-surface:#0e1622;
   --color-card:#131e2e;   --color-raised:#182436;
   --color-rim1:#1a2840;   --color-rim2:#223050;   --color-rim3:#2c3e66;
-  --color-t1:#f0f6ff;     --color-t2:#93b0d0;     --color-t3:#4e7090;  --color-t4:#263a52;
+  /* t3 was #4e7090 — 3.9:1 on --ink and 3.3:1 on --card, under the 4.5:1
+     floor, and it carries 43 text call sites. #6d90b0 measures 5.9:1 / 5.0:1
+     while staying clearly dimmer than t2. t4 stays decorative-only. */
+  --color-t1:#f0f6ff;     --color-t2:#93b0d0;     --color-t3:#6d90b0;  --color-t4:#263a52;
   --color-gold:#e09000;   --color-gold2:#f5a800;  --color-gold3:#ffc340;
   --color-emerald:#00c478; --color-crimson:#e83838;
   --color-azure:#2e8fff;  --color-amber:#f5a500;
+
+  /* shadcn's semantic names. Its components ship with `bg-primary`,
+     `border-input`, `ring-ring`, `text-muted-foreground` and friends baked
+     into their variants. Tailwind v4 resolves those against --color-*, so
+     until they were registered here every generated rule was empty: buttons
+     rendered transparent with body-coloured text, inputs lost their border,
+     focus rings never appeared. Values mirror the palette above. */
+  --color-background:#060a10;          --color-foreground:#f0f6ff;
+  --color-card-foreground:#f0f6ff;
+  --color-popover:#182436;             --color-popover-foreground:#f0f6ff;
+  --color-primary:#e09000;             --color-primary-foreground:#020406;
+  --color-secondary:#0e1622;           --color-secondary-foreground:#93b0d0;
+  --color-muted:#0e1622;               --color-muted-foreground:#6d90b0;
+  --color-accent:#182436;              --color-accent-foreground:#f0f6ff;
+  --color-destructive:#e83838;         --color-destructive-foreground:#f0f6ff;
+  --color-border:#1a2840;              --color-input:#223050;
+  --color-ring:#e09000;
 
   /* Point at the variables next/font puts on <html> rather than naming the
      families literally. Same faces either way, but this picks up the
@@ -25,18 +45,17 @@
   --radius-token:8px;
 }
 
+/* Palette names for the inline style={{ color: 'var(--gold)' }} call sites.
+   The shadcn aliases are NOT duplicated here — nothing reads var(--primary)
+   directly, and a second copy would drift from @theme. */
 :root {
   --void:#020406; --ink:#060a10; --surface:#0e1622; --card-bg:#131e2e; --raised:#182436;
   --rim1:#1a2840; --rim2:#223050; --rim3:#2c3e66;
-  --t1:#f0f6ff; --t2:#93b0d0; --t3:#4e7090; --t4:#263a52;
+  --t1:#f0f6ff; --t2:#93b0d0; --t3:#6d90b0; --t4:#263a52;
   --gold:#e09000; --gold2:#f5a800; --gold3:#ffc340;
   --gold-bg:rgba(224,144,0,.06); --gold-br:rgba(224,144,0,.2);
   --emerald:#00c478; --crimson:#e83838; --azure:#2e8fff; --amber:#f5a500;
-  --background:#060a10; --foreground:#f0f6ff;
-  --primary:#e09000; --primary-foreground:#020406;
-  --secondary:#0e1622; --secondary-foreground:#93b0d0;
-  --muted:#0e1622; --muted-foreground:#4e7090;
-  --border:#1a2840; --input:#223050; --ring:#e09000; --radius:8px;
+  --radius:8px;
 }
 /* Direction comes from <html dir> in layout.tsx, which is locale-driven.
    Hardcoding `direction: rtl` here overrode that attribute, so the English

@@ -92,7 +92,7 @@ export function Sidebar({ locale }: { locale: string }) {
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
         {groups.map((group) => (
           <div key={group.label}>
-            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--t4)]">
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--t3)]">
               {group.label}
             </p>
             <div className="space-y-0.5">
@@ -123,7 +123,7 @@ export function Sidebar({ locale }: { locale: string }) {
         {process.env.NEXT_PUBLIC_PLATFORM_ADMIN_EMAIL &&
           session?.user?.email === process.env.NEXT_PUBLIC_PLATFORM_ADMIN_EMAIL && (
           <div className="mt-2">
-            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--t4)]">
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--t3)]">
               النظام
             </p>
             <div className="space-y-0.5">

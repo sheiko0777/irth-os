@@ -35,7 +35,7 @@ export function KanbanCard({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
-    background: 'var(--card-bg, #ffffff)',
+    background: 'var(--card-bg, #131e2e)',
     border: '1px solid var(--rim1, #e5e7eb)',
     borderRadius: '8px',
     padding: '12px 14px',
