@@ -31,7 +31,9 @@
   --color-secondary:#0e1622;           --color-secondary-foreground:#93b0d0;
   --color-muted:#0e1622;               --color-muted-foreground:#6d90b0;
   --color-accent:#182436;              --color-accent-foreground:#f0f6ff;
-  --color-destructive:#e83838;         --color-destructive-foreground:#f0f6ff;
+  /* One rule for every accent fill: near-black on top. t1 on crimson is
+     3.8:1 and white on gold/emerald is ~2.3:1; void clears 4.5:1 on all four. */
+  --color-destructive:#e83838;         --color-destructive-foreground:#020406;
   --color-border:#1a2840;              --color-input:#223050;
   --color-ring:#e09000;
 

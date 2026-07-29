@@ -72,7 +72,7 @@ export default function CourierActions({ type, remittanceId, shipmentId, status,
         size="sm"
         onClick={handleReconcile}
         disabled={loading}
-        className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white h-8"
+        className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-void h-8"
       >
         {loading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : null}
         إجراء تسوية

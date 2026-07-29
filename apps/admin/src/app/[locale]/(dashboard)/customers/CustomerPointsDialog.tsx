@@ -80,7 +80,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
                   onClick={() => setPointsAction('add')}
                   className={`flex-1 py-2 rounded-md text-sm font-semibold border transition-colors ${
                     pointsAction === 'add'
-                      ? 'bg-[var(--emerald)] text-white border-[var(--emerald)]'
+                      ? 'bg-[var(--emerald)] text-void border-[var(--emerald)]'
                       : 'border-[var(--rim1)] text-[var(--t2)]'
                   }`}
                 >
@@ -91,7 +91,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
                   onClick={() => setPointsAction('redeem')}
                   className={`flex-1 py-2 rounded-md text-sm font-semibold border transition-colors ${
                     pointsAction === 'redeem'
-                      ? 'bg-[var(--crimson)] text-white border-[var(--crimson)]'
+                      ? 'bg-[var(--crimson)] text-void border-[var(--crimson)]'
                       : 'border-[var(--rim1)] text-[var(--t2)]'
                   }`}
                 >

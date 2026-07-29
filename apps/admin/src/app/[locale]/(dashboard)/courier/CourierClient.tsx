@@ -185,7 +185,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                         <Button
                             onClick={handleBulkRemit}
                             disabled={selectedShipmentIds.size === 0 || markRemittedMutation.isPending}
-                            className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white"
+                            className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-void"
                         >
                             {markRemittedMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                             تسوية مجمعة ({selectedShipmentIds.size})
@@ -242,13 +242,13 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                                                 </TableCell>
                                                 <TableCell className="flex gap-2">
                                                     {ship.codCollected && (
-                                                        <Badge className="bg-[var(--emerald)] text-white text-xs border-0">تم التحصيل</Badge>
+                                                        <Badge className="bg-[var(--emerald)] text-void text-xs border-0">تم التحصيل</Badge>
                                                     )}
                                                     {ship.codRemitted && (
-                                                        <Badge className="bg-[var(--emerald)] text-white text-xs border-0">مسدد</Badge>
+                                                        <Badge className="bg-[var(--emerald)] text-void text-xs border-0">مسدد</Badge>
                                                     )}
                                                     {!ship.codRemitted && ship.codCollected && (
-                                                        <Badge className="bg-[var(--gold)] text-black text-xs border-0">غير مسدد</Badge>
+                                                        <Badge className="bg-[var(--gold)] text-void text-xs border-0">غير مسدد</Badge>
                                                     )}
                                                 </TableCell>
                                             </TableRow>
@@ -329,7 +329,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                                     <Button
                                         type="submit"
                                         disabled={createRemittanceMutation.isPending}
-                                        className="w-full bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white"
+                                        className="w-full bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-void"
                                     >
                                         {createRemittanceMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
                                     </Button>
@@ -381,7 +381,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                                                         size="sm"
                                                         onClick={() => handleReconcile(rem.id)}
                                                         disabled={reconcileMutation.isPending}
-                                                        className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white h-8"
+                                                        className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-void h-8"
                                                     >
                                                         مطابقة
                                                     </Button>

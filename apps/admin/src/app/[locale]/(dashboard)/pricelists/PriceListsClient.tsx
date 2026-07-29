@@ -105,7 +105,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                 <h1 className="text-2xl font-bold" style={{ color: 'var(--t1)' }}>قوائم الأسعار</h1>
                 <button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="px-4 py-2 rounded text-white"
+                    className="px-4 py-2 rounded text-void"
                     style={{ backgroundColor: 'var(--emerald)' }}
                 >
                     + قائمة أسعار جديدة
@@ -154,7 +154,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                             setSelectedPricelistId(list.id);
                                             setIsItemsModalOpen(true);
                                         }}
-                                        className="px-3 py-1 rounded text-sm text-white"
+                                        className="px-3 py-1 rounded text-sm text-void"
                                         style={{ backgroundColor: 'var(--t1)' }}
                                     >
                                         عرض المنتجات
@@ -166,7 +166,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                         onConfirm={() => deleteMutation?.mutate({ id: list.id })}
                                     >
                                         <button
-                                            className="px-3 py-1 rounded text-sm text-white"
+                                            className="px-3 py-1 rounded text-sm text-void"
                                             style={{ backgroundColor: 'var(--crimson)' }}
                                         >
                                             حذف
@@ -269,7 +269,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                 <button
                                     type="submit"
                                     disabled={createMutation?.isLoading}
-                                    className="px-4 py-2 rounded text-white"
+                                    className="px-4 py-2 rounded text-void"
                                     style={{ backgroundColor: 'var(--emerald)' }}
                                 >
                                     {createMutation?.isLoading ? 'جاري الحفظ...' : 'حفظ'}

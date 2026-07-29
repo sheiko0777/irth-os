@@ -26,7 +26,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { pa
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-[var(--t1)]">الكوبونات والخصومات</h1>
                 <CreateCouponDialog>
-                    <Button className="bg-[var(--emerald)] hover:bg-emerald/80 text-white">إضافة كوبون جديد</Button>
+                    <Button className="bg-[var(--emerald)] hover:bg-emerald/80 text-void">إضافة كوبون جديد</Button>
                 </CreateCouponDialog>
             </div>
 

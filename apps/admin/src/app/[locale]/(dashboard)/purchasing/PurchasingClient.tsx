@@ -301,9 +301,9 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                         <Badge
                           variant={getStatusColor(po.status)}
                           className={
-                            po.status === "ordered" ? "bg-[var(--gold)] text-black" :
-                            po.status === "received" ? "bg-[var(--emerald)] text-white" :
-                            po.status === "cancelled" ? "bg-[var(--crimson)] text-white" :
+                            po.status === "ordered" ? "bg-[var(--gold)] text-void" :
+                            po.status === "received" ? "bg-[var(--emerald)] text-void" :
+                            po.status === "cancelled" ? "bg-[var(--crimson)] text-void" :
                             "bg-raised text-t1"
                           }
                         >

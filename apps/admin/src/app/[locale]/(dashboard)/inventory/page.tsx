@@ -63,11 +63,11 @@ export default async function InventoryPage() {
                                         <TableCell className="text-[var(--t2)]">{row.item.reorderPoint}</TableCell>
                                         <TableCell>
                                             {isLowStock ? (
-                                                <Badge className="bg-[var(--crimson)] hover:bg-[var(--crimson)] text-white">
+                                                <Badge className="bg-[var(--crimson)] hover:bg-[var(--crimson)] text-void">
                                                     {t('inventory.status.low')}
                                                 </Badge>
                                             ) : (
-                                                <Badge className="bg-[var(--emerald)] hover:bg-[var(--emerald)] text-white">
+                                                <Badge className="bg-[var(--emerald)] hover:bg-[var(--emerald)] text-void">
                                                     {t('inventory.status.ok')}
                                                 </Badge>
                                             )}

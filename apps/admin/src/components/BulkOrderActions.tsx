@@ -71,7 +71,7 @@ export function BulkOrderActions({ selectedIds, onSuccess }: Props) {
                 >
                     <button
                         disabled={mutation.isPending}
-                        className="bg-[var(--gold)] text-white text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50 cursor-pointer transition-opacity"
+                        className="bg-[var(--gold)] text-void text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50 cursor-pointer transition-opacity"
                     >
                         {mutation.isPending ? 'جارٍ التحديث...' : 'تطبيق'}
                     </button>

@@ -44,7 +44,7 @@ export function AiQueryForm() {
                 <Button
                     type="submit"
                     disabled={isLoading}
-                    className="bg-[var(--gold)] text-white hover:bg-[var(--gold-br)]"
+                    className="bg-[var(--gold)] text-void hover:bg-[var(--gold-br)]"
                 >
                     {isLoading ? 'جاري الاستعلام...' : 'استعلام'}
                 </Button>

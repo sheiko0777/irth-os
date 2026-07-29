@@ -2,19 +2,10 @@ import { serverCaller } from '@/server/caller';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import UpdateStatusForm from './UpdateStatusForm';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export const metadata = {
   title: 'Return Details | IRTH',
-};
-
-const badgeColors: Record<string, string> = {
-  requested: 'var(--gold)',
-  approved: 'var(--emerald)',
-  rejected: 'var(--crimson)',
-  received: 'var(--gold)',
-  restocked: 'var(--emerald)',
-  refunded: 'var(--emerald)',
-  exchanged: 'var(--emerald)',
 };
 
 export default async function ReturnDetailsPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
@@ -61,14 +52,8 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
           </div>
           <div>
             <h3 className="text-[var(--t2)] text-sm">الحالة (Status)</h3>
-            <span
-                className="px-2 py-1 rounded-full text-xs font-medium border text-black inline-block mt-1"
-                style={{
-                  backgroundColor: badgeColors[returnObj.status] || 'var(--rim1)',
-                  borderColor: 'rgba(0,0,0,0.1)'
-                }}
-            >
-              {returnObj.status}
+            <span className="inline-block mt-1">
+              <StatusBadge status={returnObj.status} domain="return" />
             </span>
           </div>
         </div>

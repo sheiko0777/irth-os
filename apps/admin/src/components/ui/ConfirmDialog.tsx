@@ -66,8 +66,8 @@ export function ConfirmDialog({
             disabled={pending}
             className={
               destructive
-                ? 'bg-[var(--crimson)] text-white hover:opacity-90'
-                : 'bg-[var(--emerald)] text-white hover:opacity-90'
+                ? 'bg-[var(--crimson)] text-void hover:opacity-90'
+                : 'bg-[var(--emerald)] text-void hover:opacity-90'
             }
           >
             {pending ? '...' : confirmLabel}

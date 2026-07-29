@@ -110,7 +110,7 @@ export default function GiftCardsClient({
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className='rounded-lg px-4 py-2 text-sm font-medium text-white'
+          className='rounded-lg px-4 py-2 text-sm font-medium text-void'
           style={{ background: 'var(--gold)' }}
         >
           + إصدار بطاقة هدية
@@ -260,7 +260,7 @@ export default function GiftCardsClient({
                 <button
                   type='submit'
                   disabled={createMutation.isPending}
-                  className='flex-1 rounded-lg py-2 text-sm font-medium text-white disabled:opacity-50'
+                  className='flex-1 rounded-lg py-2 text-sm font-medium text-void disabled:opacity-50'
                   style={{ background: 'var(--gold)' }}
                 >
                   {createMutation.isPending ? 'جارٍ الإصدار…' : 'إصدار البطاقة'}

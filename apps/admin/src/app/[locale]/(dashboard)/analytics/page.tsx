@@ -177,7 +177,7 @@ export default async function AnalyticsPage() {
                       <span className="text-[var(--emerald)] text-xs">↓{item.outbound}</span>
                     )}
                     {item.isLow && (
-                      <span className="text-[10px] bg-[var(--crimson)] text-white px-1 py-0.5 rounded font-bold">
+                      <span className="text-[10px] bg-[var(--crimson)] text-void px-1 py-0.5 rounded font-bold">
                         منخفض
                       </span>
                     )}

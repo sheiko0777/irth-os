@@ -117,7 +117,7 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
                 <Button
                     onClick={handleSubmitPending}
                     disabled={submitPendingMutation.isPending}
-                    className="bg-[var(--emerald)] text-white hover:bg-[var(--emerald)]/90"
+                    className="bg-[var(--emerald)] text-void hover:bg-[var(--emerald)]/90"
                 >
                     {submitPendingMutation.isPending ? 'جارٍ الإصدار…' : 'إصدار الكل المعلقة'}
                 </Button>
@@ -192,7 +192,7 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
                                                         <Button
                                                             size="sm"
                                                             variant="destructive"
-                                                            className="text-xs bg-[var(--crimson)] text-white hover:bg-[var(--crimson)]/90"
+                                                            className="text-xs bg-[var(--crimson)] text-void hover:bg-[var(--crimson)]/90"
                                                             disabled={isRowPending}
                                                             onClick={() => handleCancel(inv.orderId)}
                                                         >
