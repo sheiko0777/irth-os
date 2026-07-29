@@ -158,7 +158,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
     };
 
     return (
-        <div className="font-cairo space-y-6" style={{ backgroundColor: 'var(--surface)' }}>
+        <div className="space-y-6" style={{ backgroundColor: 'var(--surface)' }}>
             <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--t1)' }}>إدارة المنتجات</h1>
                 <PermissionGate resource="products" action="write">
@@ -169,7 +169,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                         <DialogTrigger asChild>
                             <Button style={{ backgroundColor: 'var(--t1)', color: 'var(--surface)' }}>منتج جديد</Button>
                         </DialogTrigger>
-                        <DialogContent className="font-cairo">
+                        <DialogContent>
                             <DialogHeader>
                                 <DialogTitle>{editingId ? "تعديل منتج" : "منتج جديد"}</DialogTitle>
                             </DialogHeader>

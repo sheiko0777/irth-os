@@ -85,7 +85,7 @@ export function Sidebar({ locale }: { locale: string }) {
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--gold-bg)] border border-[var(--gold-br)]">
           <span className="text-[var(--gold)] font-bold text-lg leading-none">إ</span>
         </div>
-        <span className="font-bold text-[var(--t1)] font-cairo text-sm">نظام إرث</span>
+        <span className="font-bold text-[var(--t1)] text-sm">نظام إرث</span>
       </div>
 
       {/* Nav */}

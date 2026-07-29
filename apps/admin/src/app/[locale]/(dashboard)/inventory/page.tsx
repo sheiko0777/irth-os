@@ -24,12 +24,12 @@ export default async function InventoryPage() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold font-cairo text-[var(--t1)]">{t('inventory.title')}</h1>
+                <h1 className="text-2xl font-bold text-[var(--t1)]">{t('inventory.title')}</h1>
                 <ExportButton type="inventory" label="تصدير المخزون" />
             </div>
 
             {alerts.length > 0 && (
-                <div className="bg-[var(--crimson)] text-[var(--gold)] p-4 rounded-md font-cairo shadow-sm border border-[var(--rim1)]">
+                <div className="bg-[var(--crimson)] text-[var(--gold)] p-4 rounded-md shadow-sm border border-[var(--rim1)]">
                     <p className="font-bold">{t('inventory.alerts_banner', { count: alerts.length })}</p>
                 </div>
             )}

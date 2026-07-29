@@ -56,7 +56,7 @@ export default function CourierActions({ type, remittanceId, shipmentId, status,
         size="sm"
         onClick={handleMarkRemitted}
         disabled={loading}
-        className="text-[var(--gold)] border-[var(--gold-br)] hover:bg-[var(--gold-bg)] font-cairo h-8"
+        className="text-[var(--gold)] border-[var(--gold-br)] hover:bg-[var(--gold-bg)] h-8"
       >
         {loading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : null}
         تعليم كمسدد
@@ -72,7 +72,7 @@ export default function CourierActions({ type, remittanceId, shipmentId, status,
         size="sm"
         onClick={handleReconcile}
         disabled={loading}
-        className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white font-cairo h-8"
+        className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white h-8"
       >
         {loading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : null}
         إجراء تسوية

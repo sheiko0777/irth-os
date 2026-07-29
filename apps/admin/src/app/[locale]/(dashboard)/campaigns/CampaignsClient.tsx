@@ -34,7 +34,7 @@ import { statusLabel } from '@/lib/statusMaps';
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl p-5 border font-cairo" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
+    <div className="rounded-xl p-5 border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
       <p className="text-sm mb-1" style={{ color: 'var(--t2)' }}>{label}</p>
       <p className="text-3xl font-bold" style={{ color: 'var(--gold)' }}>{value.toLocaleString('ar-EG')}</p>
     </div>
@@ -106,7 +106,7 @@ export default function CampaignsClient({
   };
 
   return (
-    <div className="font-cairo p-6" style={{ color: 'var(--t1)' }}>
+    <div className="p-6" style={{ color: 'var(--t1)' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

@@ -13,7 +13,7 @@ export default async function EtaPage({ params }: PageProps) {
     const response = await caller.eta.list({});
 
     if (response.error) {
-        return <div className="text-[var(--crimson)] p-4 font-cairo">خطأ في تحميل الفواتير الإلكترونية</div>;
+        return <div className="text-[var(--crimson)] p-4">خطأ في تحميل الفواتير الإلكترونية</div>;
     }
 
     const invoices: EtaInvoice[] = response.data.map((inv) => ({
@@ -25,10 +25,10 @@ export default async function EtaPage({ params }: PageProps) {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold font-cairo text-[var(--t1)]">الفواتير الإلكترونية (هيئة الزكاة)</h1>
+                <h1 className="text-2xl font-bold text-[var(--t1)]">الفواتير الإلكترونية (هيئة الزكاة)</h1>
             </div>
 
-            <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-md p-4 text-sm font-cairo text-[var(--t2)]">
+            <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-md p-4 text-sm text-[var(--t2)]">
                 <p>يتم تقديم الفواتير الإلكترونية تلقائياً لهيئة الزكاة والضريبة والجمارك (ETA) وفقاً للمتطلبات القانونية المصرية.</p>
             </div>
 

@@ -19,7 +19,7 @@ export default async function IntegrationsPage() {
 
     return (
         <div className="flex flex-col gap-6 p-6">
-            <h1 className="text-3xl font-bold font-cairo text-[var(--gold)]">{t('title')}</h1>
+            <h1 className="text-3xl font-bold text-[var(--gold)]">{t('title')}</h1>
             
             <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
                 <CardHeader>

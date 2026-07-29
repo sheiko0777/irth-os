@@ -22,7 +22,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: { pa
     };
 
     return (
-        <div className="font-cairo p-6 space-y-6">
+        <div className="p-6 space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-[var(--t1)]">الكوبونات والخصومات</h1>
                 <CreateCouponDialog>

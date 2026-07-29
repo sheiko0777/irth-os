@@ -9,7 +9,7 @@ export default async function ShippingPage() {
 
   if (zonesRes.error) {
     return (
-      <div className="font-cairo p-8 text-[var(--crimson)]">
+      <div className="p-8 text-[var(--crimson)]">
         حدث خطأ في تحميل مناطق الشحن
       </div>
     );
@@ -20,7 +20,7 @@ export default async function ShippingPage() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--t1)] font-cairo">مناطق الشحن والأسعار</h1>
+        <h1 className="text-2xl font-bold text-[var(--t1)]">مناطق الشحن والأسعار</h1>
       </div>
       <ShippingClient zones={zones} />
     </div>

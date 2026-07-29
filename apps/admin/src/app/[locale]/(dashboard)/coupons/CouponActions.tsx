@@ -54,7 +54,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
             <DialogTrigger asChild>
                 {children}
             </DialogTrigger>
-            <DialogContent className="font-cairo sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle className="text-right">إضافة كوبون جديد</DialogTitle>
                 </DialogHeader>

@@ -136,7 +136,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
     return (
         <div className="space-y-6">
             {/* Summary cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-cairo">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-md p-6 flex flex-col justify-center items-center">
                     <p className="text-sm text-[var(--t2)] mb-2">إجمالي الشحنات</p>
                     <p className="text-3xl font-bold text-[var(--t1)]">{summary.totalShipments}</p>
@@ -152,7 +152,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-4 border-b border-[var(--rim1)] pb-2 font-cairo">
+            <div className="flex gap-4 border-b border-[var(--rim1)] pb-2">
                 <button
                     onClick={() => setTab('shipments')}
                     className={`pb-2 px-4 font-bold ${tab === 'shipments' ? 'border-b-2 border-[var(--t1)] text-[var(--t1)]' : 'text-[var(--t2)]'}`}
@@ -170,7 +170,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
             {/* Shipments tab */}
             {tab === 'shipments' && (
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center font-cairo">
+                    <div className="flex justify-between items-center">
                         <Select value={courierFilter} onValueChange={setCourierFilter}>
                             <SelectTrigger className="w-[200px] bg-[var(--surface)] text-[var(--t1)] border-[var(--rim1)]">
                                 <SelectValue placeholder="تصفية حسب الشركة" />
@@ -185,7 +185,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                         <Button
                             onClick={handleBulkRemit}
                             disabled={selectedShipmentIds.size === 0 || markRemittedMutation.isPending}
-                            className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white font-cairo"
+                            className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white"
                         >
                             {markRemittedMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                             تسوية مجمعة ({selectedShipmentIds.size})
@@ -208,7 +208,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                             <TableBody>
                                 {filteredShipments.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center text-[var(--t2)] py-8 font-cairo">
+                                        <TableCell colSpan={7} className="text-center text-[var(--t2)] py-8">
                                             لا توجد شحنات
                                         </TableCell>
                                     </TableRow>
@@ -264,15 +264,15 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
             {/* Remittances tab */}
             {tab === 'remittances' && (
                 <div className="space-y-4">
-                    <div className="flex justify-end font-cairo">
+                    <div className="flex justify-end">
                         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                             <DialogTrigger asChild>
-                                <Button className="bg-[var(--t1)] hover:bg-[var(--t2)] text-[var(--surface)] font-cairo">
+                                <Button className="bg-[var(--t1)] hover:bg-[var(--t2)] text-[var(--surface)]">
                                     + إنشاء تسوية
                                 </Button>
                             </DialogTrigger>
                             <DialogContent
-                                className="bg-[var(--surface)] text-[var(--t1)] border-[var(--rim1)] font-cairo"
+                                className="bg-[var(--surface)] text-[var(--t1)] border-[var(--rim1)]"
                             >
                                 <DialogHeader>
                                     <DialogTitle>إنشاء تسوية جديدة</DialogTitle>
@@ -329,7 +329,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                                     <Button
                                         type="submit"
                                         disabled={createRemittanceMutation.isPending}
-                                        className="w-full bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white font-cairo"
+                                        className="w-full bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white"
                                     >
                                         {createRemittanceMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
                                     </Button>
@@ -354,7 +354,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                             <TableBody>
                                 {initialRemittances.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center text-[var(--t2)] py-8 font-cairo">
+                                        <TableCell colSpan={7} className="text-center text-[var(--t2)] py-8">
                                             لا توجد تسويات
                                         </TableCell>
                                     </TableRow>
@@ -381,7 +381,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                                                         size="sm"
                                                         onClick={() => handleReconcile(rem.id)}
                                                         disabled={reconcileMutation.isPending}
-                                                        className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white h-8 font-cairo"
+                                                        className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-white h-8"
                                                     >
                                                         مطابقة
                                                     </Button>

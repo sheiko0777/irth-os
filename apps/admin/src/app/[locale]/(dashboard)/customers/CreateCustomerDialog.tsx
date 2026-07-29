@@ -51,7 +51,7 @@ export default function CreateCustomerDialog() {
       <Button onClick={() => setIsOpen(true)}>إضافة عميل</Button>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsOpen(false)}>
-          <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 w-full max-w-md font-cairo" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">إضافة عميل جديد</h2>
             <form onSubmit={handleCreateSubmit} className="space-y-3">
               <div>

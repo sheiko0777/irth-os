@@ -23,7 +23,7 @@ export function Pagination({ page, pageSize, total, onPageChange }: PaginationPr
 
   return (
     <div
-      className="flex items-center justify-between gap-4 py-3 font-cairo text-sm text-[var(--t2)]"
+      className="flex items-center justify-between gap-4 py-3 text-sm text-[var(--t2)]"
     >
       <span>
         عرض {from.toLocaleString('ar-EG')}–{to.toLocaleString('ar-EG')} من{' '}

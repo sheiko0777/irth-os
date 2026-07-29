@@ -100,7 +100,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
 
 
     return (
-        <div className="font-cairo p-6" style={{ backgroundColor: 'var(--surface)' }}>
+        <div className="p-6" style={{ backgroundColor: 'var(--surface)' }}>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold" style={{ color: 'var(--t1)' }}>قوائم الأسعار</h1>
                 <button

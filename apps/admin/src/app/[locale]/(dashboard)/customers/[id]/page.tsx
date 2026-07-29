@@ -41,7 +41,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   };
 
   return (
-    <div className="space-y-6 font-cairo">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/ar/customers" className="text-[var(--t2)] hover:text-[var(--t1)] text-sm">
           ← العملاء

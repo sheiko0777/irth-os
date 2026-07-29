@@ -22,7 +22,7 @@ export default async function CampaignsPage() {
   } catch (error) {
     console.error('Failed to fetch campaigns:', error);
     return (
-      <div className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
+      <div className="p-8 text-center" style={{ color: 'var(--crimson)' }}>
         حدث خطأ في تحميل الحملات
       </div>
     );

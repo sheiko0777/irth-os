@@ -35,7 +35,7 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full font-cairo max-w-5xl mx-auto">
+    <div className="flex flex-col gap-6 w-full max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href={`/${locale}/returns`} className="text-[var(--t2)] hover:text-[var(--t1)]">

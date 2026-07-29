@@ -61,7 +61,7 @@ export default async function DashboardPage({
       {/* Page title */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--t1)] font-cairo">
+          <h1 className="text-2xl font-bold text-[var(--t1)]">
             {t("title")}
           </h1>
           <p className="text-sm text-[var(--t3)] mt-1">

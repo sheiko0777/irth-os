@@ -17,7 +17,7 @@ export function ErrorState({
 }: ErrorStateProps) {
   return (
     <div
-      className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)] py-12 px-6 text-center font-cairo"
+      className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)] py-12 px-6 text-center"
     >
       <AlertTriangle size={32} className="text-[var(--crimson)]" />
       <h3 className="text-lg font-semibold text-[var(--t1)]">{title}</h3>

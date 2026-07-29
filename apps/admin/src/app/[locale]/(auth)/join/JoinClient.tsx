@@ -71,7 +71,7 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
 
   return (
     <div
-      className="font-cairo w-full max-w-sm"
+      className="w-full max-w-sm"
     >
       <div className="rounded-xl border p-8 space-y-6" style={{ borderColor: 'var(--rim1)', background: 'var(--surface)' }}>
         {/* Header */}

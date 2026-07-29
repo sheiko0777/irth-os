@@ -12,7 +12,7 @@ export default async function StocktakingPage() {
 
   if (sessionsRes.error || summaryRes.error) {
     return (
-      <div className="font-cairo p-8 text-[var(--crimson)]">
+      <div className="p-8 text-[var(--crimson)]">
         حدث خطأ في تحميل بيانات الجرد
       </div>
     );

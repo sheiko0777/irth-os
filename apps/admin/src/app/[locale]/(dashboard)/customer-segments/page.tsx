@@ -17,7 +17,7 @@ export default async function CustomerSegmentsPage() {
   } catch (error) {
     console.error('Failed to fetch customer segments:', error);
     return (
-      <div className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
+      <div className="p-8 text-center" style={{ color: 'var(--crimson)' }}>
         حدث خطأ في تحميل شرائح العملاء
       </div>
     );

@@ -35,7 +35,7 @@ export default async function JoinPage({ params, searchParams }: Props) {
 
   if (!invite) {
     return (
-      <div className="text-center font-cairo" style={{ color: 'var(--crimson)' }}>
+      <div className="text-center" style={{ color: 'var(--crimson)' }}>
         الدعوة غير موجودة أو تم استخدامها
       </div>
     );
@@ -43,7 +43,7 @@ export default async function JoinPage({ params, searchParams }: Props) {
 
   if (invite.expiresAt < new Date()) {
     return (
-      <div className="text-center font-cairo" style={{ color: 'var(--crimson)' }}>
+      <div className="text-center" style={{ color: 'var(--crimson)' }}>
         انتهت صلاحية الدعوة — تواصل مع المسؤول للحصول على دعوة جديدة
       </div>
     );

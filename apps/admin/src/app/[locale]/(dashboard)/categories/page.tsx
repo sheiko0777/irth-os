@@ -19,7 +19,7 @@ export default async function CategoriesPage() {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between mb-4">
-                <h1 className="text-3xl font-bold tracking-tight font-cairo">{t("title")}</h1>
+                <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
             </div>
             
             <PermissionGate resource="categories" action="read">

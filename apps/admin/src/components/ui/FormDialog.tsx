@@ -24,7 +24,7 @@ export function FormDialog({ open, title, onClose, children, width = '480px' }: 
       onClick={onClose}
     >
       <div
-        className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-5 font-cairo"
+        className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-5"
         style={{ width, maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"

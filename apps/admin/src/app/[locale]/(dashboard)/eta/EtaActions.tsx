@@ -35,7 +35,7 @@ export default function EtaActions({ orderId, invoiceStatus }: EtaActionsProps) 
             <Button
                 size="sm"
                 variant="outline"
-                className="font-cairo text-xs"
+                className="text-xs"
                 disabled={isPending}
                 onClick={() => {
                     startTransition(async () => {
@@ -56,7 +56,7 @@ export default function EtaActions({ orderId, invoiceStatus }: EtaActionsProps) 
                 <Button
                     size="sm"
                     variant="outline"
-                    className="font-cairo text-xs"
+                    className="text-xs"
                     disabled={submitMutation.isPending}
                     onClick={() => submitMutation.mutate({ orderId })}
                 >
@@ -67,7 +67,7 @@ export default function EtaActions({ orderId, invoiceStatus }: EtaActionsProps) 
                 <Button
                     size="sm"
                     variant="outline"
-                    className="font-cairo text-xs"
+                    className="text-xs"
                     disabled={checkMutation.isPending}
                     onClick={() => checkMutation.mutate({ orderId })}
                 >

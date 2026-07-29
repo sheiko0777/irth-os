@@ -17,17 +17,17 @@ export function EnvVarsSection({ settings, isPending, messages, handleInputChang
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-cairo">إعدادات البيئة (ETA & الشحن)</CardTitle>
-        <p className="text-sm text-[var(--t2)] font-cairo mt-1">
+        <CardTitle>إعدادات البيئة (ETA & الشحن)</CardTitle>
+        <p className="text-sm text-[var(--t2)] mt-1">
           هذه القيم تُحفظ في قاعدة البيانات لكل منظمة. يُنصح بضبطها أيضاً كـ environment variables في منصة الاستضافة (Vercel / Railway).
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* ETA Egypt Tax Authority */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-[var(--t1)] font-cairo border-b border-[var(--rim1)] pb-1">ETA — هيئة الضرائب المصرية</h3>
+          <h3 className="text-sm font-semibold text-[var(--t1)] border-b border-[var(--rim1)] pb-1">ETA — هيئة الضرائب المصرية</h3>
           <div className="space-y-2">
-            <Label className="font-cairo">ETA_CLIENT_ID</Label>
+            <Label>ETA_CLIENT_ID</Label>
             <Input
               dir="ltr"
               placeholder="your_eta_client_id"
@@ -36,7 +36,7 @@ export function EnvVarsSection({ settings, isPending, messages, handleInputChang
             />
           </div>
           <div className="space-y-2">
-            <Label className="font-cairo">ETA_CLIENT_SECRET</Label>
+            <Label>ETA_CLIENT_SECRET</Label>
             <Input
               type="password"
               dir="ltr"
@@ -46,7 +46,7 @@ export function EnvVarsSection({ settings, isPending, messages, handleInputChang
             />
           </div>
           <div className="space-y-2">
-            <Label className="font-cairo">ETA_ISSUER_EIN — الرقم الضريبي للمنظمة</Label>
+            <Label>ETA_ISSUER_EIN — الرقم الضريبي للمنظمة</Label>
             <Input
               dir="ltr"
               placeholder="your_company_tax_id"
@@ -55,7 +55,7 @@ export function EnvVarsSection({ settings, isPending, messages, handleInputChang
             />
           </div>
           <div className="space-y-2">
-            <Label className="font-cairo">ETA_ENV — البيئة</Label>
+            <Label>ETA_ENV — البيئة</Label>
             <Select
               value={settings[SETTING_KEYS.eta.env] || "sandbox"}
               onValueChange={(val) => handleInputChange(SETTING_KEYS.eta.env, val)}
@@ -73,9 +73,9 @@ export function EnvVarsSection({ settings, isPending, messages, handleInputChang
 
         {/* Courier Webhooks */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-[var(--t1)] font-cairo border-b border-[var(--rim1)] pb-1">الشحن — Webhooks</h3>
+          <h3 className="text-sm font-semibold text-[var(--t1)] border-b border-[var(--rim1)] pb-1">الشحن — Webhooks</h3>
           <div className="space-y-2">
-            <Label className="font-cairo">BOSTA_WEBHOOK_SECRET</Label>
+            <Label>BOSTA_WEBHOOK_SECRET</Label>
             <Input
               type="password"
               dir="ltr"
@@ -85,7 +85,7 @@ export function EnvVarsSection({ settings, isPending, messages, handleInputChang
             />
           </div>
           <div className="space-y-2">
-            <Label className="font-cairo">ARAMEX_WEBHOOK_TOKEN</Label>
+            <Label>ARAMEX_WEBHOOK_TOKEN</Label>
             <Input
               type="password"
               dir="ltr"
@@ -111,7 +111,7 @@ export function EnvVarsSection({ settings, isPending, messages, handleInputChang
           حفظ إعدادات البيئة
         </Button>
         {messages['env_vars'] && (
-          <span className={`text-sm font-cairo ${messages['env_vars'].type === 'success' ? 'text-[var(--emerald)]' : 'text-[var(--crimson)]'}`}>
+          <span className={`text-sm ${messages['env_vars'].type === 'success' ? 'text-[var(--emerald)]' : 'text-[var(--crimson)]'}`}>
             {messages['env_vars'].text}
           </span>
         )}

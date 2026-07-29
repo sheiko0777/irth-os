@@ -76,7 +76,7 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
     };
 
     return (
-        <div className="font-cairo">
+        <div>
             <div className="flex justify-between items-center mb-6">
                 <PermissionGate resource="categories" action="write">
                     <Button onClick={() => setIsModalOpen(true)}>إضافة فئة</Button>

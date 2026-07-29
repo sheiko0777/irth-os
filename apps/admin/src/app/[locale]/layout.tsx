@@ -69,7 +69,7 @@ export default async function LocaleLayout({
           richColors
           dir={locale === 'ar' ? 'rtl' : 'ltr'}
           theme="dark"
-          toastOptions={{ style: { fontFamily: 'var(--font-cairo)' } }}
+          toastOptions={{ style: { fontFamily: 'var(--font-display)' } }}
         />
       </body>
     </html>

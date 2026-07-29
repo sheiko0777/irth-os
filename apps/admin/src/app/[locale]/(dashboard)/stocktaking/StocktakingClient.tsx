@@ -49,7 +49,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
   );
 
   return (
-    <div className="font-cairo">
+    <div>
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-4">
           <p className="text-sm text-[var(--t2)]">اجمالي جلسات الجرد</p>

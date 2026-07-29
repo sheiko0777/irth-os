@@ -50,7 +50,7 @@ export default async function AnalyticsPage() {
   const maxRevenue = Math.max(...topProducts.map((p) => p.revenue), 1);
 
   return (
-    <div className="space-y-6 font-cairo">
+    <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">التقارير والتحليلات</h1>
 
       {/* KPI Cards */}

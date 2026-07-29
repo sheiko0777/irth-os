@@ -15,8 +15,12 @@
   --color-emerald:#00c478; --color-crimson:#e83838;
   --color-azure:#2e8fff;  --color-amber:#f5a500;
 
-  --font-sans:'IBM Plex Sans Arabic', sans-serif;
-  --font-display:'Cairo', sans-serif;
+  /* Point at the variables next/font puts on <html> rather than naming the
+     families literally. Same faces either way, but this picks up the
+     metric-matched '<name> Fallback' next/font generates, so swapping in the
+     real font no longer shifts layout. */
+  --font-sans:var(--font-ibm-plex-sans-arabic), 'IBM Plex Sans Arabic', sans-serif;
+  --font-display:var(--font-cairo), 'Cairo', sans-serif;
 
   --radius-token:8px;
 }
@@ -37,8 +41,8 @@
 /* Direction comes from <html dir> in layout.tsx, which is locale-driven.
    Hardcoding `direction: rtl` here overrode that attribute, so the English
    locale still rendered right-to-left. */
-body { background:var(--ink); color:var(--t2); font-family:'IBM Plex Sans Arabic',sans-serif; line-height:1.75; -webkit-font-smoothing:antialiased; }
-h1,h2,h3,h4,h5,h6 { font-family:'Cairo',sans-serif; color:var(--t1); font-weight:700; }
+body { background:var(--ink); color:var(--t2); font-family:var(--font-sans); line-height:1.75; -webkit-font-smoothing:antialiased; }
+h1,h2,h3,h4,h5,h6 { font-family:var(--font-display); color:var(--t1); font-weight:700; }
 ::-webkit-scrollbar { width:3px; height:3px; }
 ::-webkit-scrollbar-track { background:var(--void); }
 ::-webkit-scrollbar-thumb { background:var(--rim3); border-radius:2px; }

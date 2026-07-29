@@ -45,7 +45,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
     }, []);
 
     return (
-        <div className="font-cairo">
+        <div>
             {/* Toolbar */}
             <div className="flex items-center justify-between mb-4">
                 <h1 className="text-2xl font-bold text-[var(--t1)]">الطلبات</h1>

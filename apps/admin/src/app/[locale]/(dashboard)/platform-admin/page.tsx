@@ -18,7 +18,7 @@ export default async function PlatformAdminPage({ params }: Props) {
     );
   } catch {
     return (
-      <div className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
+      <div className="p-8 text-center" style={{ color: 'var(--crimson)' }}>
         غير مصرح بالوصول — لوحة الأدمن للنظام فقط
       </div>
     );

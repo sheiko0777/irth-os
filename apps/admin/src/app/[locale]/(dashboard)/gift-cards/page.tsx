@@ -22,7 +22,7 @@ export default async function GiftCardsPage() {
   } catch (error) {
     console.error('Failed to fetch gift cards:', error);
     return (
-      <div className="font-cairo p-8 text-center" style={{ color: 'var(--crimson)' }}>
+      <div className="p-8 text-center" style={{ color: 'var(--crimson)' }}>
         حدث خطأ في تحميل بطاقات الهدايا
       </div>
     );

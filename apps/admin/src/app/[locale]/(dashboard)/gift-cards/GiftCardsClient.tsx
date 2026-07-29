@@ -29,8 +29,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className='rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-5'>
-      <div className='text-sm text-[var(--t2)] mb-1 font-cairo'>{label}</div>
-      <div className='text-2xl font-bold text-[var(--t1)] font-cairo'>{value}</div>
+      <div className='text-sm text-[var(--t2)] mb-1'>{label}</div>
+      <div className='text-2xl font-bold text-[var(--t1)]'>{value}</div>
     </div>
   );
 }
@@ -101,7 +101,7 @@ export default function GiftCardsClient({
   };
 
   return (
-    <div className='font-cairo' dir='rtl'>
+    <div>
       {/* Header */}
       <div className='flex items-center justify-between mb-6'>
         <div>
@@ -198,8 +198,8 @@ export default function GiftCardsClient({
       {/* Create Modal */}
       {showCreate && (
         <div className='fixed inset-0 z-50 flex items-center justify-center' style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className='rounded-2xl border border-[var(--rim1)] bg-[var(--surface)] p-6 w-full max-w-md shadow-2xl' dir='rtl'>
-            <h2 className='text-lg font-bold text-[var(--t1)] mb-4 font-cairo'>إصدار بطاقة هدية جديدة</h2>
+          <div className='rounded-2xl border border-[var(--rim1)] bg-[var(--surface)] p-6 w-full max-w-md shadow-2xl'>
+            <h2 className='text-lg font-bold text-[var(--t1)] mb-4'>إصدار بطاقة هدية جديدة</h2>
             <form onSubmit={handleCreate} className='space-y-4'>
               <div>
                 <label className='block text-sm text-[var(--t2)] mb-1'>المبلغ (جنيه مصري) *</label>

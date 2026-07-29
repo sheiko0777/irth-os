@@ -13,7 +13,7 @@ export default async function CourierPage() {
     ]);
 
     if (summaryRes.error || shipmentsRes.error || remittancesRes.error) {
-        return <div className="text-[var(--crimson)] p-4 font-cairo">حدث خطأ أثناء تحميل بيانات الشحن والتسوية</div>;
+        return <div className="text-[var(--crimson)] p-4">حدث خطأ أثناء تحميل بيانات الشحن والتسوية</div>;
     }
 
     const summary = summaryRes.data as unknown as {
@@ -29,7 +29,7 @@ export default async function CourierPage() {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold font-cairo text-[var(--t1)]">التسوية والشحن (COD)</h1>
+                <h1 className="text-2xl font-bold text-[var(--t1)]">التسوية والشحن (COD)</h1>
             </div>
 
             <CourierClient

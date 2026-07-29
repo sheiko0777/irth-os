@@ -68,7 +68,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
       <Button variant="outline" size="sm" onClick={() => setIsOpen(true)}>نقاط</Button>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsOpen(false)}>
-          <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 w-full max-w-sm font-cairo" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-1">إدارة نقاط الولاء</h2>
             <p className="text-sm text-[var(--t2)] mb-4">
               {customerName} — الرصيد الحالي: <span className="text-[var(--gold)] font-bold">{currentPoints ?? 0}</span>

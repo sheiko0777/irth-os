@@ -48,7 +48,7 @@ export function ShippingClient({ zones }: Props) {
   const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? null;
 
   return (
-    <div className="font-cairo">
+    <div>
       <div className="flex gap-6">
         {/* Zones panel */}
         <div className="w-1/2">

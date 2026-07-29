@@ -48,7 +48,7 @@ export default function UpdateStatusForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 font-cairo">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div>
         <label className="block text-sm text-[var(--t2)] mb-1">الحالة (Status)</label>
         <select
