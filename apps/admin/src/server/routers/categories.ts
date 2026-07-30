@@ -28,6 +28,19 @@ export const categoriesRouter = router({
             parentId: z.string().uuid().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
+            if (input.parentId) {
+                const parent = await ctx.db.query.categories.findFirst({
+                    where: and(
+                        eq(categories.id, input.parentId),
+                        eq(categories.orgId, ctx.orgId)
+                    )
+                });
+
+                if (!parent) {
+                    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid parentId' });
+                }
+            }
+
             const result = await withAudit(
                 ctx.db,
                 async () => {
