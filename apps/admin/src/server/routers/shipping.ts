@@ -9,27 +9,27 @@ export const shippingRouter = router({
     list: protectedProcedure
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
-        const zones = await ctx.db
-          .select()
+        // ⚡ Bolt: Replaced N+1 query pattern with a single database aggregate query using leftJoin and groupBy.
+        // This eliminates sequential roundtrips to the database and improves latency when listing zones.
+        const zonesResult = await ctx.db
+          .select({
+            zone: shippingZones,
+            rateCount: count(shippingRates.id),
+          })
           .from(shippingZones)
+          .leftJoin(shippingRates, eq(shippingRates.zoneId, shippingZones.id))
           .where(eq(shippingZones.orgId, ctx.orgId))
+          .groupBy(shippingZones.id)
           .orderBy(shippingZones.name);
 
-        const zonesWithCounts = await Promise.all(
-          zones.map(async (zone) => {
-            const [{ cnt }] = await ctx.db
-              .select({ cnt: count(shippingRates.id) })
-              .from(shippingRates)
-              .where(eq(shippingRates.zoneId, zone.id));
-            return {
-              ...zone,
-              countries: (zone.countries as string[]) ?? [],
-              rateCount: Number(cnt ?? 0),
-            };
-          })
-        );
-
-        return { data: zonesWithCounts, error: null };
+        return {
+          data: zonesResult.map(({ zone, rateCount }) => ({
+            ...zone,
+            countries: (zone.countries as string[]) ?? [],
+            rateCount: Number(rateCount ?? 0),
+          })),
+          error: null,
+        };
       }),
 
     create: adminProcedure
