@@ -2,3 +2,8 @@
 **Vulnerability:** The invite endpoint `apps/api/src/routes/orgs.ts` allowed the `role` field to be any arbitrary string due to insufficient schema validation (`z.string()`), and did not prevent `admin` users from inviting new users with the `owner` role.
 **Learning:** `requireRole('owner', 'admin')` allows admins into the endpoint, but does not implicitly restrict them from acting on equal or higher privilege tiers. Zod schemas must explicitly restrict enum-like string inputs (e.g. `z.enum(['owner', 'admin', 'member'])`).
 **Prevention:** Always use `z.enum` for role-based string fields. For endpoints shared by multiple roles, explicitly check the caller's role against the target role being modified or created to enforce a proper role hierarchy.
+
+## 2024-06-22 - Unhandled JSON.parse in Webhooks
+**Vulnerability:** Webhook handlers (`apps/api/src/routes/webhooks/paymob.ts`, `apps/api/src/routes/webhooks/bosta.ts`) read `bodyRaw` and used `JSON.parse(bodyRaw)` directly. Malformed JSON payloads could throw unhandled `SyntaxError` exceptions, leading to potential 500 Server Errors, stack trace leaks, or worker crashes.
+**Learning:** External webhook payloads are entirely untrusted user input and can be purposefully malformed to cause exceptions before signature validation occurs.
+**Prevention:** Always wrap `JSON.parse()` of raw incoming request bodies in a `try...catch` block and return a safe `400 Bad Request` on failure to ensure the application fails securely without exposing internals.
