@@ -7,27 +7,37 @@ export const pricelistsRouter = router({
   list: protectedProcedure
     .input(z.object({}).optional())
     .query(async ({ ctx }) => {
-      const lists = await ctx.db
-        .select()
+      // ⚡ Bolt Performance Optimization:
+      // Replaced sequential N+1 queries (list + map with Promise.all for counts)
+      // with a single aggregate query using leftJoin and groupBy.
+      // Expected Impact: Reduces database queries from O(N+1) to O(1), significantly lowering max latency.
+      const listsWithCounts = await ctx.db
+        .select({
+          id: priceLists.id,
+          orgId: priceLists.orgId,
+          name: priceLists.name,
+          description: priceLists.description,
+          currency: priceLists.currency,
+          discountPercent: priceLists.discountPercent,
+          isDefault: priceLists.isDefault,
+          customerGroupId: priceLists.customerGroupId,
+          startDate: priceLists.startDate,
+          endDate: priceLists.endDate,
+          createdAt: priceLists.createdAt,
+          updatedAt: priceLists.updatedAt,
+          itemCount: count(priceListItems.id),
+        })
         .from(priceLists)
+        .leftJoin(priceListItems, eq(priceLists.id, priceListItems.priceListId))
         .where(eq(priceLists.orgId, ctx.orgId))
+        .groupBy(priceLists.id)
         .orderBy(desc(priceLists.createdAt));
 
-      const listsWithCounts = await Promise.all(
-        lists.map(async (pl) => {
-          const [{ cnt }] = await ctx.db
-            .select({ cnt: count(priceListItems.id) })
-            .from(priceListItems)
-            .where(eq(priceListItems.priceListId, pl.id));
-          return {
-            ...pl,
-            itemCount: Number(cnt ?? 0),
-            discountPercent: pl.discountPercent ? Number(pl.discountPercent) : null,
-          };
-        })
-      );
-
-      return listsWithCounts;
+      return listsWithCounts.map((pl) => ({
+        ...pl,
+        itemCount: Number(pl.itemCount),
+        discountPercent: pl.discountPercent ? Number(pl.discountPercent) : null,
+      }));
     }),
 
   create: adminProcedure
