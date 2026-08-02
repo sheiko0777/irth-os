@@ -66,21 +66,25 @@ export const productsRouter = router({
             id: z.string().uuid()
         }))
         .query(async ({ ctx, input }) => {
-            const product = await ctx.db.query.products.findFirst({
-                where: and(
-                    eq(products.id, input.id),
-                    eq(products.orgId, ctx.orgId)
-                )
-            });
+            // ⚡ Bolt Performance Optimization
+            // Break sequential query dependency by using input.id for all related queries
+            // and batching them concurrently to halve the database roundtrip latency.
+            const [product, variants] = await Promise.all([
+                ctx.db.query.products.findFirst({
+                    where: and(
+                        eq(products.id, input.id),
+                        eq(products.orgId, ctx.orgId)
+                    )
+                }),
+                ctx.db
+                    .select()
+                    .from(productVariants)
+                    .where(eq(productVariants.productId, input.id))
+            ]);
 
             if (!product) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
             }
-
-            const variants = await ctx.db
-                .select()
-                .from(productVariants)
-                .where(eq(productVariants.productId, product.id));
 
             return {
                 data: { product, variants },
