@@ -9,31 +9,35 @@ export const stocktakingRouter = router({
     list: protectedProcedure
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
-        const sessions = await ctx.db
-          .select()
+        const sessionsWithCounts = await ctx.db
+          .select({
+            id: stocktakingSessions.id,
+            orgId: stocktakingSessions.orgId,
+            status: stocktakingSessions.status,
+            startedAt: stocktakingSessions.startedAt,
+            completedAt: stocktakingSessions.completedAt,
+            appliedAt: stocktakingSessions.appliedAt,
+            notes: stocktakingSessions.notes,
+            createdAt: stocktakingSessions.createdAt,
+            updatedAt: stocktakingSessions.updatedAt,
+            itemCount: count(stocktakingItems.id),
+            varianceCount: sql<number>`COALESCE(SUM(CASE WHEN ${stocktakingItems.variance} != 0 AND ${stocktakingItems.actualQuantity} IS NOT NULL THEN 1 ELSE 0 END), 0)::integer`,
+          })
           .from(stocktakingSessions)
+          .leftJoin(stocktakingItems, eq(stocktakingSessions.id, stocktakingItems.sessionId))
           .where(eq(stocktakingSessions.orgId, ctx.orgId))
+          .groupBy(stocktakingSessions.id)
           .orderBy(desc(stocktakingSessions.createdAt))
           .limit(50);
 
-        const sessionsWithCounts = await Promise.all(
-          sessions.map(async (s) => {
-            const [counts] = await ctx.db
-              .select({
-                itemCount: count(stocktakingItems.id),
-                varianceCount: sql<number>`COALESCE(COUNT(CASE WHEN ${stocktakingItems.variance} != 0 AND ${stocktakingItems.actualQuantity} IS NOT NULL THEN 1 END), 0)`,
-              })
-              .from(stocktakingItems)
-              .where(eq(stocktakingItems.sessionId, s.id));
-            return {
-              ...s,
-              itemCount: Number(counts?.itemCount ?? 0),
-              varianceCount: Number(counts?.varianceCount ?? 0),
-            };
-          })
-        );
-
-        return { data: sessionsWithCounts, error: null };
+        return {
+          data: sessionsWithCounts.map(({ itemCount, varianceCount, ...s }) => ({
+            ...s,
+            itemCount: Number(itemCount ?? 0),
+            varianceCount: Number(varianceCount ?? 0),
+          })),
+          error: null
+        };
       }),
 
     create: adminProcedure

@@ -9,27 +9,31 @@ export const shippingRouter = router({
     list: protectedProcedure
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
-        const zones = await ctx.db
-          .select()
+        const zonesWithCounts = await ctx.db
+          .select({
+            id: shippingZones.id,
+            orgId: shippingZones.orgId,
+            name: shippingZones.name,
+            countries: shippingZones.countries,
+            isActive: shippingZones.isActive,
+            createdAt: shippingZones.createdAt,
+            updatedAt: shippingZones.updatedAt,
+            cnt: count(shippingRates.id),
+          })
           .from(shippingZones)
+          .leftJoin(shippingRates, eq(shippingZones.id, shippingRates.zoneId))
           .where(eq(shippingZones.orgId, ctx.orgId))
+          .groupBy(shippingZones.id)
           .orderBy(shippingZones.name);
 
-        const zonesWithCounts = await Promise.all(
-          zones.map(async (zone) => {
-            const [{ cnt }] = await ctx.db
-              .select({ cnt: count(shippingRates.id) })
-              .from(shippingRates)
-              .where(eq(shippingRates.zoneId, zone.id));
-            return {
-              ...zone,
-              countries: (zone.countries as string[]) ?? [],
-              rateCount: Number(cnt ?? 0),
-            };
-          })
-        );
-
-        return { data: zonesWithCounts, error: null };
+        return {
+          data: zonesWithCounts.map(({ cnt, ...zone }) => ({
+            ...zone,
+            countries: (zone.countries as string[]) ?? [],
+            rateCount: Number(cnt ?? 0),
+          })),
+          error: null
+        };
       }),
 
     create: adminProcedure
