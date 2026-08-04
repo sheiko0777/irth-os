@@ -6,28 +6,41 @@ interface PipelineBarProps {
 }
 
 /**
- * The order pipeline as one proportional track. Reads as a whole at a glance,
- * where four separate count cards would not.
+ * Every order state as one proportional track — flow states first, terminal
+ * states after, nothing dropped.
+ *
+ * The first version mapped only pending/confirmed/shipped/delivered, so
+ * cancelled, failed and returned orders vanished from both the bar and the
+ * total; an org whose orders were all cancelled read as having no orders at
+ * all. Adversarial review caught it. Hiding the unhappy states is exactly the
+ * kind of lie a status widget must not tell, so the fix is to render them,
+ * not to relabel the widget.
  *
  * Segment colours come from `statusStyle` rather than a local map, so a status
  * that changes hue changes here too instead of silently drifting out of sync.
  */
-const PIPELINE_ORDER = ['pending', 'confirmed', 'shipped', 'delivered'] as const;
+const FLOW_RANK: Record<string, number> = {
+  pending: 0,
+  confirmed: 1,
+  shipped: 2,
+  delivered: 3,
+  payment_failed: 4,
+  returned: 5,
+  cancelled: 6,
+};
 
 export function PipelineBar({ data }: PipelineBarProps) {
-  const counts = new Map(data.map((d) => [d.status, d.count]));
-  const segments = PIPELINE_ORDER.map((status) => ({
-    status,
-    count: counts.get(status) ?? 0,
-    ...statusStyle('order', status),
-  }));
+  const segments = data
+    .filter((d) => d.count > 0)
+    .map((d) => ({ ...d, ...statusStyle('order', d.status) }))
+    .sort((a, b) => (FLOW_RANK[a.status] ?? 99) - (FLOW_RANK[b.status] ?? 99));
 
   const total = segments.reduce((sum, s) => sum + s.count, 0);
 
   if (total === 0) {
     return (
       <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] px-5 py-4">
-        <p className="text-xs text-[var(--t3)]">لا توجد طلبات في المسار بعد</p>
+        <p className="text-xs text-[var(--t3)]">لا توجد طلبات بعد</p>
       </div>
     );
   }
@@ -36,7 +49,7 @@ export function PipelineBar({ data }: PipelineBarProps) {
     <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] px-5 py-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--t3)]">
-          مسار الطلبات
+          حالة الطلبات
         </h2>
         <span className="text-xs text-[var(--t2)] tabular-nums" dir="ltr">
           {total.toLocaleString('ar-EG')}
@@ -46,18 +59,16 @@ export function PipelineBar({ data }: PipelineBarProps) {
       <div
         className="flex h-2 w-full overflow-hidden rounded-full bg-[var(--raised)]"
         role="img"
-        aria-label={`مسار الطلبات: ${segments.map((s) => `${s.label} ${s.count}`).join('، ')}`}
+        aria-label={`حالة الطلبات: ${segments.map((s) => `${s.label} ${s.count}`).join('، ')}`}
       >
-        {segments
-          .filter((s) => s.count > 0)
-          .map((s) => (
-            <div
-              key={s.status}
-              style={{ width: `${(s.count / total) * 100}%`, background: s.color }}
-              // A hairline between segments keeps adjacent hues from bleeding together.
-              className="border-l border-[var(--surface)] last:border-l-0"
-            />
-          ))}
+        {segments.map((s) => (
+          <div
+            key={s.status}
+            style={{ width: `${(s.count / total) * 100}%`, background: s.color }}
+            // A hairline between segments keeps adjacent hues from bleeding together.
+            className="border-l border-[var(--surface)] last:border-l-0"
+          />
+        ))}
       </div>
 
       <ul className="flex flex-wrap items-center gap-x-5 gap-y-1.5">

@@ -100,7 +100,7 @@ export default async function DashboardPage({
         and active products are stocks, and a day-over-day delta on a stock
         would be meaningless.
       */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 rise">
         <KpiCard
           id="revenue"
           variant="hero"
@@ -140,10 +140,18 @@ export default async function DashboardPage({
         />
       </div>
 
-      <PipelineBar data={pipeline} />
+      {/* One entrance sequence, ~90ms apart: KPI row, then the state track,
+          then the table. Enough to establish reading order, not enough to make
+          an operator wait. Collapses to instant under reduced motion. */}
+      <div className="rise" style={{ animationDelay: '90ms' }}>
+        <PipelineBar data={pipeline} />
+      </div>
 
       {/* Recent Orders */}
-      <div className="rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)] overflow-hidden">
+      <div
+        className="rise rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)] overflow-hidden"
+        style={{ animationDelay: '180ms' }}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--rim1)]">
           <h2 className="text-sm font-semibold text-[var(--t1)]">آخر الطلبات</h2>
           <Link

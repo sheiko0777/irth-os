@@ -48,7 +48,8 @@ export const dashboardRouter = router({
             activeProductsQuery,
             ordersYesterdayQuery,
             revenueYesterdayQuery,
-            dailyQuery,
+            dailyOrdersQuery,
+            dailyRevenueQuery,
             pipelineQuery,
         ] = await Promise.all([
             ctx.db
@@ -88,10 +89,26 @@ export const dashboardRouter = router({
                 .select({
                     day: sql<string>`${dayBucket}::date::text`,
                     orderCount: count(),
-                    revenue: sum(orders.totalAmount),
                 })
                 .from(orders)
                 .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, sparkFrom)))
+                .groupBy(dayBucket)
+                .orderBy(dayBucket),
+            // Revenue series filters to delivered, matching revenueToday. One
+            // shared query here silently summed every status, so the headline
+            // and its own trend line measured different things — caught by
+            // adversarial review.
+            ctx.db
+                .select({
+                    day: sql<string>`${dayBucket}::date::text`,
+                    revenue: sum(orders.totalAmount),
+                })
+                .from(orders)
+                .where(and(
+                    eq(orders.orgId, ctx.orgId),
+                    gte(orders.createdAt, sparkFrom),
+                    eq(orders.status, 'delivered'),
+                ))
                 .groupBy(dayBucket)
                 .orderBy(dayBucket),
             ctx.db
@@ -113,17 +130,18 @@ export const dashboardRouter = router({
         const delta = (current: number, previous: number): number | null =>
             previous === 0 ? null : ((current - previous) / previous) * 100;
 
-        // The grouped query only emits rows for days that actually have orders, so
+        // The grouped queries only emit rows for days that actually traded, so
         // fill the gaps — a sparkline needs a point per day or it misreads the shape.
-        const byDay = new Map(dailyQuery.map((r) => [r.day, r]));
+        const ordersByDay = new Map(dailyOrdersQuery.map((r) => [r.day, r.orderCount]));
+        const revenueByDay = new Map(dailyRevenueQuery.map((r) => [r.day, r.revenue]));
         const ordersSeries: number[] = [];
         const revenueSeries: number[] = [];
         for (let i = 0; i < 7; i++) {
             const d = new Date(sparkFrom);
             d.setUTCDate(d.getUTCDate() + i);
-            const row = byDay.get(d.toISOString().slice(0, 10));
-            ordersSeries.push(row?.orderCount ?? 0);
-            revenueSeries.push(num(row?.revenue));
+            const key = d.toISOString().slice(0, 10);
+            ordersSeries.push(ordersByDay.get(key) ?? 0);
+            revenueSeries.push(num(revenueByDay.get(key)));
         }
 
         return {

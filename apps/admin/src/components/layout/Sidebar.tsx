@@ -6,72 +6,16 @@ import { cn } from '@/lib/utils';
 import { signOut, useSession } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { AlertPanel } from '@/components/layout/AlertPanel';
-import {
-  Home, ShoppingCart, Package, Users, ShoppingBag,
-  Plug2, BarChart2, PieChart, Tag, Box, FolderOpen,
-  Bell, Settings, UserCog, FileText, Truck, RotateCcw,
-  LogOut, ChevronDown, Warehouse, DollarSign, Megaphone,
-  ClipboardList, List, MapPin, Gift, UsersRound, Building2, Zap, Star, History, Shield,
-} from 'lucide-react';
-
-type NavItem = { href: string; label: string; icon: React.ElementType };
-type NavGroup = { label: string; items: NavItem[] };
+import { LogOut, Shield } from 'lucide-react';
+import { buildNavGroups } from '@/lib/navigation';
 
 export function Sidebar({ locale }: { locale: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
 
-  const groups: NavGroup[] = [
-    {
-      label: 'عام',
-      items: [
-        { href: `/${locale}`, label: 'الرئيسية', icon: Home },
-        { href: `/${locale}/orders`, label: 'الطلبات', icon: ShoppingCart },
-        { href: `/${locale}/customers`, label: 'العملاء', icon: Users },
-        { href: `/${locale}/customer-segments`, label: 'شرائح العملاء', icon: UsersRound },
-        { href: `/${locale}/notifications`, label: 'الإشعارات', icon: Bell },
-      ],
-    },
-    {
-      label: 'المخزون والمنتجات',
-      items: [
-        { href: `/${locale}/products`, label: 'المنتجات', icon: Box },
-        { href: `/${locale}/categories`, label: 'التصنيفات', icon: FolderOpen },
-        { href: `/${locale}/inventory`, label: 'المخزون', icon: Warehouse },
-        { href: `/${locale}/stocktaking`, label: 'جرد المخزون', icon: ClipboardList },
-        { href: `/${locale}/purchasing`, label: 'المشتريات', icon: ShoppingBag },
-        { href: `/${locale}/returns`, label: 'المرتجعات', icon: RotateCcw },
-      ],
-    },
-    {
-      label: 'المالية والتقارير',
-      items: [
-        { href: `/${locale}/finance`, label: 'المالية', icon: DollarSign },
-        { href: `/${locale}/analytics`, label: 'التحليلات', icon: PieChart },
-        { href: `/${locale}/coupons`, label: 'الكوبونات', icon: Tag },
-        { href: `/${locale}/pricelists`, label: 'قوائم الأسعار', icon: List },
-        { href: `/${locale}/campaigns`, label: 'الحملات', icon: Megaphone },
-        { href: `/${locale}/gift-cards`, label: 'بطاقات الهدايا', icon: Gift },
-      ],
-    },
-    {
-      label: 'العمليات',
-      items: [
-        { href: `/${locale}/courier`, label: 'الشحن والتسوية', icon: Truck },
-        { href: `/${locale}/shipping`, label: 'مناطق الشحن', icon: MapPin },
-        { href: `/${locale}/eta`, label: 'الفواتير الإلكترونية', icon: FileText },
-        { href: `/${locale}/integrations`, label: 'التكاملات', icon: Plug2 },
-      ],
-    },
-    {
-      label: 'الإعدادات',
-      items: [
-        { href: `/${locale}/settings`, label: 'الإعدادات', icon: Settings },
-        { href: `/${locale}/settings/members`, label: 'الأعضاء', icon: UserCog },
-      ],
-    },
-  ];
+  // Single source shared with the command palette — see lib/navigation.ts.
+  const groups = buildNavGroups(locale);
 
   const handleLogout = async () => {
     await signOut();

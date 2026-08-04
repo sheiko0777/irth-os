@@ -75,9 +75,13 @@ describe('dashboard router', () => {
       [{ count: 40 }],                      // activeProducts
       [{ count: 4 }],                       // ordersYesterday
       [{ total: '600' }],                   // revenueYesterday
-      [                                     // daily — only two of seven days traded
-        { day: utcDayKey(-6), orderCount: 3, revenue: '300' },
-        { day: utcDayKey(0), orderCount: 5, revenue: '900' },
+      [                                     // daily orders — only two of seven days traded
+        { day: utcDayKey(-6), orderCount: 3 },
+        { day: utcDayKey(0), orderCount: 5 },
+      ],
+      [                                     // daily revenue — delivered only
+        { day: utcDayKey(-6), revenue: '300' },
+        { day: utcDayKey(0), revenue: '900' },
       ],
       [{ status: 'pending', count: 2 }],    // pipeline
     ]);
@@ -100,6 +104,7 @@ describe('dashboard router', () => {
       [{ total: '600' }],  // 600 -> 900 is +50%
       [],
       [],
+      [],
     ]);
 
     const res = await caller.getStats();
@@ -115,6 +120,7 @@ describe('dashboard router', () => {
       [{ count: 0 }],
       [{ count: 6 }],      // 6 -> 3 is -50%
       [{ total: '500' }],  // 500 -> 250 is -50%
+      [],
       [],
       [],
     ]);
