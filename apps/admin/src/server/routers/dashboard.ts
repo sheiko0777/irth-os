@@ -1,7 +1,15 @@
 import { router, protectedProcedure } from '../trpc';
-import { orders, orderItems, shipmentTracking, productVariants, products } from '@irth/db';
-import { eq, and, desc, sql, count, sum, ilike, gte, lte, lt } from 'drizzle-orm';
+import { orders, orderItems, shipmentTracking, productVariants, products, inventoryItems, orderReturns } from '@irth/db';
+import { eq, and, desc, sql, count, sum, ilike, gte, lte, lt, or, inArray, lte as lteOp } from 'drizzle-orm';
 import { z } from 'zod';
+
+/**
+ * An order still sitting in pending or confirmed after this long has missed its
+ * handling window. Two days is the threshold the ops team works to; it is
+ * deliberately a named constant so changing the SLA is a one-line edit rather
+ * than a hunt through query predicates.
+ */
+const LATE_ORDER_HOURS = 48;
 
 export const dashboardRouter = router({
     getStats: protectedProcedure.query(async ({ ctx }) => {
@@ -133,6 +141,53 @@ export const dashboardRouter = router({
             },
             error: null,
             meta: null
+        };
+    }),
+
+    /**
+     * The three things that need a human today, for the sidebar alert panel.
+     *
+     * Kept separate from getStats because it answers a different question and
+     * has a different cache life: getStats is a reporting snapshot, this is a
+     * worklist. Bundling them would force the whole dashboard to refetch
+     * whenever the alert counts refresh.
+     */
+    getAlerts: protectedProcedure.query(async ({ ctx }) => {
+        const lateBefore = new Date(Date.now() - LATE_ORDER_HOURS * 60 * 60 * 1000);
+
+        const [lateOrdersQuery, outOfStockQuery, pendingReturnsQuery] = await Promise.all([
+            ctx.db
+                .select({ count: count() })
+                .from(orders)
+                .where(and(
+                    eq(orders.orgId, ctx.orgId),
+                    inArray(orders.status, ['pending', 'confirmed']),
+                    lt(orders.createdAt, lateBefore),
+                )),
+            ctx.db
+                .select({ count: count() })
+                .from(inventoryItems)
+                .where(and(
+                    eq(inventoryItems.orgId, ctx.orgId),
+                    lteOp(inventoryItems.quantity, 0),
+                )),
+            ctx.db
+                .select({ count: count() })
+                .from(orderReturns)
+                .where(and(
+                    eq(orderReturns.orgId, ctx.orgId),
+                    eq(orderReturns.status, 'requested'),
+                )),
+        ]);
+
+        return {
+            data: {
+                lateOrders: lateOrdersQuery[0]?.count ?? 0,
+                outOfStock: outOfStockQuery[0]?.count ?? 0,
+                pendingReturns: pendingReturnsQuery[0]?.count ?? 0,
+            },
+            error: null,
+            meta: null,
         };
     }),
 

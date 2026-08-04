@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { signOut, useSession } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
+import { AlertPanel } from '@/components/layout/AlertPanel';
 import {
   Home, ShoppingCart, Package, Users, ShoppingBag,
   Plug2, BarChart2, PieChart, Tag, Box, FolderOpen,
@@ -90,6 +91,9 @@ export function Sidebar({ locale }: { locale: string }) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
+        {/* Sits above the nav groups on purpose: what is broken outranks where
+            you might want to go. */}
+        <AlertPanel locale={locale} />
         {groups.map((group) => (
           <div key={group.label}>
             <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-[var(--t3)]">

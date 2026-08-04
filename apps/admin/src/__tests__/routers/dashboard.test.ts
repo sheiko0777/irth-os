@@ -124,6 +124,24 @@ describe('dashboard router', () => {
     expect(res.data.deltas.revenueToday).toBeCloseTo(-50);
   });
 
+  it('getAlerts: yields zeroed counts when db is empty', async () => {
+    mockDb.select = vi.fn(() => chainOf([]));
+    const res = await caller.getAlerts();
+    expect(res).toEqual({
+      data: { lateOrders: 0, outOfStock: 0, pendingReturns: 0 },
+      error: null,
+      meta: null,
+    });
+  });
+
+  it('getAlerts: surfaces each count independently', async () => {
+    // Three queries fire in Promise.all order: late orders, out of stock,
+    // pending returns. Distinct values prove none of them are cross-wired.
+    queueSelects([[{ count: 7 }], [{ count: 4 }], [{ count: 12 }]]);
+    const res = await caller.getAlerts();
+    expect(res.data).toEqual({ lateOrders: 7, outOfStock: 4, pendingReturns: 12 });
+  });
+
   it('getRecentOrders: yields empty array when db is empty', async () => {
     mockDb.select = vi.fn(() => chainOf([]));
     const res = await caller.getRecentOrders();
