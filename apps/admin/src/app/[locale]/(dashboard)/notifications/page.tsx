@@ -1,5 +1,7 @@
 import { serverCaller } from '@/server/caller';
 import { statusLabel } from '@/lib/statusMaps';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { BellOff } from 'lucide-react';
 
 export default async function NotificationsPage() {
     const caller = await serverCaller();
@@ -32,8 +34,12 @@ export default async function NotificationsPage() {
                     <tbody className="divide-y divide-[var(--rim1)]">
                         {items.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-[var(--t2)]">
-                                    لا توجد إشعارات
+                                <td colSpan={5} className="p-0">
+                                    <EmptyState
+                                        icon={BellOff}
+                                        title="لا توجد إشعارات"
+                                        hint="الإشعارات بتتولّد من أحداث النظام — طلب جديد، نفاد صنف، أو فشل دفع."
+                                    />
                                 </td>
                             </tr>
                         ) : (

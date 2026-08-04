@@ -3,7 +3,9 @@ import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ExportButton } from "@/components/ExportButton";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { Warehouse } from "lucide-react";
 
 export default async function InventoryPage() {
     const t = await getTranslations();
@@ -29,8 +31,13 @@ export default async function InventoryPage() {
             </div>
 
             {alerts.length > 0 && (
-                <div className="bg-[var(--crimson)] text-[var(--gold)] p-4 rounded-md shadow-sm border border-[var(--rim1)]">
-                    <p className="font-bold">{t('inventory.alerts_banner', { count: alerts.length })}</p>
+                /* Was gold text on a solid crimson fill: roughly 1.5:1, illegible.
+                   Tinted like every other status surface in the console, with the
+                   crimson carried by a 3px edge bar instead of a full flood. */
+                <div className="rounded-md border border-[var(--rim1)] border-s-[3px] border-s-[var(--crimson)] bg-[rgba(232,56,56,.10)] p-4">
+                    <p className="font-semibold text-[var(--t1)]">
+                        {t('inventory.alerts_banner', { count: alerts.length })}
+                    </p>
                 </div>
             )}
 
@@ -47,9 +54,14 @@ export default async function InventoryPage() {
                     </TableHeader>
                     <TableBody>
                         {items.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="text-center text-[var(--t2)] py-8">
-                                    لا توجد عناصر في المخزون
+                            <TableRow className="hover:bg-transparent">
+                                <TableCell colSpan={5} className="p-0">
+                                    <EmptyState
+                                        icon={Warehouse}
+                                        title="لا توجد عناصر في المخزون"
+                                        hint="المخزون بيتكوّن من متغيّرات المنتجات. ابدأ بإضافة منتج وحدّد كمياته."
+                                        action={{ label: 'إضافة منتج', href: '/ar/products/new' }}
+                                    />
                                 </TableCell>
                             </TableRow>
                         ) : (

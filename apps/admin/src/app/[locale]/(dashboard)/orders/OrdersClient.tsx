@@ -4,8 +4,10 @@ import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { BulkOrderActions } from '@/components/BulkOrderActions';
 import { ExportButton } from '@/components/ExportButton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { PaginationNav } from '@/components/ui/PaginationNav';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { ShoppingCart } from 'lucide-react';
 
 export interface OrderRow {
     id: string;
@@ -79,8 +81,12 @@ export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
                         <tbody className="divide-y divide-[var(--rim1)]">
                             {orders.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-[var(--t2)]">
-                                        لا توجد طلبات
+                                    <td colSpan={6} className="p-0">
+                                        <EmptyState
+                                            icon={ShoppingCart}
+                                            title="لا توجد طلبات"
+                                            hint="لو فيه فلاتر مفعّلة، جرّب تشيلها. غير كده أول طلب هيظهر هنا فور وصوله."
+                                        />
                                     </td>
                                 </tr>
                             ) : (

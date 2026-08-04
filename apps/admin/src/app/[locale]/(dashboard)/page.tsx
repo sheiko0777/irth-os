@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { serverCaller } from "@/server/caller";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PipelineBar } from "@/components/ui/PipelineBar";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -155,10 +156,12 @@ export default async function DashboardPage({
         </div>
 
         {recentOrders.length === 0 ? (
-          <div className="py-12 text-center">
-            <ShoppingCart size={32} className="mx-auto mb-3 text-[var(--t4)]" />
-            <p className="text-sm text-[var(--t3)]">لا توجد طلبات بعد</p>
-          </div>
+          <EmptyState
+            icon={ShoppingCart}
+            title="لا توجد طلبات بعد"
+            hint="أول طلب يوصل هيظهر هنا مع حالته وإجماليه."
+            action={{ label: 'فتح صفحة الطلبات', href: `/${locale}/orders` }}
+          />
         ) : (
           <table className="w-full text-sm">
             <thead>
