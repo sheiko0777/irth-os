@@ -5,16 +5,43 @@ import { z } from 'zod';
 
 export const dashboardRouter = router({
     getStats: protectedProcedure.query(async ({ ctx }) => {
-        // Total orders today
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
 
-        // Batch independent queries — O(max latency) instead of O(4 × latency)
+        // Yesterday's window, used for the delta chips on the two flow metrics.
+        const startOfYesterday = new Date(startOfDay);
+        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+        // Seven-day window (today inclusive) backing the KPI sparklines.
+        //
+        // Bucketed in UTC on both sides: Postgres truncates the stored timestamp,
+        // so the JS keys must be UTC too or every bucket misses and the lines
+        // flatline to zero.
+        //
+        // Anchored on the current instant's UTC date, deliberately not on
+        // `startOfDay`. That value is local midnight, whose UTC date is the day
+        // before anywhere east of Greenwich (Cairo is UTC+2, so local midnight is
+        // 22:00 the previous UTC day) — anchoring there slides the whole window
+        // back a day and drops today off the end of the chart.
+        const now = new Date();
+        const sparkFrom = new Date(Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate() - 6,
+        ));
+
+        const dayBucket = sql`date_trunc('day', ${orders.createdAt})`;
+
+        // Batch independent queries — O(max latency) instead of O(n × latency)
         const [
             ordersTodayQuery,
             revenueTodayQuery,
             pendingOrdersQuery,
-            activeProductsQuery
+            activeProductsQuery,
+            ordersYesterdayQuery,
+            revenueYesterdayQuery,
+            dailyQuery,
+            pipelineQuery,
         ] = await Promise.all([
             ctx.db
                 .select({ count: count() })
@@ -32,14 +59,77 @@ export const dashboardRouter = router({
                 .select({ count: count() })
                 .from(products)
                 .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active'))),
+            ctx.db
+                .select({ count: count() })
+                .from(orders)
+                .where(and(
+                    eq(orders.orgId, ctx.orgId),
+                    gte(orders.createdAt, startOfYesterday),
+                    lt(orders.createdAt, startOfDay),
+                )),
+            ctx.db
+                .select({ total: sum(orders.totalAmount) })
+                .from(orders)
+                .where(and(
+                    eq(orders.orgId, ctx.orgId),
+                    gte(orders.createdAt, startOfYesterday),
+                    lt(orders.createdAt, startOfDay),
+                    eq(orders.status, 'delivered'),
+                )),
+            ctx.db
+                .select({
+                    day: sql<string>`${dayBucket}::date::text`,
+                    orderCount: count(),
+                    revenue: sum(orders.totalAmount),
+                })
+                .from(orders)
+                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, sparkFrom)))
+                .groupBy(dayBucket)
+                .orderBy(dayBucket),
+            ctx.db
+                .select({ status: orders.status, count: count() })
+                .from(orders)
+                .where(eq(orders.orgId, ctx.orgId))
+                .groupBy(orders.status),
         ]);
+
+        const num = (v: unknown) => parseFloat((v as string | null) ?? '0') || 0;
+
+        const ordersToday = ordersTodayQuery[0]?.count ?? 0;
+        const revenueToday = num(revenueTodayQuery[0]?.total);
+        const ordersYesterday = ordersYesterdayQuery[0]?.count ?? 0;
+        const revenueYesterday = num(revenueYesterdayQuery[0]?.total);
+
+        // Percent change against the same window a day earlier. Null rather than
+        // a fabricated 0% or an Infinity when there is no prior value to divide by.
+        const delta = (current: number, previous: number): number | null =>
+            previous === 0 ? null : ((current - previous) / previous) * 100;
+
+        // The grouped query only emits rows for days that actually have orders, so
+        // fill the gaps — a sparkline needs a point per day or it misreads the shape.
+        const byDay = new Map(dailyQuery.map((r) => [r.day, r]));
+        const ordersSeries: number[] = [];
+        const revenueSeries: number[] = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(sparkFrom);
+            d.setUTCDate(d.getUTCDate() + i);
+            const row = byDay.get(d.toISOString().slice(0, 10));
+            ordersSeries.push(row?.orderCount ?? 0);
+            revenueSeries.push(num(row?.revenue));
+        }
 
         return {
             data: {
-                ordersToday: ordersTodayQuery[0]?.count ?? 0,
-                revenueToday: parseFloat((revenueTodayQuery[0]?.total as unknown as string) ?? '0'),
+                ordersToday,
+                revenueToday,
                 pendingOrders: pendingOrdersQuery[0]?.count ?? 0,
                 activeProducts: activeProductsQuery[0]?.count ?? 0,
+                deltas: {
+                    ordersToday: delta(ordersToday, ordersYesterday),
+                    revenueToday: delta(revenueToday, revenueYesterday),
+                },
+                series: { orders: ordersSeries, revenue: revenueSeries },
+                pipeline: pipelineQuery.map((r) => ({ status: r.status, count: r.count })),
             },
             error: null,
             meta: null

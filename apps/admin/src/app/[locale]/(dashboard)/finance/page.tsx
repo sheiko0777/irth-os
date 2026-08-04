@@ -40,25 +40,27 @@ export default async function FinancePage() {
             <section className="space-y-4">
                 <h2 className="text-xl font-semibold text-[var(--t1)]">{t("pnl")}</h2>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    {/* Revenue is the hero here too — one gold fill per screen. */}
                     <KpiCard
+                        id="fin-revenue"
+                        variant="hero"
                         title="إجمالي الإيرادات"
                         value={`${pnl.totalRevenue.toLocaleString('ar-EG')} ج.م`}
-                        color="gold"
                     />
                     <KpiCard
+                        id="fin-orders"
                         title="إجمالي الطلبات"
                         value={pnl.totalOrders.toLocaleString('ar-EG')}
-                        color="emerald"
                     />
                     <KpiCard
+                        id="fin-aov"
                         title="متوسط قيمة الطلب"
                         value={`${pnl.avgOrderValue.toLocaleString('ar-EG', { maximumFractionDigits: 2 })} ج.م`}
-                        color="azure"
                     />
                     <KpiCard
+                        id="fin-cancelled"
                         title="طلبات ملغاة"
                         value={pnl.cancelledOrders.toLocaleString('ar-EG')}
-                        color="crimson"
                     />
                 </div>
             </section>

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { serverCaller } from "@/server/caller";
 import { KpiCard } from "@/components/ui/KpiCard";
+import { PipelineBar } from "@/components/ui/PipelineBar";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
   ShoppingCart, DollarSign, Clock, Package,
@@ -52,8 +53,15 @@ export default async function DashboardPage({
     );
   }
 
-  const { ordersToday, revenueToday, pendingOrders, activeProducts } =
-    stats.data;
+  const {
+    ordersToday,
+    revenueToday,
+    pendingOrders,
+    activeProducts,
+    deltas,
+    series,
+    pipeline,
+  } = stats.data;
   const recentOrders = recent.data ?? [];
 
   return (
@@ -83,37 +91,55 @@ export default async function DashboardPage({
         </Link>
       </div>
 
-      {/* KPI Cards */}
+      {/*
+        Revenue is the one hero card. Gold fills exactly two things in this
+        console — this card and the active nav bar — so the other three stay
+        neutral rather than each taking a decorative hue.
+        Sparklines and deltas only appear on the flow metrics; pending orders
+        and active products are stocks, and a day-over-day delta on a stock
+        would be meaningless.
+      */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          title={t("ordersToday")}
-          value={ordersToday.toLocaleString("ar-EG")}
-          color="azure"
-          sub="إجمالي الطلبات اليوم"
-          icon={<ShoppingCart size={16} />}
-        />
-        <KpiCard
+          id="revenue"
+          variant="hero"
           title={t("revenueToday")}
           value={`${revenueToday.toLocaleString("ar-EG")} ج.م`}
-          color="gold"
           sub="الإيراد من الطلبات المسلَّمة"
+          trend={deltas.revenueToday}
+          series={series.revenue}
+          href={`/${locale}/reports`}
           icon={<DollarSign size={16} />}
         />
         <KpiCard
+          id="orders"
+          title={t("ordersToday")}
+          value={ordersToday.toLocaleString("ar-EG")}
+          sub="إجمالي الطلبات اليوم"
+          trend={deltas.ordersToday}
+          series={series.orders}
+          href={`/${locale}/orders`}
+          icon={<ShoppingCart size={16} />}
+        />
+        <KpiCard
+          id="pending"
           title={t("pendingOrders")}
           value={pendingOrders.toLocaleString("ar-EG")}
-          color="crimson"
           sub="في انتظار المراجعة"
+          href={`/${locale}/orders`}
           icon={<Clock size={16} />}
         />
         <KpiCard
+          id="products"
           title={t("activeProducts")}
           value={activeProducts.toLocaleString("ar-EG")}
-          color="emerald"
           sub="منتجات متاحة للبيع"
+          href={`/${locale}/products`}
           icon={<Package size={16} />}
         />
       </div>
+
+      <PipelineBar data={pipeline} />
 
       {/* Recent Orders */}
       <div className="rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)] overflow-hidden">
@@ -166,9 +192,9 @@ export default async function DashboardPage({
                     </Link>
                   </td>
                   <td className="px-5 py-3.5">
-                    <StatusBadge status={order.status as any} />
+                    <StatusBadge status={order.status} domain="order" />
                   </td>
-                  <td className="px-5 py-3.5 text-[var(--t1)] font-medium" dir="ltr">
+                  <td className="px-5 py-3.5 text-[var(--t1)] font-medium tabular-nums" dir="ltr">
                     {parseFloat(order.totalAmount ?? "0").toLocaleString("ar-EG")} ج.م
                   </td>
                   <td className="px-5 py-3.5 text-[var(--t3)] text-xs">

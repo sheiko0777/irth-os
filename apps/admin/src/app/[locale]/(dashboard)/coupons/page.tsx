@@ -5,8 +5,11 @@ import { CreateCouponDialog, ToggleCouponButton, DeleteCouponButton } from './Co
 import { CouponValidator } from './CouponValidator';
 import { format } from 'date-fns';
 
-export default async function CouponsPage({ searchParams }: { searchParams: { page?: string } }) {
-    const page = Number(searchParams.page) || 1;
+// Next 15 hands `searchParams` to pages as a Promise. Typing it as a plain
+// object compiles under `tsc` — the generated route types live outside the
+// tsconfig include — but fails `next build`, so it only surfaced at deploy.
+export default async function CouponsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+    const page = Number((await searchParams).page) || 1;
     const pageSize = 20;
 
     const caller = await serverCaller();
