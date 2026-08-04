@@ -67,3 +67,22 @@ h1,h2,h3,h4,h5,h6 { font-family:var(--font-display); color:var(--t1); font-weigh
 ::-webkit-scrollbar { width:3px; height:3px; }
 ::-webkit-scrollbar-track { background:var(--void); }
 ::-webkit-scrollbar-thumb { background:var(--rim3); border-radius:2px; }
+
+/* The console had no reduced-motion handling at all, while `transition-*` and
+   `animate-*` are used across roughly every interactive surface. For a user who
+   has asked their OS to reduce motion — vestibular disorder, migraine trigger,
+   or simply a preference — that is the difference between a usable admin tool
+   and a hostile one.
+
+   Collapsing to 0.01ms rather than 0 keeps transitionend/animationend firing,
+   so any code that waits on those events still completes instead of hanging.
+   `scroll-behavior: auto` cancels smooth scrolling, which is the single most
+   common trigger of the lot. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
