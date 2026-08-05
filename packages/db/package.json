@@ -5,6 +5,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/migrate.mjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
