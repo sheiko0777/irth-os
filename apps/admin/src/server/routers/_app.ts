@@ -24,8 +24,10 @@ import { membersRouter } from './members';
 import { giftCardsRouter } from './giftCards';
 import { customerSegmentsRouter } from './customerSegments';
 import { platformAdminRouter } from './platformAdmin';
+import { meRouter } from './me';
 
 export const appRouter = router({
+    me: meRouter,
     dashboard: dashboardRouter,
     orders: ordersRouter,
     products: productsRouter,

@@ -22,7 +22,7 @@ export default async function CategoriesPage() {
                 <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
             </div>
             
-            <PermissionGate resource="categories" action="read">
+            <PermissionGate resource="categories" action="view">
                 <CategoriesClient categories={categories} />
             </PermissionGate>
         </div>

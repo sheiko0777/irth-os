@@ -8,6 +8,9 @@
     "password": "كلمة المرور",
     "submit": "دخول"
   },
+  "categories": {
+    "title": "التصنيفات"
+  },
   "nav": {
     "dashboard": "لوحة القيادة",
     "orders": "الطلبات",
