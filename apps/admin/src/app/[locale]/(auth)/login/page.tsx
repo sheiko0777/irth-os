@@ -43,7 +43,10 @@ export default function LoginPage() {
       if (res.error) {
         setError(t("loginError"));
       } else {
-        router.push(`/${locale}/dashboard`);
+        // `/[locale]` is the dashboard. It used to point at `/[locale]/dashboard`,
+        // a stale duplicate that sat outside the (dashboard) group and so
+        // rendered with no sidebar and no header.
+        router.push(`/${locale}`);
         router.refresh();
       }
     } catch (err) {
