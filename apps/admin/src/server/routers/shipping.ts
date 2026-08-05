@@ -9,25 +9,23 @@ export const shippingRouter = router({
     list: protectedProcedure
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
-        const zones = await ctx.db
-          .select()
+        // ⚡ Bolt Optimization: Use a single aggregate query instead of N+1 to fetch shipping zones with rate counts.
+        const zonesResult = await ctx.db
+          .select({
+            zone: shippingZones,
+            rateCount: count(shippingRates.id),
+          })
           .from(shippingZones)
+          .leftJoin(shippingRates, eq(shippingRates.zoneId, shippingZones.id))
           .where(eq(shippingZones.orgId, ctx.orgId))
+          .groupBy(shippingZones.id)
           .orderBy(shippingZones.name);
 
-        const zonesWithCounts = await Promise.all(
-          zones.map(async (zone) => {
-            const [{ cnt }] = await ctx.db
-              .select({ cnt: count(shippingRates.id) })
-              .from(shippingRates)
-              .where(eq(shippingRates.zoneId, zone.id));
-            return {
-              ...zone,
-              countries: (zone.countries as string[]) ?? [],
-              rateCount: Number(cnt ?? 0),
-            };
-          })
-        );
+        const zonesWithCounts = zonesResult.map((row) => ({
+          ...row.zone,
+          countries: (row.zone.countries as string[]) ?? [],
+          rateCount: Number(row.rateCount ?? 0),
+        }));
 
         return { data: zonesWithCounts, error: null };
       }),
