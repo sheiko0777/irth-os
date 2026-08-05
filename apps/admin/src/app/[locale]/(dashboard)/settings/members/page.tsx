@@ -25,8 +25,30 @@ export default async function MembersPage() {
           <CardContent>
             <div className="space-y-4">
               {members.map((member) => (
-                <div key={member.id} className="flex justify-between items-center border-b pb-2">
-                  <span>{member.userId}</span>
+                <div
+                  key={member.id}
+                  className="flex items-center justify-between gap-3 border-b border-[var(--rim1)] pb-2"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--gold-br)] bg-[var(--gold-bg)] text-xs font-bold text-[var(--gold)]"
+                      aria-hidden="true"
+                    >
+                      {(member.name ?? member.email ?? '؟').trim().charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      {/* Falls back down the chain rather than showing nothing:
+                          a membership can outlive its user row. */}
+                      <p className="truncate text-sm text-[var(--t1)]">
+                        {member.name ?? member.email ?? 'مستخدم غير معروف'}
+                      </p>
+                      {member.email && (
+                        <p className="truncate text-xs text-[var(--t3)]" dir="ltr">
+                          {member.email}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                   <MemberRoleSelect memberId={member.id} role={member.role} />
                 </div>
               ))}

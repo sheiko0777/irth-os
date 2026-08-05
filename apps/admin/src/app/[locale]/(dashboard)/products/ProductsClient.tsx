@@ -1,19 +1,35 @@
 'use client';
 
 import { useState } from "react";
+
 import { trpc } from "@/lib/trpc";
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 import { Badge } from "@/components/ui/badge";
+
 import { Button } from "@/components/ui/button";
+
 import { Input } from "@/components/ui/input";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
 import { Label } from "@/components/ui/label";
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { PermissionGate } from "@/components/PermissionGate";
+
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+
 import { Pagination } from "@/components/ui/Pagination";
+
 import { SkeletonRow } from "@/components/ui/skeleton";
+
 import { toast } from "sonner";
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Box } from 'lucide-react';
+
 
 export interface Product {
     id: string;
@@ -285,8 +301,8 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                             </TableRow>
                         ) : products.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-8" style={{ color: 'var(--t2)' }}>
-                                    لا توجد منتجات
+                                <TableCell colSpan={7} className="p-0">
+                                    <EmptyState icon={Box} title="لا توجد منتجات" hint="ابدأ بإضافة أول منتج، وهيظهر هنا بمتغيّراته وسعره." />
                                 </TableCell>
                             </TableRow>
                         ) : (

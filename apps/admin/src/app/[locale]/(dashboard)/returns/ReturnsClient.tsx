@@ -42,6 +42,8 @@ interface ReturnsClientProps {
 }
 
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { RotateCcw } from 'lucide-react';
 
 const tabOptions = [
   { value: 'all', label: 'الكل' },
@@ -182,8 +184,16 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
             <tbody className="divide-y divide-[var(--rim1)]">
               {displayReturns.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-[var(--t2)]">
-                    لا توجد مرتجعات
+                  <td colSpan={5} className="p-0">
+                    <EmptyState
+                      icon={RotateCcw}
+                      title="لا توجد مرتجعات"
+                      hint={
+                        activeTab === 'all'
+                          ? 'المرتجعات بتتولّد لما عميل يطلب إرجاع طلب.'
+                          : 'مفيش مرتجعات في الحالة دي. جرّب تبويب "الكل".'
+                      }
+                    />
                   </td>
                 </tr>
               ) : (

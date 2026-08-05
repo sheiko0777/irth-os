@@ -1,15 +1,29 @@
 import { z } from 'zod';
 import { adminProcedure, ownerProcedure, router } from '../trpc';
 import { eq, and } from 'drizzle-orm';
-import { orgMembers, withAudit } from '@irth/db';
+import { orgMembers, user, withAudit } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 
 export const membersRouter = router({
   // List members of the active org (owner/admin only — matrix: members.view).
   list: adminProcedure.query(async ({ ctx }) => {
+    // Joined to `user` because org_members only stores the id. Returning the
+    // bare row made the members table render a 32-character auth id where the
+    // person's name belongs, which is unreadable and unsearchable.
+    //
+    // leftJoin, not innerJoin: a membership whose user record is missing is a
+    // data problem worth seeing in the UI, not a row to silently drop.
     const members = await ctx.db
-      .select()
+      .select({
+        id: orgMembers.id,
+        userId: orgMembers.userId,
+        role: orgMembers.role,
+        createdAt: orgMembers.createdAt,
+        name: user.name,
+        email: user.email,
+      })
       .from(orgMembers)
+      .leftJoin(user, eq(user.id, orgMembers.userId))
       .where(eq(orgMembers.orgId, ctx.orgId));
 
     return { data: members, error: null, meta: { orgId: ctx.orgId } };

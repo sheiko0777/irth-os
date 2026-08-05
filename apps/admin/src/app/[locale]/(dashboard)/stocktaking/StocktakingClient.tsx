@@ -1,9 +1,16 @@
 'use client';
 import { useState } from 'react';
+
 import { trpc } from '@/lib/trpc';
+
 import { Button } from '@/components/ui/button';
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ClipboardList } from 'lucide-react';
+
 
 export type StocktakingSession = {
   id: string;
@@ -81,7 +88,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
           </TableRow></TableHeader>
           <TableBody>
             {initialSessions.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center text-[var(--t2)] py-8">لا توجد جلسات جرد</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="p-0"><EmptyState icon={ClipboardList} title="لا توجد جلسات جرد" hint="جلسة الجرد بتقارن الكمية الدفترية بالفعلية وتطبّق الفروق على المخزون." /></TableCell></TableRow>
             ) : initialSessions.map(session => (
               <TableRow key={session.id} className="border-b border-[var(--rim1)]">
                 <TableCell>

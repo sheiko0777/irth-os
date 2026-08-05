@@ -1,16 +1,29 @@
 "use client";
 
 import { useState } from "react";
+
 import { trpc } from "@/lib/trpc";
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 import { Badge } from "@/components/ui/badge";
+
 import { Button } from "@/components/ui/button";
+
 import { Input } from "@/components/ui/input";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
 import { format } from "date-fns";
+
 import { ar } from "date-fns/locale";
+
 import { toast } from "sonner";
+
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ShoppingBag } from 'lucide-react';
+
 
 type Supplier = {
   id: string;
@@ -288,8 +301,8 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
               <TableBody>
                 {purchaseOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-[var(--t2)]">
-                      لا توجد طلبات شراء
+                    <TableCell colSpan={6} className="p-0">
+                      <EmptyState icon={ShoppingBag} title="لا توجد أوامر شراء" hint="أمر الشراء بيسجّل الكميات المستلمة من المورد ويزوّد المخزون." />
                     </TableCell>
                   </TableRow>
                 ) : (

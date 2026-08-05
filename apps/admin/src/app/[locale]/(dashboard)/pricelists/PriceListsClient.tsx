@@ -1,10 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+
 import { trpc } from '@/lib/trpc';
+
 import { useRouter } from 'next/navigation';
+
 import { toast } from 'sonner';
+
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { List } from 'lucide-react';
+
 
 export type PriceList = {
     id: string;
@@ -177,7 +184,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                         ))}
                         {initialData.length === 0 && (
                             <tr>
-                                <td colSpan={8} className="p-6 text-center">لا توجد قوائم أسعار</td>
+                                <td colSpan={8} className="p-0"><EmptyState icon={List} title="لا توجد قوائم أسعار" hint="قوائم الأسعار بتسمح بتسعير مختلف لكل شريحة عملاء." /></td>
                             </tr>
                         )}
                     </tbody>
