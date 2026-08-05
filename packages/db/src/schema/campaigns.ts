@@ -1,4 +1,4 @@
-﻿import { pgTable, uuid, timestamp, text, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, text, integer, pgEnum } from "drizzle-orm/pg-core";
 
 export const campaignStatusEnum = pgEnum('campaign_status', ['draft', 'scheduled', 'sending', 'sent', 'failed']);
 export const campaignChannelEnum = pgEnum('campaign_channel', ['whatsapp', 'sms', 'email']);
@@ -6,7 +6,7 @@ export const campaignSegmentEnum = pgEnum('campaign_segment', ['all', 'vip', 'in
 
 export const campaigns = pgTable("campaigns", {
   id: uuid("id").defaultRandom().primaryKey(),
-  orgId: text("org_id").notNull(),
+  orgId: uuid("org_id").notNull(),
   name: text("name").notNull(),
   message: text("message").notNull(),
   channel: campaignChannelEnum("channel").notNull().default('whatsapp'),

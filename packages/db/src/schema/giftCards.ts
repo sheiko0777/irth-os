@@ -5,7 +5,7 @@ export const giftCardTxTypeEnum = pgEnum('gift_card_tx_type', ['issue', 'redeem'
 
 export const giftCards = pgTable('gift_cards', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: text('org_id').notNull(),
+  orgId: uuid('org_id').notNull(),
   code: text('code').notNull(),
   initialAmount: numeric('initial_amount', { precision: 12, scale: 2 }).notNull().default('0'),
   balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default('0'),
@@ -23,7 +23,7 @@ export const giftCards = pgTable('gift_cards', {
 export const giftCardTransactions = pgTable('gift_card_transactions', {
   id: uuid('id').primaryKey().defaultRandom(),
   giftCardId: uuid('gift_card_id').notNull().references(() => giftCards.id, { onDelete: 'cascade' }),
-  orgId: text('org_id').notNull(),
+  orgId: uuid('org_id').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   txType: giftCardTxTypeEnum('tx_type').notNull(),
   orderId: uuid('order_id'),

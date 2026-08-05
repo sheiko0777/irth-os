@@ -2,7 +2,7 @@ import { pgTable, text, timestamp, boolean, integer, uuid } from 'drizzle-orm/pg
 
 export const outboxEvents = pgTable('outbox_events', {
     id: uuid('id').primaryKey().defaultRandom(),
-    orgId: text('org_id').notNull(),
+    orgId: uuid('org_id').notNull(),
     eventType: text('event_type').notNull(),
     payload: text('payload').notNull(),
     processed: boolean('processed').default(false).notNull(),
