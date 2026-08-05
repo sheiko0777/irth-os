@@ -6,6 +6,7 @@ import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
+import { requireRole } from '../middlewares/requireRole';
 
 const ordersRoute = new Hono();
 
@@ -135,7 +136,7 @@ const updateStatusSchema = z.object({
   status: z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'])
 });
 
-ordersRoute.patch('/:id/status', async (c: Context) => {
+ordersRoute.patch('/:id/status', requireRole('owner', 'admin'), async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
   if (!orgId || !userId) {
