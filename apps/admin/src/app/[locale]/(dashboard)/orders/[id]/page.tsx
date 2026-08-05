@@ -1,8 +1,11 @@
 import { getTranslations } from "next-intl/server";
-import { EmptyState } from '@/components/ui/EmptyState';
+import Link from "next/link";
+import { ArrowRight, PackageSearch } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatusUpdater } from "./StatusUpdater";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string, locale: string }> }) {
@@ -13,17 +16,51 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     const response = await caller.orders.getById({ id });
 
     if (response.error || !response.data) {
-        return <div>Order not found</div>;
+        // Was a bare English <div>Order not found</div> with no way back — a
+        // dead end on a URL an operator can easily reach from a stale link.
+        return (
+            <div className="rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)]">
+                <EmptyState
+                    icon={PackageSearch}
+                    title="الطلب غير موجود"
+                    hint="يمكن يكون اتحذف، أو الرابط مش مظبوط."
+                    action={{ label: "الرجوع للطلبات", href: `/${locale}/orders` }}
+                />
+            </div>
+        );
     }
 
     const { order, items, history } = response.data;
 
+    const itemsTotal = items.reduce(
+        (sum: number, i: { quantity: number; price: string | number }) =>
+            sum + Number(i.price) * i.quantity,
+        0,
+    );
+
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold tracking-tight">
-                    {t("detail.title")} #{order.orderNumber}
-                </h1>
+            <div className="space-y-3">
+                <Link
+                    href={`/${locale}/orders`}
+                    className="inline-flex items-center gap-1.5 text-xs text-[var(--t3)] transition-colors hover:text-[var(--gold)]"
+                >
+                    <ArrowRight size={13} />
+                    الطلبات
+                </Link>
+                <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-3xl font-bold tracking-tight text-[var(--t1)]">
+                        {t("detail.title")}
+                    </h1>
+                    {/* The order number is data, not prose — forced LTR so the
+                        hash and digits do not reorder inside the RTL heading. */}
+                    <span className="font-mono text-xl text-[var(--gold)] tabular-nums" dir="ltr">
+                        #{order.orderNumber}
+                    </span>
+                    {/* Current state belongs in the header. Previously the only
+                        way to see it was to open the status dropdown. */}
+                    <StatusBadge status={order.status} domain="order" />
+                </div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
@@ -52,13 +89,28 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                             <TableBody>
                                 {items.map((item: { id: string, sku: string, quantity: number, price: string | number }) => (
                                     <TableRow key={item.id}>
-                                        <TableCell>{item.sku}</TableCell>
-                                        <TableCell>{item.quantity}</TableCell>
-                                        <TableCell className="text-end">{item.price} ج.م</TableCell>
+                                        <TableCell className="font-mono text-xs" dir="ltr">{item.sku}</TableCell>
+                                        <TableCell className="tabular-nums" dir="ltr">
+                                            {item.quantity.toLocaleString("ar-EG")}
+                                        </TableCell>
+                                        <TableCell className="text-end tabular-nums" dir="ltr">
+                                            {Number(item.price).toLocaleString("ar-EG")} ج.م
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
+
+                        {/* A line-item table with no sum makes the reader add it up
+                            themselves, on a screen that is about money. */}
+                        {items.length > 0 && (
+                            <div className="mt-3 flex items-center justify-between border-t border-[var(--rim1)] pt-3">
+                                <span className="text-xs text-[var(--t3)]">إجمالي الأصناف</span>
+                                <span className="text-lg font-bold text-[var(--t1)] tabular-nums" dir="ltr">
+                                    {itemsTotal.toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م
+                                </span>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -83,9 +135,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                                     {history.map((record: { id: string, provider: string, trackingNumber: string | null, status: string | null, createdAt: string | Date }) => (
                                         <TableRow key={record.id}>
                                             <TableCell>{record.provider}</TableCell>
-                                            <TableCell>{record.trackingNumber || '-'}</TableCell>
-                                            <TableCell>{record.status || '-'}</TableCell>
-                                            <TableCell>{new Date(record.createdAt).toLocaleString()}</TableCell>
+                                            <TableCell className="font-mono text-xs" dir="ltr">
+                                                {record.trackingNumber || "—"}
+                                            </TableCell>
+                                            <TableCell>{record.status || "—"}</TableCell>
+                                            {/* toLocaleString() with no locale renders in the
+                                                server's locale, not the user's. */}
+                                            <TableCell className="tabular-nums" dir="ltr">
+                                                {new Date(record.createdAt).toLocaleString("ar-EG")}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

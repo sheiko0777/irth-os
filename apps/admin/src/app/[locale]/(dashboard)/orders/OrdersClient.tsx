@@ -23,9 +23,11 @@ interface Props {
     page: number;
     pageSize: number;
     total: number;
+    /** Drives the empty-state copy: "no orders yet" vs "nothing matched". */
+    filtered?: boolean;
 }
 
-export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
+export function OrdersClient({ orders, locale, page, pageSize, total, filtered }: Props) {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [key, setKey] = useState(0);
 
@@ -48,12 +50,10 @@ export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
 
     return (
         <div>
-            {/* Toolbar */}
-            <div className="flex items-center justify-between mb-4">
-                <h1 className="text-2xl font-bold text-[var(--t1)]">الطلبات</h1>
-                <div className="flex items-center gap-2">
-                    <ExportButton type="orders" label="تصدير الطلبات" />
-                </div>
+            {/* The heading and search live in the server page now, above the
+                filter tabs; only the export action belongs to the table. */}
+            <div className="flex items-center justify-end mb-3">
+                <ExportButton type="orders" label="تصدير الطلبات" />
             </div>
 
             {/* Table */}
@@ -82,10 +82,17 @@ export function OrdersClient({ orders, locale, page, pageSize, total }: Props) {
                             {orders.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="p-0">
+                                        {/* "Nothing here" and "nothing matched"
+                                            are different problems and need
+                                            different next steps. */}
                                         <EmptyState
                                             icon={ShoppingCart}
-                                            title="لا توجد طلبات"
-                                            hint="لو فيه فلاتر مفعّلة، جرّب تشيلها. غير كده أول طلب هيظهر هنا فور وصوله."
+                                            title={filtered ? 'لا نتائج مطابقة' : 'لا توجد طلبات بعد'}
+                                            hint={
+                                                filtered
+                                                    ? 'جرّب تشيل الفلتر أو تغيّر كلمة البحث.'
+                                                    : 'أول طلب هيظهر هنا فور وصوله من المتجر.'
+                                            }
                                         />
                                     </td>
                                 </tr>

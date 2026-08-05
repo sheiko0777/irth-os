@@ -23,23 +23,25 @@ export const ordersRouter = router({
             const { page, pageSize, status, search, dateRange } = input;
             const offset = (page - 1) * pageSize;
 
-            const conditions = [eq(orders.orgId, ctx.orgId)];
-            
-            if (status) {
-                conditions.push(eq(orders.status, status));
-            }
+            // Everything except the status filter. The status tab counts have to
+            // respect the search and date narrowing, but not the tab the user is
+            // standing on — otherwise every tab but the active one reads zero.
+            const scope = [eq(orders.orgId, ctx.orgId)];
+
             if (search) {
-                conditions.push(ilike(orders.orderNumber, `%${search}%`));
+                scope.push(ilike(orders.orderNumber, `%${search}%`));
             }
             if (dateRange?.from) {
-                conditions.push(gte(orders.createdAt, dateRange.from));
+                scope.push(gte(orders.createdAt, dateRange.from));
             }
             if (dateRange?.to) {
-                conditions.push(lte(orders.createdAt, dateRange.to));
+                scope.push(lte(orders.createdAt, dateRange.to));
             }
 
-            // Execute list and count queries concurrently to reduce latency
-            const [data, totalQuery] = await Promise.all([
+            const conditions = status ? [...scope, eq(orders.status, status)] : scope;
+
+            // Execute list, count and status breakdown concurrently
+            const [data, totalQuery, statusCountsQuery] = await Promise.all([
                 ctx.db
                     .select()
                     .from(orders)
@@ -50,7 +52,12 @@ export const ordersRouter = router({
                 ctx.db
                     .select({ count: count() })
                     .from(orders)
-                    .where(and(...conditions))
+                    .where(and(...conditions)),
+                ctx.db
+                    .select({ status: orders.status, count: count() })
+                    .from(orders)
+                    .where(and(...scope))
+                    .groupBy(orders.status),
             ]);
 
             return {
@@ -60,6 +67,7 @@ export const ordersRouter = router({
                     total: totalQuery[0].count,
                     page,
                     pageSize,
+                    statusCounts: statusCountsQuery.map((r) => ({ status: r.status, count: r.count })),
                 }
             };
         }),

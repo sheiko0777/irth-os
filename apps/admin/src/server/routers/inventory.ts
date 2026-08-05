@@ -1,13 +1,33 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
-import { eq, and, desc, asc, lte } from 'drizzle-orm';
+import { eq, and, desc, asc, lte, gt, sql, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const inventoryRouter = router({
   list: protectedProcedure
-    .query(async ({ ctx }) => {
-      const items = await ctx.db
+    .input(z.object({
+      /**
+       * `out` is stock at or below zero — unsellable right now.
+       * `low` is at or below the reorder point but still sellable.
+       * They are separate because they demand different actions, and the
+       * sidebar alert panel deep-links straight to `out`.
+       */
+      stock: z.enum(['out', 'low', 'ok']).optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const scope = eq(inventoryItems.orgId, ctx.orgId);
+
+      const stockFilter =
+        input?.stock === 'out' ? lte(inventoryItems.quantity, 0)
+        : input?.stock === 'low' ? and(
+            gt(inventoryItems.quantity, 0),
+            lte(inventoryItems.quantity, inventoryItems.reorderPoint),
+          )
+        : input?.stock === 'ok' ? gt(inventoryItems.quantity, inventoryItems.reorderPoint)
+        : undefined;
+
+      const base = ctx.db
         .select({
           item: inventoryItems,
           variant: productVariants,
@@ -15,11 +35,32 @@ export const inventoryRouter = router({
         })
         .from(inventoryItems)
         .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
-        .innerJoin(products, eq(productVariants.productId, products.id))
-        .where(eq(inventoryItems.orgId, ctx.orgId))
-        .orderBy(asc(inventoryItems.quantity));
+        .innerJoin(products, eq(productVariants.productId, products.id));
 
-      return { data: items, error: null, meta: null };
+      // Counts always span the whole org, never the active filter — a tab that
+      // showed its own filtered count would read zero on every other tab.
+      const [items, tally] = await Promise.all([
+        base
+          .where(stockFilter ? and(scope, stockFilter) : scope)
+          .orderBy(asc(inventoryItems.quantity)),
+        ctx.db
+          .select({
+            out: sql<number>`count(*) filter (where ${inventoryItems.quantity} <= 0)`.mapWith(Number),
+            low: sql<number>`count(*) filter (where ${inventoryItems.quantity} > 0 and ${inventoryItems.quantity} <= ${inventoryItems.reorderPoint})`.mapWith(Number),
+            ok: sql<number>`count(*) filter (where ${inventoryItems.quantity} > ${inventoryItems.reorderPoint})`.mapWith(Number),
+            all: count(),
+          })
+          .from(inventoryItems)
+          .where(scope),
+      ]);
+
+      return {
+        data: items,
+        error: null,
+        meta: {
+          counts: tally[0] ?? { out: 0, low: 0, ok: 0, all: 0 },
+        },
+      };
     }),
 
   alerts: protectedProcedure

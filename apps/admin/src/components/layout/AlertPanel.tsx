@@ -40,8 +40,11 @@ export function AlertPanel({ locale }: { locale: string }) {
     },
     {
       key: 'outOfStock',
+      // Deep-links to the filter, not the page. Landing on an unfiltered table
+      // and asking the operator to find the four broken rows themselves is the
+      // difference between an alert and a nag.
       label: 'أصناف نفدت',
-      href: `/${locale}/inventory`,
+      href: `/${locale}/inventory?stock=out`,
       icon: PackageX,
       fg: 'var(--amber)',
       bg: 'rgba(245,165,0,.15)',

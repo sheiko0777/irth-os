@@ -1,96 +1,136 @@
 import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { ExportButton } from "@/components/ExportButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { FilterTabs, type FilterTab } from "@/components/ui/FilterTabs";
 import { Warehouse } from "lucide-react";
 
-export default async function InventoryPage() {
-    const t = await getTranslations();
-    const caller = await serverCaller();
+/**
+ * Three stock states, not two. "Out" cannot be sold today; "low" can, but needs
+ * a purchase order. Collapsing them into one red badge — as this page used to —
+ * hides the difference between "act now" and "act this week".
+ */
+const STOCK_STATES = {
+  out: { label: "نفد", fg: "var(--crimson)", bg: "rgba(232,56,56,.15)" },
+  low: { label: "منخفض", fg: "var(--amber)", bg: "rgba(245,165,0,.15)" },
+  ok: { label: "متوفر", fg: "var(--emerald)", bg: "rgba(0,196,120,.15)" },
+} as const;
 
-    const [itemsResponse, alertsResponse] = await Promise.all([
-        caller.inventory.list(),
-        caller.inventory.alerts()
-    ]);
+type StockState = keyof typeof STOCK_STATES;
 
-    if (itemsResponse.error || alertsResponse.error) {
-        return <ErrorState message="تعذّر تحميل بيانات المخزون." />;
-    }
+function isStockState(v: string | undefined): v is StockState {
+  return v === "out" || v === "low" || v === "ok";
+}
 
-    const { data: items } = itemsResponse;
-    const { data: alerts } = alertsResponse;
+function stateOf(quantity: number, reorderPoint: number): StockState {
+  if (quantity <= 0) return "out";
+  if (quantity <= reorderPoint) return "low";
+  return "ok";
+}
 
-    return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-[var(--t1)]">{t('inventory.title')}</h1>
-                <ExportButton type="inventory" label="تصدير المخزون" />
-            </div>
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ stock?: string }>;
+}) {
+  const t = await getTranslations();
+  const { stock: stockParam } = await searchParams;
+  const stock = isStockState(stockParam) ? stockParam : undefined;
 
-            {alerts.length > 0 && (
-                /* Was gold text on a solid crimson fill: roughly 1.5:1, illegible.
-                   Tinted like every other status surface in the console, with the
-                   crimson carried by a 3px edge bar instead of a full flood. */
-                <div className="rounded-md border border-[var(--rim1)] border-s-[3px] border-s-[var(--crimson)] bg-[rgba(232,56,56,.10)] p-4">
-                    <p className="font-semibold text-[var(--t1)]">
-                        {t('inventory.alerts_banner', { count: alerts.length })}
-                    </p>
-                </div>
+  const caller = await serverCaller();
+  const itemsResponse = await caller.inventory.list({ stock });
+
+  if (itemsResponse.error) {
+    return <ErrorState message="تعذّر تحميل بيانات المخزون." />;
+  }
+
+  const items = itemsResponse.data;
+  const counts = itemsResponse.meta?.counts ?? { out: 0, low: 0, ok: 0, all: 0 };
+
+  const tabs: FilterTab[] = [
+    { label: "الكل", count: counts.all },
+    { value: "out", label: STOCK_STATES.out.label, count: counts.out },
+    { value: "low", label: STOCK_STATES.low.label, count: counts.low },
+    { value: "ok", label: STOCK_STATES.ok.label, count: counts.ok },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-[var(--t1)]">{t("inventory.title")}</h1>
+        <ExportButton type="inventory" label="تصدير المخزون" />
+      </div>
+
+      {/* The banner is gone: the tab strip carries the same warning as a live,
+          clickable count instead of a static sentence the operator cannot act on. */}
+      <FilterTabs param="stock" tabs={tabs} />
+
+      <div className="rounded-md border border-[var(--rim1)] overflow-hidden bg-[var(--surface)]">
+        <Table>
+          <TableHeader className="bg-[var(--rim1)]">
+            <TableRow>
+              <TableHead className="text-right">{t("inventory.columns.product")}</TableHead>
+              <TableHead className="text-right">{t("inventory.columns.variant")}</TableHead>
+              <TableHead className="text-right">{t("inventory.columns.quantity")}</TableHead>
+              <TableHead className="text-right">{t("inventory.columns.reorderPoint")}</TableHead>
+              <TableHead className="text-right">{t("inventory.columns.status")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.length === 0 ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="p-0">
+                  {stock ? (
+                    <EmptyState
+                      icon={Warehouse}
+                      title={`لا توجد أصناف بحالة "${STOCK_STATES[stock].label}"`}
+                      hint="غيّر الفلتر لعرض باقي الأصناف."
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={Warehouse}
+                      title="لا توجد عناصر في المخزون"
+                      hint="المخزون بيتكوّن من متغيّرات المنتجات. ابدأ بإضافة منتج وحدّد كمياته."
+                      action={{ label: "إضافة منتج", href: "/ar/products/new" }}
+                    />
+                  )}
+                </TableCell>
+              </TableRow>
+            ) : (
+              items.map((row: { item: { id: string; quantity: number; reorderPoint: number }; product: { name: string; nameAr: string | null }; variant: { name: string } }) => {
+                const state = stateOf(row.item.quantity, row.item.reorderPoint);
+                const style = STOCK_STATES[state];
+                return (
+                  <TableRow key={row.item.id} className="border-b border-[var(--rim1)]">
+                    <TableCell className="font-medium text-[var(--t1)]">
+                      {row.product.nameAr || row.product.name}
+                    </TableCell>
+                    <TableCell className="text-[var(--t2)]">{row.variant.name}</TableCell>
+                    <TableCell className="text-[var(--t1)] tabular-nums" dir="ltr">
+                      {row.item.quantity.toLocaleString("ar-EG")}
+                    </TableCell>
+                    <TableCell className="text-[var(--t2)] tabular-nums" dir="ltr">
+                      {row.item.reorderPoint.toLocaleString("ar-EG")}
+                    </TableCell>
+                    <TableCell>
+                      {/* Tinted, never a solid fill — the same treatment as every
+                          other status surface in the console. */}
+                      <span
+                        className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+                        style={{ color: style.fg, background: style.bg }}
+                      >
+                        {style.label}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
-
-            <div className="rounded-md border border-[var(--rim1)] overflow-hidden bg-[var(--surface)]">
-                <Table>
-                    <TableHeader className="bg-[var(--rim1)]">
-                        <TableRow>
-                            <TableHead className="text-right">{t('inventory.columns.product')}</TableHead>
-                            <TableHead className="text-right">{t('inventory.columns.variant')}</TableHead>
-                            <TableHead className="text-right">{t('inventory.columns.quantity')}</TableHead>
-                            <TableHead className="text-right">{t('inventory.columns.reorderPoint')}</TableHead>
-                            <TableHead className="text-right">{t('inventory.columns.status')}</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {items.length === 0 ? (
-                            <TableRow className="hover:bg-transparent">
-                                <TableCell colSpan={5} className="p-0">
-                                    <EmptyState
-                                        icon={Warehouse}
-                                        title="لا توجد عناصر في المخزون"
-                                        hint="المخزون بيتكوّن من متغيّرات المنتجات. ابدأ بإضافة منتج وحدّد كمياته."
-                                        action={{ label: 'إضافة منتج', href: '/ar/products/new' }}
-                                    />
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            items.map((row: { item: { id: string, quantity: number, reorderPoint: number }, product: { name: string, nameAr: string | null }, variant: { name: string } }) => {
-                                const isLowStock = row.item.quantity <= row.item.reorderPoint;
-                                return (
-                                    <TableRow key={row.item.id} className="border-b border-[var(--rim1)]">
-                                        <TableCell className="font-medium text-[var(--t1)]">{row.product.nameAr || row.product.name}</TableCell>
-                                        <TableCell className="text-[var(--t2)]">{row.variant.name}</TableCell>
-                                        <TableCell className="text-[var(--t1)]">{row.item.quantity}</TableCell>
-                                        <TableCell className="text-[var(--t2)]">{row.item.reorderPoint}</TableCell>
-                                        <TableCell>
-                                            {isLowStock ? (
-                                                <Badge className="bg-[var(--crimson)] hover:bg-[var(--crimson)] text-void">
-                                                    {t('inventory.status.low')}
-                                                </Badge>
-                                            ) : (
-                                                <Badge className="bg-[var(--emerald)] hover:bg-[var(--emerald)] text-void">
-                                                    {t('inventory.status.ok')}
-                                                </Badge>
-                                            )}
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
-    );
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
 }
