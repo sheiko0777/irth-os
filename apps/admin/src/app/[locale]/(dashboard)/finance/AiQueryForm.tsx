@@ -65,7 +65,7 @@ export function AiQueryForm() {
                     {queryStr && (
                         <div className="mt-4 pt-4 border-t border-[var(--rim1)]">
                             <h4 className="text-[var(--t3)] mb-2 text-xs">استعلام SQL الذي تم تنفيذه:</h4>
-                            <pre className="text-[var(--t2)] font-mono text-xs overflow-x-auto p-2 bg-black/20 rounded" dir="ltr">
+                            <pre className="text-[var(--t2)] font-mono text-xs overflow-x-auto p-2 bg-black/20 rounded-md" dir="ltr">
                                 {queryStr}
                             </pre>
                         </div>

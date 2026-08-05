@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { trpc } from '@/lib/trpc';
 
 export type GiftCard = {
@@ -143,9 +144,7 @@ export default function GiftCardsClient({
             <tbody>
               {cards.length === 0 && (
                 <tr>
-                  <td colSpan={7} className='px-4 py-12 text-center text-[var(--t2)]'>
-                    لا توجد بطاقات هدايا بعد
-                  </td>
+                  <td colSpan={7} className="p-0"><EmptyState title="لا توجد بطاقات هدايا" hint="البطاقة برصيد مدفوع مقدماً، العميل يستخدمها في الدفع." /></td>
                 </tr>
               )}
               {cards.map((card) => (
@@ -157,7 +156,7 @@ export default function GiftCardsClient({
                       </span>
                       <button
                         onClick={() => copyCode(card.code)}
-                        className='text-xs px-2 py-0.5 rounded border border-[var(--rim2)] text-[var(--t2)] hover:text-[var(--t1)] transition-colors'
+                        className='text-xs px-2 py-0.5 rounded-md border border-[var(--rim2)] text-[var(--t2)] hover:text-[var(--t1)] transition-colors'
                       >
                         {copiedCode === card.code ? 'تم النسخ' : 'نسخ'}
                       </button>
@@ -198,7 +197,7 @@ export default function GiftCardsClient({
       {/* Create Modal */}
       {showCreate && (
         <div className='fixed inset-0 z-50 flex items-center justify-center' style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className='rounded-2xl border border-[var(--rim1)] bg-[var(--surface)] p-6 w-full max-w-md shadow-2xl'>
+          <div className='rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-6 w-full max-w-md shadow-2xl'>
             <h2 className='text-lg font-bold text-[var(--t1)] mb-4'>إصدار بطاقة هدية جديدة</h2>
             <form onSubmit={handleCreate} className='space-y-4'>
               <div>

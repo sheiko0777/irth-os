@@ -52,7 +52,7 @@ export function BulkOrderActions({ selectedIds, onSuccess }: Props) {
                     onChange={(e: { target: { value: string } }) =>
                         setStatus(e.target.value as StatusValue)
                     }
-                    className="text-sm border border-[var(--rim1)] rounded px-2 py-1 bg-[var(--surface)] text-[var(--t1)] cursor-pointer"
+                    className="text-sm border border-[var(--rim1)] rounded-md px-2 py-1 bg-[var(--surface)] text-[var(--t1)] cursor-pointer"
                 >
                     {STATUS_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -71,7 +71,7 @@ export function BulkOrderActions({ selectedIds, onSuccess }: Props) {
                 >
                     <button
                         disabled={mutation.isPending}
-                        className="bg-[var(--gold)] text-void text-sm px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50 cursor-pointer transition-opacity"
+                        className="bg-[var(--gold)] text-void text-sm px-4 py-1.5 rounded-md hover:opacity-90 disabled:opacity-50 cursor-pointer transition-opacity"
                     >
                         {mutation.isPending ? 'جارٍ التحديث...' : 'تطبيق'}
                     </button>

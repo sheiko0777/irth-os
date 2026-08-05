@@ -207,14 +207,14 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
                               <button
                                 disabled={isPending}
                                 onClick={() => void handleUpdateStatus(ret.id, 'approved')}
-                                className="px-3 py-1 bg-emerald/10 text-emerald rounded hover:bg-emerald/20 text-xs disabled:opacity-50"
+                                className="px-3 py-1 bg-emerald/10 text-emerald rounded-md hover:bg-emerald/20 text-xs disabled:opacity-50"
                               >
                                 موافقة
                               </button>
                               <button
                                 disabled={isPending}
                                 onClick={() => void handleUpdateStatus(ret.id, 'rejected')}
-                                className="px-3 py-1 bg-crimson/10 text-crimson rounded hover:bg-crimson/20 text-xs disabled:opacity-50"
+                                className="px-3 py-1 bg-crimson/10 text-crimson rounded-md hover:bg-crimson/20 text-xs disabled:opacity-50"
                               >
                                 رفض
                               </button>
@@ -224,7 +224,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
                             <button
                               disabled={isPending}
                               onClick={() => void handleUpdateStatus(ret.id, 'received')}
-                              className="px-3 py-1 bg-azure/10 text-azure rounded hover:bg-azure/20 text-xs disabled:opacity-50"
+                              className="px-3 py-1 bg-azure/10 text-azure rounded-md hover:bg-azure/20 text-xs disabled:opacity-50"
                             >
                               تم الاستلام
                             </button>
@@ -233,7 +233,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
                             <button
                               disabled={isPending}
                               onClick={() => void handleUpdateStatus(ret.id, 'restocked')}
-                              className="px-3 py-1 bg-gold/10 text-gold rounded hover:bg-gold/20 text-xs disabled:opacity-50"
+                              className="px-3 py-1 bg-gold/10 text-gold rounded-md hover:bg-gold/20 text-xs disabled:opacity-50"
                             >
                               إعادة تخزين
                             </button>
@@ -243,14 +243,14 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
                               <input
                                 type="number"
                                 placeholder="المبلغ"
-                                className="px-2 py-1 border border-[var(--rim1)] rounded text-xs w-20 bg-transparent text-[var(--t1)]"
+                                className="px-2 py-1 border border-[var(--rim1)] rounded-md text-xs w-20 bg-transparent text-[var(--t1)]"
                                 value={refundInput[ret.id] || ''}
                                 onChange={(e) => setRefundInput(prev => ({ ...prev, [ret.id]: e.target.value }))}
                               />
                               <button
                                 disabled={isPending}
                                 onClick={() => void handleUpdateStatus(ret.id, 'refunded')}
-                                className="px-3 py-1 bg-amber/10 text-amber rounded hover:bg-amber/20 text-xs disabled:opacity-50"
+                                className="px-3 py-1 bg-amber/10 text-amber rounded-md hover:bg-amber/20 text-xs disabled:opacity-50"
                               >
                                 استرداد
                               </button>

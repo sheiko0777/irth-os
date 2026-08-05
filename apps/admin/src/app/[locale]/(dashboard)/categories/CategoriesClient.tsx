@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -96,9 +97,7 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                     <TableBody>
                         {categories.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center text-[var(--t2)] py-8">
-                                    لا توجد فئات
-                                </TableCell>
+                                <TableCell colSpan={4} className="p-0"><EmptyState title="لا توجد فئات" hint="الفئات بتنظّم المنتجات وبتظهر للعميل كتصنيفات في المتجر." /></TableCell>
                             </TableRow>
                         ) : (
                             categories.map(category => (

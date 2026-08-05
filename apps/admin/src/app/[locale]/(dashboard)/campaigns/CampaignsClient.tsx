@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -142,7 +143,7 @@ export default function CampaignsClient({
           </thead>
           <tbody>
             {campaigns.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-12" style={{ color: 'var(--t2)' }}>لا توجد حملات بعد</td></tr>
+              <tr><td colSpan={7} className="p-0"><EmptyState title="لا توجد حملات بعد" hint="الحملة بتبعت رسالة لشريحة عملاء عبر واتساب أو البريد." /></td></tr>
             )}
             {campaigns.map((c) => (
               <tr key={c.id} className="border-t" style={{ borderColor: 'var(--rim1)' }}>
@@ -167,7 +168,7 @@ export default function CampaignsClient({
                         pending={sendMutation.isPending}
                         onConfirm={() => sendMutation.mutate({ id: c.id })}>
                         <button
-                          className="px-3 py-1 rounded text-xs font-semibold"
+                          className="px-3 py-1 rounded-md text-xs font-semibold"
                           style={{ background: 'var(--emerald)', color: 'var(--void)' }}>
                           إرسال
                         </button>
@@ -181,7 +182,7 @@ export default function CampaignsClient({
                         pending={deleteMutation.isPending}
                         onConfirm={() => deleteMutation.mutate({ id: c.id })}>
                         <button
-                          className="px-3 py-1 rounded text-xs"
+                          className="px-3 py-1 rounded-md text-xs"
                           style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--crimson)' }}>
                           حذف
                         </button>
@@ -198,7 +199,7 @@ export default function CampaignsClient({
       {/* Create Modal */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <form onSubmit={handleCreate} className="rounded-2xl p-6 w-full max-w-lg border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
+          <form onSubmit={handleCreate} className="rounded-xl p-6 w-full max-w-lg border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
             <h2 className="text-lg font-bold mb-5">حملة جديدة</h2>
             <div className="space-y-4">
               <div>
@@ -266,7 +267,7 @@ export default function CampaignsClient({
       {/* Preview Modal */}
       {previewCampaign && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className="rounded-2xl p-6 w-full max-w-md border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
+          <div className="rounded-xl p-6 w-full max-w-md border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
             <h2 className="text-lg font-bold mb-4">{previewCampaign.name}</h2>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">

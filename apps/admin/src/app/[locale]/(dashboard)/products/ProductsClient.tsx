@@ -233,7 +233,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                     onChange={(e: { target: { value: string } }) => setSearchQuery(e.target.value)}
                     className="max-w-xs"
                 />
-                <div className="flex gap-2 bg-[var(--surface)] p-1 rounded border">
+                <div className="flex gap-2 bg-[var(--surface)] p-1 rounded-md border">
                     <Button 
                         variant={statusFilter === "all" ? "default" : "ghost"} 
                         size="sm" 

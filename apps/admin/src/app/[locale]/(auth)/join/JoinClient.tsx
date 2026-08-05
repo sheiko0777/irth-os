@@ -93,7 +93,7 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
         </div>
 
         {error && (
-          <p className="text-sm px-3 py-2 rounded" style={{ background: 'var(--rim1)', color: 'var(--crimson)' }}>
+          <p className="text-sm px-3 py-2 rounded-md" style={{ background: 'var(--rim1)', color: 'var(--crimson)' }}>
             {error}
           </p>
         )}

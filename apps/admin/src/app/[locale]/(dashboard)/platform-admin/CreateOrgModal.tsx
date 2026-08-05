@@ -60,12 +60,12 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
             <input
               readOnly
               value={inviteUrl}
-              className="flex-1 text-xs rounded border px-3 py-2 outline-none"
+              className="flex-1 text-xs rounded-md border px-3 py-2 outline-none"
               style={{ borderColor: 'var(--rim2)', background: 'var(--rim1)', color: 'var(--t1)', direction: 'ltr' }}
             />
             <button
               onClick={() => navigator.clipboard.writeText(inviteUrl)}
-              className="text-xs px-3 rounded border font-medium"
+              className="text-xs px-3 rounded-md border font-medium"
               style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}
             >
               نسخ
@@ -74,7 +74,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
           <p className="text-xs" style={{ color: 'var(--t3)' }}>الرابط صالح ٧ أيام</p>
           <button
             onClick={onClose}
-            className="w-full py-2 rounded text-sm font-bold"
+            className="w-full py-2 rounded-md text-sm font-bold"
             style={{ background: 'var(--gold)', color: 'var(--void)' }}
           >
             إغلاق
@@ -92,7 +92,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
                   setCName(e.target.value);
                   setCSlug(toSlug(e.target.value));
                 }}
-                className="w-full text-sm rounded border px-3 py-2 outline-none"
+                className="w-full text-sm rounded-md border px-3 py-2 outline-none"
                 style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
               />
             </div>
@@ -102,7 +102,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
                 required
                 value={cSlug}
                 onChange={(e: { target: { value: string } }) => setCSlug(e.target.value)}
-                className="w-full text-sm rounded border px-3 py-2 outline-none"
+                className="w-full text-sm rounded-md border px-3 py-2 outline-none"
                 style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)', direction: 'ltr' }}
                 placeholder="my-org"
               />
@@ -114,7 +114,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
                 type="email"
                 value={cEmail}
                 onChange={(e: { target: { value: string } }) => setCEmail(e.target.value)}
-                className="w-full text-sm rounded border px-3 py-2 outline-none"
+                className="w-full text-sm rounded-md border px-3 py-2 outline-none"
                 style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)', direction: 'ltr' }}
                 placeholder="owner@company.com"
               />
@@ -129,7 +129,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
                   key={p}
                   type="button"
                   onClick={() => applyPreset(p)}
-                  className="flex-1 py-1.5 rounded border text-xs font-medium"
+                  className="flex-1 py-1.5 rounded-md border text-xs font-medium"
                   style={{
                     borderColor: cPlan === p ? 'var(--gold)' : 'var(--rim2)',
                     background: cPlan === p ? 'var(--gold-bg)' : 'transparent',
@@ -150,7 +150,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
               onChange={(e: { target: { value: string } }) => setCMaxUsers(e.target.value)}
               min="1"
               placeholder="غير محدود"
-              className="w-32 text-sm rounded border px-3 py-1.5 outline-none"
+              className="w-32 text-sm rounded-md border px-3 py-1.5 outline-none"
               style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
             />
           </div>
@@ -161,7 +161,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
               value={cNotes}
               onChange={(e: { target: { value: string } }) => setCNotes(e.target.value)}
               rows={2}
-              className="w-full text-sm rounded border px-3 py-2 outline-none resize-none"
+              className="w-full text-sm rounded-md border px-3 py-2 outline-none resize-none"
               style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
             />
           </div>
@@ -169,7 +169,7 @@ export function CreateOrgModal({ show, onClose, creating, inviteUrl, onCreate }:
           <button
             type="submit"
             disabled={creating}
-            className="w-full py-2.5 rounded text-sm font-bold"
+            className="w-full py-2.5 rounded-md text-sm font-bold"
             style={{ background: 'var(--gold)', color: 'var(--void)', opacity: creating ? 0.6 : 1 }}
           >
             {creating ? 'جارٍ الإنشاء...' : 'إنشاء الحساب وإرسال دعوة'}

@@ -109,7 +109,7 @@ export function ExportButton({ type, label, startDate, endDate }: Props) {
         <button
             onClick={handleExport}
             disabled={loading}
-            className="flex items-center gap-2 bg-[var(--surface)] border border-[var(--rim1)] text-[var(--t1)] text-sm px-3 py-1.5 rounded hover:bg-raised disabled:opacity-50 cursor-pointer transition-colors"
+            className="flex items-center gap-2 bg-[var(--surface)] border border-[var(--rim1)] text-[var(--t1)] text-sm px-3 py-1.5 rounded-md hover:bg-raised disabled:opacity-50 cursor-pointer transition-colors"
         >
             <Download className="w-4 h-4" />
             {loading ? 'جارٍ التصدير...' : label}

@@ -1,4 +1,5 @@
 import { serverCaller } from "@/server/caller";
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -105,7 +106,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <TableBody>
             {transactions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center">لا توجد معاملات.</TableCell>
+                <TableCell colSpan={5} className="p-0"><EmptyState title="لا توجد معاملات" hint="معاملات نقاط الولاء بتظهر هنا بعد أول طلب أو تعديل يدوي للرصيد." /></TableCell>
               </TableRow>
             ) : (
               transactions.map((tx) => (

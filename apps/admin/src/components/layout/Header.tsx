@@ -50,7 +50,7 @@ export function Header({ locale }: { locale: string }) {
           <Search size={13} aria-hidden="true" />
           <span className="truncate">بحث أو انتقال سريع</span>
           <kbd
-            className="ms-auto rounded border border-[var(--rim2)] bg-[var(--card-bg)] px-1.5 py-0.5 text-[10px]"
+            className="ms-auto rounded-md border border-[var(--rim2)] bg-[var(--card-bg)] px-1.5 py-0.5 text-[10px]"
             dir="ltr"
           >
             Ctrl K

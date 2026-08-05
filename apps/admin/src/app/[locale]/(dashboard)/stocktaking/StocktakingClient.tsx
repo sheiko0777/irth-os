@@ -135,7 +135,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
                             <TableCell className="text-[var(--t1)]">{item.expectedQty}</TableCell>
                             <TableCell className="text-[var(--t1)]">{item.countedQty}</TableCell>
                             <TableCell>
-                              <span className="px-2 py-0.5 rounded text-xs font-bold" style={{ color: variance === 0 ? 'var(--emerald)' : 'var(--crimson)' }}>
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ color: variance === 0 ? 'var(--emerald)' : 'var(--crimson)' }}>
                                 {variance > 0 ? '+' + variance : variance}
                               </span>
                             </TableCell>

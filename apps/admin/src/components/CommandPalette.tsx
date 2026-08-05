@@ -170,7 +170,7 @@ export function CommandPalette({ locale }: { locale: string }) {
       role="presentation"
     >
       <div
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--rim2)] bg-[var(--card-bg)]"
+        className="w-full max-w-lg overflow-hidden rounded-xl border border-[var(--rim2)] bg-[var(--card-bg)]"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -191,7 +191,7 @@ export function CommandPalette({ locale }: { locale: string }) {
             aria-activedescendant={results[active] ? `cmd-${results[active].id}` : undefined}
           />
           <kbd
-            className="shrink-0 rounded border border-[var(--rim2)] bg-[var(--surface)] px-1.5 py-0.5 text-[10px] text-[var(--t3)]"
+            className="shrink-0 rounded-md border border-[var(--rim2)] bg-[var(--surface)] px-1.5 py-0.5 text-[10px] text-[var(--t3)]"
             dir="ltr"
           >
             Esc
@@ -245,7 +245,7 @@ export function CommandPalette({ locale }: { locale: string }) {
                   <span className="truncate">{cmd.label}</span>
                   {isActive && (
                     <kbd
-                      className="ms-auto shrink-0 rounded border border-[var(--rim2)] bg-[var(--surface)] px-1.5 py-0.5 text-[10px] text-[var(--t3)]"
+                      className="ms-auto shrink-0 rounded-md border border-[var(--rim2)] bg-[var(--surface)] px-1.5 py-0.5 text-[10px] text-[var(--t3)]"
                       dir="ltr"
                     >
                       ↵

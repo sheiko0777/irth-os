@@ -68,7 +68,7 @@ export function EditProductForm({ product }: { product: Product }) {
                         <Input {...register("description")} />
                     </div>
                     <div className="flex items-center space-x-2 space-x-reverse">
-                        <input type="checkbox" id="isActive" {...register("isActive")} className="w-4 h-4 rounded border-rim1" />
+                        <input type="checkbox" id="isActive" {...register("isActive")} className="w-4 h-4 rounded-md border-rim1" />
                         <label htmlFor="isActive" className="text-sm font-medium leading-none">{t("isActive")}</label>
                     </div>
                 </CardContent>

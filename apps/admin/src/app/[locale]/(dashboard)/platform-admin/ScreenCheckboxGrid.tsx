@@ -20,7 +20,7 @@ export function ScreenCheckboxGrid({ screens, onChange }: Props) {
                   : [...screens, s.slug]
               )
             }
-            className="w-4 h-4 rounded shrink-0"
+            className="w-4 h-4 rounded-md shrink-0"
           />
           <span className="text-sm">{s.label}</span>
         </label>

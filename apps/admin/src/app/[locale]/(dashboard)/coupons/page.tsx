@@ -1,4 +1,5 @@
 import { serverCaller } from '@/server/caller';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CreateCouponDialog, ToggleCouponButton, DeleteCouponButton } from './CouponActions';
@@ -72,7 +73,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
                         <tbody className="divide-y divide-[var(--rim1)]">
                             {data.items.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-8 text-center text-[var(--t2)]">لا توجد كوبونات</td>
+                                    <td colSpan={8} className="p-0"><EmptyState title="لا توجد كوبونات" hint="الكوبون بيدّي خصم بنسبة أو مبلغ ثابت، وممكن تحدّد له مدة وحد أقصى للاستخدام." /></td>
                                 </tr>
                             ) : (
                                 data.items.map((coupon) => (

@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { EmptyState } from '@/components/ui/EmptyState';
 import { serverCaller } from "@/server/caller";
 import { AiQueryForm } from "./AiQueryForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -112,7 +113,7 @@ export default async function FinancePage() {
                         <TableBody>
                             {codRows.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-center text-[var(--t3)] py-8">لا توجد بيانات متاحة.</TableCell>
+                                    <TableCell colSpan={4} className="p-0"><EmptyState title="لا توجد بيانات في هذه الفترة" hint="الأرقام بتتحسب من الطلبات المسلَّمة خلال الشهر الحالي." /></TableCell>
                                 </TableRow>
                             ) : (
                                 codRows.map((row: { orderId: string, orderNumber: string, amount: string, status: string, createdAt: Date }) => (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { trpc } from '@/lib/trpc';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -137,9 +138,7 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
                     <TableBody>
                         {filteredInvoices.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center text-[var(--t2)] py-8">
-                                    لا توجد فواتير
-                                </TableCell>
+                                <TableCell colSpan={5} className="p-0"><EmptyState title="لا توجد فواتير إلكترونية" hint="الفاتورة بتتبعت لمصلحة الضرائب بعد تسليم الطلب." /></TableCell>
                             </TableRow>
                         ) : (
                             filteredInvoices.map((inv) => {

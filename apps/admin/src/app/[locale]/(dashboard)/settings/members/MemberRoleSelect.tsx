@@ -26,7 +26,7 @@ export function MemberRoleSelect({ memberId, role }: { memberId: string; role: s
             <PermissionGate resource="members" action="changeRole">
                 {role !== 'owner' && (
                     <select
-                        className="border text-sm p-1 rounded"
+                        className="border text-sm p-1 rounded-md"
                         value={value}
                         disabled={changeRoleMutation.isPending}
                         onChange={(e) => {

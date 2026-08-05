@@ -1,6 +1,7 @@
 'use client';
 
 import { type CustomerSegment } from './CustomerSegmentsClient';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type SegmentListProps = {
   segments: CustomerSegment[];
@@ -18,9 +19,7 @@ export function SegmentList({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {segments.length === 0 && (
-        <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-xl p-[40px] text-center text-[var(--t2)]">
-          لا توجد شرائح بعد — أنشئ شريحتك الأولى
-        </div>
+        <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-xl"><EmptyState title="لا توجد شرائح بعد" hint="الشريحة بتجمّع عملاء بمعيار مشترك عشان تستهدفهم بحملة." /></div>
       )}
       {segments.map((seg) => (
         <div

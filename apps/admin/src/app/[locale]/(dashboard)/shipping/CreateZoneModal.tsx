@@ -38,7 +38,7 @@ export function CreateZoneModal({ open, onClose, onSuccess }: Props) {
             required
             value={zoneName}
             onChange={(e) => setZoneName(e.target.value)}
-            className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+            className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
           />
         </div>
         <div>
@@ -47,7 +47,7 @@ export function CreateZoneModal({ open, onClose, onSuccess }: Props) {
             value={zoneCountries}
             onChange={(e) => setZoneCountries(e.target.value)}
             rows={3}
-            className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+            className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
           />
         </div>
         <div className="flex gap-2 justify-end">

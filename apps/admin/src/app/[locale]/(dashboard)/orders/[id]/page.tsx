@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { EmptyState } from '@/components/ui/EmptyState';
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,7 +68,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     </CardHeader>
                     <CardContent>
                         {history.length === 0 ? (
-                            <p className="text-muted-foreground">لا يوجد سجلات تتبع</p>
+                            <EmptyState title="لا يوجد سجل تتبع" hint="التتبع بيبدأ لما الطلب يتسلّم لشركة الشحن." />
                         ) : (
                             <Table>
                                 <TableHeader>

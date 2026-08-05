@@ -59,7 +59,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
             required
             value={rateName}
             onChange={(e) => setRateName(e.target.value)}
-            className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+            className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
           />
         </div>
         <div>
@@ -67,7 +67,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
           <select
             value={rateType}
             onChange={(e) => setRateType(e.target.value as ShippingRate['rateType'])}
-            className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+            className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
           >
             <option value="flat">ثابت</option>
             <option value="weight_based">حسب الوزن</option>
@@ -84,7 +84,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
               step="0.01"
               value={ratePrice}
               onChange={(e) => setRatePrice(e.target.value)}
-              className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+              className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
               dir="ltr"
             />
           </div>
@@ -97,7 +97,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
               min="0"
               value={rateMinOrder}
               onChange={(e) => setRateMinOrder(e.target.value)}
-              className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+              className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
               dir="ltr"
             />
           </div>
@@ -108,7 +108,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
               min="0"
               value={rateMaxOrder}
               onChange={(e) => setRateMaxOrder(e.target.value)}
-              className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+              className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
               dir="ltr"
             />
           </div>
@@ -121,7 +121,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
               min="0"
               value={rateDaysMin}
               onChange={(e) => setRateDaysMin(e.target.value)}
-              className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+              className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
               dir="ltr"
             />
           </div>
@@ -132,7 +132,7 @@ export function CreateRateModal({ open, onClose, zoneId, onSuccess }: Props) {
               min="0"
               value={rateDaysMax}
               onChange={(e) => setRateDaysMax(e.target.value)}
-              className="w-full p-2 border rounded border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+              className="w-full p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
               dir="ltr"
             />
           </div>

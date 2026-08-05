@@ -1,4 +1,5 @@
 import { serverCaller } from "@/server/caller";
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 import CustomerActions from "./CustomerActions";
@@ -65,7 +66,7 @@ export default async function CustomersPage({
           <TableBody>
             {customerList.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center">لا يوجد عملاء.</TableCell>
+                <TableCell colSpan={7} className="p-0"><EmptyState title="لا يوجد عملاء" hint="العميل بيتسجّل تلقائياً مع أول طلب، أو ضيفه يدوي." /></TableCell>
               </TableRow>
             ) : (
               customerList.map((customer) => (

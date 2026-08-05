@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
@@ -208,9 +209,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                             <TableBody>
                                 {filteredShipments.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center text-[var(--t2)] py-8">
-                                            لا توجد شحنات
-                                        </TableCell>
+                                        <TableCell colSpan={7} className="p-0"><EmptyState title="لا توجد شحنات" hint="الشحنة بتتولّد لما تبعت طلب لشركة الشحن. لو فيه فلتر مفعّل جرّب تشيله." /></TableCell>
                                     </TableRow>
                                 ) : (
                                     filteredShipments.map((ship) => {
@@ -354,9 +353,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                             <TableBody>
                                 {initialRemittances.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center text-[var(--t2)] py-8">
-                                            لا توجد تسويات
-                                        </TableCell>
+                                        <TableCell colSpan={7} className="p-0"><EmptyState title="لا توجد تسويات" hint="التسوية بتجمّع مبالغ الدفع عند الاستلام المحصّلة من شركة الشحن." /></TableCell>
                                     </TableRow>
                                 ) : (
                                     initialRemittances.map((rem) => (

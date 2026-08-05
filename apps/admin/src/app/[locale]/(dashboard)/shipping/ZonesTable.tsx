@@ -59,7 +59,7 @@ export function ZonesTable({ zones, selectedZoneId, onSelectZone }: Props) {
                       e.stopPropagation();
                       setActiveMutation.mutate({ id: zone.id, isActive: !zone.isActive });
                     }}
-                    className="px-2 py-0.5 rounded text-xs font-semibold"
+                    className="px-2 py-0.5 rounded-full text-xs font-semibold"
                     style={{
                       color: zone.isActive ? 'var(--emerald)' : 'var(--t2)',
                       border: '1px solid currentColor',

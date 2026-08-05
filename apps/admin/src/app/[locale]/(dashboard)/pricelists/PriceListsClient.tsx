@@ -105,7 +105,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                 <h1 className="text-2xl font-bold" style={{ color: 'var(--t1)' }}>قوائم الأسعار</h1>
                 <button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="px-4 py-2 rounded text-void"
+                    className="px-4 py-2 rounded-md text-void"
                     style={{ backgroundColor: 'var(--emerald)' }}
                 >
                     + قائمة أسعار جديدة
@@ -133,14 +133,14 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                 <td className="p-3">{list.currency}</td>
                                 <td className="p-3">
                                     {list.discountPercent !== null && list.discountPercent !== undefined ? (
-                                        <span className="px-2 py-1 rounded text-xs" style={{ backgroundColor: 'var(--emerald)', color: 'white' }}>
+                                        <span className="px-2 py-1 rounded-md text-xs" style={{ backgroundColor: 'var(--emerald)', color: 'white' }}>
                                             {list.discountPercent}%
                                         </span>
                                     ) : '-'}
                                 </td>
                                 <td className="p-3">
                                     {list.isDefault && (
-                                        <span className="px-2 py-1 rounded text-xs" style={{ backgroundColor: 'var(--gold)', color: 'black' }}>
+                                        <span className="px-2 py-1 rounded-md text-xs" style={{ backgroundColor: 'var(--gold)', color: 'black' }}>
                                             افتراضي
                                         </span>
                                     )}
@@ -154,7 +154,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                             setSelectedPricelistId(list.id);
                                             setIsItemsModalOpen(true);
                                         }}
-                                        className="px-3 py-1 rounded text-sm text-void"
+                                        className="px-3 py-1 rounded-md text-sm text-void"
                                         style={{ backgroundColor: 'var(--t1)' }}
                                     >
                                         عرض المنتجات
@@ -166,7 +166,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                         onConfirm={() => deleteMutation?.mutate({ id: list.id })}
                                     >
                                         <button
-                                            className="px-3 py-1 rounded text-sm text-void"
+                                            className="px-3 py-1 rounded-md text-sm text-void"
                                             style={{ backgroundColor: 'var(--crimson)' }}
                                         >
                                             حذف
@@ -196,7 +196,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                     required
                                     value={createForm.name}
                                     onChange={(e: { target: { value: string } }) => setCreateForm({ ...createForm, name: e.target.value })}
-                                    className="w-full p-2 rounded border"
+                                    className="w-full p-2 rounded-md border"
                                     style={{ borderColor: 'var(--rim1)', backgroundColor: 'transparent' }}
                                 />
                             </div>
@@ -205,7 +205,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                 <textarea
                                     value={createForm.description}
                                     onChange={(e: { target: { value: string } }) => setCreateForm({ ...createForm, description: e.target.value })}
-                                    className="w-full p-2 rounded border"
+                                    className="w-full p-2 rounded-md border"
                                     style={{ borderColor: 'var(--rim1)', backgroundColor: 'transparent' }}
                                 />
                             </div>
@@ -214,7 +214,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                 <select
                                     value={createForm.currency}
                                     onChange={(e: { target: { value: string } }) => setCreateForm({ ...createForm, currency: e.target.value })}
-                                    className="w-full p-2 rounded border"
+                                    className="w-full p-2 rounded-md border"
                                     style={{ borderColor: 'var(--rim1)', backgroundColor: 'transparent' }}
                                 >
                                     <option value="EGP">EGP</option>
@@ -231,7 +231,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                     max="100"
                                     value={createForm.discountPercent}
                                     onChange={(e: { target: { value: string } }) => setCreateForm({ ...createForm, discountPercent: e.target.value })}
-                                    className="w-full p-2 rounded border"
+                                    className="w-full p-2 rounded-md border"
                                     style={{ borderColor: 'var(--rim1)', backgroundColor: 'transparent' }}
                                 />
                             </div>
@@ -242,7 +242,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                         type="date"
                                         value={createForm.startDate}
                                         onChange={(e: { target: { value: string } }) => setCreateForm({ ...createForm, startDate: e.target.value })}
-                                        className="w-full p-2 rounded border"
+                                        className="w-full p-2 rounded-md border"
                                         style={{ borderColor: 'var(--rim1)', backgroundColor: 'transparent' }}
                                     />
                                 </div>
@@ -252,7 +252,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                         type="date"
                                         value={createForm.endDate}
                                         onChange={(e: { target: { value: string } }) => setCreateForm({ ...createForm, endDate: e.target.value })}
-                                        className="w-full p-2 rounded border"
+                                        className="w-full p-2 rounded-md border"
                                         style={{ borderColor: 'var(--rim1)', backgroundColor: 'transparent' }}
                                     />
                                 </div>
@@ -261,7 +261,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                 <button
                                     type="button"
                                     onClick={() => setIsCreateModalOpen(false)}
-                                    className="px-4 py-2 rounded"
+                                    className="px-4 py-2 rounded-md"
                                     style={{ backgroundColor: 'var(--rim1)', color: 'var(--t1)' }}
                                 >
                                     إلغاء
@@ -269,7 +269,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                 <button
                                     type="submit"
                                     disabled={createMutation?.isLoading}
-                                    className="px-4 py-2 rounded text-void"
+                                    className="px-4 py-2 rounded-md text-void"
                                     style={{ backgroundColor: 'var(--emerald)' }}
                                 >
                                     {createMutation?.isLoading ? 'جاري الحفظ...' : 'حفظ'}

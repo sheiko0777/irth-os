@@ -16,7 +16,7 @@ function GrowthBadge({ pct }: { pct: number | null }) {
   const up = pct >= 0;
   return (
     <span
-      className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+      className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
         up ? 'bg-[var(--emerald)]/20 text-[var(--emerald)]' : 'bg-[var(--crimson)]/20 text-[var(--crimson)]'
       }`}
     >
@@ -161,7 +161,7 @@ export default async function AnalyticsPage() {
               {inventory.slice(0, 12).map((item, i) => (
                 <div
                   key={i}
-                  className={`flex items-center justify-between text-sm px-2 py-1.5 rounded ${
+                  className={`flex items-center justify-between text-sm px-2 py-1.5 rounded-md ${
                     item.isLow ? 'bg-[var(--crimson)]/10' : ''
                   }`}
                 >
@@ -177,7 +177,7 @@ export default async function AnalyticsPage() {
                       <span className="text-[var(--emerald)] text-xs">↓{item.outbound}</span>
                     )}
                     {item.isLow && (
-                      <span className="text-[10px] bg-[var(--crimson)] text-void px-1 py-0.5 rounded font-bold">
+                      <span className="text-[10px] bg-[var(--crimson)] text-void px-1 py-0.5 rounded-full font-bold">
                         منخفض
                       </span>
                     )}

@@ -78,7 +78,7 @@ export function OrgConfigPanel({ selectedOrg, saving, msg, onSave, onReset }: Pr
           <button
             onClick={onReset}
             disabled={saving}
-            className="text-xs px-3 py-1.5 rounded border"
+            className="text-xs px-3 py-1.5 rounded-md border"
             style={{ borderColor: 'var(--rim2)', color: 'var(--crimson)' }}
           >
             إعادة افتراضي
@@ -86,7 +86,7 @@ export function OrgConfigPanel({ selectedOrg, saving, msg, onSave, onReset }: Pr
           <button
             onClick={handleSave}
             disabled={saving}
-            className="text-xs px-4 py-1.5 rounded font-bold"
+            className="text-xs px-4 py-1.5 rounded-md font-bold"
             style={{ background: 'var(--gold)', color: 'var(--void)', opacity: saving ? 0.6 : 1 }}
           >
             {saving ? '...' : 'حفظ'}
@@ -96,7 +96,7 @@ export function OrgConfigPanel({ selectedOrg, saving, msg, onSave, onReset }: Pr
 
       {msg && (
         <p
-          className="text-sm px-3 py-2 rounded"
+          className="text-sm px-3 py-2 rounded-md"
           style={{
             background: 'var(--rim1)',
             color: msg.startsWith('خطأ') ? 'var(--crimson)' : 'var(--emerald)',
@@ -113,7 +113,7 @@ export function OrgConfigPanel({ selectedOrg, saving, msg, onSave, onReset }: Pr
             <button
               key={p}
               onClick={() => applyPreset(p)}
-              className="flex-1 py-2 rounded border text-sm font-medium"
+              className="flex-1 py-2 rounded-md border text-sm font-medium"
               style={{
                 borderColor: editPlan === p ? 'var(--gold)' : 'var(--rim2)',
                 background: editPlan === p ? 'var(--gold-bg)' : 'transparent',
@@ -129,7 +129,7 @@ export function OrgConfigPanel({ selectedOrg, saving, msg, onSave, onReset }: Pr
             type="checkbox"
             checked={editActive}
             onChange={(e: { target: { checked: boolean } }) => setEditActive(e.target.checked)}
-            className="w-4 h-4 rounded"
+            className="w-4 h-4 rounded-md"
           />
           <span className="text-sm">المؤسسة مفعّلة</span>
         </label>
@@ -141,7 +141,7 @@ export function OrgConfigPanel({ selectedOrg, saving, msg, onSave, onReset }: Pr
             onChange={(e: { target: { value: string } }) => setEditMaxUsers(e.target.value)}
             min="1"
             placeholder="غير محدود"
-            className="w-32 text-sm rounded border px-3 py-1.5 outline-none"
+            className="w-32 text-sm rounded-md border px-3 py-1.5 outline-none"
             style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
           />
         </div>
@@ -163,7 +163,7 @@ export function OrgConfigPanel({ selectedOrg, saving, msg, onSave, onReset }: Pr
           value={editNotes}
           onChange={(e: { target: { value: string } }) => setEditNotes(e.target.value)}
           rows={3}
-          className="w-full text-sm rounded border px-3 py-2 outline-none resize-none"
+          className="w-full text-sm rounded-md border px-3 py-2 outline-none resize-none"
           style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
         />
       </section>
