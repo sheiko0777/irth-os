@@ -1,49 +1,81 @@
-import { Hono } from 'hono';
-import type { Context } from 'hono';
-import { db } from '../../db';
-import { orders, shipmentTracking, auditLog } from '@irth/db';
-import { eq, and } from 'drizzle-orm';
-import { verifyHmac } from '../../middlewares/verifyWebhook';
-import { issueInvoice } from '../../services/eta';
+import { Hono } from "hono";
+import type { Context } from "hono";
+import { db } from "../../db";
+import { orders, shipmentTracking, auditLog } from "@irth/db";
+import { eq, and } from "drizzle-orm";
+import { verifyHmac } from "../../middlewares/verifyWebhook";
+import { issueInvoice } from "../../services/eta";
 
 const bostaRoute = new Hono();
 
-bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), async (c: Context) => {
-  const bodyRaw = c.get('rawBody') as string;
+bostaRoute.post(
+  "/",
+  verifyHmac("BOSTA_WEBHOOK_SECRET", "x-bosta-signature"),
+  async (c: Context) => {
+    const bodyRaw = c.get("rawBody") as string;
 
-  const payload = JSON.parse(bodyRaw);
-  const trackingNumber = payload.trackingNumber as string | undefined;
-  const bostaState = payload.state as string | undefined;
+    let payload;
+    try {
+      payload = JSON.parse(bodyRaw);
+    } catch (e) {
+      return c.json({ data: null, error: "invalid_json", meta: null }, 400);
+    }
+    const trackingNumber = payload.trackingNumber as string | undefined;
+    const bostaState = payload.state as string | undefined;
 
-  if (!trackingNumber) {
-    return c.json({ data: null, error: 'missing_tracking_number', meta: null }, 400);
-  }
+    if (!trackingNumber) {
+      return c.json(
+        { data: null, error: "missing_tracking_number", meta: null },
+        400,
+      );
+    }
 
-  const [shipment] = await db.select().from(shipmentTracking).where(eq(shipmentTracking.trackingNumber, trackingNumber));
-  
-  if (!shipment) {
-    return c.json({ data: null, error: 'shipment_not_found', meta: null }, 404);
-  }
+    const [shipment] = await db
+      .select()
+      .from(shipmentTracking)
+      .where(eq(shipmentTracking.trackingNumber, trackingNumber));
 
-  // Update shipment status
-  await db.update(shipmentTracking)
-    .set({ status: bostaState, rawPayload: payload, updatedAt: new Date() })
-    .where(and(eq(shipmentTracking.id, shipment.id), eq(shipmentTracking.orgId, shipment.orgId)));
+    if (!shipment) {
+      return c.json(
+        { data: null, error: "shipment_not_found", meta: null },
+        404,
+      );
+    }
 
-  // Map Bosta state to Order state
-  let newOrderStatus: 'shipped' | 'delivered' | 'cancelled' | null = null;
-  if (bostaState === 'Picked up' || bostaState === 'In Transit') {
-    newOrderStatus = 'shipped';
-  } else if (bostaState === 'Delivered') {
-    newOrderStatus = 'delivered';
-  } else if (bostaState === 'Cancelled' || bostaState === 'Returned') {
-    newOrderStatus = 'cancelled';
-  }
+    // Update shipment status
+    await db
+      .update(shipmentTracking)
+      .set({ status: bostaState, rawPayload: payload, updatedAt: new Date() })
+      .where(
+        and(
+          eq(shipmentTracking.id, shipment.id),
+          eq(shipmentTracking.orgId, shipment.orgId),
+        ),
+      );
 
-  if (newOrderStatus) {
-    const [order] = await db.select().from(orders).where(and(eq(orders.id, shipment.orderId), eq(orders.orgId, shipment.orgId)));
-    if (order && order.status !== newOrderStatus) {
-        const [updatedOrder] = await db.update(orders)
+    // Map Bosta state to Order state
+    let newOrderStatus: "shipped" | "delivered" | "cancelled" | null = null;
+    if (bostaState === "Picked up" || bostaState === "In Transit") {
+      newOrderStatus = "shipped";
+    } else if (bostaState === "Delivered") {
+      newOrderStatus = "delivered";
+    } else if (bostaState === "Cancelled" || bostaState === "Returned") {
+      newOrderStatus = "cancelled";
+    }
+
+    if (newOrderStatus) {
+      const [order] = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.id, shipment.orderId),
+            eq(orders.orgId, shipment.orgId),
+          ),
+        );
+      if (order && order.status !== newOrderStatus) {
+        const [updatedOrder] = await db
+          .update(orders)
           .set({ status: newOrderStatus, updatedAt: new Date() })
           .where(and(eq(orders.id, order.id), eq(orders.orgId, order.orgId)))
           .returning();
@@ -51,20 +83,30 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
         await db.insert(auditLog).values({
           orgId: order.orgId,
           userId: null,
-          action: 'BOSTA_WEBHOOK_STATUS_UPDATE',
-          tableName: 'orders',
+          action: "BOSTA_WEBHOOK_STATUS_UPDATE",
+          tableName: "orders",
           recordId: order.id,
-          changes: { oldStatus: order.status, newStatus: newOrderStatus, bostaState }
+          changes: {
+            oldStatus: order.status,
+            newStatus: newOrderStatus,
+            bostaState,
+          },
         });
 
-        if (newOrderStatus === 'delivered') {
-           // Call issueInvoice on delivered
-           issueInvoice(updatedOrder).catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));
+        if (newOrderStatus === "delivered") {
+          // Call issueInvoice on delivered
+          issueInvoice(updatedOrder).catch((e) =>
+            console.error(
+              "issueInvoice failed:",
+              e instanceof Error ? e.message : "unknown error",
+            ),
+          );
         }
+      }
     }
-  }
 
-  return c.json({ data: { success: true }, error: null, meta: null });
-});
+    return c.json({ data: { success: true }, error: null, meta: null });
+  },
+);
 
 export { bostaRoute };
