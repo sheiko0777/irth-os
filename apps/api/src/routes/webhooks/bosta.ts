@@ -11,7 +11,12 @@ const bostaRoute = new Hono();
 bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), async (c: Context) => {
   const bodyRaw = c.get('rawBody') as string;
 
-  const payload = JSON.parse(bodyRaw);
+  let payload;
+  try {
+    payload = JSON.parse(bodyRaw);
+  } catch (error) {
+    return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+  }
   const trackingNumber = payload.trackingNumber as string | undefined;
   const bostaState = payload.state as string | undefined;
 
