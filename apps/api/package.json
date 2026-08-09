@@ -6,7 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@irth/db": "workspace:*",
@@ -21,6 +22,7 @@
     "@cloudflare/workers-types": "^4.0.0",
     "@types/node": "^25.8.0",
     "typescript": "^5.0.0",
+    "vitest": "^2.1.9",
     "wrangler": "^3.0.0"
   }
 }

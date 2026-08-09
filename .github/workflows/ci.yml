@@ -4,6 +4,9 @@ on:
   pull_request:
     branches: [main]
   workflow_call:
+    secrets:
+      TEST_DATABASE_URL:
+        required: false
 
 jobs:
   test:
@@ -19,3 +22,42 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo lint typecheck test
+
+  # Runs against a real Postgres branch. The unit suite above mocks `db`
+  # wholesale, so it cannot exercise a constraint, a trigger, or an RLS policy —
+  # every rule the database is supposed to enforce is invisible to it.
+  #
+  # This job is deliberately NOT conditional on the secret being present. A gate
+  # that silently skips itself when misconfigured is not a gate; if
+  # TEST_DATABASE_URL is missing the suite fails with instructions rather than
+  # reporting a green tick it did not earn.
+  integration:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+
+      # The `secrets` context is not available in a step-level `if`, so the
+      # check reads an env var instead. Written as an `if:` condition it would
+      # evaluate to false forever and never fire — a guard that cannot fail.
+      - name: Check the test database is configured
+        env:
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+        run: |
+          if [ -z "$TEST_DATABASE_URL" ]; then
+            echo "::error title=TEST_DATABASE_URL is not set::Add a repository secret TEST_DATABASE_URL pointing at a DISPOSABLE Postgres branch (never the app database). The integration suite truncates every table it touches."
+            exit 1
+          fi
+
+      - name: Integration tests
+        env:
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+        run: pnpm --filter @irth/admin test:integration

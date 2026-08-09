@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -52,6 +53,7 @@
     "@types/react": "19.0.8",
     "@types/react-dom": "19.0.3",
     "@vitest/coverage-v8": "^2.1.9",
+    "dotenv": "^17.4.2",
     "eslint-config-next": "15.3.0",
     "postcss": "^8.5.14",
     "typescript": "^5.0.0",

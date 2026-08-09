@@ -7,7 +7,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
@@ -17,6 +19,7 @@
   "devDependencies": {
     "@types/node": "^25.8.0",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^2.1.9"
   }
 }

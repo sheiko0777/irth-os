@@ -4,17 +4,9 @@ import { orgMembers } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import type { Role } from '@irth/db/src/permissions';
 import { auth } from '../auth';
-
-// Routes that authenticate by other means (Better Auth itself, signature-verified
-// webhooks) or need no auth (health) are skipped. Everything else under /api/*
-// must carry a valid session.
-const PUBLIC_PREFIXES = ['/api/auth', '/api/webhooks', '/webhooks', '/health'];
-
-function isPublic(path: string): boolean {
-  // Non-/api routes (health, webhooks, root) are not session-gated here.
-  if (!path.startsWith('/api/')) return true;
-  return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + '/'));
-}
+// Kept in its own module so the predicate can be tested without importing
+// `../auth`, which initializes a database adapter at import time.
+import { isPublic } from './publicRoutes';
 
 /**
  * Establishes a trusted request identity from the Better Auth session and exposes
