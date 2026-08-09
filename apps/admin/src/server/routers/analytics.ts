@@ -14,6 +14,14 @@ export const analyticsRouter = router({
       since.setDate(since.getDate() - input.days);
       since.setHours(0, 0, 0, 0);
 
+      // Bound as an ISO string, not a Date. The query builder converts Date
+      // params for you; `db.execute` with a raw sql`` template does not, and
+      // postgres-js rejects the object with "The string argument must be of
+      // type string... Received an instance of Date". This threw on every
+      // request, so the analytics page had never rendered — it 500'd for
+      // everyone, always.
+      const sinceIso = since.toISOString();
+
       const rows = await ctx.db.execute(sql`
         SELECT
           date_trunc('day', created_at)::date AS day,
@@ -21,7 +29,7 @@ export const analyticsRouter = router({
           COALESCE(SUM(total_amount), 0)::numeric AS revenue
         FROM orders
         WHERE org_id = ${ctx.orgId}
-          AND created_at >= ${since}
+          AND created_at >= ${sinceIso}
           AND status = 'delivered'
         GROUP BY 1
         ORDER BY 1 ASC
@@ -78,6 +86,8 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       const since = new Date();
       since.setDate(since.getDate() - input.days);
+      // Same raw-execute Date binding trap as `revenue` above.
+      const sinceIso = since.toISOString();
 
       const rows = await ctx.db.execute(sql`
         SELECT
@@ -90,7 +100,7 @@ export const analyticsRouter = router({
         JOIN product_variants pv ON pv.id = ii.variant_id
         JOIN products         p  ON p.id  = pv.product_id
         LEFT JOIN inventory_movements im
-               ON im.item_id = ii.id AND im.created_at >= ${since}
+               ON im.item_id = ii.id AND im.created_at >= ${sinceIso}
         WHERE ii.org_id = ${ctx.orgId}
         GROUP BY pv.name, p.name, ii.quantity, ii.reorder_point
         ORDER BY ii.quantity ASC

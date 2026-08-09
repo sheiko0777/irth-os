@@ -37,6 +37,46 @@ beforeEach(() => {
 describe('analytics router', () => {
   const caller = analyticsRouter.createCaller(ctx('owner'));
 
+  /**
+   * The mock's execute() returned [] without looking at what it was handed, so
+   * the suite stayed green while every analytics query threw in production:
+   * db.execute with a raw sql`` template does not convert Date params, and
+   * postgres-js rejects the object outright. This walks the bound params and
+   * fails on any Date, which is the shape that broke.
+   */
+  function rawDateParams(sqlObj: unknown): Date[] {
+    const chunks = (sqlObj as { queryChunks?: unknown[] })?.queryChunks ?? [];
+    const found: Date[] = [];
+    for (const c of chunks) {
+      // An interpolated Date sits in queryChunks as a bare Date. Note it is NOT
+      // wrapped in anything with a .value — StringChunk is what has `.value`,
+      // and filtering on that key finds only SQL text. The first version of
+      // this guard did exactly that and passed against the broken code.
+      if (c instanceof Date) found.push(c);
+      else if (
+        c && typeof c === 'object' && 'value' in c &&
+        (c as { value: unknown }).value instanceof Date
+      ) {
+        found.push((c as { value: Date }).value);
+      }
+    }
+    return found;
+  }
+
+  it('revenue: binds no raw Date params', async () => {
+    await caller.revenue({ days: 30 });
+    const arg = (mockDb as unknown as { execute: { mock: { calls: unknown[][] } } }).execute.mock.calls[0][0];
+    const dates = rawDateParams(arg);
+    expect(dates).toEqual([]);
+  });
+
+  it('inventoryTurnover: binds no raw Date params', async () => {
+    await caller.inventoryTurnover({ days: 30 });
+    const arg = (mockDb as unknown as { execute: { mock: { calls: unknown[][] } } }).execute.mock.calls[0][0];
+    const dates = rawDateParams(arg);
+    expect(dates).toEqual([]);
+  });
+
   it('revenue: out of bounds days rejects BAD_REQUEST', async () => {
     await expectCode(caller.revenue({ days: 1 }), 'BAD_REQUEST');
     await expectCode(caller.revenue({ days: 100 }), 'BAD_REQUEST');

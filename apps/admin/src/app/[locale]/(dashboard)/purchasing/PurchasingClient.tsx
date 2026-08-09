@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ShoppingBag } from 'lucide-react';
+import { Factory } from 'lucide-react';
 
 
 type Supplier = {
@@ -200,8 +201,12 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
               <TableBody>
                 {suppliers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-[var(--t2)]">
-                      لا يوجد موردون
+                    <TableCell colSpan={4} className="p-0">
+                      <EmptyState
+                        icon={Factory}
+                        title="لا يوجد موردون"
+                        hint="ضيف مورد الأول عشان تقدر تعمل أمر شراء."
+                      />
                     </TableCell>
                   </TableRow>
                 ) : (

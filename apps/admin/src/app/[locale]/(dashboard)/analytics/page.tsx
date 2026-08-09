@@ -2,6 +2,8 @@ import { serverCaller } from '@/server/caller';
 import { BarChart } from '@/components/charts/BarChart';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TrendingUp, Box, Warehouse } from 'lucide-react';
 
 function fmt(n: number) {
   return n.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -85,9 +87,11 @@ export default async function AnalyticsPage() {
           <span className="text-sm text-[var(--t2)]">الطلبات المسلمة فقط</span>
         </div>
         {revenueChartData.length === 0 ? (
-          <div className="flex items-center justify-center h-44 text-[var(--t3)] text-sm">
-            لا توجد بيانات في هذه الفترة
-          </div>
+          <EmptyState
+            icon={TrendingUp}
+            title="لا توجد بيانات في هذه الفترة"
+            hint="الرسم بيحسب الطلبات المسلَّمة فقط. جرّب مدى زمني أوسع."
+          />
         ) : (
           <BarChart
             data={revenueChartData}
@@ -121,7 +125,11 @@ export default async function AnalyticsPage() {
         <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
           <h2 className="font-semibold text-lg text-[var(--t1)] mb-4">أفضل المنتجات</h2>
           {topProducts.length === 0 ? (
-            <p className="text-[var(--t3)] text-sm text-center py-8">لا توجد بيانات مبيعات</p>
+            <EmptyState
+              icon={Box}
+              title="لا توجد بيانات مبيعات"
+              hint="ترتيب المنتجات بيتبني من الطلبات المسلَّمة."
+            />
           ) : (
             <div className="space-y-3">
               {topProducts.map((p, i) => {
@@ -155,7 +163,11 @@ export default async function AnalyticsPage() {
             <span className="text-xs text-[var(--t2)]">آخر 30 يوم</span>
           </div>
           {inventory.length === 0 ? (
-            <p className="text-[var(--t3)] text-sm text-center py-8">لا توجد بيانات مخزون</p>
+            <EmptyState
+              icon={Warehouse}
+              title="لا توجد حركة مخزون"
+              hint="الحركة بتتسجّل مع كل استلام أو بيع أو تسوية جرد."
+            />
           ) : (
             <div className="space-y-2">
               {inventory.slice(0, 12).map((item, i) => (

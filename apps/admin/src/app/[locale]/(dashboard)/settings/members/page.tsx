@@ -4,6 +4,8 @@ import { InviteForm } from "./InviteForm";
 import { MemberRoleSelect } from "./MemberRoleSelect";
 import { PermissionGate } from "@/components/PermissionGate";
 import { serverCaller } from "@/server/caller";
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Users } from 'lucide-react';
 
 export default async function MembersPage() {
   const t = await getTranslations("settings");
@@ -53,7 +55,11 @@ export default async function MembersPage() {
                 </div>
               ))}
               {members.length === 0 && (
-                <p className="text-sm text-[var(--t3)]">لا يوجد أعضاء بعد</p>
+                <EmptyState
+                  icon={Users}
+                  title="لا يوجد أعضاء بعد"
+                  hint="ادعُ زميل بالبريد الإلكتروني، وهيظهر هنا بدوره في المؤسسة."
+                />
               )}
             </div>
           </CardContent>
