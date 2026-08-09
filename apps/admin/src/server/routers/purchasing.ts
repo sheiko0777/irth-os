@@ -1,8 +1,22 @@
-import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
-import { z } from 'zod';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
-import { TRPCError } from '@trpc/server';
+import {
+  router,
+  protectedProcedure,
+  adminProcedure,
+  ownerProcedure,
+} from "../trpc";
+import { z } from "zod";
+import { eq, and, desc, sql, count } from "drizzle-orm";
+import {
+  suppliers,
+  purchaseOrders,
+  purchaseOrderItems,
+  inventoryItems,
+  inventoryMovements,
+  productVariants,
+  products,
+  withAudit,
+} from "@irth/db";
+import { TRPCError } from "@trpc/server";
 
 export const purchasingRouter = router({
   suppliers: router({
@@ -19,11 +33,11 @@ export const purchasingRouter = router({
       .input(
         z.object({
           name: z.string().min(1),
-          email: z.string().email().optional().or(z.literal('')),
+          email: z.string().email().optional().or(z.literal("")),
           phone: z.string().optional(),
           address: z.string().optional(),
           notes: z.string().optional(),
-        })
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         const result = await withAudit(
@@ -45,10 +59,10 @@ export const purchasingRouter = router({
           {
             orgId: ctx.orgId,
             userId: ctx.userId,
-            action: 'CREATE_SUPPLIER',
-            tableName: 'suppliers',
+            action: "CREATE_SUPPLIER",
+            tableName: "suppliers",
             changes: input,
-          }
+          },
         );
         return { data: result, error: null, meta: null };
       }),
@@ -58,24 +72,24 @@ export const purchasingRouter = router({
         z.object({
           id: z.string().uuid(),
           name: z.string().min(1).optional(),
-          email: z.string().email().optional().or(z.literal('')),
+          email: z.string().email().optional().or(z.literal("")),
           phone: z.string().optional(),
           address: z.string().optional(),
           notes: z.string().optional(),
-        })
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         const { id, ...updateData } = input;
 
         const supplier = await ctx.db.query.suppliers.findFirst({
-            where: and(eq(suppliers.id, id), eq(suppliers.orgId, ctx.orgId))
+          where: and(eq(suppliers.id, id), eq(suppliers.orgId, ctx.orgId)),
         });
 
-        if (!supplier) throw new TRPCError({ code: 'NOT_FOUND' });
+        if (!supplier) throw new TRPCError({ code: "NOT_FOUND" });
 
         const mappedData = {
           ...updateData,
-          email: updateData.email === '' ? null : updateData.email,
+          email: updateData.email === "" ? null : updateData.email,
           updatedAt: new Date(),
         };
 
@@ -92,10 +106,10 @@ export const purchasingRouter = router({
           {
             orgId: ctx.orgId,
             userId: ctx.userId,
-            action: 'UPDATE_SUPPLIER',
-            tableName: 'suppliers',
+            action: "UPDATE_SUPPLIER",
+            tableName: "suppliers",
             changes: updateData,
-          }
+          },
         );
         return { data: result, error: null, meta: null };
       }),
@@ -104,19 +118,30 @@ export const purchasingRouter = router({
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         const supplier = await ctx.db.query.suppliers.findFirst({
-            where: and(eq(suppliers.id, input.id), eq(suppliers.orgId, ctx.orgId))
+          where: and(
+            eq(suppliers.id, input.id),
+            eq(suppliers.orgId, ctx.orgId),
+          ),
         });
 
-        if (!supplier) throw new TRPCError({ code: 'NOT_FOUND' });
+        if (!supplier) throw new TRPCError({ code: "NOT_FOUND" });
 
         // Ensure no POs are linked to the supplier
         const [linkedPo] = await ctx.db
-            .select({ count: count() })
-            .from(purchaseOrders)
-            .where(and(eq(purchaseOrders.supplierId, input.id), eq(purchaseOrders.orgId, ctx.orgId)));
+          .select({ count: count() })
+          .from(purchaseOrders)
+          .where(
+            and(
+              eq(purchaseOrders.supplierId, input.id),
+              eq(purchaseOrders.orgId, ctx.orgId),
+            ),
+          );
 
         if (linkedPo && linkedPo.count > 0) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete supplier with linked purchase orders' });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Cannot delete supplier with linked purchase orders",
+          });
         }
 
         const result = await withAudit(
@@ -124,17 +149,19 @@ export const purchasingRouter = router({
           async () => {
             const [deleted] = await ctx.db
               .delete(suppliers)
-              .where(and(eq(suppliers.id, input.id), eq(suppliers.orgId, ctx.orgId)))
+              .where(
+                and(eq(suppliers.id, input.id), eq(suppliers.orgId, ctx.orgId)),
+              )
               .returning();
             return deleted;
           },
           {
             orgId: ctx.orgId,
             userId: ctx.userId,
-            action: 'DELETE_SUPPLIER',
-            tableName: 'suppliers',
+            action: "DELETE_SUPPLIER",
+            tableName: "suppliers",
             changes: { id: input.id },
-          }
+          },
         );
         return { data: result, error: null, meta: null };
       }),
@@ -142,10 +169,12 @@ export const purchasingRouter = router({
 
   po: router({
     list: protectedProcedure
-      .input(z.object({
-        page: z.number().default(1),
-        pageSize: z.number().default(20),
-      }))
+      .input(
+        z.object({
+          page: z.number().default(1),
+          pageSize: z.number().default(20),
+        }),
+      )
       .query(async ({ ctx, input }) => {
         const offset = (input.page - 1) * input.pageSize;
 
@@ -162,7 +191,10 @@ export const purchasingRouter = router({
           })
           .from(purchaseOrders)
           .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-          .leftJoin(purchaseOrderItems, eq(purchaseOrderItems.poId, purchaseOrders.id))
+          .leftJoin(
+            purchaseOrderItems,
+            eq(purchaseOrderItems.poId, purchaseOrders.id),
+          )
           .where(eq(purchaseOrders.orgId, ctx.orgId))
           .groupBy(purchaseOrders.id, suppliers.name)
           .orderBy(desc(purchaseOrders.createdAt))
@@ -175,33 +207,37 @@ export const purchasingRouter = router({
     get: protectedProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
-        const order = await ctx.db.query.purchaseOrders.findFirst({
-          where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)),
-          with: {
-            supplier: true, // Assuming relation exists, but since not defined in schema relation we need left join or separate query
-          }
-        });
-
-        // Since no relations object is created in schema, query separately:
-        const poRows = await ctx.db
+        // Execute primary query and relation queries concurrently using input.id
+        // instead of sequentially waiting for the primary query to finish.
+        const [poRows, items] = await Promise.all([
+          ctx.db
             .select({
-                order: purchaseOrders,
-                supplier: suppliers
+              order: purchaseOrders,
+              supplier: suppliers,
             })
             .from(purchaseOrders)
             .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-            .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
-            .limit(1);
+            .where(
+              and(
+                eq(purchaseOrders.id, input.id),
+                eq(purchaseOrders.orgId, ctx.orgId),
+              ),
+            )
+            .limit(1),
+          ctx.db
+            .select()
+            .from(purchaseOrderItems)
+            .where(eq(purchaseOrderItems.poId, input.id)),
+        ]);
 
         const po = poRows[0];
-        if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
+        if (!po) throw new TRPCError({ code: "NOT_FOUND" });
 
-        const items = await ctx.db
-          .select()
-          .from(purchaseOrderItems)
-          .where(eq(purchaseOrderItems.poId, po.order.id));
-
-        return { data: { ...po.order, supplier: po.supplier, items }, error: null, meta: null };
+        return {
+          data: { ...po.order, supplier: po.supplier, items },
+          error: null,
+          meta: null,
+        };
       }),
 
     create: adminProcedure
@@ -210,16 +246,18 @@ export const purchasingRouter = router({
           supplierId: z.string().uuid().optional(),
           notes: z.string().optional(),
           totalAmount: z.string().or(z.number()).optional(),
-          items: z.array(
-            z.object({
-              productName: z.string().min(1),
-              variantName: z.string().optional(),
-              sku: z.string().optional(),
-              quantity: z.number().int().min(1),
-              unitCost: z.string().or(z.number()).optional(),
-            })
-          ).min(1),
-        })
+          items: z
+            .array(
+              z.object({
+                productName: z.string().min(1),
+                variantName: z.string().optional(),
+                sku: z.string().optional(),
+                quantity: z.number().int().min(1),
+                unitCost: z.string().or(z.number()).optional(),
+              }),
+            )
+            .min(1),
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         // Generate PO number: PO-YYYY-XXXX
@@ -227,26 +265,31 @@ export const purchasingRouter = router({
 
         // Get latest PO for this year to sequence
         const latestPoRows = await ctx.db
-            .select({ poNumber: purchaseOrders.poNumber })
-            .from(purchaseOrders)
-            .where(and(
-                eq(purchaseOrders.orgId, ctx.orgId),
-                sql`${purchaseOrders.poNumber} LIKE ${`PO-${year}-%`}`
-            ))
-            .orderBy(desc(purchaseOrders.poNumber))
-            .limit(1);
+          .select({ poNumber: purchaseOrders.poNumber })
+          .from(purchaseOrders)
+          .where(
+            and(
+              eq(purchaseOrders.orgId, ctx.orgId),
+              sql`${purchaseOrders.poNumber} LIKE ${`PO-${year}-%`}`,
+            ),
+          )
+          .orderBy(desc(purchaseOrders.poNumber))
+          .limit(1);
         const latestPo = latestPoRows[0];
 
         let seq = 1;
         if (latestPo && latestPo.poNumber) {
-            const parts = latestPo.poNumber.split('-');
-            if (parts.length === 3) {
-                seq = parseInt(parts[2], 10) + 1;
-            }
+          const parts = latestPo.poNumber.split("-");
+          if (parts.length === 3) {
+            seq = parseInt(parts[2], 10) + 1;
+          }
         }
 
-        const poNumber = `PO-${year}-${seq.toString().padStart(4, '0')}`;
-        const totalAmt = typeof input.totalAmount === 'number' ? input.totalAmount.toString() : input.totalAmount;
+        const poNumber = `PO-${year}-${seq.toString().padStart(4, "0")}`;
+        const totalAmt =
+          typeof input.totalAmount === "number"
+            ? input.totalAmount.toString()
+            : input.totalAmount;
 
         const result = await ctx.db.transaction(async (tx) => {
           const [po] = await tx
@@ -255,7 +298,7 @@ export const purchasingRouter = router({
               orgId: ctx.orgId,
               supplierId: input.supplierId,
               poNumber,
-              status: 'draft',
+              status: "draft",
               notes: input.notes,
               totalAmount: totalAmt,
             })
@@ -267,22 +310,28 @@ export const purchasingRouter = router({
             variantName: item.variantName,
             sku: item.sku,
             quantity: item.quantity,
-            unitCost: typeof item.unitCost === 'number' ? item.unitCost.toString() : item.unitCost,
+            unitCost:
+              typeof item.unitCost === "number"
+                ? item.unitCost.toString()
+                : item.unitCost,
           }));
 
-          const insertedItems = await tx.insert(purchaseOrderItems).values(itemsData).returning();
+          const insertedItems = await tx
+            .insert(purchaseOrderItems)
+            .values(itemsData)
+            .returning();
 
-          await withAudit(
-              tx,
-              async () => po,
-              {
-                orgId: ctx.orgId,
-                userId: ctx.userId,
-                action: 'CREATE_PURCHASE_ORDER',
-                tableName: 'purchase_orders',
-                changes: { poNumber, supplierId: input.supplierId, itemCount: itemsData.length }
-              }
-          );
+          await withAudit(tx, async () => po, {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: "CREATE_PURCHASE_ORDER",
+            tableName: "purchase_orders",
+            changes: {
+              poNumber,
+              supplierId: input.supplierId,
+              itemCount: itemsData.length,
+            },
+          });
 
           return { ...po, items: insertedItems };
         });
@@ -294,15 +343,24 @@ export const purchasingRouter = router({
       .input(
         z.object({
           id: z.string().uuid(),
-          status: z.enum(['draft', 'ordered', 'partial', 'received', 'cancelled']),
-        })
+          status: z.enum([
+            "draft",
+            "ordered",
+            "partial",
+            "received",
+            "cancelled",
+          ]),
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         const po = await ctx.db.query.purchaseOrders.findFirst({
-            where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId))
+          where: and(
+            eq(purchaseOrders.id, input.id),
+            eq(purchaseOrders.orgId, ctx.orgId),
+          ),
         });
 
-        if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
+        if (!po) throw new TRPCError({ code: "NOT_FOUND" });
 
         const updateData: {
           status: typeof input.status;
@@ -310,10 +368,10 @@ export const purchasingRouter = router({
           orderedAt?: Date;
           receivedAt?: Date;
         } = { status: input.status, updatedAt: new Date() };
-        if (input.status === 'ordered') {
-            updateData.orderedAt = new Date();
-        } else if (input.status === 'received' || input.status === 'partial') {
-            updateData.receivedAt = new Date();
+        if (input.status === "ordered") {
+          updateData.orderedAt = new Date();
+        } else if (input.status === "received" || input.status === "partial") {
+          updateData.receivedAt = new Date();
         }
 
         const result = await withAudit(
@@ -322,17 +380,22 @@ export const purchasingRouter = router({
             const [updated] = await ctx.db
               .update(purchaseOrders)
               .set(updateData)
-              .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
+              .where(
+                and(
+                  eq(purchaseOrders.id, input.id),
+                  eq(purchaseOrders.orgId, ctx.orgId),
+                ),
+              )
               .returning();
             return updated;
           },
           {
             orgId: ctx.orgId,
             userId: ctx.userId,
-            action: 'UPDATE_PO_STATUS',
-            tableName: 'purchase_orders',
+            action: "UPDATE_PO_STATUS",
+            tableName: "purchase_orders",
             changes: { from: po.status, to: input.status },
-          }
+          },
         );
         return { data: result, error: null, meta: null };
       }),
@@ -346,91 +409,121 @@ export const purchasingRouter = router({
               id: z.string().uuid(),
               receivedQuantity: z.number().int().min(0),
               updateInventory: z.boolean().default(false),
-            })
+            }),
           ),
-        })
+        }),
       )
       .mutation(async ({ ctx, input }) => {
         const po = await ctx.db.query.purchaseOrders.findFirst({
-            where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId))
+          where: and(
+            eq(purchaseOrders.id, input.id),
+            eq(purchaseOrders.orgId, ctx.orgId),
+          ),
         });
-        if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
+        if (!po) throw new TRPCError({ code: "NOT_FOUND" });
 
         const result = await ctx.db.transaction(async (tx) => {
-            let fullyReceived = true;
+          let fullyReceived = true;
 
-            for (const itemInput of input.items) {
-                // Get item to know its original requested qty and sku
-                const [poItem] = await tx.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.id, itemInput.id)).limit(1);
-                if (!poItem || poItem.poId !== po.id) continue;
+          for (const itemInput of input.items) {
+            // Get item to know its original requested qty and sku
+            const [poItem] = await tx
+              .select()
+              .from(purchaseOrderItems)
+              .where(eq(purchaseOrderItems.id, itemInput.id))
+              .limit(1);
+            if (!poItem || poItem.poId !== po.id) continue;
 
-                const currentReceived = poItem.receivedQuantity || 0;
-                const newReceivedTotal = currentReceived + itemInput.receivedQuantity;
+            const currentReceived = poItem.receivedQuantity || 0;
+            const newReceivedTotal =
+              currentReceived + itemInput.receivedQuantity;
 
-                if (newReceivedTotal < poItem.quantity) {
-                    fullyReceived = false;
-                }
-
-                await tx.update(purchaseOrderItems)
-                    .set({ receivedQuantity: newReceivedTotal })
-                    .where(eq(purchaseOrderItems.id, itemInput.id));
-
-                // Update inventory if requested and SKU exists
-                if (itemInput.updateInventory && poItem.sku && itemInput.receivedQuantity > 0) {
-                    // Scope the SKU lookup to this org by joining through products:
-                    // productVariants has no orgId and `sku` is globally unique, so an
-                    // unscoped lookup silently resolves another tenant's variant and the
-                    // org-scoped inventory read below then finds nothing — received stock
-                    // would vanish with no error.
-                    const [variant] = await tx.select({ id: productVariants.id })
-                        .from(productVariants)
-                        .innerJoin(products, eq(productVariants.productId, products.id))
-                        .where(and(eq(productVariants.sku, poItem.sku), eq(products.orgId, ctx.orgId)))
-                        .limit(1);
-                    if (variant) {
-                        // Find inventory item
-                        const [invItem] = await tx.select().from(inventoryItems).where(and(eq(inventoryItems.variantId, variant.id), eq(inventoryItems.orgId, ctx.orgId))).limit(1);
-                        if (invItem) {
-                            // Increment in SQL — reading the quantity and writing back an
-                            // absolute value loses concurrent receipts.
-                            await tx.update(inventoryItems)
-                                .set({
-                                    quantity: sql`${inventoryItems.quantity} + ${itemInput.receivedQuantity}`,
-                                    updatedAt: new Date()
-                                })
-                                .where(eq(inventoryItems.id, invItem.id));
-
-                            await tx.insert(inventoryMovements).values({
-                                orgId: ctx.orgId,
-                                itemId: invItem.id,
-                                type: 'in',
-                                quantity: itemInput.receivedQuantity,
-                                note: `PO ${po.poNumber} receipt`,
-                            });
-                        }
-                    }
-                }
+            if (newReceivedTotal < poItem.quantity) {
+              fullyReceived = false;
             }
 
-            const newStatus = fullyReceived ? 'received' : 'partial';
-            const [updatedPo] = await tx.update(purchaseOrders)
-                .set({ status: newStatus, receivedAt: new Date(), updatedAt: new Date() })
-                .where(eq(purchaseOrders.id, po.id))
-                .returning();
+            await tx
+              .update(purchaseOrderItems)
+              .set({ receivedQuantity: newReceivedTotal })
+              .where(eq(purchaseOrderItems.id, itemInput.id));
 
-            await withAudit(
-              tx,
-              async () => updatedPo,
-              {
-                orgId: ctx.orgId,
-                userId: ctx.userId,
-                action: 'RECEIVE_PO',
-                tableName: 'purchase_orders',
-                changes: { poId: po.id, items: input.items, newStatus },
+            // Update inventory if requested and SKU exists
+            if (
+              itemInput.updateInventory &&
+              poItem.sku &&
+              itemInput.receivedQuantity > 0
+            ) {
+              // Scope the SKU lookup to this org by joining through products:
+              // productVariants has no orgId and `sku` is globally unique, so an
+              // unscoped lookup silently resolves another tenant's variant and the
+              // org-scoped inventory read below then finds nothing — received stock
+              // would vanish with no error.
+              const [variant] = await tx
+                .select({ id: productVariants.id })
+                .from(productVariants)
+                .innerJoin(products, eq(productVariants.productId, products.id))
+                .where(
+                  and(
+                    eq(productVariants.sku, poItem.sku),
+                    eq(products.orgId, ctx.orgId),
+                  ),
+                )
+                .limit(1);
+              if (variant) {
+                // Find inventory item
+                const [invItem] = await tx
+                  .select()
+                  .from(inventoryItems)
+                  .where(
+                    and(
+                      eq(inventoryItems.variantId, variant.id),
+                      eq(inventoryItems.orgId, ctx.orgId),
+                    ),
+                  )
+                  .limit(1);
+                if (invItem) {
+                  // Increment in SQL — reading the quantity and writing back an
+                  // absolute value loses concurrent receipts.
+                  await tx
+                    .update(inventoryItems)
+                    .set({
+                      quantity: sql`${inventoryItems.quantity} + ${itemInput.receivedQuantity}`,
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(inventoryItems.id, invItem.id));
+
+                  await tx.insert(inventoryMovements).values({
+                    orgId: ctx.orgId,
+                    itemId: invItem.id,
+                    type: "in",
+                    quantity: itemInput.receivedQuantity,
+                    note: `PO ${po.poNumber} receipt`,
+                  });
+                }
               }
-            );
+            }
+          }
 
-            return updatedPo;
+          const newStatus = fullyReceived ? "received" : "partial";
+          const [updatedPo] = await tx
+            .update(purchaseOrders)
+            .set({
+              status: newStatus,
+              receivedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(purchaseOrders.id, po.id))
+            .returning();
+
+          await withAudit(tx, async () => updatedPo, {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: "RECEIVE_PO",
+            tableName: "purchase_orders",
+            changes: { poId: po.id, items: input.items, newStatus },
+          });
+
+          return updatedPo;
         });
 
         return { data: result, error: null, meta: null };
