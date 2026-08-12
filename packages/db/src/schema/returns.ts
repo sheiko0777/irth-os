@@ -23,6 +23,9 @@ export const orderReturns = pgTable('order_returns', {
 
 export const returnItems = pgTable('return_items', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // Added in 0030, with a composite FK on (return_id, org_id) so a line can
+  // never belong to a different org than the return that owns it.
+  orgId: uuid('org_id').notNull(),
   returnId: uuid('return_id').notNull().references(() => orderReturns.id, { onDelete: 'cascade' }),
   orderItemId: uuid('order_item_id'),
   productName: text('product_name').notNull(),

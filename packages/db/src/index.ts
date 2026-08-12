@@ -1,4 +1,5 @@
 ﻿import { drizzle } from 'drizzle-orm/postgres-js';
+import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as baseSchema from './schema';
 import * as inventorySchema from './schema/inventory';
@@ -55,6 +56,54 @@ export const createDb = (url: string) => {
 export type DbInstance = ReturnType<typeof createDb>;
 
 export const db = createDb(process.env.DATABASE_URL!);
+
+/**
+ * Runs `fn` in a transaction that the database will only let touch one tenant's
+ * rows (CLAUDE.md rule 3).
+ *
+ * Two statements do the work, and both are transaction-local for the same
+ * reason: `db` above is a module-level singleton over a shared pool, so
+ * anything set at connection level outlives the request and leaks into whoever
+ * gets that connection next.
+ *
+ *   SET LOCAL ROLE irth_app
+ *     The connecting role (`neondb_owner`) owns every table AND has
+ *     rolbypassrls, so policies do not apply to it — measured, not assumed:
+ *     with a policy in place and the context scoped to one of two orgs, the
+ *     owner still saw both rows, and FORCE ROW LEVEL SECURITY did not change
+ *     that. BYPASSRLS wins over FORCE. Dropping to `irth_app`, which owns
+ *     nothing and has no bypass, made the same query return one row.
+ *
+ *   set_config('app.org_id', $1, true)
+ *     The value every policy compares against. The third argument is what makes
+ *     it local to the transaction.
+ *
+ * Both revert on COMMIT and on ROLLBACK, so a failed request cannot leave a
+ * connection elevated or scoped to a stale tenant.
+ *
+ * This is defence in depth, not a replacement for `eq(table.orgId, ctx.orgId)`.
+ * Queries should still be scoped explicitly; RLS is what catches the one that
+ * is not.
+ */
+export async function withOrgContext<T>(
+  dbInstance: DbInstance,
+  orgId: string,
+  fn: (tx: Parameters<Parameters<DbInstance['transaction']>[0]>[0]) => Promise<T>,
+): Promise<T> {
+  // Fail before opening a transaction rather than handing a malformed value to
+  // a policy comparison, where it would surface as a confusing cast error.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)) {
+    throw new TypeError(`withOrgContext requires a uuid orgId, got ${JSON.stringify(orgId)}`);
+  }
+
+  return dbInstance.transaction(async (tx) => {
+    // Not parameterisable — a role name is an identifier, not a value. It is a
+    // hard-coded constant here, never interpolated from input.
+    await tx.execute(sql`SET LOCAL ROLE irth_app`);
+    await tx.execute(sql`SELECT set_config('app.org_id', ${orgId}, true)`);
+    return fn(tx);
+  });
+}
 
 // Accepts the plain db or a transaction handle — both expose the same
 // insert() shape, and passing tx keeps the audit row in the transaction.

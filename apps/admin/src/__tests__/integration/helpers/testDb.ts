@@ -6,18 +6,19 @@
  * branch instead. The schema, however, is the real one — testing against a
  * hand-rolled copy would prove nothing about the tables deploy creates.
  */
-import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
-import postgres from 'postgres';
+import { createDb } from '@irth/db';
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) {
   throw new Error('TEST_DATABASE_URL is not set — globalSetup should have loaded it.');
 }
 
-// prepare: false so the same handle works against a pooled endpoint.
-export const client = postgres(url, { max: 4, prepare: false, onnotice: () => {} });
-export const testDb = drizzle(client);
+// Built with the app's own factory rather than a bare drizzle() call, so this
+// handle is the same *type* as the one production uses. Helpers that take a
+// DbInstance — withOrgContext in particular — then accept it without a cast,
+// and a test cannot accidentally exercise a differently-shaped client.
+export const testDb = createDb(url);
 
 /**
  * Empties every application table, leaving the schema and the migration ledger
@@ -39,5 +40,5 @@ export async function truncateAll(): Promise<void> {
 
 /** Closes the pool so vitest can exit instead of hanging on an open socket. */
 export async function closeTestDb(): Promise<void> {
-  await client.end({ timeout: 5 });
+  await testDb.$client.end({ timeout: 5 });
 }

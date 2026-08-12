@@ -110,11 +110,17 @@ export const returnsRouter = router({
 
       if (input.items.length > 0) {
         const itemsToInsert = input.items.map(item => ({
+          // See 0030: denormalised org_id, guarded by a composite FK against
+          // the parent return so the two can never disagree.
+          orgId: ctx.orgId,
           returnId: createdReturn.id,
           productName: item.productName,
           variantName: item.variantName,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          unitPriceMinor:
+            item.unitPrice === undefined || item.unitPrice === null
+              ? null
+              : parseDecimal(String(item.unitPrice)).minor,
           condition: item.condition,
         }));
         await db.insert(returnItems).values(itemsToInsert);

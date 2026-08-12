@@ -32,6 +32,10 @@ export const purchaseOrders = pgTable('purchase_orders', {
 
 export const purchaseOrderItems = pgTable('purchase_order_items', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // Added in 0030. A composite FK on (po_id, org_id) -> purchase_orders(id,
+  // org_id) makes a line whose org disagrees with its parent's unrepresentable,
+  // so this column cannot drift into showing a row to the wrong tenant.
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   poId: uuid('po_id').notNull().references(() => purchaseOrders.id, { onDelete: 'cascade' }),
   productName: text('product_name').notNull(),
   variantName: text('variant_name'),

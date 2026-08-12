@@ -270,6 +270,11 @@ export const purchasingRouter = router({
             .returning();
 
           const itemsData = input.items.map((item) => ({
+            // Denormalised from the parent so RLS can use the same
+            // `org_id = current_setting(...)` predicate as every other table.
+            // The composite FK in 0030 rejects any value that disagrees with
+            // the purchase order's own org.
+            orgId: ctx.orgId,
             poId: po.id,
             productName: item.productName,
             variantName: item.variantName,

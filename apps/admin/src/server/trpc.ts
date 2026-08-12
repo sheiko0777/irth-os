@@ -16,25 +16,23 @@ export const createContext = async () => {
     const userId = session.user.id;
 
     // Better Auth does not put orgId/role on the user — derive the tenant scope
-    // and role from the user's org membership. Prefer the active organization
-    // from the session, falling back to the user's first membership.
-    const activeOrgId = session.session?.activeOrganizationId;
-
-    let membership;
-    if (activeOrgId) {
-        [membership] = await db
-            .select()
-            .from(orgMembers)
-            .where(and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, activeOrgId)))
-            .limit(1);
-    }
-    if (!membership) {
-        [membership] = await db
-            .select()
-            .from(orgMembers)
-            .where(eq(orgMembers.userId, userId))
-            .limit(1);
-    }
+    // and role from the user's org membership.
+    //
+    // The `session.activeOrganizationId` branch that used to sit here could
+    // never execute: that column comes from Better Auth's organization plugin,
+    // which is deliberately off (see lib/auth-server.ts), so it does not exist
+    // and the value was always undefined. Only the fallback ever ran.
+    //
+    // Stated plainly instead of implied by dead code: a user in more than one
+    // organization always gets whichever membership Postgres returns first and
+    // cannot switch. Org switching needs the choice stored somewhere real, not
+    // read from a field nothing writes. Mirrored in
+    // apps/api/src/middlewares/authContext.ts.
+    const [membership] = await db
+        .select()
+        .from(orgMembers)
+        .where(eq(orgMembers.userId, userId))
+        .limit(1);
 
     if (!membership) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'No organization membership.' });
