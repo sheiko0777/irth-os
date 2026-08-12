@@ -1,4 +1,5 @@
 import { initTRPC, TRPCError } from '@trpc/server';
+import superjson from 'superjson';
 import { db, orgMembers } from '@irth/db';
 import { and, eq } from 'drizzle-orm';
 import type { Role } from '@irth/db/src/permissions';
@@ -50,7 +51,12 @@ export const createContext = async () => {
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
 
-const t = initTRPC.context<Context>().create();
+// superjson so bigint survives serialization. Money is a count of minor units
+// (CLAUDE.md rule 1), and plain JSON cannot represent a bigint — returning one
+// from a procedure throws "Do not know how to serialize a BigInt" at runtime,
+// not at compile time. Must match the transformer on the client link in
+// src/components/providers/TrpcProvider.tsx.
+const t = initTRPC.context<Context>().create({ transformer: superjson });
 
 export const router = t.router;
 export const publicProcedure = t.procedure;

@@ -1,3 +1,4 @@
+import { parseDecimal } from '@irth/domain';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db } from '../../db';
@@ -121,7 +122,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
             courier: 'bosta',
             trackingNumber: trackingNumber,
             courierStatus,
-            codAmount: cashOnDelivery.toString(),
+            codAmountMinor: parseDecimal(String(cashOnDelivery)).minor,
             codCollected: isDeliveredAndCod,
             webhookEvents: [payload]
         }).onConflictDoUpdate({
@@ -129,7 +130,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
             set: {
                 courierStatus,
                 trackingNumber,
-                codAmount: cashOnDelivery.toString(),
+                codAmountMinor: parseDecimal(String(cashOnDelivery)).minor,
                 codCollected: isDeliveredAndCod,
                 webhookEvents: sql`${courierShipments.webhookEvents} || ${JSON.stringify([payload])}::jsonb`,
                 updatedAt: new Date()

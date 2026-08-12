@@ -1,3 +1,4 @@
+import { formatMoney, fromMinor, multiply, sum } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { ArrowRight, PackageSearch } from "lucide-react";
@@ -32,10 +33,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
     const { order, items, history } = response.data;
 
-    const itemsTotal = items.reduce(
-        (sum: number, i: { quantity: number; price: string | number }) =>
-            sum + Number(i.price) * i.quantity,
-        0,
+    // Was Number(i.price) * i.quantity accumulated into a float. Each line is
+    // multiplied in minor units and summed exactly, so the footer total always
+    // equals the sum of the rows above it.
+    const itemsTotal = sum(
+        items.map((i) => multiply(fromMinor(i.priceMinor), i.quantity)),
     );
 
     return (
@@ -87,14 +89,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {items.map((item: { id: string, sku: string, quantity: number, price: string | number }) => (
+                                {items.map((item) => (
                                     <TableRow key={item.id}>
                                         <TableCell className="font-mono text-xs" dir="ltr">{item.sku}</TableCell>
                                         <TableCell className="tabular-nums" dir="ltr">
                                             {item.quantity.toLocaleString("ar-EG")}
                                         </TableCell>
                                         <TableCell className="text-end tabular-nums" dir="ltr">
-                                            {Number(item.price).toLocaleString("ar-EG")} ج.م
+                                            {formatMoney(fromMinor(item.priceMinor))}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -107,7 +109,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                             <div className="mt-3 flex items-center justify-between border-t border-[var(--rim1)] pt-3">
                                 <span className="text-xs text-[var(--t3)]">إجمالي الأصناف</span>
                                 <span className="text-lg font-bold text-[var(--t1)] tabular-nums" dir="ltr">
-                                    {itemsTotal.toLocaleString("ar-EG", { minimumFractionDigits: 2 })} ج.م
+                                    {formatMoney(itemsTotal)}
                                 </span>
                             </div>
                         )}

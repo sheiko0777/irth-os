@@ -1,6 +1,7 @@
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
 import { courierShipments, courierRemittances, withAudit } from '@irth/db';
+import { fromMinor, parseDecimal } from '@irth/domain';
 import { eq, and, sql, sum, inArray, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
@@ -83,7 +84,10 @@ export const courierRouter = router({
       .input(z.object({
         courier: z.string(),
         reference: z.string(),
-        amount: z.string(), // decimal stored as string
+        // Accepted as a decimal string from the client and parsed exactly.
+        // parseDecimal never constructs a float, so "1234.56" cannot arrive as
+        // 1234.5600000000001 the way Number(...) would allow.
+        amount: z.string(),
         shipmentCount: z.number().int(),
         expectedDate: z.date().optional(),
       }))
@@ -97,7 +101,7 @@ export const courierRouter = router({
                 orgId: ctx.orgId,
                 courier: input.courier,
                 remittanceReference: input.reference,
-                amount: input.amount,
+                amountMinor: parseDecimal(input.amount).minor,
                 shipmentCount: input.shipmentCount,
                 expectedDate: input.expectedDate,
                 status: 'pending',
@@ -168,15 +172,17 @@ export const courierRouter = router({
   summary: protectedProcedure.query(async ({ ctx }) => {
     // We will run the aggregations using Promise.all per the memory guidelines
     const [collectedRes, remittedRes, unremittedRes, statusesRes] = await Promise.all([
-      ctx.db.select({ total: sum(sql`CAST(${courierShipments.codAmount} AS numeric)`) })
+      // The CAST is gone with the column: cod_amount_minor is already bigint,
+      // so sum() aggregates it natively.
+      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true))),
 
-      ctx.db.select({ total: sum(sql`CAST(${courierShipments.codAmount} AS numeric)`) })
+      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codRemitted, true))),
 
-      ctx.db.select({ total: sum(sql`CAST(${courierShipments.codAmount} AS numeric)`) })
+      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true), eq(courierShipments.codRemitted, false))),
 
@@ -193,9 +199,12 @@ export const courierRouter = router({
 
     return {
       data: {
-        totalCodCollected: Number(collectedRes[0]?.total ?? 0),
-        totalCodRemitted: Number(remittedRes[0]?.total ?? 0),
-        pendingRemittance: Number(unremittedRes[0]?.total ?? 0),
+        // sum() returns a numeric string (null when nothing matched). BigInt
+        // keeps it exact; Number would silently cap at 2^53 and reintroduce a
+        // float for the COD balance the courier actually owes us.
+        totalCodCollected: fromMinor(BigInt((collectedRes[0]?.total as string | null) ?? '0')),
+        totalCodRemitted: fromMinor(BigInt((remittedRes[0]?.total as string | null) ?? '0')),
+        pendingRemittance: fromMinor(BigInt((unremittedRes[0]?.total as string | null) ?? '0')),
         shipmentsByStatus,
       },
       error: null,

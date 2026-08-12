@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, decimal, integer, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, bigint, integer, boolean, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const orderReturns = pgTable('order_returns', {
@@ -11,7 +11,7 @@ export const orderReturns = pgTable('order_returns', {
   resolutionType: text('resolution_type', { enum: ['refund', 'exchange', 'store_credit', 'none'] }).notNull().default('none'),
   notes: text('notes'),
   adminNotes: text('admin_notes'),
-  refundAmount: decimal('refund_amount', { precision: 12, scale: 2 }),
+  refundAmountMinor: bigint('refund_amount_minor', { mode: 'bigint' }),
   requestedAt: timestamp('requested_at').defaultNow(),
   resolvedAt: timestamp('resolved_at'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -28,7 +28,7 @@ export const returnItems = pgTable('return_items', {
   productName: text('product_name').notNull(),
   variantName: text('variant_name'),
   quantity: integer('quantity').notNull().default(1),
-  unitPrice: decimal('unit_price', { precision: 12, scale: 2 }),
+  unitPriceMinor: bigint('unit_price_minor', { mode: 'bigint' }),
   condition: text('condition', { enum: ['new', 'good', 'damaged', 'unknown'] }).default('unknown'),
   restock: boolean('restock').notNull().default(false),
 }, (table) => [

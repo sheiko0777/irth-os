@@ -7,7 +7,7 @@ import {
     integer,
     uniqueIndex,
     index,
-    numeric,
+    bigint,
 } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
@@ -20,8 +20,14 @@ export const coupons = pgTable(
             .references(() => organizations.id, { onDelete: 'cascade' }),
         code: text('code').notNull(),
         type: text('type').notNull().$type<'percentage' | 'fixed' | 'free_shipping'>(),
-        value: numeric('value', { precision: 10, scale: 2 }).notNull().default('0'),
-        minOrderAmount: numeric('min_order_amount', { precision: 12, scale: 2 }),
+        // `value` used to be one numeric column holding two different kinds of
+        // number: a RATE when type='percentage', MONEY when type='fixed'. Any
+        // blanket "money x 100" conversion would have turned a 10% coupon into
+        // 1000%. Split so the type system and a CHECK constraint both know
+        // which applies — see 0028_money_minor_units.sql.
+        percentBp: integer('percent_bp'),
+        amountMinor: bigint('amount_minor', { mode: 'bigint' }),
+        minOrderAmountMinor: bigint('min_order_amount_minor', { mode: 'bigint' }),
         maxUses: integer('max_uses'),
         usedCount: integer('used_count').notNull().default(0),
         expiresAt: timestamp('expires_at'),

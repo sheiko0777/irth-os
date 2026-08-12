@@ -92,7 +92,7 @@ export const ordersRouter = router({
                 .select({
                     id: orderItems.id,
                     quantity: orderItems.quantity,
-                    price: orderItems.price,
+                    priceMinor: orderItems.priceMinor,
                     sku: productVariants.sku,
                 })
                 .from(orderItems)

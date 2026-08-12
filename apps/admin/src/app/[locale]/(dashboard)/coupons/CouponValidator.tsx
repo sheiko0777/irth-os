@@ -1,4 +1,5 @@
 'use client';
+import { formatMoney } from "@irth/domain";
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
@@ -70,7 +71,10 @@ export function CouponValidator() {
                             {data.valid ? (
                                 <div className="space-y-1">
                                     <p className="font-bold">الكوبون صالح!</p>
-                                    <p>قيمة الخصم: {data.discount.toFixed(2)} {data.discountType === 'percentage' ? '%' : 'ج.م'}</p>
+                                    {/* discount is the resolved AMOUNT in both cases now — for a
+                                        percentage coupon the server already applied the rate — so the
+                                        old '%' suffix labelled a money value as a percentage. */}
+                                    <p>قيمة الخصم: {formatMoney(data.discount)}</p>
                                     <p>نوع الخصم: {data.discountType === 'percentage' ? 'نسبة مئوية' : data.discountType === 'fixed' ? 'خصم ثابت' : 'شحن مجاني'}</p>
                                 </div>
                             ) : (

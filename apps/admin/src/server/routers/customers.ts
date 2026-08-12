@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { eq, and, desc, sql, count, ilike, or, gte } from 'drizzle-orm';
 import { customers, loyaltyTransactions, withAudit } from '@irth/db';
 import { TRPCError } from '@trpc/server';
+import { EGP, parseDecimal } from '@irth/domain';
 
 export const customersRouter = router({
   list: protectedProcedure
@@ -264,11 +265,10 @@ export const customersRouter = router({
 
       if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
 
-      // 1 point per 10 EGP, rounded down
-      const earnedPoints = Math.floor(input.orderAmount / 10);
+      const orderAmountMinor = parseDecimal(String(input.orderAmount), EGP).minor;
+      const earnedPoints = parseInt((orderAmountMinor / parseDecimal('10', EGP).minor).toString(), 10);
       const newBalance = (customer.loyaltyPoints ?? 0) + earnedPoints;
       const newTotal = (customer.totalOrders ?? 0) + 1;
-      const newSpent = (parseFloat(customer.totalSpent ?? '0') + input.orderAmount).toFixed(2);
 
       const result = await ctx.db.transaction(async (tx) => {
         const [updated] = await tx
@@ -276,7 +276,7 @@ export const customersRouter = router({
           .set({
             loyaltyPoints: newBalance,
             totalOrders: newTotal,
-            totalSpent: newSpent,
+            totalSpentMinor: sql`${customers.totalSpentMinor} + ${orderAmountMinor}`,
             updatedAt: new Date(),
           })
           .where(and(eq(customers.id, input.customerId), eq(customers.orgId, ctx.orgId)))
@@ -319,3 +319,4 @@ export const customersRouter = router({
     };
   }),
 });
+

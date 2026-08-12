@@ -22,7 +22,10 @@ export const pricelistsRouter = router({
           return {
             ...pl,
             itemCount: Number(cnt ?? 0),
-            discountPercent: pl.discountPercent ? Number(pl.discountPercent) : null,
+            // Stored as integer basis points; surfaced as a percent for display.
+            // 1000 bp -> 10. Integer division by 100 keeps the tenth of a
+            // percent that bp can express without going through a float.
+            discountPercent: pl.discountBp === null ? null : pl.discountBp / 100,
           };
         })
       );
@@ -49,7 +52,10 @@ export const pricelistsRouter = router({
           name: input.name,
           description: input.description ?? null,
           currency: input.currency,
-          discountPercent: input.discountPercent?.toString() ?? null,
+          // Percent in, basis points stored. Math.round is safe here: the input
+          // is a rate bounded to 0..100, not money, and bp is the integer
+          // representation the CHECK constraint enforces.
+          discountBp: input.discountPercent === undefined ? null : Math.round(input.discountPercent * 100),
           startDate: input.startDate ?? null,
           endDate: input.endDate ?? null,
         })

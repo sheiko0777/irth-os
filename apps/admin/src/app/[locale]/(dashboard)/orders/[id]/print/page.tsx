@@ -1,3 +1,4 @@
+import { formatMoney, fromMinor, multiply } from "@irth/domain";
 import { serverCaller } from '@/server/caller';
 import { notFound } from 'next/navigation';
 import { PrintButton } from './PrintButton';
@@ -15,9 +16,7 @@ export default async function PrintPage({
 
     const { order, items } = response.data;
 
-    const total = Number(order.totalAmount).toLocaleString('ar-EG', {
-        minimumFractionDigits: 2,
-    });
+    const total = formatMoney(fromMinor(order.totalAmountMinor));
 
     return (
         <>
@@ -68,21 +67,19 @@ export default async function PrintPage({
                     </thead>
                     <tbody>
                         {items.map((item) => {
-                            const unitPrice = Number(item.price);
-                            const lineTotal = unitPrice * item.quantity;
+                            // Was Number(item.price) * item.quantity — a float
+                            // multiply on every printed invoice line.
+                            const unitPrice = fromMinor(item.priceMinor);
+                            const lineTotal = multiply(unitPrice, item.quantity);
                             return (
                                 <tr key={item.id}>
                                     <td>{item.sku}</td>
                                     <td>{item.quantity}</td>
                                     <td>
-                                        {unitPrice.toLocaleString('ar-EG', {
-                                            minimumFractionDigits: 2,
-                                        })} ج.م
+                                        {formatMoney(unitPrice)}
                                     </td>
                                     <td>
-                                        {lineTotal.toLocaleString('ar-EG', {
-                                            minimumFractionDigits: 2,
-                                        })} ج.م
+                                        {formatMoney(lineTotal)}
                                     </td>
                                 </tr>
                             );

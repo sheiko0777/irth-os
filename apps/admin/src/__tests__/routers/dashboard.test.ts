@@ -1,3 +1,4 @@
+import { EGP, zero } from '@irth/domain';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Context } from '@/server/trpc';
 import { dashboardRouter } from '@/server/routers/dashboard';
@@ -53,7 +54,7 @@ describe('dashboard router', () => {
     expect(res).toEqual({
       data: {
         ordersToday: 0,
-        revenueToday: 0,
+        revenueToday: zero(EGP),
         pendingOrders: 0,
         activeProducts: 0,
         // No prior-day basis, so a percentage would divide by zero. Null says
@@ -70,18 +71,18 @@ describe('dashboard router', () => {
   it('getStats: pads the sparkline to seven points when days have no orders', async () => {
     queueSelects([
       [{ count: 5 }],                       // ordersToday
-      [{ total: '900' }],                   // revenueToday
+      [{ total: '90000' }],                 // revenueToday — minor units (900.00 EGP)
       [{ count: 2 }],                       // pendingOrders
       [{ count: 40 }],                      // activeProducts
       [{ count: 4 }],                       // ordersYesterday
-      [{ total: '600' }],                   // revenueYesterday
+      [{ total: '60000' }],                 // revenueYesterday — minor units
       [                                     // daily orders — only two of seven days traded
         { day: utcDayKey(-6), orderCount: 3 },
         { day: utcDayKey(0), orderCount: 5 },
       ],
       [                                     // daily revenue — delivered only
-        { day: utcDayKey(-6), revenue: '300' },
-        { day: utcDayKey(0), revenue: '900' },
+        { day: utcDayKey(-6), revenue: '30000' },
+        { day: utcDayKey(0), revenue: '90000' },
       ],
       [{ status: 'pending', count: 2 }],    // pipeline
     ]);
@@ -91,17 +92,18 @@ describe('dashboard router', () => {
     // Gaps must become zeros, not vanish — a sparkline that silently drops quiet
     // days compresses the x-axis and misreports the shape of the trend.
     expect(res.data.series.orders).toEqual([3, 0, 0, 0, 0, 0, 5]);
+    // The sparkline plots whole major units, so 30000 piastres reads as 300.
     expect(res.data.series.revenue).toEqual([300, 0, 0, 0, 0, 0, 900]);
   });
 
   it('getStats: computes day-over-day deltas against the prior window', async () => {
     queueSelects([
       [{ count: 5 }],
-      [{ total: '900' }],
+      [{ total: '90000' }],
       [{ count: 0 }],
       [{ count: 0 }],
       [{ count: 4 }],      // 4 -> 5 is +25%
-      [{ total: '600' }],  // 600 -> 900 is +50%
+      [{ total: '60000' }],  // 600 -> 900 is +50%
       [],
       [],
       [],

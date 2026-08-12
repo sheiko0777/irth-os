@@ -1,3 +1,4 @@
+import { EGP, zero } from '@irth/domain';
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
@@ -31,7 +32,7 @@ describe('giftCards router', () => {
   it('summary: empty db yields all-zero totals', async () => {
     const res = await caller.summary();
     expect(res).toEqual({
-      data: { total: 0, active: 0, totalIssued: 0, activeBalance: 0 },
+      data: { total: 0, active: 0, totalIssued: zero(EGP), activeBalance: zero(EGP) },
       error: null,
     });
   });

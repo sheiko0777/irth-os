@@ -1,4 +1,5 @@
 "use client";
+import { currency, formatMoney, fromMinor } from '@irth/domain';
 
 import { useState } from "react";
 
@@ -41,7 +42,8 @@ type PurchaseOrder = {
   poNumber: string;
   supplierName: string | null;
   status: string;
-  totalAmount: string | null;
+  totalAmountMinor: bigint | null;
+  currency: string;
   createdAt: Date | string | null;
 };
 
@@ -329,7 +331,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-[var(--t2)]">
-                        {po.totalAmount ? `${po.totalAmount} ج.م` : "-"}
+                        {po.totalAmountMinor === null ? "-" : formatMoney(fromMinor(po.totalAmountMinor, currency(po.currency)))}
                       </TableCell>
                       <TableCell className="text-[var(--t2)]">
                         {po.createdAt ? format(new Date(po.createdAt), "PP", { locale: ar }) : "-"}

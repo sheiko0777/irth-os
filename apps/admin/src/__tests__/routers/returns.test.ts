@@ -1,3 +1,4 @@
+import { EGP, zero } from '@irth/domain';
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
@@ -91,7 +92,7 @@ describe('returns', () => {
   it('summary resolves with zeroed counters on an empty db', async () => {
     const res = await caller.summary();
     expect(res.data.total).toBe(0);
-    expect(res.data.pendingRefundAmount).toBe(0);
+    expect(res.data.pendingRefundAmount).toEqual(zero(EGP));
     expect(res.data.byStatus).toEqual({
       requested: 0,
       approved: 0,

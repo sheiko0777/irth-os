@@ -69,7 +69,13 @@ describe('returns.restock — idempotency', () => {
 
 describe('giftCards.topup — decimal safety', () => {
   it('increments the balance in SQL, not by writing back a JS float', async () => {
-    mockDb.select = vi.fn(() => chainOf([{ id: UUID, orgId: 'org-1', balance: '0.10', status: 'active' }]));
+    // Mirrors the real row: balance is bigint minor units since 0028, and
+    // currency is `text NOT NULL DEFAULT 'EGP'`. The fixture previously omitted
+    // currency, which the code now reads — a mock that does not match the
+    // schema hides exactly the class of bug the integration suite exists for.
+    mockDb.select = vi.fn(() =>
+      chainOf([{ id: UUID, orgId: 'org-1', balanceMinor: 10n, currency: 'EGP', status: 'active' }]),
+    );
 
     let capturedSet: Record<string, unknown> | undefined;
     const updateChain = chainOf([{ id: UUID }]);
@@ -80,10 +86,10 @@ describe('giftCards.topup — decimal safety', () => {
     await giftCardsRouter.createCaller(ctx()).topup({ id: UUID, amount: 0.2 });
 
     expect(capturedSet).toBeDefined();
-    const balance = capturedSet!.balance;
+    const balance = capturedSet!.balanceMinor;
     // A string or number here means the parseFloat read-modify-write is back
     // (0.1 + 0.2 === 0.30000000000000004, and concurrent top-ups get lost).
-    // It must be a drizzle SQL fragment so Postgres does the decimal math.
+    // It must be a drizzle SQL fragment so Postgres does the addition.
     expect(typeof balance).not.toBe('string');
     expect(typeof balance).not.toBe('number');
     expect(balance?.constructor?.name).toBe(sql``.constructor.name);

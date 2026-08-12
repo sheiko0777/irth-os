@@ -1,6 +1,7 @@
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { orders, orderItems, products, productVariants } from '@irth/db';
-import { eq, and, desc, sql, count, sum, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, count, sum, gte, lte } from 'drizzle-orm';
+import { EGYPT_VAT_BP, divideRoundHalfEven, formatMoney, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
 import { z } from 'zod';
 
 export const financeRouter = router({
@@ -21,7 +22,7 @@ export const financeRouter = router({
                 pendingQuery
             ] = await Promise.all([
                 ctx.db
-                    .select({ total: sum(orders.totalAmount) })
+                    .select({ total: sum(orders.totalAmountMinor) })
                     .from(orders)
                     .where(and(
                         eq(orders.orgId, ctx.orgId),
@@ -57,17 +58,19 @@ export const financeRouter = router({
                     )),
             ]);
 
-            const totalRevenue = parseFloat((deliveredQuery[0]?.total as unknown as string) ?? '0');
+            const totalRevenueMinor = BigInt((deliveredQuery[0]?.total as string | null) ?? '0');
             const totalOrders = totalOrdersQuery[0]?.count ?? 0;
-            const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+            const avgOrderValueMinor = totalOrders > 0
+                ? divideRoundHalfEven(totalRevenueMinor, BigInt(totalOrders))
+                : BigInt(0);
             const cancelledOrders = cancelledQuery[0]?.count ?? 0;
             const pendingOrders = pendingQuery[0]?.count ?? 0;
 
             return {
                 data: {
-                    totalRevenue,
+                    totalRevenue: fromMinor(totalRevenueMinor),
                     totalOrders,
-                    avgOrderValue,
+                    avgOrderValue: fromMinor(avgOrderValueMinor),
                     cancelledOrders,
                     pendingOrders,
                     startDate: input.startDate,
@@ -93,7 +96,7 @@ export const financeRouter = router({
                 .select({
                     orderId: orders.id,
                     orderNumber: orders.orderNumber,
-                    amount: orders.totalAmount,
+                    amount: orders.totalAmountMinor,
                     status: orders.status,
                     createdAt: orders.createdAt,
                 })
@@ -125,7 +128,7 @@ export const financeRouter = router({
 
             const result = await ctx.db
                 .select({
-                    total: sum(orders.totalAmount),
+                    total: sum(orders.totalAmountMinor),
                     count: count(),
                 })
                 .from(orders)
@@ -136,10 +139,10 @@ export const financeRouter = router({
                     eq(orders.status, 'delivered')
                 ));
 
-            const grossRevenue = parseFloat((result[0]?.total as unknown as string) ?? '0');
+            const grossRevenue = fromMinor(BigInt((result[0]?.total as string | null) ?? '0'));
             const orderCount = result[0]?.count ?? 0;
-            const vatAmount = grossRevenue * 0.14;
-            const netRevenue = grossRevenue * 0.86;
+            const vatAmount = taxIncludedIn(grossRevenue, EGYPT_VAT_BP);
+            const netRevenue = netOfTax(grossRevenue, EGYPT_VAT_BP);
 
             return {
                 data: {
@@ -187,13 +190,13 @@ export const financeRouter = router({
                     resultData = "أكثر 5 منتجات مبيعاً:\n" + topProducts.map((p: {name: string | null; orderCount: number}, i: number) => `${i + 1}. ${p.name} (${p.orderCount} طلب)`).join('\n');
                 }
             } else if (q.includes('revenue') || q.includes('ايراد')) {
-                queryStr = "SELECT SUM(total_amount) FROM orders WHERE org_id = ? AND status = 'delivered' AND created_at >= NOW() - INTERVAL '30 days'";
+                queryStr = "SELECT SUM(total_amount_minor) FROM orders WHERE org_id = ? AND status = 'delivered' AND created_at >= NOW() - INTERVAL '30 days'";
 
                 const thirtyDaysAgo = new Date();
                 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
                 const revRes = await ctx.db
-                    .select({ total: sum(orders.totalAmount) })
+                    .select({ total: sum(orders.totalAmountMinor) })
                     .from(orders)
                     .where(and(
                         eq(orders.orgId, ctx.orgId),
@@ -201,8 +204,8 @@ export const financeRouter = router({
                         gte(orders.createdAt, thirtyDaysAgo)
                     ));
 
-                const rev = parseFloat((revRes[0]?.total as unknown as string) ?? '0');
-                resultData = `إجمالي الإيرادات في آخر 30 يوماً: ${rev.toLocaleString('ar-EG')} ج.م`;
+                const rev = fromMinor(BigInt((revRes[0]?.total as string | null) ?? '0'));
+                resultData = `إجمالي الإيرادات في آخر 30 يوماً: ${formatMoney(rev)}`;
             } else if (q.includes('pending') || q.includes('معلق')) {
                 queryStr = "SELECT COUNT(*) FROM orders WHERE org_id = ? AND status = 'pending'";
 
@@ -243,3 +246,5 @@ export const financeRouter = router({
             };
         })
 });
+
+

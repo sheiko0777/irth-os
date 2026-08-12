@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, text, numeric, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, text, bigint, char, integer } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
 export const suppliers = pgTable('suppliers', {
@@ -20,7 +20,10 @@ export const purchaseOrders = pgTable('purchase_orders', {
   poNumber: text('po_number').notNull(),
   status: text('status').notNull().default('draft'), // draft, ordered, partial, received, cancelled
   notes: text('notes'),
-  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }),
+  totalAmountMinor: bigint('total_amount_minor', { mode: 'bigint' }),
+  // A supplier may genuinely invoice in a foreign currency, so this document
+  // carries its own denomination rather than assuming the org's.
+  currency: char('currency', { length: 3 }).notNull().default('EGP'),
   orderedAt: timestamp('ordered_at'),
   receivedAt: timestamp('received_at'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -34,6 +37,6 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   variantName: text('variant_name'),
   sku: text('sku'),
   quantity: integer('quantity').notNull().default(1),
-  unitCost: numeric('unit_cost', { precision: 12, scale: 2 }),
+  unitCostMinor: bigint('unit_cost_minor', { mode: 'bigint' }),
   receivedQuantity: integer('received_quantity').default(0),
 });

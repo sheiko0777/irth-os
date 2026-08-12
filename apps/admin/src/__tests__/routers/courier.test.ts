@@ -1,3 +1,4 @@
+import { EGP, zero } from '@irth/domain';
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
@@ -70,9 +71,9 @@ describe('courier router', () => {
     const res = await caller.summary();
     expect(res).toEqual({
       data: {
-        totalCodCollected: 0,
-        totalCodRemitted: 0,
-        pendingRemittance: 0,
+        totalCodCollected: zero(EGP),
+        totalCodRemitted: zero(EGP),
+        pendingRemittance: zero(EGP),
         shipmentsByStatus: {},
       },
       error: null,

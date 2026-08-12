@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { formatMoney, fromMinor } from "@irth/domain";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { serverCaller } from "@/server/caller";
 import { AiQueryForm } from "./AiQueryForm";
@@ -46,7 +47,7 @@ export default async function FinancePage() {
                         id="fin-revenue"
                         variant="hero"
                         title="إجمالي الإيرادات"
-                        value={`${pnl.totalRevenue.toLocaleString('ar-EG')} ج.م`}
+                        value={formatMoney(pnl.totalRevenue)}
                     />
                     <KpiCard
                         id="fin-orders"
@@ -56,7 +57,7 @@ export default async function FinancePage() {
                     <KpiCard
                         id="fin-aov"
                         title="متوسط قيمة الطلب"
-                        value={`${pnl.avgOrderValue.toLocaleString('ar-EG', { maximumFractionDigits: 2 })} ج.م`}
+                        value={formatMoney(pnl.avgOrderValue)}
                     />
                     <KpiCard
                         id="fin-cancelled"
@@ -75,7 +76,7 @@ export default async function FinancePage() {
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">الإيراد الإجمالي</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-[var(--t1)]">{vat.grossRevenue.toLocaleString('ar-EG')} ج.م</div>
+                            <div className="text-2xl font-bold text-[var(--t1)]">{formatMoney(vat.grossRevenue)}</div>
                         </CardContent>
                     </Card>
                     <Card className="bg-[var(--surface)] border-[var(--rim1)]">
@@ -83,7 +84,7 @@ export default async function FinancePage() {
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">قيمة ضريبة القيمة المضافة (14%)</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-[var(--crimson)]">{vat.vatAmount.toLocaleString('ar-EG', { maximumFractionDigits: 2 })} ج.م</div>
+                            <div className="text-2xl font-bold text-[var(--crimson)]">{formatMoney(vat.vatAmount)}</div>
                         </CardContent>
                     </Card>
                     <Card className="bg-[var(--surface)] border-[var(--rim1)]">
@@ -91,7 +92,7 @@ export default async function FinancePage() {
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">الإيراد الصافي</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-[var(--emerald)]">{vat.netRevenue.toLocaleString('ar-EG', { maximumFractionDigits: 2 })} ج.م</div>
+                            <div className="text-2xl font-bold text-[var(--emerald)]">{formatMoney(vat.netRevenue)}</div>
                         </CardContent>
                     </Card>
                 </div>
@@ -116,10 +117,10 @@ export default async function FinancePage() {
                                     <TableCell colSpan={4} className="p-0"><EmptyState title="لا توجد بيانات في هذه الفترة" hint="الأرقام بتتحسب من الطلبات المسلَّمة خلال الشهر الحالي." /></TableCell>
                                 </TableRow>
                             ) : (
-                                codRows.map((row: { orderId: string, orderNumber: string, amount: string, status: string, createdAt: Date }) => (
+                                codRows.map((row) => (
                                     <TableRow key={row.orderId} className="border-[var(--rim1)] hover:bg-[var(--rim1)]/50">
                                         <TableCell className="font-mono">{row.orderNumber}</TableCell>
-                                        <TableCell>{parseFloat(String(row.amount)).toLocaleString('ar-EG')} ج.م</TableCell>
+                                        <TableCell>{formatMoney(fromMinor(row.amount))}</TableCell>
                                         <TableCell>{new Date(row.createdAt).toLocaleDateString('ar-EG')}</TableCell>
                                         <TableCell>
                                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[var(--emerald)]/10 text-[var(--emerald)]">

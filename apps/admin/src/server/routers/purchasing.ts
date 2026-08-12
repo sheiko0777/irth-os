@@ -2,6 +2,7 @@ import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../t
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
+import { parseDecimal } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
 
 export const purchasingRouter = router({
@@ -154,7 +155,8 @@ export const purchasingRouter = router({
             id: purchaseOrders.id,
             poNumber: purchaseOrders.poNumber,
             status: purchaseOrders.status,
-            totalAmount: purchaseOrders.totalAmount,
+            totalAmountMinor: purchaseOrders.totalAmountMinor,
+            currency: purchaseOrders.currency,
             orderedAt: purchaseOrders.orderedAt,
             createdAt: purchaseOrders.createdAt,
             supplierName: suppliers.name,
@@ -246,7 +248,13 @@ export const purchasingRouter = router({
         }
 
         const poNumber = `PO-${year}-${seq.toString().padStart(4, '0')}`;
-        const totalAmt = typeof input.totalAmount === 'number' ? input.totalAmount.toString() : input.totalAmount;
+        // parseDecimal both when the client sends a string and when it sends a
+        // number: routing the number through String() first means the value
+        // never becomes a float here, only its decimal text.
+        const totalAmountMinor =
+          input.totalAmount === undefined || input.totalAmount === null
+            ? null
+            : parseDecimal(String(input.totalAmount)).minor;
 
         const result = await ctx.db.transaction(async (tx) => {
           const [po] = await tx
@@ -257,7 +265,7 @@ export const purchasingRouter = router({
               poNumber,
               status: 'draft',
               notes: input.notes,
-              totalAmount: totalAmt,
+              totalAmountMinor,
             })
             .returning();
 
@@ -267,7 +275,10 @@ export const purchasingRouter = router({
             variantName: item.variantName,
             sku: item.sku,
             quantity: item.quantity,
-            unitCost: typeof item.unitCost === 'number' ? item.unitCost.toString() : item.unitCost,
+            unitCostMinor:
+              item.unitCost === undefined || item.unitCost === null
+                ? null
+                : parseDecimal(String(item.unitCost)).minor,
           }));
 
           const insertedItems = await tx.insert(purchaseOrderItems).values(itemsData).returning();

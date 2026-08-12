@@ -1,3 +1,4 @@
+import { parseDecimal } from '@irth/domain';
 import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -76,13 +77,16 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
       }
     }
 
-    const priceStr = typeof data.price === 'number' ? data.price.toString() : data.price;
+    // Routed through String() then parseDecimal so a numeric body value never
+    // becomes a float here — only its decimal text does.
+    const { price, ...productData } = data;
+    const priceMinor = parseDecimal(String(price)).minor;
 
     const result = await withAudit(db, async () => {
       const [inserted] = await db.insert(products).values({
         orgId,
-        ...data,
-        price: priceStr,
+        ...productData,
+        priceMinor,
       }).returning();
       return inserted;
     }, {
@@ -263,13 +267,20 @@ productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Co
     const body = await c.req.json();
     const data = createVariantSchema.parse(body);
 
-    const priceStr = data.price !== undefined ? (typeof data.price === 'number' ? data.price.toString() : data.price) : undefined;
+    const { price: variantPrice, ...variantData } = data;
+    const variantPriceMinor =
+      variantPrice === undefined ? null : parseDecimal(String(variantPrice)).minor;
 
     const result = await withAudit(db, async () => {
       const [inserted] = await db.insert(productVariants).values({
+        // org_id is uuid NOT NULL in the database with no default, but the
+        // Drizzle table did not declare it, so it was omitted from every insert
+        // and Postgres rejected the row with 23502 — variant creation was
+        // broken outright. orgId has been in scope here the whole time.
+        orgId,
         productId: id,
-        ...data,
-        price: priceStr || null,
+        ...variantData,
+        priceMinor: variantPriceMinor,
       }).returning();
       return inserted;
     }, {

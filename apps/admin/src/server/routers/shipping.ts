@@ -3,6 +3,7 @@ import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../t
 import { shippingZones, shippingRates } from '@irth/db';
 import { eq, and, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+import { EGP, fromMinor, parseDecimal } from '@irth/domain';
 
 export const shippingRouter = router({
   zones: router({
@@ -78,9 +79,9 @@ export const shippingRouter = router({
         return {
           data: rates.map((r) => ({
             ...r,
-            price: Number(r.price),
-            minOrderValue: r.minOrderValue ? Number(r.minOrderValue) : null,
-            maxOrderValue: r.maxOrderValue ? Number(r.maxOrderValue) : null,
+            price: fromMinor(r.priceMinor, EGP),
+            minOrderValue: r.minOrderValueMinor == null ? null : fromMinor(r.minOrderValueMinor, EGP),
+            maxOrderValue: r.maxOrderValueMinor == null ? null : fromMinor(r.maxOrderValueMinor, EGP),
             minWeight: r.minWeight ? Number(r.minWeight) : null,
             maxWeight: r.maxWeight ? Number(r.maxWeight) : null,
           })),
@@ -111,9 +112,9 @@ export const shippingRouter = router({
             zoneId: input.zoneId,
             name: input.name,
             rateType: input.rateType,
-            price: input.price.toString(),
-            minOrderValue: input.minOrderValue?.toString() ?? null,
-            maxOrderValue: input.maxOrderValue?.toString() ?? null,
+            priceMinor: parseDecimal(String(input.price), EGP).minor,
+            minOrderValueMinor: input.minOrderValue == null ? null : parseDecimal(String(input.minOrderValue), EGP).minor,
+            maxOrderValueMinor: input.maxOrderValue == null ? null : parseDecimal(String(input.maxOrderValue), EGP).minor,
             minWeight: input.minWeight?.toString() ?? null,
             maxWeight: input.maxWeight?.toString() ?? null,
             estimatedDaysMin: input.estimatedDaysMin ?? null,

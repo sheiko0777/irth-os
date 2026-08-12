@@ -35,32 +35,14 @@ const IS_MONEY =
   /price|amount|cost|balance|total|revenue|spent|refund|fee|subtotal|value|credit|debit|paid|due|salary|discount/i;
 
 /**
- * Decimal money columns that existed before this gate. Every entry is a defect
- * scheduled for conversion to `bigint` minor units. Shrink this list; never
- * grow it.
+ * Decimal money columns that predate the rule.
+ *
+ * Empty as of migration 0028, which moved all twenty to `bigint` minor units.
+ * Kept as an explicit empty list rather than deleted: the equality assertion
+ * below now reads "there are no exceptions, and adding one is a deliberate act
+ * that shows up in a diff", which is the state worth defending.
  */
-const KNOWN_DECIMAL_MONEY: readonly string[] = [
-  'coupons.min_order_amount',
-  'coupons.value',
-  'courier_remittances.amount',
-  'courier_shipments.cod_amount',
-  'customers.total_spent',
-  'gift_card_transactions.amount',
-  'gift_cards.balance',
-  'gift_cards.initial_amount',
-  'order_items.price',
-  'order_returns.refund_amount',
-  'orders.total_amount',
-  'price_list_items.price',
-  'product_variants.price',
-  'products.price',
-  'purchase_order_items.unit_cost',
-  'purchase_orders.total_amount',
-  'return_items.unit_price',
-  'shipping_rates.max_order_value',
-  'shipping_rates.min_order_value',
-  'shipping_rates.price',
-];
+const KNOWN_DECIMAL_MONEY: readonly string[] = [];
 
 type Column = { table: string; column: string; type: string; file: string };
 
@@ -120,10 +102,21 @@ const key = (c: Column) => `${c.table}.${c.column}`;
 
 describe('rule 1 — money is bigint minor units', () => {
   it('parses the schema it claims to guard', async () => {
+    // If the parser silently found nothing — wrong path, renamed files, a regex
+    // that stopped matching — every assertion below would pass vacuously and
+    // the gate would be decorative. Assert on the files rather than on the
+    // number of decimal columns, which is meant to trend to zero.
+    const files = await schemaFiles();
+    expect(files.length).toBeGreaterThan(10);
+
+    const tables = (
+      await Promise.all(files.map(async (f) => (await readFile(f, 'utf8')).match(/pgTable\(/g) ?? []))
+    ).flat();
+    expect(tables.length).toBeGreaterThan(20);
+
+    // Every column the parser does find must resolve to its enclosing table;
+    // a '<none>' key means the table regex missed a declaration style.
     const columns = await allDecimalColumns();
-    // If the parser silently matched nothing, every assertion below would pass
-    // vacuously and the gate would be decorative.
-    expect(columns.length).toBeGreaterThan(0);
     expect(columns.every((c) => c.table !== '<none>')).toBe(true);
   });
 
@@ -151,10 +144,9 @@ describe('rule 1 — money is bigint minor units', () => {
       .sort();
     // Guards the classifier itself: if IS_MONEY were widened until it swallowed
     // these, the previous test would start reporting false violations.
-    expect(nonMoney).toEqual([
-      'price_lists.discount_percent',
-      'shipping_rates.max_weight',
-      'shipping_rates.min_weight',
-    ]);
+    // Only physical quantities remain decimal. price_lists.discount_percent
+    // used to be here; 0028 made it `discount_bp`, an integer count of basis
+    // points, because rates are integers too (CLAUDE.md rule 1).
+    expect(nonMoney).toEqual(['shipping_rates.max_weight', 'shipping_rates.min_weight']);
   });
 });

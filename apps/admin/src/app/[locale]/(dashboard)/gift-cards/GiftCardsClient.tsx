@@ -1,4 +1,5 @@
 'use client';
+import { currency, formatMoney, fromMinor, type Money } from '@irth/domain';
 
 import { useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -7,22 +8,22 @@ import { trpc } from '@/lib/trpc';
 export type GiftCard = {
   id: string;
   code: string;
-  initialAmount: string;
-  balance: string;
+  initialAmountMinor: bigint;
+  balanceMinor: bigint;
   currency: string;
   status: 'active' | 'redeemed' | 'expired' | 'cancelled';
   recipientName: string | null;
   recipientEmail: string | null;
   message: string | null;
-  expiresAt: string | null;
-  createdAt: string;
+  expiresAt: Date | null;
+  createdAt: Date;
 };
 
 export type GiftCardSummary = {
   total: number;
   active: number;
-  totalIssued: number;
-  activeBalance: number;
+  totalIssued: Money;
+  activeBalance: Money;
 };
 
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -36,8 +37,10 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function formatAmount(amount: string | number, currency = 'EGP') {
-  return `${parseFloat(String(amount)).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ${currency}`;
+// Was a local parseFloat formatter. The shared one renders ج.م rather than the
+// raw currency code and groups the digits the same way every other screen does.
+function formatAmount(amount: Money) {
+  return formatMoney(amount);
 }
 
 export default function GiftCardsClient({
@@ -163,10 +166,10 @@ export default function GiftCardsClient({
                     </div>
                   </td>
                   <td className='px-4 py-3 font-semibold text-[var(--t1)]'>
-                    {formatAmount(card.balance, card.currency)}
+                    {formatAmount(fromMinor(card.balanceMinor, currency(card.currency)))}
                   </td>
                   <td className='px-4 py-3 text-[var(--t2)]'>
-                    {formatAmount(card.initialAmount, card.currency)}
+                    {formatAmount(fromMinor(card.initialAmountMinor, currency(card.currency)))}
                   </td>
                   <td className='px-4 py-3 text-[var(--t2)]'>
                     {card.recipientName || '—'}

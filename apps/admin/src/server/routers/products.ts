@@ -4,6 +4,7 @@ import { eq, and, desc, sql, count, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { withAudit } from '@irth/db';
+import { EGP, parseDecimal } from '@irth/domain';
 
 export const productsRouter = router({
     list: protectedProcedure
@@ -32,7 +33,7 @@ export const productsRouter = router({
                         id: products.id,
                         name: products.name,
                         sku: products.sku,
-                        price: products.price,
+                        priceMinor: products.priceMinor,
                         stock: products.stock,
                         status: products.status,
                         category: categories.name,
@@ -104,7 +105,7 @@ export const productsRouter = router({
             brand: z.enum(brandEnum.enumValues).default('irth'),
         }))
         .mutation(async ({ ctx, input }) => {
-            const priceStr = typeof input.price === 'number' ? input.price.toString() : input.price;
+            const priceMinor = parseDecimal(String(input.price), EGP).minor;
 
             const result = await withAudit(
                 ctx.db,
@@ -118,7 +119,7 @@ export const productsRouter = router({
                             categoryId: input.categoryId,
                             description: input.description,
                             descriptionAr: input.descriptionAr,
-                            price: priceStr,
+                            priceMinor,
                             currency: input.currency,
                             stock: input.stock,
                             status: input.status,
@@ -169,7 +170,7 @@ export const productsRouter = router({
             const { id: _id, ...rest } = input;
             const updateData: Record<string, unknown> = { ...rest, updatedAt: new Date() };
             if (input.price !== undefined) {
-               updateData.price = typeof input.price === 'number' ? input.price.toString() : input.price;
+               updateData.priceMinor = parseDecimal(String(input.price), EGP).minor;
             }
 
             const result = await withAudit(
@@ -229,3 +230,4 @@ export const productsRouter = router({
             return { data: result, error: null, meta: null };
         }),
 });
+

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit } from '@irth/db';
+import { fromMinor, parseDecimal } from '@irth/domain';
 import { eq, and, count, sum, sql, desc } from 'drizzle-orm';
 
 export const returnsRouter = router({
@@ -147,7 +148,10 @@ export const returnsRouter = router({
         .set({
           status: input.status,
           adminNotes: input.adminNotes,
-          refundAmount: input.refundAmount,
+          refundAmountMinor:
+            input.refundAmount === undefined || input.refundAmount === null
+              ? null
+              : parseDecimal(input.refundAmount).minor,
           resolvedAt: resolvedAt,
         })
         .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
@@ -254,16 +258,20 @@ export const returnsRouter = router({
         exchanged: 0,
       };
 
-      let pendingRefundAmount = 0;
+      // Accumulated in minor units. The float version compounded its error on
+      // every approved return, so the pending-refund figure drifted further
+      // from the truth the more returns an org processed.
+      let pendingRefundMinor = 0n;
 
       for (const r of returns) {
         if (byStatus[r.status as keyof typeof byStatus] !== undefined) {
            byStatus[r.status as keyof typeof byStatus]++;
         }
-        if (r.status === 'approved' && r.refundAmount) {
-          pendingRefundAmount += parseFloat(r.refundAmount);
+        if (r.status === 'approved' && r.refundAmountMinor !== null) {
+          pendingRefundMinor += r.refundAmountMinor;
         }
       }
+      const pendingRefundAmount = fromMinor(pendingRefundMinor);
 
       return {
         data: {

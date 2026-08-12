@@ -1,3 +1,4 @@
+import { EGYPT_VAT_BP, currency, fromMinor, netOfTax, taxIncludedIn, toDecimalString } from '@irth/domain';
 const isProd = process.env.ETA_ENV === 'production';
 const ETA_ID_URL = isProd
     ? 'https://id.eta.gov.eg/connect/token'
@@ -31,7 +32,12 @@ async function getAuthToken(): Promise<string> {
     return data.access_token;
 }
 
-export const issueInvoice = async (order: { id: string; orgId: string; totalAmount: string }): Promise<EtaResult> => {
+export const issueInvoice = async (order: {
+    id: string;
+    orgId: string;
+    totalAmountMinor: bigint;
+    currency?: string;
+}): Promise<EtaResult> => {
     const issuerEin = process.env.ETA_ISSUER_EIN;
     if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET || !issuerEin) {
         console.warn('ETA credentials not fully configured. Skipping invoice issuance.');
@@ -40,8 +46,17 @@ export const issueInvoice = async (order: { id: string; orgId: string; totalAmou
 
     try {
         const token = await getAuthToken();
-        const amount = Number(order.totalAmount);
-        const vatAmount = amount * 0.14;
+        // orders.total_amount_minor is VAT-INCLUSIVE (it is what the customer
+        // paid). The old `amount * 0.14` was the VAT-EXCLUSIVE formula and
+        // over-declared both revenue and VAT to the Egyptian Tax Authority by
+        // 14%. Duplicated verbatim in apps/admin/src/server/services/eta.ts.
+        const gross = fromMinor(order.totalAmountMinor, currency(order.currency ?? 'EGP'));
+        const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
+        const net = netOfTax(gross, EGYPT_VAT_BP);
+
+        const amount = Number(toDecimalString(net));
+        const vatAmount = Number(toDecimalString(vat));
+        const grossAmount = Number(toDecimalString(gross));
 
         const doc = {
             issuer: { type: 'B', id: issuerEin, name: 'IRTH Business' },
@@ -75,7 +90,7 @@ export const issueInvoice = async (order: { id: string; orgId: string; totalAmou
             taxTotals: [{ taxType: 'T1', amount: vatAmount }],
             extraDiscountAmount: 0,
             totalItemsDiscountAmount: 0,
-            totalAmount: amount + vatAmount,
+            totalAmount: grossAmount,
         };
 
         const res = await fetch(`${ETA_API_URL}/documentsubmissions`, {

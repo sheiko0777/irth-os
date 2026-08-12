@@ -1,4 +1,5 @@
 import { serverCaller } from "@/server/caller";
+import { formatMoney, fromMinor } from "@irth/domain";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
@@ -80,7 +81,9 @@ export default async function CustomersPage({
                   <TableCell className="text-left" dir="ltr">{customer.phone || '-'}</TableCell>
                   <TableCell className="text-[var(--gold)] font-semibold">{customer.loyaltyPoints ?? 0}</TableCell>
                   <TableCell>{customer.totalOrders ?? 0}</TableCell>
-                  <TableCell>{customer.totalSpent ? `${customer.totalSpent} ج.م` : '-'}</TableCell>
+                  {/* Was `${customer.totalSpent} ج.م` — the raw column value,
+                      so it printed ungrouped ("1234.56 ج.م"). */}
+                  <TableCell>{customer.totalSpentMinor ? formatMoney(fromMinor(customer.totalSpentMinor)) : '-'}</TableCell>
                   <TableCell className="text-end">
                     <div className="flex justify-end gap-2">
                       <CustomerActions actionType="addPoints" customerId={customer.id} customerName={customer.name} currentPoints={customer.loyaltyPoints ?? 0} />

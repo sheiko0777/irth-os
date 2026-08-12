@@ -1,3 +1,4 @@
+import { formatMoney, fromMinor } from "@irth/domain";
 import { serverCaller } from '@/server/caller';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -81,13 +82,17 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
                                         <td className="px-4 py-3 text-sm font-medium font-mono text-[var(--t1)]" dir="ltr">{coupon.code}</td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]">{typeLabels[coupon.type]}</td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]" dir="ltr">
-                                            {coupon.type === 'percentage' ? `${coupon.value}%` : coupon.type === 'free_shipping' ? '-' : coupon.value}
+                                            {coupon.type === 'percentage'
+                                                ? (coupon.percentBp === null ? '-' : `${coupon.percentBp / 100}%`)
+                                                : coupon.type === 'free_shipping'
+                                                  ? '-'
+                                                  : (coupon.amountMinor === null ? '-' : formatMoney(fromMinor(coupon.amountMinor)))}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]">
                                             {coupon.usedCount} {coupon.maxUses ? `/ ${coupon.maxUses}` : ''}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]" dir="ltr">
-                                            {coupon.minOrderAmount || '-'}
+                                            {coupon.minOrderAmountMinor === null ? '-' : formatMoney(fromMinor(coupon.minOrderAmountMinor))}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]" dir="ltr">
                                             {coupon.expiresAt ? format(new Date(coupon.expiresAt), 'yyyy-MM-dd') : '-'}

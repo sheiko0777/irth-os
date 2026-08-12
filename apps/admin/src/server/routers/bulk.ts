@@ -51,7 +51,7 @@ export const bulkRouter = router({
                     orderNumber: orders.orderNumber,
                     customerName: customers.name,
                     status: orders.status,
-                    totalAmount: orders.totalAmount,
+                    totalAmountMinor: orders.totalAmountMinor,
                     createdAt: orders.createdAt,
                     paymentMethod: sql<string>`''`,
                 })
@@ -91,7 +91,7 @@ export const bulkRouter = router({
                     phone: customers.phone,
                     loyaltyPoints: customers.loyaltyPoints,
                     totalOrders: customers.totalOrders,
-                    totalSpent: customers.totalSpent,
+                    totalSpentMinor: customers.totalSpentMinor,
                     createdAt: customers.createdAt,
                 })
                 .from(customers)
@@ -101,3 +101,4 @@ export const bulkRouter = router({
             return { data: rows, error: null, meta: null };
         }),
 });
+

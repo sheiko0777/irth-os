@@ -1,3 +1,4 @@
+import { EGP, zero } from '@irth/domain';
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
@@ -58,7 +59,7 @@ describe('coupons router', () => {
     expect(res).toEqual({
       valid: false,
       error: 'invalid_code',
-      discount: 0,
+      discount: zero(EGP),
       discountType: null,
       couponId: null,
     });

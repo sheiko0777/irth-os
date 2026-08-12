@@ -74,17 +74,11 @@ export default async function OrdersPage({
 
     const orders: OrderRow[] = response.error
         ? []
-        : response.data.map((o: {
-            id: string;
-            orderNumber: string;
-            status: string;
-            totalAmount: string | number;
-            createdAt: string | Date;
-          }) => ({
+        : response.data.map((o) => ({
             id: o.id,
             orderNumber: o.orderNumber,
             status: o.status,
-            totalAmount: o.totalAmount,
+            totalAmountMinor: o.totalAmountMinor,
             createdAt: o.createdAt,
         }));
 

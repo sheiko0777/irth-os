@@ -6,6 +6,7 @@ import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
+import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
 
 const ordersRoute = new Hono();
 
@@ -37,7 +38,7 @@ ordersRoute.post('/', async (c: Context) => {
 
   const variants = await db.select({
     id: productVariants.id,
-    price: productVariants.price,
+    priceMinor: productVariants.priceMinor,
     productId: productVariants.productId
   })
   .from(productVariants)
@@ -52,23 +53,29 @@ ordersRoute.post('/', async (c: Context) => {
     variantMap.set(v.id, v);
   }
 
-  let totalAmount = 0;
-  const itemsToInsert: { orgId: string, variantId: string, quantity: number, price: string }[] = [];
+  // Accumulated in minor units. This was `totalAmount += Number(variant.price)
+  // * item.quantity` — a float multiply per line, summed into a float, on the
+  // only code path that creates an order.
+  let total = zero(EGP);
+  const itemsToInsert: { orgId: string, variantId: string, quantity: number, priceMinor: bigint }[] = [];
 
   for (const item of data.items) {
     const variant = variantMap.get(item.variantId);
     if (!variant) {
       return c.json({ data: null, error: 'variant_not_found', meta: null }, 404);
     }
+    if (variant.priceMinor === null) {
+      return c.json({ data: null, error: 'variant_has_no_price', meta: null }, 422);
+    }
 
-    const price = Number(variant.price);
-    totalAmount += price * item.quantity;
-    
+    const unit = fromMinor(variant.priceMinor, EGP);
+    total = add(total, multiply(unit, item.quantity));
+
     itemsToInsert.push({
       orgId,
       variantId: item.variantId,
       quantity: item.quantity,
-      price: variant.price!,
+      priceMinor: variant.priceMinor,
     });
   }
 
@@ -82,7 +89,8 @@ ordersRoute.post('/', async (c: Context) => {
         orgId,
         orderNumber,
         status: 'pending',
-        totalAmount: totalAmount.toString(),
+        totalAmountMinor: total.minor,
+        currency: total.currency,
         customerId: userId,
       }).returning();
       return insertedOrder;

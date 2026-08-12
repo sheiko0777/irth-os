@@ -3,6 +3,9 @@ import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../t
 import { giftCards, giftCardTransactions, withAudit } from '@irth/db';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+import { currency, fromMinor, parseDecimal } from '@irth/domain';
+
+const moneyInput = z.string().min(1).or(z.number().positive());
 
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -29,26 +32,34 @@ export const giftCardsRouter = router({
     const rows = await ctx.db
       .select({
         status: giftCards.status,
-        balance: giftCards.balance,
-        initialAmount: giftCards.initialAmount,
+        balanceMinor: giftCards.balanceMinor,
+        initialAmountMinor: giftCards.initialAmountMinor,
       })
       .from(giftCards)
       .where(eq(giftCards.orgId, ctx.orgId));
 
     const total = rows.length;
     const active = rows.filter((r) => r.status === 'active').length;
-    const totalIssued = rows.reduce((s, r) => s + parseFloat(r.initialAmount ?? '0'), 0);
-    const activeBalance = rows
+    const totalIssuedMinor = rows.reduce((s, r) => s + r.initialAmountMinor, BigInt(0));
+    const activeBalanceMinor = rows
       .filter((r) => r.status === 'active')
-      .reduce((s, r) => s + parseFloat(r.balance ?? '0'), 0);
+      .reduce((s, r) => s + r.balanceMinor, BigInt(0));
 
-    return { data: { total, active, totalIssued, activeBalance }, error: null };
+    return {
+      data: {
+        total,
+        active,
+        totalIssued: fromMinor(totalIssuedMinor),
+        activeBalance: fromMinor(activeBalanceMinor),
+      },
+      error: null,
+    };
   }),
 
   create: adminProcedure
     .input(
       z.object({
-        initialAmount: z.number().positive(),
+        initialAmount: moneyInput,
         currency: z.string().default('EGP'),
         recipientName: z.string().optional(),
         recipientEmail: z.string().email().optional(),
@@ -58,13 +69,15 @@ export const giftCardsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const code = generateCode();
+      const giftCardCurrency = currency(input.currency);
+      const initialAmountMinor = parseDecimal(String(input.initialAmount), giftCardCurrency).minor;
       const [card] = await ctx.db
         .insert(giftCards)
         .values({
           orgId: ctx.orgId,
           code,
-          initialAmount: String(input.initialAmount),
-          balance: String(input.initialAmount),
+          initialAmountMinor,
+          balanceMinor: initialAmountMinor,
           currency: input.currency,
           status: 'active',
           recipientName: input.recipientName ?? null,
@@ -77,7 +90,7 @@ export const giftCardsRouter = router({
       await ctx.db.insert(giftCardTransactions).values({
         giftCardId: card.id,
         orgId: ctx.orgId,
-        amount: String(input.initialAmount),
+        amountMinor: initialAmountMinor,
         txType: 'issue',
         notes: 'بطاقة هدية جديدة',
       });
@@ -86,7 +99,7 @@ export const giftCardsRouter = router({
     }),
 
   topup: adminProcedure
-    .input(z.object({ id: z.string().uuid(), amount: z.number().positive() }))
+    .input(z.object({ id: z.string().uuid(), amount: moneyInput }))
     .mutation(async ({ ctx, input }) => {
       const [card] = await ctx.db
         .select()
@@ -96,16 +109,13 @@ export const giftCardsRouter = router({
       if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: 'البطاقة غير موجودة' });
       if (card.status === 'cancelled') throw new TRPCError({ code: 'BAD_REQUEST', message: 'البطاقة ملغاة' });
 
-      // Balance is numeric(12,2); reading it into a JS float and writing the
-      // result back loses that precision and races with concurrent top-ups
-      // (read-modify-write). Let Postgres do the decimal arithmetic in place.
-      const amount = input.amount.toFixed(2);
+      const amountMinor = parseDecimal(String(input.amount), currency(card.currency)).minor;
 
       const updated = await ctx.db.transaction(async (tx) => {
         const [row] = await tx
           .update(giftCards)
           .set({
-            balance: sql`${giftCards.balance} + ${amount}::numeric`,
+            balanceMinor: sql`${giftCards.balanceMinor} + ${amountMinor}`,
             status: 'active',
             updatedAt: new Date(),
           })
@@ -115,7 +125,7 @@ export const giftCardsRouter = router({
         await tx.insert(giftCardTransactions).values({
           giftCardId: input.id,
           orgId: ctx.orgId,
-          amount,
+          amountMinor,
           txType: 'topup',
         });
 
@@ -127,7 +137,7 @@ export const giftCardsRouter = router({
             userId: ctx.userId,
             action: 'TOPUP_GIFT_CARD',
             tableName: 'gift_cards',
-            changes: { giftCardId: input.id, amount },
+            changes: { giftCardId: input.id, amountMinor },
           }
         );
 
@@ -151,13 +161,13 @@ export const giftCardsRouter = router({
       const [updated] = await ctx.db
         .update(giftCards)
         .set({ status: 'cancelled', updatedAt: new Date() })
-        .where(eq(giftCards.id, input.id))
+        .where(and(eq(giftCards.id, input.id), eq(giftCards.orgId, ctx.orgId)))
         .returning();
 
       await ctx.db.insert(giftCardTransactions).values({
         giftCardId: input.id,
         orgId: ctx.orgId,
-        amount: '0',
+        amountMinor: BigInt(0),
         txType: 'cancel',
       });
 
