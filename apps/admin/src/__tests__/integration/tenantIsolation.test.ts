@@ -128,6 +128,24 @@ describe('tenant isolation', () => {
     expect(row.org === null || row.org === '').toBe(true);
   });
 
+  it('returns nothing — and does not throw — when the tenant is unset', async () => {
+    // The forgotten-wrapper case, and the one that used to be an outage.
+    //
+    // `current_setting(name, true)` is NULL only while the setting has never
+    // been touched on that backend. After anything sets it — a stray
+    // set_config, or an earlier request on the same pooled connection — it
+    // becomes the EMPTY STRING, and the original policy's `''::uuid` raised
+    // `invalid input syntax for type uuid: ""` on every query against every
+    // protected table. Migration 0032 wraps it in NULLIF so both cases collapse
+    // to NULL and the row is simply filtered out.
+    await testDb.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.org_id', '', true)`);
+      await tx.execute(sql`SET LOCAL ROLE irth_app`);
+      const rows = await tx.select().from(orders);
+      expect(rows).toHaveLength(0);
+    });
+  });
+
   it('refuses a non-uuid orgId before opening a transaction', async () => {
     await expect(
       withOrgContext(testDb, "' OR 1=1 --", async (tx) => tx.select().from(orders)),
