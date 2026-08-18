@@ -1,12 +1,20 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { db, withOrg } from '../db';
-import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe } from '@irth/db';
+import { db, getDb, withOrg } from '../db';
+import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
+
+/** Thrown inside the order transaction so the whole thing rolls back. */
+class InsufficientStockError extends Error {
+  constructor(readonly variantId: string) {
+    super(`Insufficient stock for variant ${variantId}`);
+    this.name = 'InsufficientStockError';
+  }
+}
 
 const ordersRoute = new Hono();
 
@@ -14,6 +22,10 @@ const getOrgId = (c: Context): string | undefined => c.get('orgId') as string | 
 const getUserId = (c: Context): string | undefined => c.get('userId') as string | undefined;
 
 const createOrderSchema = z.object({
+  // Optional so existing callers keep working; a client opts in by sending one.
+  // Only the CALLER can tell a retry from a second genuine order — ordering the
+  // same item twice in a minute is legitimate, so the server cannot infer it.
+  idempotencyKey: z.string().min(1).max(255).optional(),
   items: z.array(z.object({
     variantId: z.string().uuid(),
     quantity: z.number().int().positive()
@@ -79,53 +91,121 @@ ordersRoute.post('/', async (c: Context) => {
     });
   }
 
-  // Number, order, lines and audit row in ONE transaction.
+  // Number, stock, order, lines and audit row in ONE transaction, run at most
+  // once per idempotency key.
   //
-  // Previously: the number came from `count(*) + 1` (read-then-write, so two
-  // concurrent orders both saw N and both built N+1 — and until 0035 the
+  // What this replaced: the number came from `count(*) + 1` (read-then-write,
+  // so two concurrent orders both saw N and both built N+1, and until 0035 the
   // duplicate was silently accepted); the order and its audit row committed
-  // separately from the lines; and the year was the literal 2026.
+  // separately from the lines; the year was the literal 2026; NOTHING
+  // decremented stock; and a retried request created a second order.
   //
   // The lines being a separate autocommit is the one that loses money: an order
-  // could commit with a total and no items behind it, which reconciles against
-  // nothing and cannot be repriced.
-  const newOrder = await withOrg(c, async (tx) => {
-    // Claimed inside the transaction, so a rollback releases the number instead
-    // of burning it. See nextDocumentNumber for why this is not a SEQUENCE.
-    const seq = await nextDocumentNumber(tx, orgId, 'order');
-    const orderNumber = formatDocumentNumber('order', seq);
+  // could commit carrying a total with no items behind it — reconciles against
+  // nothing, cannot be repriced.
+  let newOrder;
+  try {
+    newOrder = await withIdempotency(
+      getDb(),
+      { orgId, operation: 'orders.create', key: data.idempotencyKey, request: data },
+      () => withOrg(c, async (tx) => {
+        // Claimed inside the transaction, so a rollback releases the number
+        // rather than burning it. See nextDocumentNumber for why this is not a
+        // Postgres SEQUENCE.
+        const seq = await nextDocumentNumber(tx, orgId, 'order');
+        const orderNumber = formatDocumentNumber('order', seq);
 
-    return withAudit(tx, async () => {
-      const [insertedOrder] = await tx.insert(orders).values({
-        orgId,
-        orderNumber,
-        status: 'pending',
-        totalAmountMinor: total.minor,
-        currency: total.currency,
-        // NOT `customerId: userId`. customer_id is uuid and refers to
-        // customers.id, while Better Auth user ids are text (0034) — so this
-        // raised 22P02 and order creation through the API could never succeed.
-        // It was also the wrong relationship: the session user PLACED the
-        // order, which is what the audit row below records; the customer is a
-        // separate entity that may not exist yet.
-        customerId: null,
-      }).returning();
+        // STOCK FIRST, and in the UPDATE's WHERE.
+        //
+        // There was previously no stock decrement anywhere on this path — an
+        // order could always be placed for any quantity of anything, and
+        // inventory only moved when someone adjusted it by hand.
+        //
+        // `quantity >= n` lives in the WHERE rather than a SELECT before it, so
+        // the check and the decrement are one statement and cannot be split by
+        // a concurrent order. A read-then-write here is precisely how two
+        // buyers both pass a "5 in stock" check and both take 5.
+        //
+        // Zero rows updated means either no inventory record or not enough on
+        // hand; both are a refusal, and throwing rolls back the number and the
+        // order with it.
+        for (const item of itemsToInsert) {
+          const updated = await tx
+            .update(inventoryItems)
+            .set({
+              quantity: sql`${inventoryItems.quantity} - ${item.quantity}`,
+              updatedAt: new Date(),
+            })
+            .where(and(
+              eq(inventoryItems.orgId, orgId),
+              eq(inventoryItems.variantId, item.variantId),
+              sql`${inventoryItems.quantity} >= ${item.quantity}`,
+            ))
+            .returning({ id: inventoryItems.id, quantity: inventoryItems.quantity });
 
-      if (itemsToInsert.length > 0) {
-        await tx.insert(orderItems).values(
-          itemsToInsert.map((item) => ({ ...item, orderId: insertedOrder.id })),
-        );
-      }
+          if (updated.length === 0) {
+            throw new InsufficientStockError(item.variantId);
+          }
 
-      return insertedOrder;
-    }, {
-      orgId,
-      userId,
-      action: 'CREATE',
-      tableName: 'orders',
-      changes: { items: itemsToInsert }
-    });
-  });
+          // Ledger row, matching inventory.adjust and returns.restock: a stock
+          // change absent from the movements table is invisible to any audit
+          // and makes the on-hand figure underivable.
+          await tx.insert(inventoryMovements).values({
+            orgId,
+            itemId: updated[0].id,
+            type: 'out',
+            quantity: item.quantity,
+            note: `Order ${orderNumber}`,
+          });
+        }
+
+        return withAudit(tx, async () => {
+          const [insertedOrder] = await tx.insert(orders).values({
+            orgId,
+            orderNumber,
+            status: 'pending',
+            totalAmountMinor: total.minor,
+            currency: total.currency,
+            // NOT `customerId: userId`. customer_id is uuid and refers to
+            // customers.id, while Better Auth user ids are text (0034) — so
+            // this raised 22P02 and order creation through the API could never
+            // succeed. It was also the wrong relationship: the session user
+            // PLACED the order, which is what the audit row records; the
+            // customer is a separate entity that may not exist yet.
+            customerId: null,
+          }).returning();
+
+          if (itemsToInsert.length > 0) {
+            await tx.insert(orderItems).values(
+              itemsToInsert.map((item) => ({ ...item, orderId: insertedOrder.id })),
+            );
+          }
+
+          return insertedOrder;
+        }, {
+          orgId,
+          userId,
+          action: 'CREATE',
+          tableName: 'orders',
+          changes: { items: itemsToInsert }
+        });
+      }),
+    );
+  } catch (err) {
+    if (err instanceof InsufficientStockError) {
+      return c.json(
+        { data: null, error: 'insufficient_stock', meta: { variantId: err.variantId } },
+        409,
+      );
+    }
+    if (err instanceof IdempotencyError) {
+      return c.json(
+        { data: null, error: err.message, meta: null },
+        err.code === 'CONFLICT' ? 409 : 400,
+      );
+    }
+    throw err;
+  }
 
   return c.json({ data: jsonSafe(newOrder), error: null, meta: null });
 });
