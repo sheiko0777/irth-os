@@ -1,7 +1,7 @@
 import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import { db } from '../db';
-import { notifications, activityLog } from '@irth/db';
+import { notifications, activityLog, jsonSafe } from '@irth/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -27,7 +27,7 @@ notificationsRouter.get('/', async (c) => {
       ))
       .orderBy(desc(notifications.createdAt));
 
-    return c.json({ data, error: null, meta: null });
+    return c.json({ data: jsonSafe(data), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ error: handleError(error), data: null, meta: null }, 500);
   }
@@ -58,7 +58,7 @@ notificationsRouter.patch('/:id/read', async (c) => {
       return c.json({ error: 'Notification not found', data: null, meta: null }, 404);
     }
 
-    return c.json({ data: result[0], error: null, meta: null });
+    return c.json({ data: jsonSafe(result[0]), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ error: handleError(error), data: null, meta: null }, 500);
   }
@@ -83,7 +83,7 @@ notificationsRouter.patch('/read-all', async (c) => {
         eq(notifications.read, false)
       ));
 
-    return c.json({ data: { success: true }, error: null, meta: null });
+    return c.json({ data: jsonSafe({ success: true }), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ error: handleError(error), data: null, meta: null }, 500);
   }
@@ -115,7 +115,7 @@ notificationsRouter.get('/activity', async (c) => {
       .offset(offset);
 
     return c.json({
-      data,
+      data: jsonSafe(data),
       error: null,
       meta: { page: query.page, limit: query.limit }
     });

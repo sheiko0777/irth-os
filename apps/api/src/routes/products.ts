@@ -1,10 +1,10 @@
-import { parseDecimal } from '@irth/domain';
+import { parseDecimal, EGP } from '@irth/domain';
 import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, withOrg } from '../db';
-import { products, productVariants, withAudit } from '@irth/db';
+import { products, productVariants, withAudit, jsonSafe } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
 
@@ -39,7 +39,7 @@ productsRouter.get('/', async (c: Context) => {
     
     const total = Number(countResult[0].count);
 
-    return c.json({ data, error: null, meta: { total, page, limit } });
+    return c.json({ data: jsonSafe(data), error: null, meta: { total, page, limit } });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -97,7 +97,7 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
       changes: data
     }));
 
-    return c.json({ data: result, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(result), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -119,7 +119,7 @@ productsRouter.get('/:id', async (c: Context) => {
 
     const variants = await db.select().from(productVariants).where(eq(productVariants.productId, id));
 
-    return c.json({ data: { product, variants }, error: null, meta: null });
+    return c.json({ data: jsonSafe({ product, variants }), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -159,9 +159,21 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
       }
     }
 
-    const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
-    if (data.price !== undefined) {
-       updateData.price = typeof data.price === 'number' ? data.price.toString() : data.price;
+    // `price` is destructured OUT: there is no such column since 0028, and
+    // leaving it spread in invites someone to "fix" the dead key by adding
+    // one back.
+    const { price, ...rest } = data;
+    const updateData: Record<string, unknown> = { ...rest, updatedAt: new Date() };
+    if (price !== undefined) {
+       // priceMinor, not price. 0028 renamed the column; Drizzle silently
+       // DROPS writes to keys that are not columns, so every price update
+       // through PATCH /api/products/:id reported success and changed nothing.
+       // Silent data loss on the most-used update path, invisible to a test
+       // that only asserts the response envelope.
+       //
+       // String() first so a numeric body never becomes a float: parseDecimal
+       // reads the decimal text, it does not do float arithmetic.
+       updateData.priceMinor = parseDecimal(String(price), EGP).minor;
     }
 
     const result = await withOrg(c, (tx) => withAudit(tx, async () => {
@@ -180,7 +192,7 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
-    return c.json({ data: result, error: null, meta: null });
+    return c.json({ data: jsonSafe(result), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -211,7 +223,7 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
-    return c.json({ data: result, error: null, meta: null });
+    return c.json({ data: jsonSafe(result), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -234,7 +246,7 @@ productsRouter.get('/:id/variants', async (c: Context) => {
 
     const data = await db.select().from(productVariants).where(eq(productVariants.productId, id));
 
-    return c.json({ data, error: null, meta: null });
+    return c.json({ data: jsonSafe(data), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -291,7 +303,7 @@ productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Co
       changes: data
     }));
 
-    return c.json({ data: result, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(result), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }

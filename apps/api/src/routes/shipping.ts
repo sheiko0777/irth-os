@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { orders, shipmentTracking, auditLog } from '@irth/db';
+import { orders, shipmentTracking, auditLog, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 
 const shippingRoute = new Hono();
@@ -80,7 +80,7 @@ shippingRoute.post('/create', async (c: Context) => {
          changes: { provider: 'bosta', trackingNumber: bostaResponse.trackingNumber }
      });
 
-     return c.json({ data: shipment, error: null, meta: null });
+     return c.json({ data: jsonSafe(shipment), error: null, meta: null });
   } catch (error) {
      console.error('Bosta API failed:', error instanceof Error ? error.message : 'unknown error');
      return c.json({ data: null, error: 'shipping_unavailable', meta: null }, 200);

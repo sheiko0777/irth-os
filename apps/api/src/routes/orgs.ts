@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, getDb, withOrg } from '../db';
-import { organizations, orgMembers, orgInvites, withAudit, auditLog } from '@irth/db';
+import { organizations, orgMembers, orgInvites, withAudit, auditLog, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
 // import { Resend } from 'resend'; // Assume resend is installed, or we handle it
@@ -61,7 +61,7 @@ orgsRouter.post('/', async (c: Context) => {
       return insertedOrg;
     });
 
-    return c.json({ data: org, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(org), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -75,7 +75,7 @@ orgsRouter.get('/:id/members', async (c: Context) => {
     if (id !== orgId) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
 
     const members = await db.select().from(orgMembers).where(eq(orgMembers.orgId, orgId));
-    return c.json({ data: members, error: null, meta: null });
+    return c.json({ data: jsonSafe(members), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -123,7 +123,7 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
     // await resend.emails.send({ ... subject: `دعوة للانضمام إلى ${org.name}` ... })
     console.log(`Sending email to ${email} with subject: دعوة للانضمام إلى ${org.name}`);
 
-    return c.json({ data: invite, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(invite), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -160,7 +160,7 @@ orgsRouter.post('/invite/accept', async (c: Context) => {
 
     await db.delete(orgInvites).where(eq(orgInvites.id, invite.id));
 
-    return c.json({ data: member, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(member), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -199,7 +199,7 @@ orgsRouter.patch('/members/:memberId/role', requireRole('owner'), async (c: Cont
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
-    return c.json({ data: result, error: null, meta: null });
+    return c.json({ data: jsonSafe(result), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }

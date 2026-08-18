@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, withOrg } from '../db';
-import { categories, withAudit } from '@irth/db';
+import { categories, withAudit, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
 
@@ -16,7 +16,7 @@ categoriesRouter.get('/', async (c: Context) => {
 
     const data = await db.select().from(categories).where(eq(categories.orgId, orgId));
 
-    return c.json({ data, error: null, meta: null });
+    return c.json({ data: jsonSafe(data), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -60,7 +60,7 @@ categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => 
       changes: data
     }));
 
-    return c.json({ data: result, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(result), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -91,7 +91,7 @@ categoriesRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
-    return c.json({ data: result, error: null, meta: null });
+    return c.json({ data: jsonSafe(result), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }

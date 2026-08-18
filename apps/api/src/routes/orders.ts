@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, withOrg } from '../db';
-import { orders, orderItems, productVariants, products } from '@irth/db';
+import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
@@ -79,38 +79,55 @@ ordersRoute.post('/', async (c: Context) => {
     });
   }
 
-  const existingOrdersCountResult = await db.select({ count: sql<number>`count(*)` }).from(orders).where(eq(orders.orgId, orgId));
-  const existingOrdersCount = Number(existingOrdersCountResult[0]?.count || 0);
-  const seq = (existingOrdersCount + 1).toString().padStart(4, '0');
-  const orderNumber = `IRT-2026-${seq}`;
+  // Number, order, lines and audit row in ONE transaction.
+  //
+  // Previously: the number came from `count(*) + 1` (read-then-write, so two
+  // concurrent orders both saw N and both built N+1 — and until 0035 the
+  // duplicate was silently accepted); the order and its audit row committed
+  // separately from the lines; and the year was the literal 2026.
+  //
+  // The lines being a separate autocommit is the one that loses money: an order
+  // could commit with a total and no items behind it, which reconciles against
+  // nothing and cannot be repriced.
+  const newOrder = await withOrg(c, async (tx) => {
+    // Claimed inside the transaction, so a rollback releases the number instead
+    // of burning it. See nextDocumentNumber for why this is not a SEQUENCE.
+    const seq = await nextDocumentNumber(tx, orgId, 'order');
+    const orderNumber = formatDocumentNumber('order', seq);
 
-  const newOrder = await withOrg(c, (tx) => withAudit(tx, async () => {
+    return withAudit(tx, async () => {
       const [insertedOrder] = await tx.insert(orders).values({
         orgId,
         orderNumber,
         status: 'pending',
         totalAmountMinor: total.minor,
         currency: total.currency,
-        customerId: userId,
+        // NOT `customerId: userId`. customer_id is uuid and refers to
+        // customers.id, while Better Auth user ids are text (0034) — so this
+        // raised 22P02 and order creation through the API could never succeed.
+        // It was also the wrong relationship: the session user PLACED the
+        // order, which is what the audit row below records; the customer is a
+        // separate entity that may not exist yet.
+        customerId: null,
       }).returning();
+
+      if (itemsToInsert.length > 0) {
+        await tx.insert(orderItems).values(
+          itemsToInsert.map((item) => ({ ...item, orderId: insertedOrder.id })),
+        );
+      }
+
       return insertedOrder;
-  }, {
-    orgId,
-    userId,
-    action: 'CREATE',
-    tableName: 'orders',
-    changes: { items: itemsToInsert }
-  }));
+    }, {
+      orgId,
+      userId,
+      action: 'CREATE',
+      tableName: 'orders',
+      changes: { items: itemsToInsert }
+    });
+  });
 
-  if (itemsToInsert.length > 0) {
-    const orderItemsValues = itemsToInsert.map(item => ({
-      ...item,
-      orderId: newOrder.id
-    }));
-    await db.insert(orderItems).values(orderItemsValues);
-  }
-
-  return c.json({ data: newOrder, error: null, meta: null });
+  return c.json({ data: jsonSafe(newOrder), error: null, meta: null });
 });
 
 ordersRoute.get('/', async (c: Context) => {
@@ -124,7 +141,7 @@ ordersRoute.get('/', async (c: Context) => {
 
   const totalCount = Number(countResult[0]?.count || 0);
 
-  return c.json({ data: list, error: null, meta: { total: totalCount } });
+  return c.json({ data: jsonSafe(list), error: null, meta: { total: totalCount } });
 });
 
 ordersRoute.get('/:id', async (c: Context) => {
@@ -136,7 +153,7 @@ ordersRoute.get('/:id', async (c: Context) => {
   if (!order) {
     return c.json({ data: null, error: 'not_found', meta: null }, 404);
   }
-  return c.json({ data: order, error: null, meta: null });
+  return c.json({ data: jsonSafe(order), error: null, meta: null });
 });
 
 const updateStatusSchema = z.object({
@@ -178,7 +195,7 @@ ordersRoute.patch('/:id/status', async (c: Context) => {
       issueInvoice(updatedOrder).catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));
   }
 
-  return c.json({ data: updatedOrder, error: null, meta: null });
+  return c.json({ data: jsonSafe(updatedOrder), error: null, meta: null });
 });
 
 export { ordersRoute };

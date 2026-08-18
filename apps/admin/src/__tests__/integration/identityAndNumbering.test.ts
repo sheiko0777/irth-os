@@ -108,6 +108,47 @@ describe('withAudit writes NULL rather than a fabricated record id (0033)', () =
   });
 });
 
+describe('withAudit survives money in the changeset', () => {
+  it('writes an audit row whose changes contain bigint', async () => {
+    // `changes` is jsonb, and the postgres driver serializes jsonb parameters
+    // with JSON.stringify — which THROWS on bigint, it does not coerce:
+    //
+    //     TypeError: Do not know how to serialize a BigInt
+    //
+    // Every money column became bigint in 0028, so any audited write whose
+    // changeset mentioned an amount took down the write it was recording.
+    // Order creation passes `changes: { items: [...] }` with priceMinor on each
+    // line, which is exactly this shape.
+    await testDb.transaction(async (tx) => {
+      await withAudit(
+        tx,
+        async () => ({ id: orgA }),
+        {
+          orgId: orgA,
+          userId: BETTER_AUTH_USER_ID,
+          // Distinct action: the first test in this file also writes
+          // CREATE/orders, and `find` would return that row instead.
+          action: 'CREATE_WITH_MONEY',
+          tableName: 'orders',
+          changes: {
+            totalAmountMinor: 19999n,
+            items: [{ variantId: 'v1', quantity: 2, priceMinor: 9999n }],
+          },
+        },
+      );
+    });
+
+    const rows = await testDb.select().from(auditLog);
+    const written = rows.find((r) => r.action === 'CREATE_WITH_MONEY');
+    const changes = written?.changes as Record<string, unknown>;
+
+    // Stored as decimal STRINGS: Number() is lossy past 2^53, and money is
+    // precisely what must not round.
+    expect(changes.totalAmountMinor).toBe('19999');
+    expect((changes.items as Record<string, unknown>[])[0].priceMinor).toBe('9999');
+  });
+});
+
 describe('document numbers are unique per tenant, not globally (0035)', () => {
   it('lets two organizations each hold IRT-2026-0001', async () => {
     // `orders_order_number_unique` was UNIQUE(order_number) alone. Since every

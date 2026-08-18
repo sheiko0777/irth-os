@@ -1,7 +1,7 @@
 import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
+import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber } from '@irth/db';
 import { parseDecimal } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
 
@@ -224,30 +224,18 @@ export const purchasingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // Generate PO number: PO-YYYY-XXXX
-        const year = new Date().getFullYear();
-
-        // Get latest PO for this year to sequence
-        const latestPoRows = await ctx.db
-            .select({ poNumber: purchaseOrders.poNumber })
-            .from(purchaseOrders)
-            .where(and(
-                eq(purchaseOrders.orgId, ctx.orgId),
-                sql`${purchaseOrders.poNumber} LIKE ${`PO-${year}-%`}`
-            ))
-            .orderBy(desc(purchaseOrders.poNumber))
-            .limit(1);
-        const latestPo = latestPoRows[0];
-
-        let seq = 1;
-        if (latestPo && latestPo.poNumber) {
-            const parts = latestPo.poNumber.split('-');
-            if (parts.length === 3) {
-                seq = parseInt(parts[2], 10) + 1;
-            }
-        }
-
-        const poNumber = `PO-${year}-${seq.toString().padStart(4, '0')}`;
+        // The PO number is claimed inside the transaction below, from the
+        // tenant's counter.
+        //
+        // What this replaced read the highest existing PO number and added one,
+        // which was wrong twice over:
+        //
+        //   - Read-then-write, so two concurrent creates both derived the same
+        //     next number. Nothing rejected the duplicate until 0035.
+        //   - It ordered by the number as TEXT. 'PO-2026-10000' sorts before
+        //     'PO-2026-9999', so on the ten-thousandth PO of a year the "latest"
+        //     is no longer the highest and the series silently restarts into
+        //     numbers already issued.
         // parseDecimal both when the client sends a string and when it sends a
         // number: routing the number through String() first means the value
         // never becomes a float here, only its decimal text.
@@ -257,6 +245,11 @@ export const purchasingRouter = router({
             : parseDecimal(String(input.totalAmount)).minor;
 
         const result = await ctx.withOrg(async (tx) => {
+          const poNumber = formatDocumentNumber(
+            'purchase_order',
+            await nextDocumentNumber(tx, ctx.orgId, 'purchase_order'),
+          );
+
           const [po] = await tx
             .insert(purchaseOrders)
             .values({

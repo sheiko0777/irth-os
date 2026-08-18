@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit } from '@irth/db';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit, nextDocumentNumber, formatDocumentNumber } from '@irth/db';
 import { fromMinor, parseDecimal } from '@irth/domain';
 import { eq, and, count, sum, sql, desc } from 'drizzle-orm';
 
@@ -96,17 +96,15 @@ export const returnsRouter = router({
       // second insert left a return with no items — indistinguishable from a
       // genuinely empty return, and its refund total silently reads as zero.
       const createdReturn = await ctx.withOrg(async (tx) => {
-        const [{ count: currentCount }] = await tx
-          .select({ count: count() })
-          .from(orderReturns)
-          .where(eq(orderReturns.orgId, ctx.orgId));
-
-        // STILL RACY, and the transaction does not fix it: at READ COMMITTED
-        // two concurrent creates both count N and both build RMA-{N+1}, and
-        // nothing in the schema rejects the duplicate. P3 replaces this with a
-        // sequence. Narrowing the window is not closing it.
-        const nextNumber = currentCount + 1;
-        const returnNumber = `RMA-${String(nextNumber).padStart(4, '0')}`;
+        // Claimed from the tenant's counter, not counted. The old
+        // `count(*) + 1` was read-then-write: at READ COMMITTED two concurrent
+        // creates both saw N and both built RMA-{N+1}. The row lock inside
+        // nextDocumentNumber serialises them, and because the claim shares this
+        // transaction, a rollback releases the number rather than burning it.
+        const returnNumber = formatDocumentNumber(
+          'return',
+          await nextDocumentNumber(tx, ctx.orgId, 'return'),
+        );
 
         const [created] = await tx.insert(orderReturns).values({
           orgId: ctx.orgId,
