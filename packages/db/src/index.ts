@@ -97,10 +97,21 @@ export async function withOrgContext<T>(
   }
 
   return dbInstance.transaction(async (tx) => {
-    // Not parameterisable — a role name is an identifier, not a value. It is a
-    // hard-coded constant here, never interpolated from input.
-    await tx.execute(sql`SET LOCAL ROLE irth_app`);
-    await tx.execute(sql`SELECT set_config('app.org_id', ${orgId}, true)`);
+    // One statement, not two. `SET LOCAL ROLE x` is just `SET LOCAL role = x`,
+    // and set_config(name, value, is_local=true) is the function form of SET
+    // LOCAL — so both GUCs can be set in a single round trip. Every wrapped
+    // procedure pays this cost, so halving it is worth the indirection.
+    //
+    // Setting the role through set_config also keeps the org id a bound
+    // parameter: `SET LOCAL ROLE` takes an identifier, which cannot be
+    // parameterised, so a two-statement version invites string interpolation
+    // the day someone makes the role dynamic.
+    //
+    // Both are transaction-local, so nothing leaks to the next request sharing
+    // this pooled connection — asserted in integration/tenantIsolation.test.ts.
+    await tx.execute(
+      sql`SELECT set_config('role', 'irth_app', true), set_config('app.org_id', ${orgId}, true)`,
+    );
     return fn(tx);
   });
 }

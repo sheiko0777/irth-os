@@ -38,7 +38,7 @@ export const customerSegmentsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [segment] = await ctx.db
+      const [segment] = await ctx.withOrg(async (tx) => tx
         .insert(customerSegments)
         .values({
           orgId: ctx.orgId,
@@ -46,7 +46,7 @@ export const customerSegmentsRouter = router({
           color: input.color,
           description: input.description ?? null,
         })
-        .returning();
+        .returning());
       return { data: segment, error: null };
     }),
 
@@ -61,11 +61,11 @@ export const customerSegmentsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...fields } = input;
-      const [updated] = await ctx.db
+      const [updated] = await ctx.withOrg(async (tx) => tx
         .update(customerSegments)
         .set({ ...fields, updatedAt: new Date() })
         .where(and(eq(customerSegments.id, id), eq(customerSegments.orgId, ctx.orgId)))
-        .returning();
+        .returning());
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
       return { data: updated, error: null };
     }),
@@ -73,10 +73,10 @@ export const customerSegmentsRouter = router({
   delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const [deleted] = await ctx.db
+      const [deleted] = await ctx.withOrg(async (tx) => tx
         .delete(customerSegments)
         .where(and(eq(customerSegments.id, input.id), eq(customerSegments.orgId, ctx.orgId)))
-        .returning();
+        .returning());
       if (!deleted) throw new TRPCError({ code: 'NOT_FOUND' });
       return { data: deleted, error: null };
     }),
@@ -118,7 +118,7 @@ export const customerSegmentsRouter = router({
         .limit(1);
       if (!seg.length) throw new TRPCError({ code: 'NOT_FOUND' });
 
-      await ctx.db
+      await ctx.withOrg(async (tx) => tx
         .insert(customerSegmentMembers)
         .values(
           input.customerIds.map((cid) => ({
@@ -127,7 +127,7 @@ export const customerSegmentsRouter = router({
             customerId: cid,
           }))
         )
-        .onConflictDoNothing();
+        .onConflictDoNothing());
 
       return { data: { added: input.customerIds.length }, error: null };
     }),
@@ -135,7 +135,7 @@ export const customerSegmentsRouter = router({
   removeMember: adminProcedure
     .input(z.object({ memberId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const [deleted] = await ctx.db
+      const [deleted] = await ctx.withOrg(async (tx) => tx
         .delete(customerSegmentMembers)
         .where(
           and(
@@ -143,7 +143,7 @@ export const customerSegmentsRouter = router({
             eq(customerSegmentMembers.orgId, ctx.orgId)
           )
         )
-        .returning();
+        .returning());
       if (!deleted) throw new TRPCError({ code: 'NOT_FOUND' });
       return { data: deleted, error: null };
     }),

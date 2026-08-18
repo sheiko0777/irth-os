@@ -88,8 +88,8 @@ export const couponsRouter = router({
             description: z.string().max(500).optional().nullable(),
         }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
-                const result = await db.insert(coupons)
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
+                const result = await tx.insert(coupons)
                     .values({
                         orgId: ctx.orgId,
                         code: input.code,
@@ -108,7 +108,7 @@ export const couponsRouter = router({
                 action: 'create_coupon',
                 tableName: 'coupons',
                 changes: input,
-            });
+            }));
         }),
 
     update: adminProcedure
@@ -123,7 +123,7 @@ export const couponsRouter = router({
             description: z.string().max(500).optional().nullable(),
         }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
                 const { id, value: _value, minOrderAmount: _minOrderAmount, ...rest } = input;
                 const formattedData: Partial<typeof coupons.$inferInsert> = { ...rest, updatedAt: new Date() };
 
@@ -137,7 +137,7 @@ export const couponsRouter = router({
                     formattedData.minOrderAmountMinor = input.minOrderAmount == null ? null : moneyMinor(input.minOrderAmount);
                 }
 
-                const result = await db.update(coupons)
+                const result = await tx.update(coupons)
                     .set(formattedData)
                     .where(and(eq(coupons.id, id), eq(coupons.orgId, ctx.orgId)))
                     .returning();
@@ -151,14 +151,14 @@ export const couponsRouter = router({
                 action: 'update_coupon',
                 tableName: 'coupons',
                 changes: input,
-            });
+            }));
         }),
 
     toggleActive: adminProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
-                const coupon = await db.select({ isActive: coupons.isActive })
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
+                const coupon = await tx.select({ isActive: coupons.isActive })
                     .from(coupons)
                     .where(and(eq(coupons.id, input.id), eq(coupons.orgId, ctx.orgId)))
                     .limit(1);
@@ -167,7 +167,7 @@ export const couponsRouter = router({
                     throw new TRPCError({ code: 'NOT_FOUND', message: 'Coupon not found' });
                 }
 
-                const result = await db.update(coupons)
+                const result = await tx.update(coupons)
                     .set({ isActive: !coupon[0].isActive, updatedAt: new Date() })
                     .where(and(eq(coupons.id, input.id), eq(coupons.orgId, ctx.orgId)))
                     .returning();
@@ -178,14 +178,14 @@ export const couponsRouter = router({
                 action: 'toggle_coupon_active',
                 tableName: 'coupons',
                 changes: { id: input.id },
-            });
+            }));
         }),
 
     delete: ownerProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
-                const result = await db.delete(coupons)
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
+                const result = await tx.delete(coupons)
                     .where(and(eq(coupons.id, input.id), eq(coupons.orgId, ctx.orgId)))
                     .returning();
                 if (!result.length) {
@@ -198,7 +198,7 @@ export const couponsRouter = router({
                 action: 'delete_coupon',
                 tableName: 'coupons',
                 changes: { id: input.id },
-            });
+            }));
         }),
 
     validate: protectedProcedure
@@ -260,14 +260,14 @@ export const couponsRouter = router({
             orderId: z.string().uuid().optional(), // For auditing if needed
         }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
                 // `validate` is a separate query, so its checks are stale by the
                 // time this runs — and this mutation is callable without it.
                 // Re-assert redeemability inside the UPDATE's WHERE so the check
                 // and the increment cannot be split: without this an expired,
                 // deactivated, or fully-used coupon still increments and reports
                 // success, and concurrent redemptions blow past maxUses.
-                const result = await db.update(coupons)
+                const result = await tx.update(coupons)
                     .set({
                         usedCount: sql`used_count + 1`,
                         updatedAt: new Date()
@@ -284,7 +284,7 @@ export const couponsRouter = router({
                 if (!result.length) {
                     // Distinguish "no such coupon" from "not redeemable" only
                     // after the atomic attempt has already failed.
-                    const [existing] = await db.select({ id: coupons.id })
+                    const [existing] = await tx.select({ id: coupons.id })
                         .from(coupons)
                         .where(and(eq(coupons.id, input.couponId), eq(coupons.orgId, ctx.orgId)))
                         .limit(1);
@@ -304,6 +304,6 @@ export const couponsRouter = router({
                 action: 'apply_coupon',
                 tableName: 'coupons',
                 changes: { couponId: input.couponId, orderId: input.orderId },
-            });
+            }));
         }),
 });

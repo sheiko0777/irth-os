@@ -28,10 +28,10 @@ export const categoriesRouter = router({
             parentId: z.string().uuid().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const result = await withAudit(
-                ctx.db,
+            const result = await ctx.withOrg((tx) => withAudit(
+                tx,
                 async () => {
-                    const [category] = await ctx.db.insert(categories)
+                    const [category] = await tx.insert(categories)
                         .values({
                             orgId: ctx.orgId,
                             name: input.name,
@@ -48,7 +48,7 @@ export const categoriesRouter = router({
                     tableName: 'categories',
                     changes: input
                 }
-            );
+            ));
 
             return { data: result, error: null, meta: null };
         }),
@@ -58,10 +58,10 @@ export const categoriesRouter = router({
             id: z.string().uuid()
         }))
         .mutation(async ({ ctx, input }) => {
-            const result = await withAudit(
-                ctx.db,
+            const result = await ctx.withOrg((tx) => withAudit(
+                tx,
                 async () => {
-                    const [deleted] = await ctx.db.delete(categories)
+                    const [deleted] = await tx.delete(categories)
                         .where(and(
                             eq(categories.id, input.id),
                             eq(categories.orgId, ctx.orgId)
@@ -80,7 +80,7 @@ export const categoriesRouter = router({
                     tableName: 'categories',
                     changes: { id: input.id }
                 }
-            );
+            ));
 
             return { data: result, error: null, meta: null };
         }),

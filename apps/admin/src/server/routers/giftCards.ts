@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { giftCards, giftCardTransactions, withAudit } from '@irth/db';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, ne } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { currency, fromMinor, parseDecimal } from '@irth/domain';
 
@@ -71,28 +71,36 @@ export const giftCardsRouter = router({
       const code = generateCode();
       const giftCardCurrency = currency(input.currency);
       const initialAmountMinor = parseDecimal(String(input.initialAmount), giftCardCurrency).minor;
-      const [card] = await ctx.db
-        .insert(giftCards)
-        .values({
-          orgId: ctx.orgId,
-          code,
-          initialAmountMinor,
-          balanceMinor: initialAmountMinor,
-          currency: input.currency,
-          status: 'active',
-          recipientName: input.recipientName ?? null,
-          recipientEmail: input.recipientEmail ?? null,
-          message: input.message ?? null,
-          expiresAt: input.expiresAt ?? null,
-        })
-        .returning();
+      // The card and its opening ledger line are one transaction: a card
+      // issued without its `issue` row is a liability with no record of where
+      // it came from, and the transaction history no longer reconciles to the
+      // balance.
+      const card = await ctx.withOrg(async (tx) => {
+        const [issued] = await tx
+          .insert(giftCards)
+          .values({
+            orgId: ctx.orgId,
+            code,
+            initialAmountMinor,
+            balanceMinor: initialAmountMinor,
+            currency: input.currency,
+            status: 'active',
+            recipientName: input.recipientName ?? null,
+            recipientEmail: input.recipientEmail ?? null,
+            message: input.message ?? null,
+            expiresAt: input.expiresAt ?? null,
+          })
+          .returning();
 
-      await ctx.db.insert(giftCardTransactions).values({
-        giftCardId: card.id,
-        orgId: ctx.orgId,
-        amountMinor: initialAmountMinor,
-        txType: 'issue',
-        notes: 'بطاقة هدية جديدة',
+        await tx.insert(giftCardTransactions).values({
+          giftCardId: issued.id,
+          orgId: ctx.orgId,
+          amountMinor: initialAmountMinor,
+          txType: 'issue',
+          notes: 'بطاقة هدية جديدة',
+        });
+
+        return issued;
       });
 
       return { data: card, error: null };
@@ -156,20 +164,37 @@ export const giftCardsRouter = router({
         .where(and(eq(giftCards.id, input.id), eq(giftCards.orgId, ctx.orgId)));
 
       if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: 'البطاقة غير موجودة' });
-      if (card.status === 'redeemed') throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إلغاء بطاقة مستخدمة' });
 
-      const [updated] = await ctx.db
-        .update(giftCards)
-        .set({ status: 'cancelled', updatedAt: new Date() })
-        .where(and(eq(giftCards.id, input.id), eq(giftCards.orgId, ctx.orgId)))
-        .returning();
+      // The redeemed check is repeated in the UPDATE's WHERE rather than
+      // trusted from the SELECT above. Between the two statements a concurrent
+      // redemption can land, and cancelling a card that was just spent writes
+      // off a balance the customer has already used.
+      const updated = await ctx.withOrg(async (tx) => {
+        const [row] = await tx
+          .update(giftCards)
+          .set({ status: 'cancelled', updatedAt: new Date() })
+          .where(and(
+            eq(giftCards.id, input.id),
+            eq(giftCards.orgId, ctx.orgId),
+            ne(giftCards.status, 'redeemed'),
+          ))
+          .returning();
 
-      await ctx.db.insert(giftCardTransactions).values({
-        giftCardId: input.id,
-        orgId: ctx.orgId,
-        amountMinor: BigInt(0),
-        txType: 'cancel',
+        if (!row) return null;
+
+        await tx.insert(giftCardTransactions).values({
+          giftCardId: input.id,
+          orgId: ctx.orgId,
+          amountMinor: BigInt(0),
+          txType: 'cancel',
+        });
+
+        return row;
       });
+
+      if (!updated) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن إلغاء بطاقة مستخدمة' });
+      }
 
       return { data: updated, error: null };
     }),

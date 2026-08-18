@@ -11,10 +11,10 @@ export const bulkRouter = router({
         }))
         .mutation(async ({ ctx, input }) => {
             const { ids, status } = input;
-            await withAudit(
-                ctx.db,
+            await ctx.withOrg((tx) => withAudit(
+                tx,
                 async () => {
-                    await ctx.db
+                    await tx
                         .update(orders)
                         .set({ status })
                         .where(and(inArray(orders.id, ids), eq(orders.orgId, ctx.orgId)));
@@ -27,7 +27,7 @@ export const bulkRouter = router({
                     tableName: 'orders',
                     changes: { ids, newStatus: status },
                 }
-            );
+            ));
             return { data: { updated: ids.length }, error: null, meta: null };
         }),
 

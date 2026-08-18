@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
 import type { Context } from '@/server/trpc';
 import { ordersRouter } from '@/server/routers/orders';
-import { mockDb } from '../helpers/mockDb';
+import { mockDb, withOrgMock } from '../helpers/mockDb';
 
 // Input schemas mirrored from orders router — validate without DB
 const listInputSchema = z.object({
@@ -50,6 +50,7 @@ describe('orders router — input validation', () => {
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
   return {
     db: mockDb,
+    withOrg: withOrgMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',

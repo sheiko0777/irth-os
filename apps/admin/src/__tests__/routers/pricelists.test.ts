@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
-import { mockDb } from '../helpers/mockDb';
+import { mockDb, withOrgMock } from '../helpers/mockDb';
 
 const { pricelistsRouter } = await import('@/server/routers/pricelists');
 
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
   return {
     db: mockDb,
+    withOrg: withOrgMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',

@@ -46,7 +46,7 @@ export const etaRouter = router({
             });
 
             if (!result) {
-                await ctx.db.insert(etaInvoices).values({
+                await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
                     orgId: ctx.orgId,
                     orderId: input.orderId,
                     status: 'error',
@@ -59,11 +59,11 @@ export const etaRouter = router({
                         errorMessage: 'ETA service unavailable or not configured',
                         retryCount: (existing?.retryCount ?? 0) + 1,
                     },
-                });
+                }));
                 return { data: null, error: 'ETA submission failed', meta: null };
             }
 
-            const [row] = await ctx.db.insert(etaInvoices).values({
+            const [row] = await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
                 orgId: ctx.orgId,
                 orderId: input.orderId,
                 etaUuid: result.uuid,
@@ -83,7 +83,7 @@ export const etaRouter = router({
                     retryCount: 0,
                     errorMessage: null,
                 },
-            }).returning();
+            }).returning());
 
             return { data: row, error: null, meta: null };
         }),
@@ -99,14 +99,14 @@ export const etaRouter = router({
             if (!invoice?.etaUuid) return { data: null, error: 'No ETA invoice found', meta: null };
 
             const statusResult = await getInvoiceStatus(invoice.etaUuid);
-            await ctx.db
+            await ctx.withOrg(async (tx) => tx
                 .update(etaInvoices)
                 .set({
                     status: statusResult.status.toLowerCase(),
                     qrCodeData: statusResult.qrCodeData ?? invoice.qrCodeData,
                     longId: statusResult.longId ?? invoice.longId,
                 })
-                .where(eq(etaInvoices.id, invoice.id));
+                .where(eq(etaInvoices.id, invoice.id)));
 
             return { data: { ...invoice, status: statusResult.status }, error: null, meta: null };
         }),
@@ -123,10 +123,10 @@ export const etaRouter = router({
 
             const ok = await cancelInvoice(invoice.etaUuid, input.reason);
             if (ok) {
-                await ctx.db
+                await ctx.withOrg(async (tx) => tx
                     .update(etaInvoices)
                     .set({ status: 'cancelled' })
-                    .where(eq(etaInvoices.id, invoice.id));
+                    .where(eq(etaInvoices.id, invoice.id)));
             }
             return { data: { cancelled: ok }, error: ok ? null : 'Cancel failed', meta: null };
         }),
@@ -156,7 +156,7 @@ export const etaRouter = router({
                     currency: order.currency,
                 });
                 if (result) {
-                    await ctx.db.insert(etaInvoices).values({
+                    await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
                         orgId: ctx.orgId,
                         orderId: order.id,
                         etaUuid: result.uuid,
@@ -167,7 +167,7 @@ export const etaRouter = router({
                     }).onConflictDoUpdate({
                         target: etaInvoices.orderId,
                         set: { etaUuid: result.uuid, status: 'submitted', submittedAt: new Date(), retryCount: 0 },
-                    });
+                    }));
                     submitted++;
                 }
             }

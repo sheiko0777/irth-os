@@ -115,6 +115,23 @@ describe('tenant isolation', () => {
     ).rejects.toThrow();
   });
 
+  it('actually drops to irth_app inside the transaction', async () => {
+    // The positive half of the test below, and the one that localises a
+    // failure. withOrgContext sets the role via set_config('role', …) rather
+    // than SET LOCAL ROLE so both GUCs fit in one round trip; if that form ever
+    // stops working, the session stays neondb_owner — which holds BYPASSRLS —
+    // and every isolation test above goes red at once with no indication why.
+    const seen = await withOrgContext(testDb, orgA, async (tx) => {
+      const r = await tx.execute<{ role: string; org: string }>(
+        sql`SELECT current_user AS role, current_setting('app.org_id', true) AS org`,
+      );
+      return [...r][0];
+    });
+
+    expect(seen.role).toBe('irth_app');
+    expect(seen.org).toBe(orgA);
+  });
+
   it('drops the elevated role and the tenant scope when the transaction ends', async () => {
     await withOrgContext(testDb, orgA, async (tx) => tx.select().from(orders));
 

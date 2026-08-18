@@ -107,10 +107,10 @@ export const productsRouter = router({
         .mutation(async ({ ctx, input }) => {
             const priceMinor = parseDecimal(String(input.price), EGP).minor;
 
-            const result = await withAudit(
-                ctx.db,
+            const result = await ctx.withOrg((tx) => withAudit(
+                tx,
                 async () => {
-                    const [product] = await ctx.db.insert(products)
+                    const [product] = await tx.insert(products)
                         .values({
                             orgId: ctx.orgId,
                             name: input.name,
@@ -136,7 +136,7 @@ export const productsRouter = router({
                     tableName: 'products',
                     changes: input
                 }
-            );
+            ));
 
             return { data: result, error: null, meta: null };
         }),
@@ -173,10 +173,10 @@ export const productsRouter = router({
                updateData.priceMinor = parseDecimal(String(input.price), EGP).minor;
             }
 
-            const result = await withAudit(
-                ctx.db,
+            const result = await ctx.withOrg((tx) => withAudit(
+                tx,
                 async () => {
-                    const [updated] = await ctx.db.update(products)
+                    const [updated] = await tx.update(products)
                         .set(updateData)
                         .where(and(
                             eq(products.id, input.id),
@@ -192,7 +192,7 @@ export const productsRouter = router({
                     tableName: 'products',
                     changes: input
                 }
-            );
+            ));
 
             return { data: result, error: null, meta: null };
         }),
@@ -202,10 +202,10 @@ export const productsRouter = router({
             id: z.string().uuid()
         }))
         .mutation(async ({ ctx, input }) => {
-            const result = await withAudit(
-                ctx.db,
+            const result = await ctx.withOrg((tx) => withAudit(
+                tx,
                 async () => {
-                    const [updated] = await ctx.db.update(products)
+                    const [updated] = await tx.update(products)
                         .set({ status: 'archived', updatedAt: new Date() })
                         .where(and(
                             eq(products.id, input.id),
@@ -225,7 +225,7 @@ export const productsRouter = router({
                     tableName: 'products',
                     changes: { status: 'archived' }
                 }
-            );
+            ));
 
             return { data: result, error: null, meta: null };
         }),

@@ -41,21 +41,21 @@ export const shippingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const [zone] = await ctx.db
+        const [zone] = await ctx.withOrg(async (tx) => tx
           .insert(shippingZones)
           .values({ orgId: ctx.orgId, name: input.name, countries: input.countries })
-          .returning();
+          .returning());
         return { data: zone, error: null };
       }),
 
     setActive: adminProcedure
       .input(z.object({ id: z.string().uuid(), isActive: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
-        const [zone] = await ctx.db
+        const [zone] = await ctx.withOrg(async (tx) => tx
           .update(shippingZones)
           .set({ isActive: input.isActive, updatedAt: new Date() })
           .where(and(eq(shippingZones.id, input.id), eq(shippingZones.orgId, ctx.orgId)))
-          .returning();
+          .returning());
         if (!zone) throw new TRPCError({ code: 'NOT_FOUND', message: 'Zone not found' });
         return { data: zone, error: null };
       }),
@@ -105,7 +105,7 @@ export const shippingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const [rate] = await ctx.db
+        const [rate] = await ctx.withOrg(async (tx) => tx
           .insert(shippingRates)
           .values({
             orgId: ctx.orgId,
@@ -120,16 +120,16 @@ export const shippingRouter = router({
             estimatedDaysMin: input.estimatedDaysMin ?? null,
             estimatedDaysMax: input.estimatedDaysMax ?? null,
           })
-          .returning();
+          .returning());
         return { data: rate, error: null };
       }),
 
     delete: ownerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
-        await ctx.db
+        await ctx.withOrg(async (tx) => tx
           .delete(shippingRates)
-          .where(and(eq(shippingRates.id, input.id), eq(shippingRates.orgId, ctx.orgId)));
+          .where(and(eq(shippingRates.id, input.id), eq(shippingRates.orgId, ctx.orgId))));
         return { success: true };
       }),
   }),

@@ -27,10 +27,10 @@ export const purchasingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const result = await withAudit(
-          ctx.db,
+        const result = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [supplier] = await ctx.db
+            const [supplier] = await tx
               .insert(suppliers)
               .values({
                 orgId: ctx.orgId,
@@ -50,7 +50,7 @@ export const purchasingRouter = router({
             tableName: 'suppliers',
             changes: input,
           }
-        );
+        ));
         return { data: result, error: null, meta: null };
       }),
 
@@ -80,10 +80,10 @@ export const purchasingRouter = router({
           updatedAt: new Date(),
         };
 
-        const result = await withAudit(
-          ctx.db,
+        const result = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [updated] = await ctx.db
+            const [updated] = await tx
               .update(suppliers)
               .set(mappedData)
               .where(and(eq(suppliers.id, id), eq(suppliers.orgId, ctx.orgId)))
@@ -97,7 +97,7 @@ export const purchasingRouter = router({
             tableName: 'suppliers',
             changes: updateData,
           }
-        );
+        ));
         return { data: result, error: null, meta: null };
       }),
 
@@ -120,10 +120,10 @@ export const purchasingRouter = router({
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete supplier with linked purchase orders' });
         }
 
-        const result = await withAudit(
-          ctx.db,
+        const result = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [deleted] = await ctx.db
+            const [deleted] = await tx
               .delete(suppliers)
               .where(and(eq(suppliers.id, input.id), eq(suppliers.orgId, ctx.orgId)))
               .returning();
@@ -136,7 +136,7 @@ export const purchasingRouter = router({
             tableName: 'suppliers',
             changes: { id: input.id },
           }
-        );
+        ));
         return { data: result, error: null, meta: null };
       }),
   }),
@@ -332,10 +332,10 @@ export const purchasingRouter = router({
             updateData.receivedAt = new Date();
         }
 
-        const result = await withAudit(
-          ctx.db,
+        const result = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [updated] = await ctx.db
+            const [updated] = await tx
               .update(purchaseOrders)
               .set(updateData)
               .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
@@ -349,7 +349,7 @@ export const purchasingRouter = router({
             tableName: 'purchase_orders',
             changes: { from: po.status, to: input.status },
           }
-        );
+        ));
         return { data: result, error: null, meta: null };
       }),
 

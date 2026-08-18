@@ -49,8 +49,9 @@ export const createContext = async () => {
 
         /**
          * Runs `fn` in a transaction the database will only let touch this
-         * tenant's rows: it issues `SET LOCAL ROLE irth_app` and
-         * `set_config('app.org_id', ..., true)` before handing over the handle.
+         * tenant's rows: it drops to the unprivileged `irth_app` role and sets
+         * `app.org_id`, both transaction-locally, before handing over the
+         * handle. RLS policies key on that setting.
          *
          * LAZY ON PURPOSE — the caller wraps just the database section rather
          * than the middleware wrapping the whole handler. An eagerly-opened
@@ -70,6 +71,27 @@ export const createContext = async () => {
          */
         withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]): Promise<T> =>
             withOrgContext(db, orgId, fn),
+
+        /**
+         * The deliberate cross-tenant escape hatch, for `platformAdminProcedure`
+         * only.
+         *
+         * Platform administration is genuinely cross-org — `listOrgs` reads
+         * every organization, `setOrgConfig` writes to whichever `input.orgId`
+         * it is given — so running it under this caller's tenant scope would
+         * make RLS hide the very rows it exists to manage.
+         *
+         * It is a separate name from `db` so that "bypasses tenant isolation"
+         * is something a reader and a grep can both see. Anything reaching for
+         * this outside platformAdmin.ts is a bug: the caller's own tenant data
+         * is reachable through `withOrg`, which is scoped.
+         *
+         * Authorisation for it is a single env-var email check in
+         * `platformAdminProcedure` — the database will not second-guess this
+         * one, so the procedure guard is the only thing standing in front of
+         * every tenant's data.
+         */
+        dbUnscoped: db,
     };
 };
 

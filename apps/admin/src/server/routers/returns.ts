@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit } from '@irth/db';
 import { fromMinor, parseDecimal } from '@irth/domain';
@@ -91,40 +92,51 @@ export const returnsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const [{ count: currentCount }] = await db
-        .select({ count: count() })
-        .from(orderReturns)
-        .where(eq(orderReturns.orgId, ctx.orgId));
+      // Header and lines in one transaction. Separately, a failure on the
+      // second insert left a return with no items — indistinguishable from a
+      // genuinely empty return, and its refund total silently reads as zero.
+      const createdReturn = await ctx.withOrg(async (tx) => {
+        const [{ count: currentCount }] = await tx
+          .select({ count: count() })
+          .from(orderReturns)
+          .where(eq(orderReturns.orgId, ctx.orgId));
 
-      const nextNumber = currentCount + 1;
-      const returnNumber = `RMA-${String(nextNumber).padStart(4, '0')}`;
+        // STILL RACY, and the transaction does not fix it: at READ COMMITTED
+        // two concurrent creates both count N and both build RMA-{N+1}, and
+        // nothing in the schema rejects the duplicate. P3 replaces this with a
+        // sequence. Narrowing the window is not closing it.
+        const nextNumber = currentCount + 1;
+        const returnNumber = `RMA-${String(nextNumber).padStart(4, '0')}`;
 
-      const [createdReturn] = await db.insert(orderReturns).values({
-        orgId: ctx.orgId,
-        orderId: input.orderId,
-        returnNumber,
-        reason: input.reason,
-        resolutionType: input.resolutionType,
-        notes: input.notes,
-      }).returning();
-
-      if (input.items.length > 0) {
-        const itemsToInsert = input.items.map(item => ({
-          // See 0030: denormalised org_id, guarded by a composite FK against
-          // the parent return so the two can never disagree.
+        const [created] = await tx.insert(orderReturns).values({
           orgId: ctx.orgId,
-          returnId: createdReturn.id,
-          productName: item.productName,
-          variantName: item.variantName,
-          quantity: item.quantity,
-          unitPriceMinor:
-            item.unitPrice === undefined || item.unitPrice === null
-              ? null
-              : parseDecimal(String(item.unitPrice)).minor,
-          condition: item.condition,
-        }));
-        await db.insert(returnItems).values(itemsToInsert);
-      }
+          orderId: input.orderId,
+          returnNumber,
+          reason: input.reason,
+          resolutionType: input.resolutionType,
+          notes: input.notes,
+        }).returning();
+
+        if (input.items.length > 0) {
+          const itemsToInsert = input.items.map(item => ({
+            // See 0030: denormalised org_id, guarded by a composite FK against
+            // the parent return so the two can never disagree.
+            orgId: ctx.orgId,
+            returnId: created.id,
+            productName: item.productName,
+            variantName: item.variantName,
+            quantity: item.quantity,
+            unitPriceMinor:
+              item.unitPrice === undefined || item.unitPrice === null
+                ? null
+                : parseDecimal(String(item.unitPrice)).minor,
+            condition: item.condition,
+          }));
+          await tx.insert(returnItems).values(itemsToInsert);
+        }
+
+        return created;
+      });
 
       return { data: createdReturn, error: null, meta: null };
     }),
@@ -139,29 +151,34 @@ export const returnsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      // Ensure org scoped
-      const existing = await db.select().from(orderReturns).where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId))).limit(1);
-      if (existing.length === 0) {
-        throw new Error('Not found');
-      }
-
       let resolvedAt: Date | undefined;
       if (['refunded', 'exchanged', 'rejected'].includes(input.status)) {
         resolvedAt = new Date();
       }
 
-      const [updated] = await db.update(orderReturns)
-        .set({
-          status: input.status,
-          adminNotes: input.adminNotes,
-          refundAmountMinor:
-            input.refundAmount === undefined || input.refundAmount === null
-              ? null
-              : parseDecimal(input.refundAmount).minor,
-          resolvedAt: resolvedAt,
-        })
-        .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
-        .returning();
+      // The org check is the UPDATE's own WHERE, not a SELECT before it. The
+      // separate existence read added nothing — the UPDATE already carried the
+      // same predicate — while giving a concurrent delete a window to land
+      // between the two, and costing a round trip on every call.
+      const updated = await ctx.withOrg(async (tx) => {
+        const [row] = await tx.update(orderReturns)
+          .set({
+            status: input.status,
+            adminNotes: input.adminNotes,
+            refundAmountMinor:
+              input.refundAmount === undefined || input.refundAmount === null
+                ? null
+                : parseDecimal(input.refundAmount).minor,
+            resolvedAt: resolvedAt,
+          })
+          .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
+          .returning();
+        return row;
+      });
+
+      if (!updated) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Return not found' });
+      }
 
       return { data: updated, error: null, meta: null };
     }),

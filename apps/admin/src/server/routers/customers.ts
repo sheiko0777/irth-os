@@ -82,10 +82,10 @@ export const customersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await withAudit(
-        ctx.db,
+      const result = await ctx.withOrg((tx) => withAudit(
+        tx,
         async () => {
-          const [customer] = await ctx.db
+          const [customer] = await tx
             .insert(customers)
             .values({
               orgId: ctx.orgId,
@@ -105,7 +105,7 @@ export const customersRouter = router({
           tableName: 'customers',
           changes: input,
         }
-      );
+      ));
       return { data: result, error: null, meta: null };
     }),
 
@@ -135,10 +135,10 @@ export const customersRouter = router({
         updatedAt: new Date(),
       };
 
-      const result = await withAudit(
-        ctx.db,
+      const result = await ctx.withOrg((tx) => withAudit(
+        tx,
         async () => {
-          const [updated] = await ctx.db
+          const [updated] = await tx
             .update(customers)
             .set(mappedData)
             .where(and(eq(customers.id, id), eq(customers.orgId, ctx.orgId)))
@@ -152,7 +152,7 @@ export const customersRouter = router({
           tableName: 'customers',
           changes: updateData,
         }
-      );
+      ));
       return { data: result, error: null, meta: null };
     }),
 

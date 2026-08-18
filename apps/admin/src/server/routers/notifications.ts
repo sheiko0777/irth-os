@@ -37,19 +37,19 @@ export const notificationsRouter = router({
     markRead: protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            await ctx.db
+            await ctx.withOrg(async (tx) => tx
                 .update(notifications)
                 .set({ read: true })
-                .where(and(eq(notifications.id, input.id), eq(notifications.orgId, ctx.orgId)));
+                .where(and(eq(notifications.id, input.id), eq(notifications.orgId, ctx.orgId))));
             return { data: { ok: true }, error: null, meta: null };
         }),
 
     markAllRead: protectedProcedure
         .mutation(async ({ ctx }) => {
-            await ctx.db
+            await ctx.withOrg(async (tx) => tx
                 .update(notifications)
                 .set({ read: true })
-                .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.read, false)));
+                .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.read, false))));
             return { data: { ok: true }, error: null, meta: null };
         }),
 

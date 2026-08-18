@@ -45,7 +45,7 @@ export const pricelistsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [pl] = await ctx.db
+      const [pl] = await ctx.withOrg(async (tx) => tx
         .insert(priceLists)
         .values({
           orgId: ctx.orgId,
@@ -59,16 +59,16 @@ export const pricelistsRouter = router({
           startDate: input.startDate ?? null,
           endDate: input.endDate ?? null,
         })
-        .returning();
+        .returning());
       return pl;
     }),
 
   delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db
+      await ctx.withOrg(async (tx) => tx
         .delete(priceLists)
-        .where(and(eq(priceLists.id, input.id), eq(priceLists.orgId, ctx.orgId)));
+        .where(and(eq(priceLists.id, input.id), eq(priceLists.orgId, ctx.orgId))));
       return { success: true };
     }),
 

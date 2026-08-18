@@ -2,13 +2,14 @@ import { EGP, zero } from '@irth/domain';
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
-import { mockDb } from '../helpers/mockDb';
+import { mockDb, withOrgMock } from '../helpers/mockDb';
 
 const { returnsRouter } = await import('@/server/routers/returns');
 
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
   return {
     db: mockDb,
+    withOrg: withOrgMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',
@@ -63,16 +64,17 @@ describe('returns', () => {
     await expectCode(member.updateStatus({} as never), 'FORBIDDEN');
   });
 
-  it('updateStatus on a missing return throws "Not found" (plain Error, not NOT_FOUND)', async () => {
-    // The router throws `new Error('Not found')`; tRPC surfaces it as an
-    // INTERNAL_SERVER_ERROR-coded TRPCError, keeping the message.
-    await expect(
-      caller.updateStatus({ id: 'ret-missing', status: 'approved' })
-    ).rejects.toThrow('Not found');
-    await expect(
-      caller.updateStatus({ id: 'ret-missing', status: 'approved' })
-    ).rejects.toSatisfy(
-      (e: unknown) => !(e instanceof TRPCError && e.code === 'NOT_FOUND')
+  it('updateStatus on a missing return rejects NOT_FOUND', async () => {
+    // Previously this threw a bare `new Error('Not found')` from a SELECT that
+    // ran before the UPDATE, which tRPC surfaced as INTERNAL_SERVER_ERROR — a
+    // 500 for what is an ordinary client mistake, and this test asserted that
+    // wrong behaviour deliberately.
+    //
+    // The existence check now lives in the UPDATE's own WHERE (no row returned
+    // means no such return, in this org), so the case is reported honestly.
+    await expectCode(
+      caller.updateStatus({ id: 'ret-missing', status: 'approved' }),
+      'NOT_FOUND',
     );
   });
 

@@ -135,35 +135,42 @@ export const ordersRouter = router({
                 throw new TRPCError({ code: 'NOT_FOUND' });
             }
 
-            const result = await withAudit(
-                ctx.db,
-                async () => {
-                    const [updated] = await ctx.db.update(orders)
-                        .set({ status: input.status, updatedAt: new Date() })
-                        .where(and(
-                            eq(orders.id, input.id),
-                            eq(orders.orgId, ctx.orgId)
-                        ))
-                        .returning();
-                    return updated;
-                },
-                {
+            // Status change, audit row and notification in one transaction.
+            // As three autocommits, a failure between them left the order
+            // advanced with no audit trail and no notification — the customer
+            // never heard about a change that had in fact happened.
+            const result = await ctx.withOrg(async (tx) => {
+                const updated = await withAudit(
+                    tx,
+                    async () => {
+                        const [row] = await tx.update(orders)
+                            .set({ status: input.status, updatedAt: new Date() })
+                            .where(and(
+                                eq(orders.id, input.id),
+                                eq(orders.orgId, ctx.orgId)
+                            ))
+                            .returning();
+                        return row;
+                    },
+                    {
+                        orgId: ctx.orgId,
+                        userId: ctx.userId,
+                        action: 'UPDATE_ORDER_STATUS',
+                        tableName: 'orders',
+                        changes: { from: order.status, to: input.status }
+                    }
+                );
+
+                await tx.insert(notifications).values({
                     orgId: ctx.orgId,
                     userId: ctx.userId,
-                    action: 'UPDATE_ORDER_STATUS',
-                    tableName: 'orders',
-                    changes: { from: order.status, to: input.status }
-                }
-            );
+                    type: 'order_status',
+                    title: `تحديث الطلب ${order.orderNumber}`,
+                    body: `تم تغيير حالة الطلب إلى: ${input.status}`,
+                    read: false,
+                });
 
-            // Trigger notification for status change
-            await ctx.db.insert(notifications).values({
-                orgId: ctx.orgId,
-                userId: ctx.userId,
-                type: 'order_status',
-                title: `تحديث الطلب ${order.orderNumber}`,
-                body: `تم تغيير حالة الطلب إلى: ${input.status}`,
-                read: false,
+                return updated;
             });
 
             return { data: result, error: null, meta: null };

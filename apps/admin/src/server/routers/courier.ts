@@ -35,10 +35,10 @@ export const courierRouter = router({
         remittanceId: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const updated = await withAudit(
-          ctx.db,
+        const updated = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [row] = await ctx.db
+            const [row] = await tx
               .update(courierShipments)
               .set({ codRemitted: true, remittanceId: input.remittanceId })
               .where(and(
@@ -55,7 +55,7 @@ export const courierRouter = router({
             tableName: 'courier_shipments',
             changes: input,
           }
-        );
+        ));
 
         return { data: updated, error: null, meta: null };
       }),
@@ -92,10 +92,10 @@ export const courierRouter = router({
         expectedDate: z.date().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const newRemittance = await withAudit(
-          ctx.db,
+        const newRemittance = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [row] = await ctx.db
+            const [row] = await tx
               .insert(courierRemittances)
               .values({
                 orgId: ctx.orgId,
@@ -116,7 +116,7 @@ export const courierRouter = router({
             tableName: 'courier_remittances',
             changes: input as unknown as Record<string, unknown>,
           }
-        );
+        ));
 
         return { data: newRemittance, error: null, meta: null };
       }),

@@ -39,7 +39,7 @@ export const stocktakingRouter = router({
     create: adminProcedure
       .input(z.object({ notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
-        const [session] = await ctx.db
+        const [session] = await ctx.withOrg(async (tx) => tx
           .insert(stocktakingSessions)
           .values({
             orgId: ctx.orgId,
@@ -47,7 +47,7 @@ export const stocktakingRouter = router({
             startedAt: new Date(),
             notes: input.notes ?? null,
           })
-          .returning();
+          .returning());
         return { data: session, error: null };
       }),
 
