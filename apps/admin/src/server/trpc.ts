@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, orgMembers } from '@irth/db';
+import { db, orgMembers, withOrgContext } from '@irth/db';
 import { and, eq } from 'drizzle-orm';
 import type { Role } from '@irth/db/src/permissions';
 import { verifySession } from '@/lib/auth';
@@ -38,12 +38,38 @@ export const createContext = async () => {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'No organization membership.' });
     }
 
+    const orgId = membership.orgId;
+
     return {
         db,
         session,
-        orgId: membership.orgId,
+        orgId,
         userId,
         role: membership.role as Role,
+
+        /**
+         * Runs `fn` in a transaction the database will only let touch this
+         * tenant's rows: it issues `SET LOCAL ROLE irth_app` and
+         * `set_config('app.org_id', ..., true)` before handing over the handle.
+         *
+         * LAZY ON PURPOSE — the caller wraps just the database section rather
+         * than the middleware wrapping the whole handler. An eagerly-opened
+         * transaction would pin a pooled server connection for the entire
+         * procedure, including the external HTTP calls that courier.ts and
+         * eta.ts make inside their handlers; one slow courier response, times a
+         * few concurrent admins, exhausts the pool and takes down every tenant.
+         * It would also double-book a connection in the nine procedures that
+         * already open a transaction of their own.
+         *
+         * So: no `fetch` inside this callback. Do the network work outside it
+         * and pass the result in.
+         *
+         * This is defence in depth, not a licence to drop `eq(t.orgId, ctx.orgId)`.
+         * Keep scoping queries explicitly; RLS is what catches the one that is
+         * not scoped.
+         */
+        withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]): Promise<T> =>
+            withOrgContext(db, orgId, fn),
     };
 };
 

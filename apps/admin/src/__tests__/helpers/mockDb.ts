@@ -14,6 +14,21 @@ function chainable(finalValue: unknown = []) {
   return chain;
 }
 
+/**
+ * Stands in for `ctx.withOrg` in unit tests.
+ *
+ * The real one opens a transaction and issues `SET LOCAL ROLE irth_app` +
+ * `set_config('app.org_id', …, true)` so RLS applies. None of that is
+ * meaningful against a mock, so this just hands the callback the mock db and
+ * keeps the procedure's own logic under test.
+ *
+ * Tenant isolation is NOT asserted here and cannot be — it is proven against
+ * real Postgres in src/__tests__/integration/tenantIsolation.test.ts. Treating
+ * a green unit test as evidence of isolation is exactly the mistake this
+ * comment exists to prevent.
+ */
+export const withOrgMock = <T>(fn: (tx: typeof mockDb) => Promise<T>): Promise<T> => fn(mockDb);
+
 export const mockDb = {
   select: vi.fn(() => chainable()),
   insert: vi.fn(() => chainable()),

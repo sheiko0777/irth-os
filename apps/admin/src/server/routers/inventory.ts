@@ -121,7 +121,7 @@ export const inventoryRouter = router({
         note: z.string().optional(),
       }).parse(input);
 
-      return await ctx.db.transaction(async (tx) => {
+      return await ctx.withOrg(async (tx) => {
         // Fetch item to ensure it belongs to org
         const [item] = await tx
           .select()

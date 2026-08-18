@@ -195,7 +195,7 @@ export const returnsRouter = router({
       // resolved through orderItemId -> orderItems.variantId. Without that link
       // there is no variant to credit: flag the line and write nothing, rather
       // than guessing at a match by name.
-      const result = await db.transaction(async (tx) => {
+      const result = await ctx.withOrg(async (tx) => {
         await tx.update(returnItems).set({ restock: true }).where(eq(returnItems.id, input.itemId));
 
         if (!item.orderItemId) {

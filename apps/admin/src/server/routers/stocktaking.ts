@@ -59,7 +59,7 @@ export const stocktakingRouter = router({
         // marked completed with counts half-applied. The status guard in the
         // WHERE clause is what makes the whole thing idempotent — only an open
         // session can be completed, so counts can never be applied twice.
-        const result = await ctx.db.transaction(async (tx) => {
+        const result = await ctx.withOrg(async (tx) => {
           const [session] = await tx
             .update(stocktakingSessions)
             .set({

@@ -256,7 +256,7 @@ export const purchasingRouter = router({
             ? null
             : parseDecimal(String(input.totalAmount)).minor;
 
-        const result = await ctx.db.transaction(async (tx) => {
+        const result = await ctx.withOrg(async (tx) => {
           const [po] = await tx
             .insert(purchaseOrders)
             .values({
@@ -372,7 +372,7 @@ export const purchasingRouter = router({
         });
         if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
-        const result = await ctx.db.transaction(async (tx) => {
+        const result = await ctx.withOrg(async (tx) => {
             let fullyReceived = true;
 
             for (const itemInput of input.items) {

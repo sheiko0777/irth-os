@@ -168,7 +168,7 @@ export const customersRouter = router({
       // Increment in SQL rather than read-then-write-absolute: two concurrent
       // grants both read the same starting balance and the second overwrites
       // the first, silently dropping points.
-      const result = await ctx.db.transaction(async (tx) => {
+      const result = await ctx.withOrg(async (tx) => {
         const [updated] = await tx
           .update(customers)
           .set({
@@ -204,7 +204,7 @@ export const customersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.db.transaction(async (tx) => {
+      const result = await ctx.withOrg(async (tx) => {
         // The sufficient-balance check is part of the UPDATE's WHERE clause, so
         // check and decrement are one atomic step. Checking first and updating
         // after lets two concurrent redemptions both pass the check and spend
@@ -270,7 +270,7 @@ export const customersRouter = router({
       const newBalance = (customer.loyaltyPoints ?? 0) + earnedPoints;
       const newTotal = (customer.totalOrders ?? 0) + 1;
 
-      const result = await ctx.db.transaction(async (tx) => {
+      const result = await ctx.withOrg(async (tx) => {
         const [updated] = await tx
           .update(customers)
           .set({

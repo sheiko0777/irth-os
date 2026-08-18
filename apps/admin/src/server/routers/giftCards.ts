@@ -111,7 +111,7 @@ export const giftCardsRouter = router({
 
       const amountMinor = parseDecimal(String(input.amount), currency(card.currency)).minor;
 
-      const updated = await ctx.db.transaction(async (tx) => {
+      const updated = await ctx.withOrg(async (tx) => {
         const [row] = await tx
           .update(giftCards)
           .set({

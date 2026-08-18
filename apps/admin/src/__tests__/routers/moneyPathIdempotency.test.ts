@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
-import { mockDb } from '../helpers/mockDb';
+import { mockDb, withOrgMock } from '../helpers/mockDb';
 
 const { returnsRouter } = await import('@/server/routers/returns');
 const { giftCardsRouter } = await import('@/server/routers/giftCards');
@@ -10,9 +10,10 @@ const { couponsRouter } = await import('@/server/routers/coupons');
 const { campaignsRouter } = await import('@/server/routers/campaigns');
 const { customersRouter } = await import('@/server/routers/customers');
 
-function ctx(): Context {
+function ctx(withOrg: unknown = withOrgMock): Context {
   return {
     db: mockDb,
+    withOrg,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',
@@ -42,26 +43,27 @@ describe('returns.restock — idempotency', () => {
     mockDb.select = vi.fn()
       .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1' }]))
       .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, restock: true, orderItemId: UUID }]));
-    const txSpy = vi.fn();
-    mockDb.transaction = txSpy;
+    // Spy on ctx.withOrg, not mockDb.transaction: the procedure now opens its
+    // transaction through the RLS-scoped runner, so asserting on the old seam
+    // would pass no matter what the code did.
+    const withOrgSpy = vi.fn(withOrgMock);
 
-    const res = await returnsRouter.createCaller(ctx()).restock({ returnId: UUID, itemId: UUID });
+    const res = await returnsRouter.createCaller(ctx(withOrgSpy)).restock({ returnId: UUID, itemId: UUID });
 
     expect(res.data).toMatchObject({ restocked: false, alreadyRestocked: true });
     // The guard must short-circuit before any write — this is the whole fix.
-    expect(txSpy).not.toHaveBeenCalled();
+    expect(withOrgSpy).not.toHaveBeenCalled();
   });
 
   it('a first restock does enter the transaction', async () => {
     mockDb.select = vi.fn()
       .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1' }]))
       .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, restock: false, orderItemId: null }]));
-    const txSpy = vi.fn(async (fn: (tx: unknown) => unknown) => fn(mockDb));
-    mockDb.transaction = txSpy;
+    const withOrgSpy = vi.fn(withOrgMock);
 
-    const res = await returnsRouter.createCaller(ctx()).restock({ returnId: UUID, itemId: UUID });
+    const res = await returnsRouter.createCaller(ctx(withOrgSpy)).restock({ returnId: UUID, itemId: UUID });
 
-    expect(txSpy).toHaveBeenCalled();
+    expect(withOrgSpy).toHaveBeenCalled();
     // No orderItemId -> nothing to credit, but the line is still flagged.
     expect(res.data).toMatchObject({ restocked: false, reason: 'no_order_item_link' });
   });

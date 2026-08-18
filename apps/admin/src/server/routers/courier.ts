@@ -2,7 +2,7 @@ import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
 import { courierShipments, courierRemittances, withAudit } from '@irth/db';
 import { fromMinor, parseDecimal } from '@irth/domain';
-import { eq, and, sql, sum, inArray, count } from 'drizzle-orm';
+import { eq, and, ne, sql, sum, inArray, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const courierRouter = router({
@@ -126,44 +126,73 @@ export const courierRouter = router({
         remittanceId: z.string().uuid(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const [remittance] = await ctx.db
-          .select()
-          .from(courierRemittances)
-          .where(and(
-            eq(courierRemittances.id, input.remittanceId),
-            eq(courierRemittances.orgId, ctx.orgId)
-          ));
+        // This was THREE separate autocommits: the remittance status, the audit
+        // row (withAudit was handed ctx.db rather than a transaction), and the
+        // shipments. A failure between any two left the remittance marked
+        // reconciled while its shipments still showed COD outstanding — money
+        // state that diverges permanently, with no report that would surface it.
+        //
+        // Now one transaction, scoped to the tenant by RLS as well as by the
+        // WHERE clauses.
+        const updatedRemittance = await ctx.withOrg(async (tx) => {
+          const [remittance] = await tx
+            .select()
+            .from(courierRemittances)
+            .where(and(
+              eq(courierRemittances.id, input.remittanceId),
+              eq(courierRemittances.orgId, ctx.orgId)
+            ));
 
-        if (!remittance) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Remittance not found' });
-        }
+          if (!remittance) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Remittance not found' });
+          }
 
-        const updatedRemittance = await withAudit(
-          ctx.db,
-          async () => {
-            const [row] = await ctx.db
-              .update(courierRemittances)
-              .set({ status: 'reconciled', receivedDate: new Date() })
-              .where(eq(courierRemittances.id, remittance.id))
-              .returning();
-            return row;
-          },
-          {
+          // Idempotency without a key: only a remittance that is not already
+          // reconciled can transition. A double submit updates zero rows and
+          // throws below, rather than writing a second audit row and
+          // re-stamping receivedDate. The guard lives in the WHERE so a
+          // concurrent caller cannot slip between the check and the write.
+          const [row] = await tx
+            .update(courierRemittances)
+            .set({ status: 'reconciled', receivedDate: new Date() })
+            .where(and(
+              eq(courierRemittances.id, remittance.id),
+              // orgId was missing from this UPDATE. The SELECT above is
+              // org-scoped so it was not exploitable, but the check and the
+              // write were separate statements — single-layer defence on a
+              // money-moving write.
+              eq(courierRemittances.orgId, ctx.orgId),
+              ne(courierRemittances.status, 'reconciled')
+            ))
+            .returning();
+
+          if (!row) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Remittance is already reconciled',
+            });
+          }
+
+          await tx
+            .update(courierShipments)
+            .set({ codRemitted: true })
+            .where(and(
+              eq(courierShipments.remittanceId, remittance.remittanceReference),
+              eq(courierShipments.orgId, ctx.orgId)
+            ));
+
+          // Inside the transaction, so the audit row lands with the change it
+          // describes or not at all.
+          await withAudit(tx, async () => row, {
             orgId: ctx.orgId,
             userId: ctx.userId,
             action: 'RECONCILE_REMITTANCE',
             tableName: 'courier_remittances',
             changes: { remittanceId: input.remittanceId },
-          }
-        );
+          });
 
-        await ctx.db
-          .update(courierShipments)
-          .set({ codRemitted: true })
-          .where(and(
-            eq(courierShipments.remittanceId, remittance.remittanceReference),
-            eq(courierShipments.orgId, ctx.orgId)
-          ));
+          return row;
+        });
 
         return { data: updatedRemittance, error: null, meta: null };
       }),
