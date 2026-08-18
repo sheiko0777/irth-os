@@ -24,3 +24,10 @@ graphify-out/
 codeflow-*
 hazy-spinning-blum.md
 /irth-os/
+
+# Wrangler local secrets — never commit
+.dev.vars
+.dev.vars.*
+
+# Wrangler local state
+.wrangler/

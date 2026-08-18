@@ -14,9 +14,14 @@ import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
 import { authContext } from './middlewares/authContext'
+import { dbContext } from './db'
 
 const app = new Hono()
 
+// First in the chain on purpose: Workers expose configuration only through the
+// request `env`, so the database handle cannot exist until a request arrives.
+// Anything registered above this that touches the db would throw.
+app.use('*', dbContext())
 app.use('*', corsMiddleware)
 app.use('*', securityHeaders)
 const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT || '0', 10);
@@ -34,6 +39,7 @@ app.get('/health', (c) => {
 app.on(['POST', 'GET'], '/api/auth/**', (c) => {
   return auth.handler(c.req.raw)
 })
+
 
 app.route('/api/orders', ordersRoute)
 app.route('/api/shipping', shippingRoute)
