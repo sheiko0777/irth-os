@@ -2,7 +2,7 @@
 // `mode: 'bigint'` makes Drizzle hand back a JS bigint rather than a string, so
 // values flow straight into @irth/domain's Money without a lossy hop through
 // Number on the way.
-import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const brandEnum = pgEnum('brand', ['irth']);
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
@@ -91,12 +91,25 @@ export const productVariants = pgTable('product_variants', {
 
 export const orders = pgTable("orders", {
   ...baseColumns,
-  orderNumber: varchar("order_number", { length: 50 }).notNull().unique(), // IRT-2026-0001
+  // Unique per ORG, not globally — see the table-level constraint below and
+  // migration 0035. A bare .unique() here meant the second org ever to place
+  // an order collided with the first org's IRT-2026-0001 and could not order.
+  orderNumber: varchar("order_number", { length: 50 }).notNull(), // IRT-2026-0001
   status: orderStatusEnum("status").notNull().default('pending'),
   totalAmountMinor: bigint("total_amount_minor", { mode: 'bigint' }).notNull(),
   currency: char("currency", { length: 3 }).notNull().default('EGP'),
-  customerId: uuid("customer_id"), // Ref to auth users eventually
-});
+  // NOT a user id. This is uuid, while Better Auth user ids are text — see
+  // 0034. apps/api was writing the session's userId straight in here, which
+  // raised 22P02 and meant order creation through the API could never succeed.
+  // It refers to `customers.id` when a customer is linked, and is NULL when the
+  // order has no customer record yet.
+  customerId: uuid("customer_id"),
+}, (table) => ({
+  // Per tenant, not global (0035). A bare .unique() on order_number meant the
+  // second org ever to place an order collided with the first org's
+  // IRT-2026-0001 and was locked out of ordering entirely.
+  orgOrderNumberIdx: uniqueIndex('orders_org_order_number_idx').on(table.orgId, table.orderNumber),
+}));
 
 export const orderItems = pgTable("order_items", {
   ...baseColumns,
@@ -119,10 +132,16 @@ export const shipmentTracking = pgTable("shipment_tracking", {
 
 export const auditLog = pgTable("audit_log", {
   ...baseColumns,
-  userId: uuid("user_id"), // Ref to auth users
+  // TEXT, not uuid (0034). Better Auth owns `public."user"` and its ids are
+  // random alphanumeric strings, not uuids — writing one into a uuid column
+  // raised 22P02 on every audited mutation by a logged-in user.
+  // org_members.user_id is text for the same reason.
+  userId: text("user_id"),
   action: varchar("action", { length: 255 }).notNull(),
   tableName: varchar("table_name", { length: 255 }).notNull(),
-  recordId: uuid("record_id").notNull(),
+  // Nullable since 0033: some audited actions (bulk updates) have no single
+  // subject row, and the previous NOT NULL forced withAudit to invent one.
+  recordId: uuid("record_id"),
   changes: jsonb("changes").notNull(),
 });
 

@@ -55,10 +55,18 @@ describe('integration harness', () => {
    * because most call sites are not in a transaction, the business write has
    * already committed by then.
    *
-   * P3 fixes this. When it does, this test flips from "documents the bug" to
-   * "asserts the fix": expect the insert to succeed with a real record id.
+   * FIXED in 0033, but not the way this comment originally predicted. The
+   * column stays `uuid` — record_id genuinely refers to a uuid primary key, so
+   * widening it would be the wrong repair. What changed is `withAudit`: it now
+   * writes NULL when the operation yields no id, which is honest for a bulk
+   * update that has no single subject row.
+   *
+   * So this test keeps asserting exactly what it always did — Postgres rejects
+   * the string — because that is still correct and is the reason the fallback
+   * had to go. That withAudit no longer produces it is asserted separately in
+   * identityAndNumbering.test.ts.
    */
-  it('rejects the string withAudit falls back to for record_id (known defect)', async () => {
+  it('rejects the string withAudit used to fall back to for record_id', async () => {
     const [org] = await testDb
       .insert(organizations)
       .values({ name: 'Audit Org', slug: 'audit-org' })

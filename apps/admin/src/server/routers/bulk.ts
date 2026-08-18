@@ -18,7 +18,12 @@ export const bulkRouter = router({
                         .update(orders)
                         .set({ status })
                         .where(and(inArray(orders.id, ids), eq(orders.orgId, ctx.orgId)));
-                    return { id: ids[0]! };
+                    // No id on purpose. This updates up to 100 orders, so there
+                    // is no single subject row; `ids[0]` was only ever there to
+                    // satisfy a NOT NULL, and it made the audit row name one
+                    // arbitrary order out of the batch. record_id is nullable
+                    // since 0033 and `changes.ids` below carries the full list.
+                    return {};
                 },
                 {
                     orgId: ctx.orgId,

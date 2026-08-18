@@ -116,9 +116,24 @@ export async function withOrgContext<T>(
   });
 }
 
-// Accepts the plain db or a transaction handle — both expose the same
-// insert() shape, and passing tx keeps the audit row in the transaction.
-type AuditWriter = Pick<DbInstance, 'insert'>;
+/** The handle drizzle hands a `db.transaction()` callback. */
+export type DbTx = Parameters<Parameters<DbInstance['transaction']>[0]>[0];
+
+/**
+ * A transaction handle — NOT the plain db.
+ *
+ * `rollback` is what makes this refuse a non-transaction: PgTransaction has it,
+ * PostgresJsDatabase does not, so `withAudit(db, …)` and `withAudit(ctx.db, …)`
+ * stop compiling. It is never called here; it is in the type purely so the
+ * compiler can tell the two apart.
+ *
+ * Previously this was `Pick<DbInstance, 'insert'>`, which both satisfy. That
+ * let a business write and its audit row commit as two separate autocommits:
+ * a failure between them left a change with no record that it happened, and no
+ * report anywhere would show the gap. Making it a compile error is the only
+ * version of this rule that holds — a convention did not.
+ */
+type AuditWriter = Pick<DbTx, 'insert' | 'rollback'>;
 
 export async function withAudit<T extends { id?: string }>(
     dbInstance: AuditWriter,
@@ -126,7 +141,14 @@ export async function withAudit<T extends { id?: string }>(
     auditData: { orgId: string, userId: string | null, action: string, tableName: string, changes: Record<string, unknown> }
 ) {
     const result = await operation();
-    const recordId = result?.id || 'unknown_id';
+    // `?? null`, not `|| 'unknown_id'`. record_id is uuid, so the old string
+    // fallback raised Postgres 22P02 and threw instead of writing an audit row
+    // (see migration 0033). NULL says "this action had no single subject row" —
+    // true for bulk updates — and `changes` carries the detail either way.
+    //
+    // `??` not `||` on purpose: an empty-string id is a bug worth surfacing as
+    // a constraint violation, not silently converting to NULL.
+    const recordId = result?.id ?? null;
     await dbInstance.insert(auditLog).values({ ...auditData, recordId });
     return result;
 }

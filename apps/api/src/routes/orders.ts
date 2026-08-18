@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { db } from '../db';
+import { db, withOrg } from '../db';
 import { orders, orderItems, productVariants, products } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
@@ -84,8 +84,8 @@ ordersRoute.post('/', async (c: Context) => {
   const seq = (existingOrdersCount + 1).toString().padStart(4, '0');
   const orderNumber = `IRT-2026-${seq}`;
 
-  const newOrder = await withAudit(db, async () => {
-      const [insertedOrder] = await db.insert(orders).values({
+  const newOrder = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [insertedOrder] = await tx.insert(orders).values({
         orgId,
         orderNumber,
         status: 'pending',
@@ -100,7 +100,7 @@ ordersRoute.post('/', async (c: Context) => {
     action: 'CREATE',
     tableName: 'orders',
     changes: { items: itemsToInsert }
-  });
+  }));
 
   if (itemsToInsert.length > 0) {
     const orderItemsValues = itemsToInsert.map(item => ({
@@ -160,8 +160,8 @@ ordersRoute.patch('/:id/status', async (c: Context) => {
     return c.json({ data: null, error: 'not_found', meta: null }, 404);
   }
 
-  const updatedOrder = await withAudit(db, async () => {
-      const [res] = await db.update(orders)
+  const updatedOrder = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [res] = await tx.update(orders)
         .set({ status, updatedAt: new Date() })
         .where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)))
         .returning();
@@ -172,7 +172,7 @@ ordersRoute.patch('/:id/status', async (c: Context) => {
     action: 'UPDATE_STATUS',
     tableName: 'orders',
     changes: { oldStatus: order.status, newStatus: status }
-  });
+  }));
 
   if (status === 'delivered') {
       issueInvoice(updatedOrder).catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));

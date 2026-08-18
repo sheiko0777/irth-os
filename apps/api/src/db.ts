@@ -1,5 +1,5 @@
-import type { MiddlewareHandler } from 'hono';
-import { createDb, type DbInstance } from '@irth/db';
+import type { Context, MiddlewareHandler } from 'hono';
+import { createDb, withOrgContext, type DbInstance, type DbTx } from '@irth/db';
 
 /**
  * Database handle for the Worker, built from the request's `env` binding.
@@ -75,3 +75,35 @@ export const db = new Proxy({} as DbInstance, {
     return Reflect.get(getDb() as object, prop, receiver);
   },
 });
+
+/**
+ * Runs `fn` in a transaction scoped to the request's tenant — the apps/api
+ * counterpart of `ctx.withOrg` in apps/admin.
+ *
+ * It drops to the unprivileged `irth_app` role and sets `app.org_id`, both
+ * transaction-locally, so RLS policies apply. Without it the connection stays
+ * `neondb_owner`, which owns every table and holds BYPASSRLS, and the policies
+ * added in migration 0031 simply do not run.
+ *
+ * The orgId comes from `authContext`, which derives it from the verified
+ * session — never from a client-supplied header.
+ *
+ * LAZY, like the admin one: wrap only the database section, not the whole
+ * handler. An eagerly-opened transaction would hold a pooled connection across
+ * any external call in the handler. So no `fetch` inside the callback — do the
+ * network work outside and pass the result in.
+ *
+ * Throws if the request has no tenant. Routes that legitimately run without one
+ * (onboarding, invite accept) must not call this; they already guard on orgId
+ * themselves and return 401.
+ */
+export function withOrg<T>(c: Context, fn: (tx: DbTx) => Promise<T>): Promise<T> {
+  const orgId = c.get('orgId') as string | undefined;
+  if (!orgId) {
+    throw new Error(
+      'withOrg called on a request with no tenant. Guard the route on orgId and ' +
+        'return 401 before reaching the database.',
+    );
+  }
+  return withOrgContext(getDb(), orgId, fn);
+}

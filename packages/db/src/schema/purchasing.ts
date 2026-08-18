@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, text, bigint, char, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, text, bigint, char, integer, uniqueIndex } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
 export const suppliers = pgTable('suppliers', {
@@ -28,7 +28,12 @@ export const purchaseOrders = pgTable('purchase_orders', {
   receivedAt: timestamp('received_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => [
+  // Per tenant (0035). Was unconstrained entirely, so the count(*)+1
+  // generator's collisions were not merely likely — nothing rejected them,
+  // and two documents legitimately shared a number.
+  uniqueIndex('purchase_orders_org_po_number_idx').on(table.orgId, table.poNumber),
+]);
 
 export const purchaseOrderItems = pgTable('purchase_order_items', {
   id: uuid('id').primaryKey().defaultRandom(),

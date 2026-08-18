@@ -2,7 +2,7 @@ import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { db } from '../db';
+import { db, withOrg } from '../db';
 import { categories, withAudit } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
@@ -46,8 +46,8 @@ categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => 
       }
     }
 
-    const result = await withAudit(db, async () => {
-      const [inserted] = await db.insert(categories).values({
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [inserted] = await tx.insert(categories).values({
         orgId,
         ...data,
       }).returning();
@@ -58,7 +58,7 @@ categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => 
       action: 'CREATE_CATEGORY',
       tableName: 'categories',
       changes: data
-    });
+    }));
 
     return c.json({ data: result, error: null, meta: null }, 201);
   } catch (error: unknown) {
@@ -75,8 +75,8 @@ categoriesRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
     const userId = (c.get('userId') as string | undefined) ?? 'system';
 
-    const result = await withAudit(db, async () => {
-      const [deleted] = await db.delete(categories).where(and(
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [deleted] = await tx.delete(categories).where(and(
         eq(categories.id, id),
         eq(categories.orgId, orgId)
       )).returning();
@@ -87,7 +87,7 @@ categoriesRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
       action: 'DELETE_CATEGORY',
       tableName: 'categories',
       changes: { id }
-    });
+    }));
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 

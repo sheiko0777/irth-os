@@ -3,7 +3,7 @@ import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { db } from '../db';
+import { db, withOrg } from '../db';
 import { products, productVariants, withAudit } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
@@ -82,8 +82,8 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
     const { price, ...productData } = data;
     const priceMinor = parseDecimal(String(price)).minor;
 
-    const result = await withAudit(db, async () => {
-      const [inserted] = await db.insert(products).values({
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [inserted] = await tx.insert(products).values({
         orgId,
         ...productData,
         priceMinor,
@@ -95,7 +95,7 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
       action: 'CREATE_PRODUCT',
       tableName: 'products',
       changes: data
-    });
+    }));
 
     return c.json({ data: result, error: null, meta: null }, 201);
   } catch (error: unknown) {
@@ -164,8 +164,8 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
        updateData.price = typeof data.price === 'number' ? data.price.toString() : data.price;
     }
 
-    const result = await withAudit(db, async () => {
-      const [updated] = await db.update(products)
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [updated] = await tx.update(products)
         .set(updateData)
         .where(and(eq(products.id, id), eq(products.orgId, orgId)))
         .returning();
@@ -176,7 +176,7 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
       action: 'UPDATE_PRODUCT',
       tableName: 'products',
       changes: data
-    });
+    }));
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
@@ -195,8 +195,8 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
     const userId = (c.get('userId') as string | undefined) ?? 'system';
 
-    const result = await withAudit(db, async () => {
-      const [updated] = await db.update(products)
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [updated] = await tx.update(products)
         .set({ status: 'archived', updatedAt: new Date() })
         .where(and(eq(products.id, id), eq(products.orgId, orgId)))
         .returning();
@@ -207,7 +207,7 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
       action: 'DELETE_PRODUCT',
       tableName: 'products',
       changes: { status: 'archived' }
-    });
+    }));
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
@@ -271,8 +271,8 @@ productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Co
     const variantPriceMinor =
       variantPrice === undefined ? null : parseDecimal(String(variantPrice)).minor;
 
-    const result = await withAudit(db, async () => {
-      const [inserted] = await db.insert(productVariants).values({
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [inserted] = await tx.insert(productVariants).values({
         // org_id is uuid NOT NULL in the database with no default, but the
         // Drizzle table did not declare it, so it was omitted from every insert
         // and Postgres rejected the row with 23502 — variant creation was
@@ -289,7 +289,7 @@ productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Co
       action: 'CREATE_PRODUCT_VARIANT',
       tableName: 'product_variants',
       changes: data
-    });
+    }));
 
     return c.json({ data: result, error: null, meta: null }, 201);
   } catch (error: unknown) {

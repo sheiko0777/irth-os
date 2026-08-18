@@ -31,3 +31,6 @@ hazy-spinning-blum.md
 
 # Wrangler local state
 .wrangler/
+
+# Scratch/worktree dir created by tooling; contains nested git repos.
+.freebuff/
