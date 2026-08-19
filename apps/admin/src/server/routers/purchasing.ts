@@ -357,9 +357,14 @@ export const purchasingRouter = router({
               updateInventory: z.boolean().default(false),
             })
           ),
+          // The highest-consequence of the three: receiving twice adds the
+          // quantity to stock twice, and nothing downstream can tell the
+          // difference between that and a genuine second delivery.
+          idempotencyKey: z.string().min(1).max(255).optional(),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }) =>
+        ctx.idempotent('purchasing.receive', input.idempotencyKey, input, async () => {
         const po = await ctx.db.query.purchaseOrders.findFirst({
             where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId))
         });
@@ -443,6 +448,6 @@ export const purchasingRouter = router({
         });
 
         return { data: result, error: null, meta: null };
-      }),
+      })),
   }),
 });

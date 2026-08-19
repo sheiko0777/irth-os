@@ -27,6 +27,25 @@ function chainable(finalValue: unknown = []) {
  * a green unit test as evidence of isolation is exactly the mistake this
  * comment exists to prevent.
  */
+/**
+ * Stands in for `ctx.idempotent` in unit tests: runs the operation directly.
+ *
+ * The real one claims a row in idempotency_keys before the work and replays a
+ * stored response on retry. None of that is meaningful without a database — the
+ * whole mechanism is a unique index plus a state column — so this only keeps the
+ * wiring from throwing while the procedure's own logic stays under test.
+ *
+ * Idempotency is NOT asserted here and cannot be. It is proven against real
+ * Postgres in src/__tests__/integration/idempotency.test.ts, including the case
+ * that matters most: a retry arriving while the first attempt is still running.
+ */
+export const idempotentMock = <T>(
+  _operation: string,
+  _key: string | undefined,
+  _request: unknown,
+  fn: () => Promise<T>,
+): Promise<T> => fn();
+
 export const withOrgMock = <T>(fn: (tx: typeof mockDb) => Promise<T>): Promise<T> => fn(mockDb);
 
 export const mockDb = {

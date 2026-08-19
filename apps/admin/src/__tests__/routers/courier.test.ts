@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { courierRouter } from '@/server/routers/courier';
-import { mockDb, withOrgMock } from '../helpers/mockDb';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 const UUID = '11111111-1111-4111-8111-111111111111';
 
@@ -15,6 +15,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     userId: 'user-1',
     role,
     withOrg: withOrgMock,
+    idempotent: idempotentMock,
   } as unknown as Context;
 }
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
-import { mockDb, withOrgMock } from '../helpers/mockDb';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 const { returnsRouter } = await import('@/server/routers/returns');
 const { giftCardsRouter } = await import('@/server/routers/giftCards');
@@ -14,6 +14,7 @@ function ctx(withOrg: unknown = withOrgMock): Context {
   return {
     db: mockDb,
     withOrg,
+    idempotent: idempotentMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',

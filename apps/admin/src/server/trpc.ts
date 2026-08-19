@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, orgMembers, withOrgContext } from '@irth/db';
+import { db, orgMembers, withOrgContext, withIdempotency, IdempotencyError } from '@irth/db';
 import { and, eq } from 'drizzle-orm';
 import type { Role } from '@irth/db/src/permissions';
 import { verifySession } from '@/lib/auth';
@@ -92,6 +92,39 @@ export const createContext = async () => {
          * every tenant's data.
          */
         dbUnscoped: db,
+
+        /**
+         * Runs `fn` at most once per (tenant, operation, key).
+         *
+         * Atomic is not idempotent. `withOrg` makes a mutation all-or-nothing;
+         * two atomic calls still apply twice. A timed-out client, a lost
+         * response on mobile data, a double-tapped button and a proxy retry all
+         * produce a second identical request for ONE intended action — and the
+         * server cannot tell which is which, because a customer genuinely
+         * topping up the same card twice in a minute is legitimate. Only a
+         * caller-supplied key separates them.
+         *
+         * `key` is optional: without one this runs `fn` directly and nothing is
+         * recorded, so existing callers are unaffected and a client opts in by
+         * sending a key.
+         *
+         * `request` is hashed, so reusing a key with DIFFERENT input is
+         * rejected rather than silently replaying the first response and
+         * discarding what the second request asked for.
+         *
+         * Takes the unscoped handle deliberately: the claim must be visible to
+         * other sessions BEFORE the work runs, so it commits in its own
+         * transaction outside `withOrg`. org_id is written explicitly on every
+         * row, and idempotency_keys carries its own RLS policy (0037) for
+         * anything that does reach it through a scoped session.
+         */
+        idempotent: <T>(
+            operation: string,
+            key: string | undefined,
+            request: unknown,
+            fn: () => Promise<T>,
+        ): Promise<T> =>
+            withIdempotency(db, { orgId, operation, key, request }, fn),
     };
 };
 
@@ -155,3 +188,21 @@ export const platformAdminProcedure = t.procedure.use(({ ctx, next }) => {
     }
     return next({ ctx });
 });
+
+/**
+ * Translates an IdempotencyError into the tRPC code the client should see.
+ *
+ * CONFLICT   the first attempt is still running, or the key was reclaimed —
+ *            the client should retry.
+ * BAD_REQUEST the key was reused with different input, or is malformed — the
+ *            client must change something before retrying.
+ *
+ * Without this the error surfaces as INTERNAL_SERVER_ERROR, telling a client
+ * that its own retry is a server fault.
+ */
+export function asTRPCError(err: unknown): never {
+    if (err instanceof IdempotencyError) {
+        throw new TRPCError({ code: err.code, message: err.message });
+    }
+    throw err;
+}

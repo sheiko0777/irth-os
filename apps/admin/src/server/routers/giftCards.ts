@@ -107,8 +107,16 @@ export const giftCardsRouter = router({
     }),
 
   topup: adminProcedure
-    .input(z.object({ id: z.string().uuid(), amount: moneyInput }))
-    .mutation(async ({ ctx, input }) => {
+    .input(z.object({
+      id: z.string().uuid(),
+      amount: moneyInput,
+      // Optional so existing callers are unaffected; a client opts in by
+      // sending one. Only the CALLER can distinguish a retry from a second
+      // genuine request — doing this twice in a minute is legitimate.
+      idempotencyKey: z.string().min(1).max(255).optional(),
+    }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.idempotent('giftCards.topup', input.idempotencyKey, input, async () => {
       const [card] = await ctx.db
         .select()
         .from(giftCards)
@@ -153,7 +161,7 @@ export const giftCardsRouter = router({
       });
 
       return { data: updated, error: null };
-    }),
+    })),
 
   cancel: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))

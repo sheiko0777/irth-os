@@ -2,7 +2,7 @@ import { EGP, zero } from '@irth/domain';
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
-import { mockDb, withOrgMock } from '../helpers/mockDb';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 const { financeRouter } = await import('@/server/routers/finance');
 
@@ -10,6 +10,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
   return {
     db: mockDb,
     withOrg: withOrgMock,
+    idempotent: idempotentMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',

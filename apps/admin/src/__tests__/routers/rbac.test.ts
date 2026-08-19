@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure, adminProcedure, ownerProcedure, type Context } from '@/server/trpc';
-import { mockDb, withOrgMock } from '../helpers/mockDb';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 function ctxWithRole(role: 'owner' | 'admin' | 'member'): Context {
   return {
     db: mockDb,
     withOrg: withOrgMock,
+    idempotent: idempotentMock,
     session: {
       user: { id: 'user-1', email: 'user@test.com' },
       session: { activeOrganizationId: 'org-1' },

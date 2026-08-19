@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
 import type { Context } from '@/server/trpc';
 import { inventoryRouter } from '@/server/routers/inventory';
-import { mockDb, withOrgMock } from '../helpers/mockDb';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 const adjustSchema = z.object({
   productId: z.string().uuid(),
@@ -15,6 +15,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
   return {
     db: mockDb,
     withOrg: withOrgMock,
+    idempotent: idempotentMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',

@@ -2,12 +2,13 @@ import { EGP, zero } from '@irth/domain';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Context } from '@/server/trpc';
 import { dashboardRouter } from '@/server/routers/dashboard';
-import { mockDb, withOrgMock } from '../helpers/mockDb';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
   return {
     db: mockDb,
     withOrg: withOrgMock,
+    idempotent: idempotentMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',
