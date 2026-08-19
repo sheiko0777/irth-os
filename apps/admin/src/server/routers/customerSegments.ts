@@ -111,6 +111,13 @@ export const customerSegmentsRouter = router({
   addMembers: adminProcedure
     .input(z.object({ segmentId: z.string().uuid(), customerIds: z.array(z.string().uuid()).min(1) }))
     .mutation(async ({ ctx, input }) => {
+      // Stays a separate read on purpose. The condition is about
+      // customer_segments while the write goes to customer_segment_members, and
+      // an INSERT ... VALUES has no WHERE to fold it into. The gap is closed by
+      // the database anyway: segment_id is a foreign key, so a segment deleted
+      // between these two statements makes the insert fail rather than attach
+      // members to nothing. This read is what turns that into NOT_FOUND, and it
+      // is also the only thing scoping the segment to the caller's org.
       const seg = await ctx.db
         .select({ id: customerSegments.id })
         .from(customerSegments)

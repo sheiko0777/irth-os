@@ -123,12 +123,6 @@ export const customersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
 
-      const customer = await ctx.db.query.customers.findFirst({
-        where: and(eq(customers.id, id), eq(customers.orgId, ctx.orgId)),
-      });
-
-      if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
-
       const mappedData = {
         ...updateData,
         email: updateData.email === '' ? null : updateData.email,
@@ -138,11 +132,16 @@ export const customersRouter = router({
       const result = await ctx.withOrg((tx) => withAudit(
         tx,
         async () => {
+          // Existence is decided by the UPDATE's own result. A SELECT first and
+          // an UPDATE after are two statements: the row can be deleted between
+          // them, and the update then matches nothing while this reports
+          // success with `data: undefined`.
           const [updated] = await tx
             .update(customers)
             .set(mappedData)
             .where(and(eq(customers.id, id), eq(customers.orgId, ctx.orgId)))
             .returning();
+          if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
           return updated;
         },
         {
@@ -264,28 +263,27 @@ export const customersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const customer = await ctx.db.query.customers.findFirst({
-        where: and(eq(customers.id, input.customerId), eq(customers.orgId, ctx.orgId)),
-      });
-
-      if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
-
       const orderAmountMinor = parseDecimal(String(input.orderAmount), EGP).minor;
       const earnedPoints = parseInt((orderAmountMinor / parseDecimal('10', EGP).minor).toString(), 10);
-      const newBalance = (customer.loyaltyPoints ?? 0) + earnedPoints;
-      const newTotal = (customer.totalOrders ?? 0) + 1;
 
       const result = await ctx.withOrg(async (tx) => {
+        // Both counters are incremented in SQL and the customer's existence is
+        // decided by this UPDATE, not by a SELECT before it. Reading the row
+        // first and writing back absolute values is a lost update: two orders
+        // linked concurrently read the same balance and the second write
+        // discards the first order's points and its order count.
         const [updated] = await tx
           .update(customers)
           .set({
-            loyaltyPoints: newBalance,
-            totalOrders: newTotal,
+            loyaltyPoints: sql`${customers.loyaltyPoints} + ${earnedPoints}`,
+            totalOrders: sql`${customers.totalOrders} + 1`,
             totalSpentMinor: sql`${customers.totalSpentMinor} + ${orderAmountMinor}`,
             updatedAt: new Date(),
           })
           .where(and(eq(customers.id, input.customerId), eq(customers.orgId, ctx.orgId)))
           .returning();
+
+        if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
 
         if (earnedPoints > 0) {
           await tx.insert(loyaltyTransactions).values({
@@ -293,7 +291,9 @@ export const customersRouter = router({
             customerId: input.customerId,
             type: 'earn',
             points: earnedPoints,
-            balanceAfter: newBalance,
+            // The balance the ledger records is the one the database actually
+            // wrote, read back from RETURNING — never a figure computed here.
+            balanceAfter: updated.loyaltyPoints,
             note: `طلب مرتبط`,
             referenceId: input.orderId,
           });

@@ -123,8 +123,13 @@ export const giftCardsRouter = router({
         .where(and(eq(giftCards.id, input.id), eq(giftCards.orgId, ctx.orgId)));
 
       if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: 'البطاقة غير موجودة' });
-      if (card.status === 'cancelled') throw new TRPCError({ code: 'BAD_REQUEST', message: 'البطاقة ملغاة' });
 
+      // The SELECT above stays because the amount cannot be parsed until the
+      // card's own currency is known — but its `status` is deliberately NOT
+      // trusted. The cancelled guard is re-asserted in the UPDATE's WHERE
+      // below: between the two statements a concurrent cancel can land, and
+      // this statement would otherwise credit a cancelled card and flip it
+      // back to 'active', reviving a balance that was written off.
       const amountMinor = parseDecimal(String(input.amount), currency(card.currency)).minor;
 
       const updated = await ctx.withOrg(async (tx) => {
@@ -135,8 +140,17 @@ export const giftCardsRouter = router({
             status: 'active',
             updatedAt: new Date(),
           })
-          .where(and(eq(giftCards.id, input.id), eq(giftCards.orgId, ctx.orgId)))
+          .where(and(
+            eq(giftCards.id, input.id),
+            eq(giftCards.orgId, ctx.orgId),
+            ne(giftCards.status, 'cancelled'),
+          ))
           .returning();
+
+        // Nothing matched, so the card was cancelled after the read above. Bail
+        // before the ledger line — a topup transaction with no balance change
+        // is exactly the drift the gift-card ledger has to reconcile against.
+        if (!row) return null;
 
         await tx.insert(giftCardTransactions).values({
           giftCardId: input.id,
@@ -159,6 +173,13 @@ export const giftCardsRouter = router({
 
         return row;
       });
+
+      // The card existed a moment ago and this router has no delete path, so
+      // the only way the guard matches nothing is a concurrent cancel — the
+      // same BAD_REQUEST the pre-read used to raise.
+      if (!updated) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'البطاقة ملغاة' });
+      }
 
       return { data: updated, error: null };
     })),

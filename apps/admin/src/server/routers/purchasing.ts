@@ -68,12 +68,6 @@ export const purchasingRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { id, ...updateData } = input;
 
-        const supplier = await ctx.db.query.suppliers.findFirst({
-            where: and(eq(suppliers.id, id), eq(suppliers.orgId, ctx.orgId))
-        });
-
-        if (!supplier) throw new TRPCError({ code: 'NOT_FOUND' });
-
         const mappedData = {
           ...updateData,
           email: updateData.email === '' ? null : updateData.email,
@@ -83,11 +77,17 @@ export const purchasingRouter = router({
         const result = await ctx.withOrg((tx) => withAudit(
           tx,
           async () => {
+            // The UPDATE's own result is the existence check. Looking the
+            // supplier up first and updating after are two statements — a
+            // delete landing between them left this reporting success with an
+            // undefined row and writing an audit entry for a write that never
+            // happened.
             const [updated] = await tx
               .update(suppliers)
               .set(mappedData)
               .where(and(eq(suppliers.id, id), eq(suppliers.orgId, ctx.orgId)))
               .returning();
+            if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
             return updated;
           },
           {
@@ -104,13 +104,13 @@ export const purchasingRouter = router({
     delete: ownerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
-        const supplier = await ctx.db.query.suppliers.findFirst({
-            where: and(eq(suppliers.id, input.id), eq(suppliers.orgId, ctx.orgId))
-        });
-
-        if (!supplier) throw new TRPCError({ code: 'NOT_FOUND' });
-
-        // Ensure no POs are linked to the supplier
+        // Stays a separate read: the condition is a count over ANOTHER table,
+        // which the DELETE's own WHERE cannot express. It is safe to leave
+        // split because the outcome it guards is enforced by the database
+        // regardless — purchase_orders.supplier_id references suppliers.id with
+        // no ON DELETE action, so a purchase order created concurrently makes
+        // the DELETE fail on the foreign key rather than orphan anything. This
+        // check only turns that 500 into a message the caller can act on.
         const [linkedPo] = await ctx.db
             .select({ count: count() })
             .from(purchaseOrders)
@@ -123,10 +123,14 @@ export const purchasingRouter = router({
         const result = await ctx.withOrg((tx) => withAudit(
           tx,
           async () => {
+            // Existence comes from the DELETE's RETURNING, not from a lookup
+            // before it. A supplier with no linked POs cannot exist and match
+            // nothing here, so an empty result means no such supplier.
             const [deleted] = await tx
               .delete(suppliers)
               .where(and(eq(suppliers.id, input.id), eq(suppliers.orgId, ctx.orgId)))
               .returning();
+            if (!deleted) throw new TRPCError({ code: 'NOT_FOUND' });
             return deleted;
           },
           {
@@ -307,11 +311,15 @@ export const purchasingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        // Read purely to record where the status came FROM: RETURNING hands
+        // back the new row, never the old one, so the previous value has to be
+        // read to be audited. The existence check is deliberately not taken
+        // from here — it is the UPDATE's own result below, so a PO deleted
+        // between the two statements reports NOT_FOUND instead of succeeding
+        // with an undefined row.
         const po = await ctx.db.query.purchaseOrders.findFirst({
             where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId))
         });
-
-        if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
         const updateData: {
           status: typeof input.status;
@@ -333,6 +341,7 @@ export const purchasingRouter = router({
               .set(updateData)
               .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
               .returning();
+            if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
             return updated;
           },
           {
@@ -340,7 +349,7 @@ export const purchasingRouter = router({
             userId: ctx.userId,
             action: 'UPDATE_PO_STATUS',
             tableName: 'purchase_orders',
-            changes: { from: po.status, to: input.status },
+            changes: { from: po?.status ?? null, to: input.status },
           }
         ));
         return { data: result, error: null, meta: null };
@@ -374,20 +383,31 @@ export const purchasingRouter = router({
             let fullyReceived = true;
 
             for (const itemInput of input.items) {
-                // Get item to know its original requested qty and sku
-                const [poItem] = await tx.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.id, itemInput.id)).limit(1);
-                if (!poItem || poItem.poId !== po.id) continue;
+                // One statement does the lot: the "line belongs to this PO and
+                // this org" check is the UPDATE's own WHERE, and the quantity
+                // is incremented in SQL. Reading the line first, adding in JS
+                // and writing back an absolute total let two concurrent
+                // receipts both read the same figure and the second overwrite
+                // the first — stock credited, but the line still short.
+                // RETURNING then supplies the sku and the total the database
+                // actually holds.
+                const [poItem] = await tx.update(purchaseOrderItems)
+                    .set({
+                        receivedQuantity: sql`COALESCE(${purchaseOrderItems.receivedQuantity}, 0) + ${itemInput.receivedQuantity}`,
+                    })
+                    .where(and(
+                        eq(purchaseOrderItems.id, itemInput.id),
+                        eq(purchaseOrderItems.orgId, ctx.orgId),
+                        eq(purchaseOrderItems.poId, po.id),
+                    ))
+                    .returning();
+                // No such line, or it belongs to a different PO — the same
+                // silent skip as before, now decided by the database.
+                if (!poItem) continue;
 
-                const currentReceived = poItem.receivedQuantity || 0;
-                const newReceivedTotal = currentReceived + itemInput.receivedQuantity;
-
-                if (newReceivedTotal < poItem.quantity) {
+                if ((poItem.receivedQuantity ?? 0) < poItem.quantity) {
                     fullyReceived = false;
                 }
-
-                await tx.update(purchaseOrderItems)
-                    .set({ receivedQuantity: newReceivedTotal })
-                    .where(eq(purchaseOrderItems.id, itemInput.id));
 
                 // Update inventory if requested and SKU exists
                 if (itemInput.updateInventory && poItem.sku && itemInput.receivedQuantity > 0) {
@@ -426,11 +446,17 @@ export const purchasingRouter = router({
                 }
             }
 
+            // Re-asserts the org scope the lookup above established rather than
+            // trusting it across statements, and takes NOT_FOUND from this
+            // write's own result: without the predicate this was the one write
+            // in the procedure the tenant filter never reached.
             const newStatus = fullyReceived ? 'received' : 'partial';
             const [updatedPo] = await tx.update(purchaseOrders)
                 .set({ status: newStatus, receivedAt: new Date(), updatedAt: new Date() })
-                .where(eq(purchaseOrders.id, po.id))
+                .where(and(eq(purchaseOrders.id, po.id), eq(purchaseOrders.orgId, ctx.orgId)))
                 .returning();
+
+            if (!updatedPo) throw new TRPCError({ code: 'NOT_FOUND' });
 
             await withAudit(
               tx,
