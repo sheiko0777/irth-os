@@ -140,7 +140,7 @@ export const stocktakingRouter = router({
             if (!resolvedVariantId) {
               itemsSkipped.push({ sku: item.sku, reason: 'variant_not_found' });
               await tx.update(stocktakingItems).set({ variance })
-                .where(eq(stocktakingItems.id, item.id));
+                .where(and(eq(stocktakingItems.id, item.id), eq(stocktakingItems.orgId, ctx.orgId)));
               continue;
             }
 
@@ -156,7 +156,7 @@ export const stocktakingRouter = router({
             if (!invItem) {
               itemsSkipped.push({ sku: item.sku, reason: 'inventory_record_not_found' });
               await tx.update(stocktakingItems).set({ variance })
-                .where(eq(stocktakingItems.id, item.id));
+                .where(and(eq(stocktakingItems.id, item.id), eq(stocktakingItems.orgId, ctx.orgId)));
               continue;
             }
 
@@ -166,8 +166,17 @@ export const stocktakingRouter = router({
             if (variance !== 0) {
               await tx
                 .update(inventoryItems)
+                // `counted` is absolute on purpose — a stocktake asserts what
+                // the quantity IS, so unlike inventory.adjust's in/out this is
+                // not a lost update waiting to happen.
                 .set({ quantity: counted, updatedAt: new Date() })
-                .where(eq(inventoryItems.id, invItem.id));
+                // orgId as well as id: invItem came from an org-scoped read,
+                // but a write must be correct on its own rather than relying on
+                // an earlier statement having been right.
+                .where(and(
+                  eq(inventoryItems.id, invItem.id),
+                  eq(inventoryItems.orgId, ctx.orgId),
+                ));
 
               await tx.insert(inventoryMovements).values({
                 orgId: ctx.orgId,
@@ -181,7 +190,7 @@ export const stocktakingRouter = router({
             await tx
               .update(stocktakingItems)
               .set({ variance, appliedQuantity: counted })
-              .where(eq(stocktakingItems.id, item.id));
+              .where(and(eq(stocktakingItems.id, item.id), eq(stocktakingItems.orgId, ctx.orgId)));
 
             itemsApplied++;
           }

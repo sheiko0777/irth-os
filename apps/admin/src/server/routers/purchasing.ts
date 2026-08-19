@@ -432,7 +432,10 @@ export const purchasingRouter = router({
                                     quantity: sql`${inventoryItems.quantity} + ${itemInput.receivedQuantity}`,
                                     updatedAt: new Date()
                                 })
-                                .where(eq(inventoryItems.id, invItem.id));
+                                .where(and(
+                                  eq(inventoryItems.id, invItem.id),
+                                  eq(inventoryItems.orgId, ctx.orgId),
+                                ));
 
                             await tx.insert(inventoryMovements).values({
                                 orgId: ctx.orgId,

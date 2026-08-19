@@ -211,7 +211,8 @@ export const returnsRouter = router({
       // there is no variant to credit: flag the line and write nothing, rather
       // than guessing at a match by name.
       const result = await ctx.withOrg(async (tx) => {
-        await tx.update(returnItems).set({ restock: true }).where(eq(returnItems.id, input.itemId));
+        await tx.update(returnItems).set({ restock: true })
+          .where(and(eq(returnItems.id, input.itemId), eq(returnItems.orgId, ctx.orgId)));
 
         if (!item.orderItemId) {
           return { restocked: false, reason: 'no_order_item_link' as const };
@@ -232,7 +233,7 @@ export const returnsRouter = router({
 
         await tx.update(inventoryItems)
           .set({ quantity: sql`${inventoryItems.quantity} + ${item.quantity}`, updatedAt: new Date() })
-          .where(eq(inventoryItems.id, invItem.id));
+          .where(and(eq(inventoryItems.id, invItem.id), eq(inventoryItems.orgId, ctx.orgId)));
 
         // Ledger row, matching inventory.adjust and purchasing.receive — a
         // stock change that isn't in the movements table is invisible to audit.

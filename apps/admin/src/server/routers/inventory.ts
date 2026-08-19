@@ -138,6 +138,23 @@ export const inventoryRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Inventory item not found' });
         }
 
+        // 'in' and 'out' are RELATIVE, so they are applied in SQL rather than
+        // computed here: reading item.quantity and writing back an absolute
+        // total is a lost update — two concurrent adjustments both read the
+        // same starting quantity and the second silently discards the first.
+        //
+        // 'set' is genuinely absolute (a correction states what the quantity
+        // IS), so it stays a plain value.
+        const quantityUpdate =
+          parsedInput.type === 'in'
+            ? sql`${inventoryItems.quantity} + ${parsedInput.quantity}`
+            : parsedInput.type === 'out'
+              ? sql`${inventoryItems.quantity} - ${parsedInput.quantity}`
+              : parsedInput.quantity;
+
+        // Reported in the audit row and the response. For in/out this is the
+        // value as of the read above; the authoritative post-write figure comes
+        // back from RETURNING below.
         let newQuantity = item.quantity;
         if (parsedInput.type === 'in') {
           newQuantity += parsedInput.quantity;
@@ -151,8 +168,14 @@ export const inventoryRouter = router({
             tx,
             async () => {
               const [updated] = await tx.update(inventoryItems)
-                .set({ quantity: newQuantity, updatedAt: new Date() })
-                .where(eq(inventoryItems.id, parsedInput.itemId))
+                .set({ quantity: quantityUpdate, updatedAt: new Date() })
+                // orgId as well as id: the read above was org-scoped, but a
+                // write must be correct on its own rather than relying on an
+                // earlier statement having been right.
+                .where(and(
+                  eq(inventoryItems.id, parsedInput.itemId),
+                  eq(inventoryItems.orgId, ctx.orgId),
+                ))
                 .returning();
               return updated;
             },
