@@ -29,10 +29,10 @@ export function ZonesTable({ zones, selectedZoneId, onSelectZone }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-right">الاسم</TableHead>
-            <TableHead className="text-right">الدول</TableHead>
-            <TableHead className="text-right">الأسعار</TableHead>
-            <TableHead className="text-right">نشط</TableHead>
+            <TableHead className="text-start">الاسم</TableHead>
+            <TableHead className="text-start">الدول</TableHead>
+            <TableHead className="text-start">الأسعار</TableHead>
+            <TableHead className="text-start">نشط</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

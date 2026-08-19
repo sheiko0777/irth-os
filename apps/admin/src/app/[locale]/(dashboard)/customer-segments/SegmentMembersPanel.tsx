@@ -99,9 +99,9 @@ export function SegmentMembersPanel({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--rim1)' }}>
-                <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>الاسم</th>
-                <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>البريد</th>
-                <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>الهاتف</th>
+                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>الاسم</th>
+                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>البريد</th>
+                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>الهاتف</th>
                 <th style={{ padding: '8px 10px' }} />
               </tr>
             </thead>

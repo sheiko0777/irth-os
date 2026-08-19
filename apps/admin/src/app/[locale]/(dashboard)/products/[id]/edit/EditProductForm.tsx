@@ -67,7 +67,7 @@ export function EditProductForm({ product }: { product: Product }) {
                         <label className="text-sm font-medium">{t("description")}</label>
                         <Input {...register("description")} />
                     </div>
-                    <div className="flex items-center space-x-2 space-x-reverse">
+                    <div className="flex items-center space-x-2">
                         <input type="checkbox" id="isActive" {...register("isActive")} className="w-4 h-4 rounded-md border-rim1" />
                         <label htmlFor="isActive" className="text-sm font-medium leading-none">{t("isActive")}</label>
                     </div>

@@ -42,7 +42,7 @@ export default async function PrintPage({
                         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>نظام إرث</h1>
                         <p style={{ color: '#666', margin: '4px 0 0' }}>فاتورة / إيصال</p>
                     </div>
-                    <div style={{ textAlign: 'left' }}>
+                    <div style={{ textAlign: 'end' }}>
                         <p style={{ fontWeight: 600, margin: 0 }}>رقم الفاتورة: {order.orderNumber}</p>
                         <p style={{ color: '#666', margin: '4px 0 0' }}>
                             التاريخ:{' '}
@@ -85,7 +85,7 @@ export default async function PrintPage({
                             );
                         })}
                         <tr>
-                            <td colSpan={3} style={{ fontWeight: 700, textAlign: 'right' }}>
+                            <td colSpan={3} style={{ fontWeight: 700, textAlign: 'start' }}>
                                 الإجمالي
                             </td>
                             <td style={{ fontWeight: 700 }}>{total} ج.م</td>

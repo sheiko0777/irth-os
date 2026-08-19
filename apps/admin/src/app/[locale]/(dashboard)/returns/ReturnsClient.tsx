@@ -172,7 +172,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
 
       <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right">
+          <table className="w-full text-sm text-start">
             <thead className="text-xs text-[var(--t2)] bg-[var(--surface)] border-b border-[var(--rim1)]">
               <tr>
                 <th className="px-6 py-4 font-medium">رقم الطلب</th>
@@ -267,7 +267,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
                               </button>
                             </div>
                           )}
-                          <Link href={`/${locale}/returns/${ret.id}`} className="text-azure hover:underline text-xs mr-2">
+                          <Link href={`/${locale}/returns/${ret.id}`} className="text-azure hover:underline text-xs ms-2">
                             عرض
                           </Link>
                         </div>

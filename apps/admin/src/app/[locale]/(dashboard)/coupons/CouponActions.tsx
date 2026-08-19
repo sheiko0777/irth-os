@@ -56,11 +56,11 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle className="text-right">إضافة كوبون جديد</DialogTitle>
+                    <DialogTitle className="text-start">إضافة كوبون جديد</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="code" className="text-right block">كود الكوبون</Label>
+                        <Label htmlFor="code" className="text-start block">كود الكوبون</Label>
                         <Input
                             id="code"
                             required
@@ -72,7 +72,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="type" className="text-right block">نوع الخصم</Label>
+                        <Label htmlFor="type" className="text-start block">نوع الخصم</Label>
                         <Select
                             value={formData.type}
                             onValueChange={(val: 'percentage' | 'fixed' | 'free_shipping') => setFormData(p => ({ ...p, type: val }))}
@@ -88,7 +88,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="value" className="text-right block">القيمة</Label>
+                        <Label htmlFor="value" className="text-start block">القيمة</Label>
                         <Input
                             id="value"
                             type="number"
@@ -102,7 +102,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="minOrderAmount" className="text-right block">الحد الأدنى للطلب (اختياري)</Label>
+                        <Label htmlFor="minOrderAmount" className="text-start block">الحد الأدنى للطلب (اختياري)</Label>
                         <Input
                             id="minOrderAmount"
                             type="number"
@@ -114,7 +114,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="maxUses" className="text-right block">الحد الأقصى للاستخدامات (اختياري)</Label>
+                        <Label htmlFor="maxUses" className="text-start block">الحد الأقصى للاستخدامات (اختياري)</Label>
                         <Input
                             id="maxUses"
                             type="number"
@@ -125,7 +125,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="expiresAt" className="text-right block">تاريخ الانتهاء (اختياري)</Label>
+                        <Label htmlFor="expiresAt" className="text-start block">تاريخ الانتهاء (اختياري)</Label>
                         <Input
                             id="expiresAt"
                             type="date"
@@ -136,7 +136,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="description" className="text-right block">الوصف (اختياري)</Label>
+                        <Label htmlFor="description" className="text-start block">الوصف (اختياري)</Label>
                         <Textarea
                             id="description"
                             value={formData.description}

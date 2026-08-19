@@ -188,7 +188,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                             disabled={selectedShipmentIds.size === 0 || markRemittedMutation.isPending}
                             className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-void"
                         >
-                            {markRemittedMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                            {markRemittedMutation.isPending ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : null}
                             تسوية مجمعة ({selectedShipmentIds.size})
                         </Button>
                     </div>
@@ -198,12 +198,12 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                             <TableHeader className="bg-[var(--rim1)]">
                                 <TableRow>
                                     <TableHead className="w-[50px]"></TableHead>
-                                    <TableHead className="text-right">رقم الطلب</TableHead>
-                                    <TableHead className="text-right">رقم التتبع</TableHead>
-                                    <TableHead className="text-right">شركة الشحن</TableHead>
-                                    <TableHead className="text-right">حالة الشحنة</TableHead>
-                                    <TableHead className="text-right">قيمة COD</TableHead>
-                                    <TableHead className="text-right">التحصيل والتسديد</TableHead>
+                                    <TableHead className="text-start">رقم الطلب</TableHead>
+                                    <TableHead className="text-start">رقم التتبع</TableHead>
+                                    <TableHead className="text-start">شركة الشحن</TableHead>
+                                    <TableHead className="text-start">حالة الشحنة</TableHead>
+                                    <TableHead className="text-start">قيمة COD</TableHead>
+                                    <TableHead className="text-start">التحصيل والتسديد</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -341,13 +341,13 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                         <Table>
                             <TableHeader className="bg-[var(--rim1)]">
                                 <TableRow>
-                                    <TableHead className="text-right">المرجع</TableHead>
-                                    <TableHead className="text-right">شركة الشحن</TableHead>
-                                    <TableHead className="text-right">القيمة</TableHead>
-                                    <TableHead className="text-right">عدد الشحنات</TableHead>
-                                    <TableHead className="text-right">التاريخ المتوقع</TableHead>
-                                    <TableHead className="text-right">الحالة</TableHead>
-                                    <TableHead className="text-right">إجراءات</TableHead>
+                                    <TableHead className="text-start">المرجع</TableHead>
+                                    <TableHead className="text-start">شركة الشحن</TableHead>
+                                    <TableHead className="text-start">القيمة</TableHead>
+                                    <TableHead className="text-start">عدد الشحنات</TableHead>
+                                    <TableHead className="text-start">التاريخ المتوقع</TableHead>
+                                    <TableHead className="text-start">الحالة</TableHead>
+                                    <TableHead className="text-start">إجراءات</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

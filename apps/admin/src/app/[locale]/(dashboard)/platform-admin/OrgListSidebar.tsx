@@ -17,7 +17,7 @@ export function OrgListSidebar({ orgs, selectedId, onSelect, onOpenCreate }: Pro
     : orgs;
 
   return (
-    <div className="w-72 shrink-0 flex flex-col border-l" style={{ borderColor: 'var(--rim1)', background: 'var(--surface)' }}>
+    <div className="w-72 shrink-0 flex flex-col border-e" style={{ borderColor: 'var(--rim1)', background: 'var(--surface)' }}>
       <div className="p-4 border-b space-y-3" style={{ borderColor: 'var(--rim1)' }}>
         <div className="flex items-center justify-between">
           <h1 className="text-sm font-bold">لوحة الأدمن العام</h1>
@@ -40,7 +40,7 @@ export function OrgListSidebar({ orgs, selectedId, onSelect, onOpenCreate }: Pro
             <button
               key={org.id}
               onClick={() => onSelect(org)}
-              className="w-full text-right px-4 py-3 border-b transition-colors"
+              className="w-full text-start px-4 py-3 border-b transition-colors"
               style={{
                 borderColor: 'var(--rim1)',
                 background: isSel ? 'var(--gold-bg)' : 'transparent',

@@ -135,13 +135,13 @@ export default function GiftCardsClient({
           <table className='w-full text-sm'>
             <thead>
               <tr className='border-b border-[var(--rim1)] text-[var(--t2)]'>
-                <th className='px-4 py-3 text-right font-medium'>الكود</th>
-                <th className='px-4 py-3 text-right font-medium'>الرصيد</th>
-                <th className='px-4 py-3 text-right font-medium'>المبلغ الأصلي</th>
-                <th className='px-4 py-3 text-right font-medium'>المستلم</th>
-                <th className='px-4 py-3 text-right font-medium'>الحالة</th>
-                <th className='px-4 py-3 text-right font-medium'>تاريخ الإصدار</th>
-                <th className='px-4 py-3 text-right font-medium'>إجراءات</th>
+                <th className='px-4 py-3 text-start font-medium'>الكود</th>
+                <th className='px-4 py-3 text-start font-medium'>الرصيد</th>
+                <th className='px-4 py-3 text-start font-medium'>المبلغ الأصلي</th>
+                <th className='px-4 py-3 text-start font-medium'>المستلم</th>
+                <th className='px-4 py-3 text-start font-medium'>الحالة</th>
+                <th className='px-4 py-3 text-start font-medium'>تاريخ الإصدار</th>
+                <th className='px-4 py-3 text-start font-medium'>إجراءات</th>
               </tr>
             </thead>
             <tbody>

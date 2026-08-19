@@ -23,7 +23,7 @@ function SkeletonRow() {
   return (
     <div className="flex items-center gap-4 py-3 border-b border-[var(--rim1)]">
       <Skeleton className="h-4 w-28" />
-      <Skeleton className="h-4 w-20 mr-auto" />
+      <Skeleton className="h-4 w-20 ms-auto" />
       <Skeleton className="h-5 w-16 rounded-full" />
       <Skeleton className="h-4 w-16" />
     </div>

@@ -212,7 +212,7 @@ export default async function AnalyticsPage() {
             <span className="text-[var(--t2)]">إيرادات الشهر الحالي: </span>
             <span className="font-bold text-[var(--gold)]">{fmtCurrency(kpiData.revenueThisMonth)}</span>
             {kpiData.revenueGrowth !== null && (
-              <span className="mr-2">
+              <span className="ms-2">
                 <GrowthBadge pct={kpiData.revenueGrowth} />
               </span>
             )}

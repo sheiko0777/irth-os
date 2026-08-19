@@ -231,10 +231,12 @@ export function CommandPalette({ locale }: { locale: string }) {
                     isActive
                       ? {
                           background: 'var(--raised)',
-                          // The same 3px gold bar as the sidebar's active item,
-                          // on the same physical edge (right, matching the
-                          // sidebar's border-r): one signature, used everywhere
-                          // "current" is meant. Negative inset-x = right edge.
+                          // The same 3px gold bar as the sidebar's active item
+                          // (Sidebar's border-s-2): one signature, used
+                          // everywhere "current" is meant. Negative inset-x =
+                          // right edge — box-shadow has no logical form, so
+                          // this one stays physical and matches border-s only
+                          // in RTL.
                           boxShadow: 'inset -3px 0 0 var(--gold)',
                           color: 'var(--t1)',
                         }

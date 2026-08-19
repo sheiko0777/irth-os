@@ -30,10 +30,10 @@ export default async function IntegrationsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent border-b-[var(--rim1)]">
-                                    <TableHead className="text-right text-[var(--t2)]">{t('columns.id')}</TableHead>
-                                    <TableHead className="text-right text-[var(--t2)]">{t('columns.type')}</TableHead>
-                                    <TableHead className="text-right text-[var(--t2)]">{t('columns.attempts')}</TableHead>
-                                    <TableHead className="text-right text-[var(--t2)]">{t('columns.date')}</TableHead>
+                                    <TableHead className="text-start text-[var(--t2)]">{t('columns.id')}</TableHead>
+                                    <TableHead className="text-start text-[var(--t2)]">{t('columns.type')}</TableHead>
+                                    <TableHead className="text-start text-[var(--t2)]">{t('columns.attempts')}</TableHead>
+                                    <TableHead className="text-start text-[var(--t2)]">{t('columns.date')}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

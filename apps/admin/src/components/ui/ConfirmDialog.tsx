@@ -53,9 +53,9 @@ export function ConfirmDialog({
       </div>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle className="text-right text-[var(--t1)]">{title}</DialogTitle>
+          <DialogTitle className="text-start text-[var(--t1)]">{title}</DialogTitle>
           {description && (
-            <DialogDescription className="text-right text-[var(--t2)]">
+            <DialogDescription className="text-start text-[var(--t2)]">
               {description}
             </DialogDescription>
           )}

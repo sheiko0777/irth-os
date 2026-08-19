@@ -32,7 +32,7 @@ export function CouponValidator() {
             <CardContent>
                 <form onSubmit={handleValidate} className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="space-y-2 flex-1 w-full">
-                        <Label htmlFor="test-code" className="text-right block">الكود</Label>
+                        <Label htmlFor="test-code" className="text-start block">الكود</Label>
                         <Input
                             id="test-code"
                             value={code}
@@ -43,7 +43,7 @@ export function CouponValidator() {
                         />
                     </div>
                     <div className="space-y-2 flex-1 w-full">
-                        <Label htmlFor="test-amount" className="text-right block">قيمة الطلب</Label>
+                        <Label htmlFor="test-amount" className="text-start block">قيمة الطلب</Label>
                         <Input
                             id="test-amount"
                             type="number"

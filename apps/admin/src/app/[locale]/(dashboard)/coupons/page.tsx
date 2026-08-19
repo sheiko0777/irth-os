@@ -58,7 +58,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
 
             <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-right">
+                    <table className="w-full text-start">
                         <thead className="bg-raised border-b border-[var(--rim1)]">
                             <tr>
                                 <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">الكود</th>

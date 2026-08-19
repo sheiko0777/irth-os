@@ -137,7 +137,7 @@ export default function CampaignsClient({
           <thead>
             <tr style={{ borderBottom: '1px solid var(--rim1)' }}>
               {['اسم الحملة', 'القناة', 'الشريحة', 'الحالة', 'المستلمون', 'الإرسال', 'إجراءات'].map((h) => (
-                <th key={h} className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--t2)' }}>{h}</th>
+                <th key={h} className="px-4 py-3 text-start font-semibold" style={{ color: 'var(--t2)' }}>{h}</th>
               ))}
             </tr>
           </thead>

@@ -27,7 +27,7 @@ export function SegmentList({
           onClick={() => onOpenSegment(seg)}
           className="bg-[var(--surface)] border border-[var(--rim1)] rounded-xl p-5 cursor-pointer"
           style={{
-            borderRight: activeSegmentId === seg.id ? `4px solid ${seg.color}` : '1px solid var(--rim1)',
+            borderInlineStart: activeSegmentId === seg.id ? `4px solid ${seg.color}` : '1px solid var(--rim1)',
             transition: 'border 0.15s',
           }}
         >

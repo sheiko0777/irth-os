@@ -58,7 +58,7 @@ export default function CourierActions({ type, remittanceId, shipmentId, status,
         disabled={loading}
         className="text-[var(--gold)] border-[var(--gold-br)] hover:bg-[var(--gold-bg)] h-8"
       >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : null}
+        {loading ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
         تعليم كمسدد
       </Button>
     );
@@ -74,7 +74,7 @@ export default function CourierActions({ type, remittanceId, shipmentId, status,
         disabled={loading}
         className="bg-[var(--emerald)] hover:bg-[var(--emerald)]/90 text-void h-8"
       >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : null}
+        {loading ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
         إجراء تسوية
       </Button>
     );

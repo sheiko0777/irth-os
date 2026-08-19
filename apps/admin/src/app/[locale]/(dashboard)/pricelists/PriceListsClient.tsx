@@ -120,7 +120,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
             </div>
 
             <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--rim1)' }}>
-                <table className="w-full text-right" style={{ color: 'var(--t2)' }}>
+                <table className="w-full text-start" style={{ color: 'var(--t2)' }}>
                     <thead className="bg-opacity-50" style={{ backgroundColor: 'var(--rim1)', color: 'var(--t1)' }}>
                         <tr>
                             <th className="p-3">الاسم</th>
@@ -304,7 +304,7 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                         </div>
                         
                         <div className="flex-1 overflow-auto rounded-lg border" style={{ borderColor: 'var(--rim1)' }}>
-                            <table className="w-full text-right" style={{ color: 'var(--t2)' }}>
+                            <table className="w-full text-start" style={{ color: 'var(--t2)' }}>
                                 <thead className="bg-opacity-50 sticky top-0" style={{ backgroundColor: 'var(--rim1)', color: 'var(--t1)' }}>
                                     <tr>
                                         <th className="p-3">اسم المنتج</th>

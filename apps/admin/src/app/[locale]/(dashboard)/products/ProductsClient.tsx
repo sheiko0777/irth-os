@@ -280,13 +280,13 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="text-right">الاسم</TableHead>
-                            <TableHead className="text-right">SKU</TableHead>
-                            <TableHead className="text-right">السعر</TableHead>
-                            <TableHead className="text-right">المخزون</TableHead>
-                            <TableHead className="text-right">الحالة</TableHead>
-                            <TableHead className="text-right">القسم</TableHead>
-                            <TableHead className="text-left">الإجراءات</TableHead>
+                            <TableHead className="text-start">الاسم</TableHead>
+                            <TableHead className="text-start">SKU</TableHead>
+                            <TableHead className="text-start">السعر</TableHead>
+                            <TableHead className="text-start">المخزون</TableHead>
+                            <TableHead className="text-start">الحالة</TableHead>
+                            <TableHead className="text-start">القسم</TableHead>
+                            <TableHead className="text-end">الإجراءات</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -317,7 +317,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                     <TableCell>{p.stock}</TableCell>
                                     <TableCell>{getStatusBadge(p.status)}</TableCell>
                                     <TableCell>{p.category || '-'}</TableCell>
-                                    <TableCell className="text-left">
+                                    <TableCell className="text-end">
                                         <PermissionGate resource="products" action="write">
                                             <div className="flex justify-end gap-2">
                                                 <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)}>

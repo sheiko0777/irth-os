@@ -105,10 +105,10 @@ export default async function FinancePage() {
                     <Table>
                         <TableHeader>
                             <TableRow className="border-[var(--rim1)] hover:bg-transparent">
-                                <TableHead className="text-right">رقم الطلب</TableHead>
-                                <TableHead className="text-right">المبلغ</TableHead>
-                                <TableHead className="text-right">التاريخ</TableHead>
-                                <TableHead className="text-right">الحالة</TableHead>
+                                <TableHead className="text-start">رقم الطلب</TableHead>
+                                <TableHead className="text-start">المبلغ</TableHead>
+                                <TableHead className="text-start">التاريخ</TableHead>
+                                <TableHead className="text-start">الحالة</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>

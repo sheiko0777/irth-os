@@ -37,11 +37,11 @@ export function RatesTable({ zoneId }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-right">الاسم</TableHead>
-            <TableHead className="text-right">النوع</TableHead>
-            <TableHead className="text-right">السعر</TableHead>
-            <TableHead className="text-right">التوصيل</TableHead>
-            <TableHead className="text-right">حذف</TableHead>
+            <TableHead className="text-start">الاسم</TableHead>
+            <TableHead className="text-start">النوع</TableHead>
+            <TableHead className="text-start">السعر</TableHead>
+            <TableHead className="text-start">التوصيل</TableHead>
+            <TableHead className="text-start">حذف</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

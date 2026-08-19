@@ -71,11 +71,11 @@ export default async function InventoryPage({
         <Table>
           <TableHeader className="bg-[var(--rim1)]">
             <TableRow>
-              <TableHead className="text-right">{t("inventory.columns.product")}</TableHead>
-              <TableHead className="text-right">{t("inventory.columns.variant")}</TableHead>
-              <TableHead className="text-right">{t("inventory.columns.quantity")}</TableHead>
-              <TableHead className="text-right">{t("inventory.columns.reorderPoint")}</TableHead>
-              <TableHead className="text-right">{t("inventory.columns.status")}</TableHead>
+              <TableHead className="text-start">{t("inventory.columns.product")}</TableHead>
+              <TableHead className="text-start">{t("inventory.columns.variant")}</TableHead>
+              <TableHead className="text-start">{t("inventory.columns.quantity")}</TableHead>
+              <TableHead className="text-start">{t("inventory.columns.reorderPoint")}</TableHead>
+              <TableHead className="text-start">{t("inventory.columns.status")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

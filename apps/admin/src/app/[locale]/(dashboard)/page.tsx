@@ -175,16 +175,16 @@ export default async function DashboardPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--rim1)]">
-                <th className="px-5 py-3 text-right text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
+                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
                   رقم الطلب
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
+                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
                   الحالة
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
+                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
                   الإجمالي
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
+                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
                   التاريخ
                 </th>
               </tr>
