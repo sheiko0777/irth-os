@@ -7,7 +7,7 @@ import { trpc } from "@/lib/trpc";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
 import { Button } from "@/components/ui/button";
 
@@ -96,26 +96,6 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
   const updatePoStatus = trpc.purchasing.po.updateStatus.useMutation({
     onSuccess: () => utils.purchasing.po.list.invalidate(),
   });
-
-  const getStatusColor = (status: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (status) {
-      case "draft": return "outline";
-      case "ordered": return "secondary";
-      case "received": return "default";
-      case "cancelled": return "destructive";
-      default: return "outline";
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "draft": return "مسودة";
-      case "ordered": return "مطلوب";
-      case "received": return "مستلم";
-      case "cancelled": return "ملغي";
-      default: return status;
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -318,17 +298,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                       <TableCell className="font-medium text-[var(--t1)]">{po.poNumber}</TableCell>
                       <TableCell className="text-[var(--t2)]">{po.supplierName || "غير محدد"}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant={getStatusColor(po.status)}
-                          className={
-                            po.status === "ordered" ? "bg-[var(--gold)] text-void" :
-                            po.status === "received" ? "bg-[var(--emerald)] text-void" :
-                            po.status === "cancelled" ? "bg-[var(--crimson)] text-void" :
-                            "bg-raised text-t1"
-                          }
-                        >
-                          {getStatusLabel(po.status)}
-                        </Badge>
+                        <StatusBadge status={po.status} domain="purchaseOrder" />
                       </TableCell>
                       <TableCell className="text-[var(--t2)]">
                         {po.totalAmountMinor === null ? "-" : formatMoney(fromMinor(po.totalAmountMinor, currency(po.currency)))}

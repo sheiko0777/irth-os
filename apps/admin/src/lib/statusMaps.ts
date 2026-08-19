@@ -87,6 +87,19 @@ export const campaignSegmentMap: StatusMap = {
   custom:   { label: 'مخصص',              ...tone.azure },
 };
 
+export const purchaseOrderStatusMap: StatusMap = {
+  draft:     { label: 'مسودة',        ...tone.neutral },
+  ordered:   { label: 'مطلوب',        ...tone.gold },
+  partial:   { label: 'مستلم جزئياً', ...tone.amber },
+  received:  { label: 'مستلم',        ...tone.emerald },
+  // muted, not crimson, despite the old inline ternary painting it red.
+  // Crimson is reserved for failure states here (returned, payment_failed,
+  // rejected, error); cancelling a purchase order is a deliberate act, and
+  // orderStatusMap, etaStatusMap and stocktakingStatusMap all render their
+  // own `cancelled` muted for exactly that reason.
+  cancelled: { label: 'ملغي',         ...tone.muted },
+};
+
 export const stocktakingStatusMap: StatusMap = {
   draft:       { label: 'مسودة',  ...tone.neutral },
   in_progress: { label: 'جارٍ',   ...tone.gold },
@@ -134,6 +147,7 @@ export const statusMaps = {
   campaign: campaignStatusMap,
   campaignChannel: campaignChannelMap,
   campaignSegment: campaignSegmentMap,
+  purchaseOrder: purchaseOrderStatusMap,
   stocktaking: stocktakingStatusMap,
   rateType: rateTypeMap,
   return: returnStatusMap,
