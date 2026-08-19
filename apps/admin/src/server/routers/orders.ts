@@ -3,25 +3,11 @@ import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum,
 import { eq, and, desc, sql, count, ilike, gte, lte, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { withAudit, emitOutboxEvent } from '@irth/db';
+import { withAudit, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS } from '@irth/db';
 import type { DbTx, OutboxEventType, OrderNotificationPayload } from '@irth/db';
 
 const statusEnum = z.enum(orderStatusEnum.enumValues);
 
-/**
- * Which order statuses the customer is told about, and under which event type.
- *
- * Derived from the consumer, not from what feels notification-worthy:
- * `apps/api/src/workers/outboxWorker.ts` branches on exactly `order.confirmed`
- * and `order.shipped`. An event for `delivered` or `cancelled` would be polled,
- * match no branch, and be marked processed having sent nothing — indistinguish-
- * able from a successful send on the Integrations screen. Add the worker branch
- * first, then the entry here.
- */
-const OUTBOX_EVENT_BY_STATUS: Partial<Record<(typeof orderStatusEnum.enumValues)[number], OutboxEventType>> = {
-    confirmed: 'order.confirmed',
-    shipped: 'order.shipped',
-};
 
 /**
  * org_settings key holding the courier's public tracking page, with `{tracking}`
@@ -39,7 +25,6 @@ const OUTBOX_EVENT_BY_STATUS: Partial<Record<(typeof orderStatusEnum.enumValues)
  *
  * Settable today without new UI: settings.set takes an arbitrary `key`.
  */
-const TRACKING_URL_TEMPLATE_KEY = 'shipping.tracking_url_template';
 
 /**
  * Builds the outbox payload for an order status transition, reading everything
@@ -52,71 +37,6 @@ const TRACKING_URL_TEMPLATE_KEY = 'shipping.tracking_url_template';
  * the outbox unreadable as a record of what was actually delivered. The state
  * change and its audit row still happen either way.
  */
-async function buildOrderNotification(
-    tx: Pick<DbTx, 'select' | 'rollback'>,
-    orgId: string,
-    order: { id: string; orderNumber: string; customerId: string | null },
-    eventType: OutboxEventType,
-): Promise<OrderNotificationPayload | undefined> {
-    // orders.customerId is nullable and is NOT a user id — it references
-    // customers.id, which is where the contact details live. An order placed
-    // before a customer record exists has nobody to notify.
-    const [contact] = order.customerId
-        ? await tx
-              .select({ name: customers.name, email: customers.email, phone: customers.phone })
-              .from(customers)
-              .where(and(eq(customers.id, order.customerId), eq(customers.orgId, orgId)))
-              .limit(1)
-        : [];
-
-    const phone = contact?.phone ?? undefined;
-    const email = contact?.email ?? undefined;
-
-    const reachable = eventType === 'order.shipped' ? Boolean(phone) : Boolean(phone || email);
-    if (!reachable) return undefined;
-
-    return {
-        orderNumber: order.orderNumber,
-        customerName: contact?.name ?? undefined,
-        customerPhone: phone,
-        customerEmail: email,
-        trackingUrl: eventType === 'order.shipped' ? await trackingUrlFor(tx, orgId, order.id) : undefined,
-    };
-}
-
-/** Latest waybill for the order rendered into the org's tracking URL template, or undefined. */
-async function trackingUrlFor(
-    tx: Pick<DbTx, 'select' | 'rollback'>,
-    orgId: string,
-    orderId: string,
-): Promise<string | undefined> {
-    const [tracked] = await tx
-        .select({ trackingNumber: shipmentTracking.trackingNumber })
-        .from(shipmentTracking)
-        .where(and(
-            eq(shipmentTracking.orderId, orderId),
-            eq(shipmentTracking.orgId, orgId),
-            // A shipment row is created before the waybill comes back from the
-            // courier, so the most recent row is not necessarily the one that
-            // has a number. Skip the ones that do not.
-            isNotNull(shipmentTracking.trackingNumber),
-        ))
-        .orderBy(desc(shipmentTracking.createdAt))
-        .limit(1);
-
-    if (!tracked?.trackingNumber) return undefined;
-
-    const [template] = await tx
-        .select({ value: orgSettings.value })
-        .from(orgSettings)
-        .where(and(eq(orgSettings.orgId, orgId), eq(orgSettings.key, TRACKING_URL_TEMPLATE_KEY)))
-        .limit(1);
-
-    if (!template?.value) return undefined;
-
-    return template.value.replace('{tracking}', tracked.trackingNumber);
-}
-
 export const ordersRouter = router({
     list: protectedProcedure
         .input(z.object({

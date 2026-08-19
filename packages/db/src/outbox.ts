@@ -1,6 +1,10 @@
 import { outboxEvents } from './schema/outbox';
 import { jsonSafe } from './json';
 import type { DbTx } from './index';
+import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { orderStatusEnum, shipmentTracking } from './schema';
+import { customers } from './schema/customers';
+import { orgSettings } from './schema/orgSettings';
 
 /**
  * The event types `apps/api/src/workers/outboxWorker.ts` knows how to process.
@@ -10,6 +14,14 @@ import type { DbTx } from './index';
  * silent no-op that looks identical to success on the Integrations screen.
  * Producers go through this union so a typo is a compile error instead.
  */
+/**
+ * Org setting holding the courier tracking URL, with a {tracking} placeholder.
+ * Nothing in this repo records a public tracking URL for any courier, so the
+ * format is configuration rather than a hardcoded guess that would be pasted
+ * into a real customer's message.
+ */
+const TRACKING_URL_TEMPLATE_KEY = 'shipping.tracking_url_template';
+
 export type OutboxEventType = 'order.confirmed' | 'order.shipped';
 
 /**
@@ -37,6 +49,21 @@ export type OutboxEventType = 'order.confirmed' | 'order.shipped';
  * next to the column it is serialized into, rather than being copied into each
  * app to drift apart the first time the worker grows a field.
  */
+/**
+ * Which order statuses the customer is told about, and under which event type.
+ *
+ * Derived from the consumer, not from what feels notification-worthy:
+ * `apps/api/src/workers/outboxWorker.ts` branches on exactly `order.confirmed`
+ * and `order.shipped`. An event for `delivered` or `cancelled` would be polled,
+ * match no branch, and be marked processed having sent nothing — indistinguish-
+ * able from a successful send on the Integrations screen. Add the worker branch
+ * first, then the entry here.
+ */
+export const OUTBOX_EVENT_BY_STATUS: Partial<Record<(typeof orderStatusEnum.enumValues)[number], OutboxEventType>> = {
+    confirmed: 'order.confirmed',
+    shipped: 'order.shipped',
+};
+
 export interface OrderNotificationPayload {
     orderNumber: string;
     customerPhone?: string;
@@ -82,4 +109,82 @@ export async function emitOutboxEvent(
         eventType: event.eventType,
         payload: JSON.stringify(jsonSafe(event.payload)),
     });
+}
+
+/**
+ * Builds the payload the worker expects, or `undefined` when the event has no
+ * channel it could act on.
+ *
+ * Shared rather than duplicated: four producers now emit these events (admin
+ * order status, admin bulk status, the API status route, and the courier
+ * webhooks). Four copies of "which contact field does order.shipped require"
+ * would drift, and the one that drifted would send a WhatsApp message to an
+ * empty phone number.
+ *
+ * Takes a transaction handle, so the contact lookup sees the same snapshot as
+ * the status change that triggered it.
+ */
+export async function buildOrderNotification(
+    tx: Pick<DbTx, 'select' | 'rollback'>,
+    orgId: string,
+    order: { id: string; orderNumber: string; customerId: string | null },
+    eventType: OutboxEventType,
+): Promise<OrderNotificationPayload | undefined> {
+    // orders.customerId is nullable and is NOT a user id — it references
+    // customers.id, which is where the contact details live. An order placed
+    // before a customer record exists has nobody to notify.
+    const [contact] = order.customerId
+        ? await tx
+              .select({ name: customers.name, email: customers.email, phone: customers.phone })
+              .from(customers)
+              .where(and(eq(customers.id, order.customerId), eq(customers.orgId, orgId)))
+              .limit(1)
+        : [];
+
+    const phone = contact?.phone ?? undefined;
+    const email = contact?.email ?? undefined;
+
+    const reachable = eventType === 'order.shipped' ? Boolean(phone) : Boolean(phone || email);
+    if (!reachable) return undefined;
+
+    return {
+        orderNumber: order.orderNumber,
+        customerName: contact?.name ?? undefined,
+        customerPhone: phone,
+        customerEmail: email,
+        trackingUrl: eventType === 'order.shipped' ? await trackingUrlFor(tx, orgId, order.id) : undefined,
+    };
+}
+
+/** Latest waybill for the order rendered into the org's tracking URL template, or undefined. */
+async function trackingUrlFor(
+    tx: Pick<DbTx, 'select' | 'rollback'>,
+    orgId: string,
+    orderId: string,
+): Promise<string | undefined> {
+    const [tracked] = await tx
+        .select({ trackingNumber: shipmentTracking.trackingNumber })
+        .from(shipmentTracking)
+        .where(and(
+            eq(shipmentTracking.orderId, orderId),
+            eq(shipmentTracking.orgId, orgId),
+            // A shipment row is created before the waybill comes back from the
+            // courier, so the most recent row is not necessarily the one that
+            // has a number. Skip the ones that do not.
+            isNotNull(shipmentTracking.trackingNumber),
+        ))
+        .orderBy(desc(shipmentTracking.createdAt))
+        .limit(1);
+
+    if (!tracked?.trackingNumber) return undefined;
+
+    const [template] = await tx
+        .select({ value: orgSettings.value })
+        .from(orgSettings)
+        .where(and(eq(orgSettings.orgId, orgId), eq(orgSettings.key, TRACKING_URL_TEMPLATE_KEY)))
+        .limit(1);
+
+    if (!template?.value) return undefined;
+
+    return template.value.replace('{tracking}', tracked.trackingNumber);
 }

@@ -1,10 +1,21 @@
 import { parseDecimal } from '@irth/domain';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { db } from '../../db';
-import { courierShipments } from '@irth/db';
+import { db, getDb } from '../../db';
+import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { timingSafeEqual } from 'node:crypto';
+
+/**
+ * Courier states that mean "the parcel is moving" — the natural trigger for
+ * telling the customer their order shipped.
+ *
+ * `delivered` is NOT here. The worker has no branch for it, so an event would
+ * be polled, match nothing, and be marked processed having sent nothing —
+ * indistinguishable from a successful send on the Integrations screen.
+ * `returned` is not a customer notification either.
+ */
+const SHIPPED_STATUSES = new Set(['picked_up', 'in_transit']);
 
 export const bostaWebhookRoute = new Hono();
 
@@ -99,14 +110,62 @@ bostaWebhookRoute.post('/', async (c: Context) => {
     const updatedEvents = [...(existingShipment.webhookEvents || []), payload];
     const isDeliveredAndCod = state === 'DELIVERED' && cashOnDelivery > 0;
 
-    await db.update(courierShipments)
-      .set({
-        courierStatus,
-        codCollected: isDeliveredAndCod ? true : existingShipment.codCollected,
-        webhookEvents: updatedEvents,
-        updatedAt: new Date()
-      })
-      .where(eq(courierShipments.id, existingShipment.id));
+    // The tenant comes from the shipment row, not from a session: a webhook has
+    // no authenticated user. That is also why this uses withOrgContext directly
+    // rather than the request-scoped withOrg helper.
+    await withOrgContext(getDb(), existingShipment.orgId, async (tx) => {
+      await tx.update(courierShipments)
+        .set({
+          courierStatus,
+          codCollected: isDeliveredAndCod ? true : existingShipment.codCollected,
+          webhookEvents: updatedEvents,
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(courierShipments.id, existingShipment.id),
+          eq(courierShipments.orgId, existingShipment.orgId),
+        ));
+
+      // The courier telling us a parcel is moving is the natural order.shipped
+      // trigger, and PROJECT_MASTER_PLAN.md:368 specifies an outbox insert
+      // here. Nothing wrote one, so a parcel could be picked up, scanned across
+      // the country and delivered without the customer ever being told.
+      //
+      // Guarded on an actual TRANSITION into a shipped state. Couriers redeliver
+      // the same webhook and send several in-transit scans per parcel; without
+      // this every scan would re-send the WhatsApp message.
+      const becameShipped =
+        SHIPPED_STATUSES.has(courierStatus) &&
+        !SHIPPED_STATUSES.has(existingShipment.courierStatus ?? '');
+
+      if (becameShipped && existingShipment.orderId) {
+        const [order] = await tx
+          .select({
+            id: orders.id,
+            orderNumber: orders.orderNumber,
+            customerId: orders.customerId,
+          })
+          .from(orders)
+          .where(and(
+            eq(orders.id, existingShipment.orderId),
+            eq(orders.orgId, existingShipment.orgId),
+          ))
+          .limit(1);
+
+        if (order) {
+          const payload = await buildOrderNotification(
+            tx, existingShipment.orgId, order, 'order.shipped',
+          );
+          if (payload) {
+            await emitOutboxEvent(tx, {
+              orgId: existingShipment.orgId,
+              eventType: 'order.shipped',
+              payload,
+            });
+          }
+        }
+      }
+    });
   } else if (data.businessReference) {
     // Attempt to parse businessReference as order_id
     // Need to get orgId from somewhere, let's look up the order

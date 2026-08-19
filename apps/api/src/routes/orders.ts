@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, getDb, withOrg } from '../db';
-import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError } from '@irth/db';
+import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
@@ -257,19 +257,41 @@ ordersRoute.patch('/:id/status', async (c: Context) => {
     return c.json({ data: null, error: 'not_found', meta: null }, 404);
   }
 
-  const updatedOrder = await withOrg(c, (tx) => withAudit(tx, async () => {
-      const [res] = await tx.update(orders)
-        .set({ status, updatedAt: new Date() })
-        .where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)))
-        .returning();
-      return res;
-  }, {
-    orgId,
-    userId,
-    action: 'UPDATE_STATUS',
-    tableName: 'orders',
-    changes: { oldStatus: order.status, newStatus: status }
-  }));
+  const eventType = OUTBOX_EVENT_BY_STATUS[status];
+
+  const updatedOrder = await withOrg(c, async (tx) => {
+    const res = await withAudit(tx, async () => {
+        const [row] = await tx.update(orders)
+          .set({ status, updatedAt: new Date() })
+          .where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)))
+          .returning();
+        return row;
+    }, {
+      orgId,
+      userId,
+      action: 'UPDATE_STATUS',
+      tableName: 'orders',
+      changes: { oldStatus: order.status, newStatus: status }
+    });
+
+    // Same transaction as the status change, and only when the status actually
+    // moved. The UPDATE has no ne(status) clause, so re-sending the current
+    // status succeeds and returns a row — without this guard that would
+    // re-notify the customer on every call.
+    //
+    // This mirrors the admin router's updateStatus. Both paths write the same
+    // orders table, and only one of them emitting meant a customer heard about
+    // a confirmation made in the admin console but not the identical change
+    // made through the API.
+    if (eventType && order.status !== status) {
+      const payload = await buildOrderNotification(tx, orgId, res, eventType);
+      if (payload) {
+        await emitOutboxEvent(tx, { orgId, eventType, payload });
+      }
+    }
+
+    return res;
+  });
 
   if (status === 'delivered') {
       issueInvoice(updatedOrder).catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));

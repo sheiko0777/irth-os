@@ -81,3 +81,91 @@ describe('bulk router', () => {
     expect(res).toEqual({ data: [], error: null, meta: null });
   });
 });
+
+describe('bulkUpdateOrderStatus — outbox and count', () => {
+  const UUID2 = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22';
+
+  /** Update returns `changed`; the contact SELECT returns `contact`. */
+  function wire(changed: unknown[], contact: unknown[] = []) {
+    const updateChain = chainOf(changed);
+    mockDb.update = vi.fn(() => updateChain);
+    // First select is the contact lookup in buildOrderNotification; any later
+    // one (tracking URL / template) resolves empty, which is the unconfigured
+    // path and keeps trackingUrl absent.
+    mockDb.select = vi.fn(() => chainOf(contact));
+    const inserts: unknown[][] = [];
+    mockDb.insert = vi.fn(() => {
+      const c = chainOf([]);
+      c.values = vi.fn((v: unknown) => { inserts.push([v]); return c; });
+      return c;
+    });
+    return inserts;
+  }
+
+  it('reports the rows that actually changed, not the number of ids sent', async () => {
+    // ids.length was reported unconditionally, so ids belonging to another
+    // tenant, ids that do not exist, and orders already in the target status
+    // all counted as successful updates.
+    wire([{ id: UUID, orderNumber: 'IRT-2026-0001', customerId: null }]);
+
+    const res = await bulkRouter.createCaller(ctx('owner'))
+      .bulkUpdateOrderStatus({ ids: [UUID, UUID2], status: 'confirmed' });
+
+    expect(res.data).toEqual({ updated: 1 });
+  });
+
+  it('queues one outbox event per order that moved', async () => {
+    const inserts = wire(
+      [
+        { id: UUID, orderNumber: 'IRT-2026-0001', customerId: UUID },
+        { id: UUID2, orderNumber: 'IRT-2026-0002', customerId: UUID2 },
+      ],
+      [{ name: 'Amira', email: 'a@example.com', phone: '+201000000000' }],
+    );
+
+    await bulkRouter.createCaller(ctx('owner'))
+      .bulkUpdateOrderStatus({ ids: [UUID, UUID2], status: 'confirmed' });
+
+    const events = inserts.flat().filter(
+      (v): v is { eventType: string; payload: string } =>
+        typeof v === 'object' && v !== null && 'eventType' in v,
+    );
+    expect(events).toHaveLength(2);
+    expect(events.every((e) => e.eventType === 'order.confirmed')).toBe(true);
+    // Bulk-confirming a hundred orders used to notify nobody at all.
+    expect(JSON.parse(events[0].payload).orderNumber).toBe('IRT-2026-0001');
+  });
+
+  it('queues nothing for a status the worker cannot handle', async () => {
+    // The worker branches on order.confirmed and order.shipped only. An event
+    // for `delivered` would be polled, match nothing, and be marked processed
+    // having sent nothing — which reads as success on the Integrations screen.
+    const inserts = wire(
+      [{ id: UUID, orderNumber: 'IRT-2026-0001', customerId: UUID }],
+      [{ name: 'Amira', email: 'a@example.com', phone: '+201000000000' }],
+    );
+
+    await bulkRouter.createCaller(ctx('owner'))
+      .bulkUpdateOrderStatus({ ids: [UUID], status: 'delivered' });
+
+    const events = inserts.flat().filter(
+      (v) => typeof v === 'object' && v !== null && 'eventType' in (v as object),
+    );
+    expect(events).toHaveLength(0);
+  });
+
+  it('queues nothing when no row changed', async () => {
+    // The ne(status) guard means re-applying a status every order already has
+    // returns zero rows — so nobody is re-notified.
+    const inserts = wire([]);
+
+    const res = await bulkRouter.createCaller(ctx('owner'))
+      .bulkUpdateOrderStatus({ ids: [UUID], status: 'confirmed' });
+
+    expect(res.data).toEqual({ updated: 0 });
+    const events = inserts.flat().filter(
+      (v) => typeof v === 'object' && v !== null && 'eventType' in (v as object),
+    );
+    expect(events).toHaveLength(0);
+  });
+});
