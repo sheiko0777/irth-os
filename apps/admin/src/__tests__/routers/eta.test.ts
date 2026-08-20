@@ -51,16 +51,34 @@ describe('eta', () => {
     // Order lookup resolves empty; the router reports rather than throws.
     const res = await etaRouter.createCaller(ctx()).submit({ orderId: UUID });
     expect(res.data).toBeNull();
-    expect(res.error).toBe('Order not found');
+    expect(res.error).toBe('Order not found or has no items');
+  });
+
+  it('submit returns an error result when the order has no line items', async () => {
+    // buildEtaOrderInput's line-item SELECT resolves empty — a real order
+    // with an empty items array cannot be declared to ETA at all.
+    mockDb.select = vi.fn()
+      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderNumber: 'IRT-2026-0001', currency: 'EGP', customerId: null }]))
+      .mockImplementationOnce(() => chainOf([]));
+
+    const res = await etaRouter.createCaller(ctx()).submit({ orderId: UUID });
+
+    expect(res.data).toBeNull();
+    expect(res.error).toBe('Order not found or has no items');
   });
 
   it('submit does NOT re-issue an invoice that is already submitted', async () => {
     // This is the idempotency guard: an already-submitted invoice must return
     // early, before the ETA service call. Re-issuing files a duplicate tax
     // invoice with the government — not something a retry may cause.
+    //
+    // Sequenced to match buildEtaOrderInput's own call order: order, then its
+    // line items, then (customerId is null here, so no customer SELECT),
+    // then the router's own "already submitted?" check.
     const submitted = { id: UUID, orderId: UUID, orgId: 'org-1', status: 'submitted' };
     mockDb.select = vi.fn()
-      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', totalAmount: '100.00' }]))
+      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderNumber: 'IRT-2026-0001', currency: 'EGP', customerId: null }]))
+      .mockImplementationOnce(() => chainOf([{ quantity: 1, priceMinor: 10000n, productName: 'Widget', sku: 'SKU-1' }]))
       .mockImplementationOnce(() => chainOf([submitted]));
     const insertSpy = vi.fn(() => chainOf([]));
     mockDb.insert = insertSpy;

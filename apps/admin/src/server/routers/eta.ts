@@ -1,8 +1,79 @@
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure } from '../trpc';
-import { etaInvoices, orders } from '@irth/db';
+import { etaInvoices, orders, orderItems, productVariants, products, customers } from '@irth/db';
+import type { DbTx } from '@irth/db';
 import { eq, and, desc, isNull, or } from 'drizzle-orm';
-import { issueInvoice, getInvoiceStatus, cancelInvoice } from '../services/eta';
+import { issueInvoice, getInvoiceStatus, cancelInvoice, type EtaOrderInput } from '../services/eta';
+
+/**
+ * Assembles the real order/line/receiver data issueInvoice needs, from the
+ * order id alone. Lives here (not in services/eta.ts) because the service
+ * file is deliberately free of any `@irth/db` import — see its own comment on
+ * why it stays a pure fetch-and-arithmetic module.
+ *
+ * Returns `null` when the order has no items to declare — issueInvoice
+ * refuses that case too, but checking here avoids a wasted auth round trip.
+ */
+async function buildEtaOrderInput(
+    db: Pick<DbTx, 'select'>,
+    orgId: string,
+    orderId: string,
+): Promise<EtaOrderInput | null> {
+    const [order] = await db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.id, orderId), eq(orders.orgId, orgId)))
+        .limit(1);
+    if (!order) return null;
+
+    // Real invoice lines, not one synthetic "Order Items" row: each order_item
+    // becomes its own ETA line, priced at what was actually charged
+    // (order_items.price_minor), described with the real product name and
+    // SKU as the item code.
+    //
+    // itemCode uses the SKU because nothing in this schema stores a GS1/EGS/
+    // GPC-format ETA item code — the SKU is real and traceable to a specific
+    // product, which the previous hardcoded 'EG-1234567' was not, but it is
+    // NOT itself an ETA-conformant code. Flagged rather than silently assumed
+    // correct.
+    const lineRows = await db
+        .select({
+            quantity: orderItems.quantity,
+            priceMinor: orderItems.priceMinor,
+            productName: products.name,
+            sku: productVariants.sku,
+        })
+        .from(orderItems)
+        .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
+        .innerJoin(products, eq(productVariants.productId, products.id))
+        .where(eq(orderItems.orderId, orderId));
+
+    if (lineRows.length === 0) return null;
+
+    let customerName: string | null = null;
+    if (order.customerId) {
+        const [customer] = await db
+            .select({ name: customers.name })
+            .from(customers)
+            .where(and(eq(customers.id, order.customerId), eq(customers.orgId, orgId)))
+            .limit(1);
+        customerName = customer?.name ?? null;
+    }
+
+    return {
+        id: order.id,
+        orgId,
+        orderNumber: order.orderNumber,
+        currency: order.currency,
+        customerName,
+        items: lineRows.map((r) => ({
+            description: r.productName,
+            itemCode: r.sku,
+            quantity: r.quantity,
+            unitPriceMinor: r.priceMinor,
+        })),
+    };
+}
 
 export const etaRouter = router({
     list: protectedProcedure
@@ -22,12 +93,8 @@ export const etaRouter = router({
     submit: adminProcedure
         .input(z.object({ orderId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            const [order] = await ctx.db
-                .select()
-                .from(orders)
-                .where(and(eq(orders.id, input.orderId), eq(orders.orgId, ctx.orgId)))
-                .limit(1);
-            if (!order) return { data: null, error: 'Order not found', meta: null };
+            const etaInput = await buildEtaOrderInput(ctx.db, ctx.orgId, input.orderId);
+            if (!etaInput) return { data: null, error: 'Order not found or has no items', meta: null };
 
             const [existing] = await ctx.db
                 .select()
@@ -38,12 +105,11 @@ export const etaRouter = router({
                 return { data: existing, error: null, meta: null };
             }
 
-            const result = await issueInvoice({
-                id: order.id,
-                orgId: ctx.orgId,
-                totalAmountMinor: order.totalAmountMinor,
-                currency: order.currency,
-            });
+            // issueInvoice makes external HTTP calls (auth, submission). Kept
+            // OUTSIDE any transaction, same reasoning as ctx.withOrg everywhere
+            // else in this codebase: holding a pooled connection open across a
+            // call to a government API is how the pool gets exhausted.
+            const result = await issueInvoice(etaInput);
 
             if (!result) {
                 await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
@@ -121,24 +187,23 @@ export const etaRouter = router({
                 .limit(1);
             if (!invoice?.etaUuid) return { data: null, error: 'No ETA invoice found', meta: null };
 
-            const ok = await cancelInvoice(invoice.etaUuid, input.reason);
-            if (ok) {
+            // The window is read from ETA (Get Document Type), not hardcoded —
+            // see getCancellationWindowHours's own comment for the source and
+            // why an unknown window refuses rather than assumes "no limit".
+            const result = await cancelInvoice(invoice.etaUuid, input.reason, invoice.submittedAt);
+            if (result.ok) {
                 await ctx.withOrg(async (tx) => tx
                     .update(etaInvoices)
                     .set({ status: 'cancelled' })
                     .where(eq(etaInvoices.id, invoice.id)));
             }
-            return { data: { cancelled: ok }, error: ok ? null : 'Cancel failed', meta: null };
+            return { data: { cancelled: result.ok }, error: result.ok ? null : (result.error ?? 'Cancel failed'), meta: null };
         }),
 
     submitPending: adminProcedure
         .mutation(async ({ ctx }) => {
             const pendingOrders = await ctx.db
-                .select({
-                    id: orders.id,
-                    totalAmountMinor: orders.totalAmountMinor,
-                    currency: orders.currency,
-                })
+                .select({ id: orders.id })
                 .from(orders)
                 .leftJoin(etaInvoices, eq(etaInvoices.orderId, orders.id))
                 .where(and(
@@ -148,17 +213,15 @@ export const etaRouter = router({
                 .limit(20);
 
             let submitted = 0;
-            for (const order of pendingOrders) {
-                const result = await issueInvoice({
-                    id: order.id,
-                    orgId: ctx.orgId,
-                    totalAmountMinor: order.totalAmountMinor,
-                    currency: order.currency,
-                });
+            for (const { id: orderId } of pendingOrders) {
+                const etaInput = await buildEtaOrderInput(ctx.db, ctx.orgId, orderId);
+                if (!etaInput) continue;
+
+                const result = await issueInvoice(etaInput);
                 if (result) {
                     await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
                         orgId: ctx.orgId,
-                        orderId: order.id,
+                        orderId,
                         etaUuid: result.uuid,
                         longId: result.longId ?? null,
                         status: 'submitted',
