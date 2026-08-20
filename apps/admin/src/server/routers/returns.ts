@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit, nextDocumentNumber, formatDocumentNumber } from '@irth/db';
-import { fromMinor, parseDecimal } from '@irth/domain';
-import { eq, and, count, sum, sql, desc } from 'drizzle-orm';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, type JournalLineInput } from '@irth/db';
+import { EGP, EGYPT_VAT_BP, fromMinor, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
+import { eq, and, count, sum, sql, desc, ne } from 'drizzle-orm';
 
 export const returnsRouter = router({
   list: protectedProcedure
@@ -154,23 +154,98 @@ export const returnsRouter = router({
         resolvedAt = new Date();
       }
 
+      const refundAmountMinor =
+        input.refundAmount === undefined || input.refundAmount === null
+          ? null
+          : parseDecimal(input.refundAmount).minor;
+
       // The org check is the UPDATE's own WHERE, not a SELECT before it. The
       // separate existence read added nothing — the UPDATE already carried the
       // same predicate — while giving a concurrent delete a window to land
       // between the two, and costing a round trip on every call.
+      const setValues = {
+        status: input.status,
+        adminNotes: input.adminNotes,
+        refundAmountMinor,
+        resolvedAt: resolvedAt,
+      };
+
       const updated = await ctx.withOrg(async (tx) => {
-        const [row] = await tx.update(orderReturns)
-          .set({
-            status: input.status,
-            adminNotes: input.adminNotes,
-            refundAmountMinor:
-              input.refundAmount === undefined || input.refundAmount === null
-                ? null
-                : parseDecimal(input.refundAmount).minor,
-            resolvedAt: resolvedAt,
-          })
-          .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
-          .returning();
+        // Transitioning TO 'refunded' is attempted first WITH a guard against
+        // already being 'refunded' — the one status this procedure now has a
+        // side effect for (the ledger posting below). Without it, calling
+        // this twice on the same return would reverse the same sale twice.
+        let row;
+        let isGenuineTransition = true;
+        if (input.status === 'refunded') {
+          [row] = await tx.update(orderReturns)
+            .set(setValues)
+            .where(and(
+              eq(orderReturns.id, input.id),
+              eq(orderReturns.orgId, ctx.orgId),
+              ne(orderReturns.status, 'refunded'),
+            ))
+            .returning();
+
+          // The guard matched nothing for one of two reasons: the return does
+          // not exist, or it was already refunded. Only the SECOND case
+          // deserves a plain retry — the return's notes are still legitimately
+          // editable after it is refunded, just without re-posting to the
+          // ledger. A single unconditional retry, not a pre-read: it costs an
+          // extra round trip only on the (rare) already-refunded path, and
+          // resolves the ambiguity from the write's own result rather than
+          // from a stale read.
+          if (!row) {
+            isGenuineTransition = false;
+            [row] = await tx.update(orderReturns)
+              .set(setValues)
+              .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
+              .returning();
+          }
+        } else {
+          [row] = await tx.update(orderReturns)
+            .set(setValues)
+            .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
+            .returning();
+        }
+
+        if (!row) return null;
+
+        // Reverses the original sale's revenue and VAT. Only the revenue side
+        // — restocking (a SEPARATE mutation, `restock` below) is what returns
+        // the physical stock and reverses COGS/Inventory; this status change
+        // and that action are independent today, so a refund with no restock
+        // reverses revenue but not cost, and a restock with no refund status
+        // change reverses cost but not revenue. Documented rather than
+        // silently assumed to be linked.
+        //
+        // Modelled as a liability (Customer Refunds Payable) rather than a
+        // direct cash credit: nothing in this codebase tracks HOW a refund is
+        // actually paid out, so recognising the obligation without assuming a
+        // specific cash movement is the accurate entry — a future cash
+        // disbursement would debit this same liability to clear it.
+        if (isGenuineTransition && input.status === 'refunded' && refundAmountMinor !== null && refundAmountMinor > 0n) {
+          const gross = fromMinor(refundAmountMinor, EGP);
+          const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
+          const net = netOfTax(gross, EGYPT_VAT_BP);
+
+          const lines: JournalLineInput[] = [
+            { accountCode: ACCOUNT_CODES.SALES_RETURNS, debitMinor: net.minor },
+            { accountCode: ACCOUNT_CODES.VAT_PAYABLE, debitMinor: vat.minor, memo: 'Reduces VAT payable — the sale is unwinding' },
+            { accountCode: ACCOUNT_CODES.CUSTOMER_REFUNDS_PAYABLE, creditMinor: gross.minor },
+          ];
+
+          await postJournalEntry(tx, {
+            orgId: ctx.orgId,
+            journalType: 'sales',
+            description: `Return refunded — ${row.returnNumber}`,
+            sourceTable: 'order_returns',
+            sourceId: row.id,
+            createdBy: ctx.userId,
+            lines,
+          });
+        }
+
         return row;
       });
 

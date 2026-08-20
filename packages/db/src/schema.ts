@@ -119,6 +119,11 @@ export const orderItems = pgTable("order_items", {
   // No currency column: a line is denominated in its order's currency by
   // definition, and a second copy is a second thing that can disagree.
   priceMinor: bigint("price_minor", { mode: 'bigint' }).notNull(),
+  // Cost basis captured when stock was decremented for this line (0039). NULL
+  // means the item had no cost basis yet — unknown, not free; the
+  // order-delivered ledger posting reports the gap rather than treating it
+  // as zero COGS.
+  costMinor: bigint("cost_minor", { mode: 'bigint' }),
 });
 
 export const shipmentTracking = pgTable("shipment_tracking", {

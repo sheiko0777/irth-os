@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
-import { stocktakingSessions, stocktakingItems, inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
+import { stocktakingSessions, stocktakingItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { eq, and, desc, count, sql, ne, isNotNull } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
@@ -107,6 +107,12 @@ export const stocktakingRouter = router({
           let itemsApplied = 0;
           let netVariance = 0;
           let absVariance = 0;
+          // Signed value of the variance, in minor units: positive is a net
+          // overage (inventory is worth more than the books said), negative a
+          // net shortage. Only lines with a known average cost contribute —
+          // see varianceLinesUncosted below for how many did not.
+          let varianceValueMinor = 0n;
+          let varianceLinesUncosted = 0;
           const itemsSkipped: Array<{ sku: string; reason: string }> = [];
 
           for (const item of items) {
@@ -185,6 +191,21 @@ export const stocktakingRouter = router({
                 quantity: counted,
                 note: `Stocktake ${session.id}`,
               });
+
+              // Valued at the item's current average cost — the same figure
+              // costing.ts uses for everything else. NULL means this item has
+              // never been received with a known cost, so its variance has no
+              // value to attribute; counted separately below rather than
+              // silently treated as zero-value.
+              // `== null`, not `!== null`: catches `undefined` as well as
+              // `null` — a defensive habit worth keeping regardless of what
+              // the current SELECT happens to return, since `BigInt(x) *
+              // undefined` throws rather than producing a sensible value.
+              if (invItem.averageCostMinor == null) {
+                varianceLinesUncosted++;
+              } else {
+                varianceValueMinor += BigInt(variance) * invItem.averageCostMinor;
+              }
             }
 
             await tx
@@ -193,6 +214,38 @@ export const stocktakingRouter = router({
               .where(and(eq(stocktakingItems.id, item.id), eq(stocktakingItems.orgId, ctx.orgId)));
 
             itemsApplied++;
+          }
+
+          // One entry for the whole session's variance, not one per line —
+          // the individual movements already carry per-line detail via
+          // inventory_movements; the ledger records the net financial effect
+          // of completing this count. An overage debits Inventory (the asset
+          // is worth more than the books said) and credits the variance
+          // account as a gain; a shortage is the mirror image.
+          if (varianceValueMinor !== 0n) {
+            const memo = varianceLinesUncosted > 0
+              ? `${varianceLinesUncosted} line(s) had no known cost basis and are excluded from this figure`
+              : undefined;
+            const magnitude = varianceValueMinor > 0n ? varianceValueMinor : -varianceValueMinor;
+            const lines = varianceValueMinor > 0n
+              ? [
+                  { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: magnitude, memo },
+                  { accountCode: ACCOUNT_CODES.INVENTORY_VARIANCE, creditMinor: magnitude, memo },
+                ]
+              : [
+                  { accountCode: ACCOUNT_CODES.INVENTORY_VARIANCE, debitMinor: magnitude, memo },
+                  { accountCode: ACCOUNT_CODES.INVENTORY, creditMinor: magnitude, memo },
+                ];
+
+            await postJournalEntry(tx, {
+              orgId: ctx.orgId,
+              journalType: 'inventory',
+              description: `Stocktake variance — session ${session.id}`,
+              sourceTable: 'stocktaking_sessions',
+              sourceId: session.id,
+              createdBy: ctx.userId ?? null,
+              lines,
+            });
           }
 
           await withAudit(

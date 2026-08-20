@@ -299,3 +299,22 @@ export function min(a: Money, b: Money): Money {
 export function max(a: Money, b: Money): Money {
   return compare(a, b) >= 0 ? a : b;
 }
+
+/**
+ * The fundamental double-entry invariant: total debits equal total credits.
+ *
+ * Lives here rather than only in `packages/db/src/ledger.ts` (which duplicates
+ * this exact check inline — see that file's comment on why it cannot import
+ * this package) because it is genuinely a money invariant, not a database one,
+ * and belongs beside `allocate()`'s "the parts sum to the whole" guarantee as
+ * something worth property-testing on its own, independent of any schema.
+ */
+export function isBalanced(lines: readonly { debitMinor: bigint; creditMinor: bigint }[]): boolean {
+  let debit = 0n;
+  let credit = 0n;
+  for (const line of lines) {
+    debit += line.debitMinor;
+    credit += line.creditMinor;
+  }
+  return debit === credit;
+}

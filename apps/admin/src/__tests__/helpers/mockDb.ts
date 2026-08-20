@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 // Chainable query builder mock
 function chainable(finalValue: unknown = []) {
   const chain: Record<string, unknown> = {};
-  const methods = ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'leftJoin', 'innerJoin', 'groupBy', 'returning', 'values', 'set', 'onConflictDoUpdate'];
+  const methods = ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'leftJoin', 'innerJoin', 'groupBy', 'returning', 'values', 'set', 'onConflictDoUpdate', 'onConflictDoNothing', 'for'];
   methods.forEach((m) => {
     chain[m] = vi.fn(() => chain);
   });

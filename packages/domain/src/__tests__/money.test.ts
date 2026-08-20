@@ -9,6 +9,7 @@ import {
   currency,
   divideRoundHalfEven,
   fromMinor,
+  isBalanced,
   multiply,
   netOfTax,
   parseDecimal,
@@ -318,5 +319,66 @@ describe('the defects this replaces', () => {
     let unclamped = 0;
     for (let i = 0; i < 1000; i += 1) unclamped += 0.07;
     expect(unclamped).not.toBe(70);
+  });
+});
+
+describe('isBalanced', () => {
+  // Deliberately not `amount` from the top of the file — bigInt().map(fromMinor)
+  // would need to be split back into two nonnegative halves, which is
+  // awkward. A single positive amount, split into a debit line and a matching
+  // credit line, is the shape an actual journal entry line pair takes.
+  const positiveAmount = fc.bigInt({ min: 0n, max: 9_000_000_000_000n });
+
+  it('accepts any entry built from equal debit/credit pairs — trial balance nets zero over thousands of randomised entries', () => {
+    fc.assert(
+      fc.property(
+        fc.array(positiveAmount, { minLength: 1, maxLength: 40 }),
+        (amounts) => {
+          // Each amount becomes ONE balanced pair: a debit line on one
+          // account, a matching credit line on another — exactly the shape
+          // postJournalEntry builds, and exactly what "an entry can only be
+          // balanced by construction" means.
+          const lines = amounts.map((minor) => ({ debitMinor: minor, creditMinor: 0n }))
+            .concat(amounts.map((minor) => ({ debitMinor: 0n, creditMinor: minor })));
+          expect(isBalanced(lines)).toBe(true);
+        },
+      ),
+      { numRuns: 10_000 },
+    );
+  });
+
+  it('rejects an entry perturbed by as little as one minor unit', () => {
+    fc.assert(
+      fc.property(
+        fc.array(positiveAmount, { minLength: 1, maxLength: 40 }),
+        fc.integer({ min: 0, max: 39 }),
+        (amounts, perturbIndex) => {
+          const lines = amounts.map((minor) => ({ debitMinor: minor, creditMinor: 0n }))
+            .concat(amounts.map((minor) => ({ debitMinor: 0n, creditMinor: minor })));
+          const i = perturbIndex % lines.length;
+          const perturbed = lines.map((l, idx) =>
+            idx === i ? { ...l, debitMinor: l.debitMinor + 1n } : l);
+          expect(isBalanced(perturbed)).toBe(false);
+        },
+      ),
+      { numRuns: 2_000 },
+    );
+  });
+
+  it('treats no lines as balanced (vacuously — postJournalEntry rejects an empty entry separately)', () => {
+    expect(isBalanced([])).toBe(true);
+  });
+
+  it('is what a real three-line entry (revenue + VAT split from a gross amount) satisfies', () => {
+    // The exact shape order.delivered posts: gross debited to receivable,
+    // split into net revenue + VAT on the credit side.
+    const gross = parseDecimal('1140.00');
+    const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
+    const net = netOfTax(gross, EGYPT_VAT_BP);
+    expect(isBalanced([
+      { debitMinor: gross.minor, creditMinor: 0n },
+      { debitMinor: 0n, creditMinor: net.minor },
+      { debitMinor: 0n, creditMinor: vat.minor },
+    ])).toBe(true);
   });
 });

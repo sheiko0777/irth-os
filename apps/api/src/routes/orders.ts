@@ -129,6 +129,15 @@ ordersRoute.post('/', async (c: Context) => {
         // Zero rows updated means either no inventory record or not enough on
         // hand; both are a refusal, and throwing rolls back the number and the
         // order with it.
+        // Cost basis per LINE (not per variant — the same variant can appear
+        // as two separate lines with different quantities, and a variantId
+        // keyed map would let the second overwrite the first's cost).
+        // Captured at the moment stock leaves, see 0039. Merged onto
+        // order_items by index below, so finance's order-delivered posting
+        // can SUM it directly instead of reconstructing it later from
+        // movements.
+        const lineCostsMinor: (bigint | null)[] = [];
+
         for (const item of itemsToInsert) {
           const updated = await tx
             .update(inventoryItems)
@@ -141,11 +150,20 @@ ordersRoute.post('/', async (c: Context) => {
               eq(inventoryItems.variantId, item.variantId),
               sql`${inventoryItems.quantity} >= ${item.quantity}`,
             ))
-            .returning({ id: inventoryItems.id, quantity: inventoryItems.quantity });
+            .returning({ id: inventoryItems.id, quantity: inventoryItems.quantity, averageCostMinor: inventoryItems.averageCostMinor });
 
           if (updated.length === 0) {
             throw new InsufficientStockError(item.variantId);
           }
+
+          // The average is unaffected by an OUTGOING movement — only receipts
+          // move it (packages/db/src/costing.ts) — so the item's current
+          // average IS this line's cost basis. NULL means nothing has ever
+          // been received into this item with a known cost: the line's COGS
+          // is genuinely unknown, not free, and stays NULL rather than 0.
+          const avg = updated[0].averageCostMinor;
+          const lineCostMinor = avg == null ? null : avg * BigInt(item.quantity);
+          lineCostsMinor.push(lineCostMinor);
 
           // Ledger row, matching inventory.adjust and returns.restock: a stock
           // change absent from the movements table is invisible to any audit
@@ -155,6 +173,7 @@ ordersRoute.post('/', async (c: Context) => {
             itemId: updated[0].id,
             type: 'out',
             quantity: item.quantity,
+            costMinor: lineCostMinor,
             note: `Order ${orderNumber}`,
           });
         }
@@ -177,7 +196,15 @@ ordersRoute.post('/', async (c: Context) => {
 
           if (itemsToInsert.length > 0) {
             await tx.insert(orderItems).values(
-              itemsToInsert.map((item) => ({ ...item, orderId: insertedOrder.id })),
+              itemsToInsert.map((item, i) => ({
+                ...item,
+                orderId: insertedOrder.id,
+                // Index-aligned with the stock-decrement loop above, which
+                // built lineCostsMinor in the same order it iterated
+                // itemsToInsert — not looked up by variantId, since a variant
+                // can appear as two separate lines with different quantities.
+                costMinor: lineCostsMinor[i] ?? null,
+              })),
             );
           }
 

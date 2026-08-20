@@ -1,7 +1,7 @@
 import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber } from '@irth/db';
+import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { parseDecimal } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
 
@@ -381,6 +381,12 @@ export const purchasingRouter = router({
 
         const result = await ctx.withOrg(async (tx) => {
             let fullyReceived = true;
+            // Total cost of everything costed in this call, across every line —
+            // what the goods-received ledger posting debits to Inventory. Stays
+            // 0n (and posts nothing) when no line had a known unit cost, rather
+            // than silently valuing free stock at zero and posting a fictitious
+            // liability.
+            let totalReceivedCostMinor = 0n;
 
             for (const itemInput of input.items) {
                 // One statement does the lot: the "line belongs to this PO and
@@ -425,6 +431,42 @@ export const purchasingRouter = router({
                         // Find inventory item
                         const [invItem] = await tx.select().from(inventoryItems).where(and(eq(inventoryItems.variantId, variant.id), eq(inventoryItems.orgId, ctx.orgId))).limit(1);
                         if (invItem) {
+                            // recordCostedReceipt MUST run before the quantity
+                            // increment below, not after: it reads
+                            // inventory_items.quantity to compute the weighted
+                            // average, and that read has to see the count as it
+                            // stood BEFORE this receipt. Reversing the order would
+                            // have it average against a total that already
+                            // includes the units being priced, understating the
+                            // new average every time.
+                            //
+                            // unitCostMinor is nullable — a PO line entered with no
+                            // cost has no basis to average against. Recording it as
+                            // zero would drag the item's weighted average toward
+                            // zero, valuing every unit already held as if this batch
+                            // arrived free. Skip the cost update and fall back to a
+                            // plain (uncosted) movement, matching what this line did
+                            // before costing existed at all.
+                            if (poItem.unitCostMinor != null) {
+                                const lineCostMinor = poItem.unitCostMinor * BigInt(itemInput.receivedQuantity);
+                                await recordCostedReceipt(tx, {
+                                    orgId: ctx.orgId,
+                                    itemId: invItem.id,
+                                    quantity: itemInput.receivedQuantity,
+                                    totalCostMinor: lineCostMinor,
+                                    note: `PO ${po.poNumber} receipt`,
+                                });
+                                totalReceivedCostMinor += lineCostMinor;
+                            } else {
+                                await tx.insert(inventoryMovements).values({
+                                    orgId: ctx.orgId,
+                                    itemId: invItem.id,
+                                    type: 'in',
+                                    quantity: itemInput.receivedQuantity,
+                                    note: `PO ${po.poNumber} receipt`,
+                                });
+                            }
+
                             // Increment in SQL — reading the quantity and writing back an
                             // absolute value loses concurrent receipts.
                             await tx.update(inventoryItems)
@@ -436,14 +478,6 @@ export const purchasingRouter = router({
                                   eq(inventoryItems.id, invItem.id),
                                   eq(inventoryItems.orgId, ctx.orgId),
                                 ));
-
-                            await tx.insert(inventoryMovements).values({
-                                orgId: ctx.orgId,
-                                itemId: invItem.id,
-                                type: 'in',
-                                quantity: itemInput.receivedQuantity,
-                                note: `PO ${po.poNumber} receipt`,
-                            });
                         }
                     }
                 }
@@ -460,6 +494,27 @@ export const purchasingRouter = router({
                 .returning();
 
             if (!updatedPo) throw new TRPCError({ code: 'NOT_FOUND' });
+
+            // Goods received: inventory (an asset) increases, accounts payable
+            // (what is owed the supplier) increases by the same figure. Posted
+            // only when at least one line had a known cost — a call that only
+            // received uncosted lines (or received nothing this time) has
+            // nothing to post, and posting a zero/zero entry would be a journal
+            // entry that documents no event.
+            if (totalReceivedCostMinor > 0n) {
+                await postJournalEntry(tx, {
+                    orgId: ctx.orgId,
+                    journalType: 'purchases',
+                    description: `Goods received — PO ${po.poNumber}`,
+                    sourceTable: 'purchase_orders',
+                    sourceId: po.id,
+                    createdBy: ctx.userId,
+                    lines: [
+                        { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: totalReceivedCostMinor },
+                        { accountCode: ACCOUNT_CODES.ACCOUNTS_PAYABLE, creditMinor: totalReceivedCostMinor },
+                    ],
+                });
+            }
 
             await withAudit(
               tx,

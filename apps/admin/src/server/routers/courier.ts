@@ -1,6 +1,6 @@
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
-import { courierShipments, courierRemittances, withAudit } from '@irth/db';
+import { courierShipments, courierRemittances, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { fromMinor, parseDecimal } from '@irth/domain';
 import { eq, and, ne, sql, sum, inArray, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -180,6 +180,27 @@ export const courierRouter = router({
               eq(courierShipments.remittanceId, remittance.remittanceReference),
               eq(courierShipments.orgId, ctx.orgId)
             ));
+
+          // The courier has now actually handed over the cash it collected on
+          // delivery: clears the receivable that order.delivered opened
+          // (1030) into cash the business actually holds. Posted only for a
+          // nonzero amount — the guarded UPDATE above already rejects a
+          // second reconciliation of the same remittance, so this only ever
+          // runs once per remittance.
+          if (remittance.amountMinor > 0n) {
+            await postJournalEntry(tx, {
+              orgId: ctx.orgId,
+              journalType: 'cash',
+              description: `COD remitted — ${remittance.remittanceReference}`,
+              sourceTable: 'courier_remittances',
+              sourceId: remittance.id,
+              createdBy: ctx.userId,
+              lines: [
+                { accountCode: ACCOUNT_CODES.BANK, debitMinor: remittance.amountMinor },
+                { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, creditMinor: remittance.amountMinor },
+              ],
+            });
+          }
 
           // Inside the transaction, so the audit row lands with the change it
           // describes or not at all.

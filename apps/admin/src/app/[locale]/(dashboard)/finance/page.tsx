@@ -65,6 +65,32 @@ export default async function FinancePage() {
                         value={pnl.cancelledOrders.toLocaleString('ar-EG')}
                     />
                 </div>
+
+                {/* The breakdown that makes this an actual P&L rather than a sales
+                    total: everything below comes from the double-entry ledger
+                    (packages/db/src/ledger.ts), not from summing order rows. */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <KpiCard
+                        id="fin-cogs"
+                        title="تكلفة البضاعة المباعة"
+                        value={formatMoney(pnl.cogs)}
+                    />
+                    <KpiCard
+                        id="fin-gross-profit"
+                        title="مجمل الربح"
+                        value={formatMoney(pnl.grossProfit)}
+                    />
+                    <KpiCard
+                        id="fin-returns"
+                        title="مرتجعات ومسموحات"
+                        value={formatMoney(pnl.returns)}
+                    />
+                    <KpiCard
+                        id="fin-net-income"
+                        title="صافي الدخل"
+                        value={formatMoney(pnl.netIncome)}
+                    />
+                </div>
             </section>
 
             {/* VAT Report */}

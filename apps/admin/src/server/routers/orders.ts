@@ -3,8 +3,9 @@ import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum,
 import { eq, and, desc, sql, count, ilike, gte, lte, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { withAudit, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS } from '@irth/db';
+import { withAudit, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postJournalEntry, ACCOUNT_CODES, type JournalLineInput } from '@irth/db';
 import type { DbTx, OutboxEventType, OrderNotificationPayload } from '@irth/db';
+import { EGYPT_VAT_BP, currency, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
 
 const statusEnum = z.enum(orderStatusEnum.enumValues);
 
@@ -226,6 +227,65 @@ export const ordersRouter = router({
                     if (payload) {
                         await emitOutboxEvent(tx, { orgId: ctx.orgId, eventType, payload });
                     }
+                }
+
+                // Revenue and COGS, recognised together at the point the sale
+                // becomes final. Same transition guard as the outbox event
+                // above and for the same reason: the UPDATE has no
+                // ne(status, input.status) clause, so re-saving an
+                // already-delivered order must not double-book revenue.
+                // `order.totalAmountMinor > 0n` checked BEFORE touching
+                // currency() at all: a zero-total order (fully discounted, or
+                // a data anomaly) has nothing to recognise, and there is no
+                // reason to validate/parse a currency code for a posting that
+                // is about to be skipped anyway. Posting a zero-total entry
+                // would also build a line that is neither a debit nor a
+                // credit, which postJournalEntry correctly refuses — this
+                // guard exists on its own merits, independent of that.
+                if (input.status === 'delivered' && order.status !== 'delivered' && order.totalAmountMinor > 0n) {
+                    const gross = fromMinor(order.totalAmountMinor, currency(order.currency));
+                    const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
+                    const net = netOfTax(gross, EGYPT_VAT_BP);
+
+                    const lines: JournalLineInput[] = [
+                        { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, debitMinor: gross.minor, memo: 'Gross, VAT-inclusive' },
+                        { accountCode: ACCOUNT_CODES.SALES_REVENUE, creditMinor: net.minor },
+                        { accountCode: ACCOUNT_CODES.VAT_PAYABLE, creditMinor: vat.minor },
+                    ];
+
+                    // COGS rides in the same entry when a cost basis is
+                    // known. `costMinor` is populated at order CREATION
+                    // (apps/api/src/routes/orders.ts, 0039) from the
+                    // variant's weighted-average cost at that moment — NULL
+                    // means unknown, not free, and unknown lines are
+                    // excluded rather than treated as zero cost.
+                    const costRows = await tx
+                        .select({ costMinor: orderItems.costMinor })
+                        .from(orderItems)
+                        .where(eq(orderItems.orderId, order.id));
+                    const knownCostRows = costRows.filter((r) => r.costMinor != null);
+                    const totalCostMinor = knownCostRows.reduce((acc, r) => acc + (r.costMinor as bigint), 0n);
+
+                    if (totalCostMinor > 0n) {
+                        const gap = costRows.length - knownCostRows.length;
+                        const memo = gap > 0
+                            ? `${gap} of ${costRows.length} line(s) had no known cost basis and are excluded`
+                            : undefined;
+                        lines.push(
+                            { accountCode: ACCOUNT_CODES.COGS, debitMinor: totalCostMinor, memo },
+                            { accountCode: ACCOUNT_CODES.INVENTORY, creditMinor: totalCostMinor, memo },
+                        );
+                    }
+
+                    await postJournalEntry(tx, {
+                        orgId: ctx.orgId,
+                        journalType: 'sales',
+                        description: `Order delivered — ${order.orderNumber}`,
+                        sourceTable: 'orders',
+                        sourceId: order.id,
+                        createdBy: ctx.userId,
+                        lines,
+                    });
                 }
 
                 return updated;

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
-import { giftCards, giftCardTransactions, withAudit } from '@irth/db';
+import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { eq, and, desc, sql, ne } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { currency, fromMinor, parseDecimal } from '@irth/domain';
@@ -100,6 +100,33 @@ export const giftCardsRouter = router({
           notes: 'بطاقة هدية جديدة',
         });
 
+        // A gift card is a liability the moment it exists: money (or its
+        // promise) has been received against a future obligation to deliver
+        // goods. Posted only when the amount is nonzero — a zero-value card,
+        // if one is ever created, is not a transaction to record.
+        //
+        // ASSUMPTION, stated rather than silently baked in: this treats the
+        // card as SOLD for cash equal to its face value. Nothing in this
+        // schema distinguishes a purchased card from a promotional/free one —
+        // there is no payment-method or "amount actually paid" field on this
+        // mutation — so a free issuance would currently post as if cash had
+        // been received for it. When that distinction is needed, `create`
+        // needs a field for it before this posting can be conditioned on it.
+        if (initialAmountMinor > 0n) {
+          await postJournalEntry(tx, {
+            orgId: ctx.orgId,
+            journalType: 'general',
+            description: `Gift card issued — ${code}`,
+            sourceTable: 'gift_cards',
+            sourceId: issued.id,
+            createdBy: ctx.userId,
+            lines: [
+              { accountCode: ACCOUNT_CODES.BANK, debitMinor: initialAmountMinor },
+              { accountCode: ACCOUNT_CODES.GIFT_CARD_LIABILITY, creditMinor: initialAmountMinor },
+            ],
+          });
+        }
+
         return issued;
       });
 
@@ -179,6 +206,111 @@ export const giftCardsRouter = router({
       // same BAD_REQUEST the pre-read used to raise.
       if (!updated) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'البطاقة ملغاة' });
+      }
+
+      return { data: updated, error: null };
+    })),
+
+  // The missing mutation: gift_card_status already carried 'redeemed' and
+  // gift_card_tx_type already carried 'redeem' (both from the schema this
+  // table shipped with), but nothing ever transitioned a card into either —
+  // a card could be issued, topped up and cancelled, never actually spent.
+  redeem: adminProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      amount: moneyInput,
+      // The order this redemption paid for, if any — stored on the ledger-of-
+      // usage row (giftCardTransactions.orderId) for traceability. Optional:
+      // a card can be redeemed as a standalone credit with nothing else on
+      // this schema recording which order it went toward.
+      orderId: z.string().uuid().optional(),
+      idempotencyKey: z.string().min(1).max(255).optional(),
+    }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.idempotent('giftCards.redeem', input.idempotencyKey, input, async () => {
+      const [card] = await ctx.db
+        .select()
+        .from(giftCards)
+        .where(and(eq(giftCards.id, input.id), eq(giftCards.orgId, ctx.orgId)));
+
+      if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: 'البطاقة غير موجودة' });
+
+      // The SELECT stays for the same reason topup's does: the amount cannot
+      // be parsed until the card's own currency is known. Its `status` and
+      // `balanceMinor` are NOT trusted from it — both are re-asserted in the
+      // UPDATE's WHERE below, so a concurrent redemption or cancellation
+      // cannot land between this read and the write.
+      const amountMinor = parseDecimal(String(input.amount), currency(card.currency)).minor;
+      if (amountMinor <= 0n) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'قيمة غير صالحة' });
+      }
+
+      const updated = await ctx.withOrg(async (tx) => {
+        const [row] = await tx
+          .update(giftCards)
+          .set({
+            balanceMinor: sql`${giftCards.balanceMinor} - ${amountMinor}`,
+            // A card is 'redeemed' only once fully spent — the CHECK on
+            // balance_minor >= 0 (0028) is what actually stops it going
+            // negative; this predicate is what stops a PARTIAL redemption
+            // from being accepted as if it were the full balance.
+            status: sql`CASE WHEN ${giftCards.balanceMinor} - ${amountMinor} = 0 THEN 'redeemed' ELSE ${giftCards.status} END`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(giftCards.id, input.id),
+            eq(giftCards.orgId, ctx.orgId),
+            eq(giftCards.status, 'active'),
+            sql`${giftCards.balanceMinor} >= ${amountMinor}`,
+          ))
+          .returning();
+
+        // Nothing matched: either the card is not active (cancelled, expired,
+        // already fully redeemed) or the balance will not cover this amount.
+        // Bail before the ledger line — a redemption that did not actually
+        // debit the card must not credit revenue for it.
+        if (!row) return null;
+
+        await tx.insert(giftCardTransactions).values({
+          giftCardId: input.id,
+          orgId: ctx.orgId,
+          amountMinor,
+          txType: 'redeem',
+          orderId: input.orderId ?? null,
+        });
+
+        // The card was used to pay for goods/services: the deferred revenue
+        // recognised at issuance becomes real revenue now.
+        await postJournalEntry(tx, {
+          orgId: ctx.orgId,
+          journalType: 'general',
+          description: `Gift card redeemed — ${card.code}`,
+          sourceTable: 'gift_cards',
+          sourceId: input.id,
+          createdBy: ctx.userId,
+          lines: [
+            { accountCode: ACCOUNT_CODES.GIFT_CARD_LIABILITY, debitMinor: amountMinor },
+            { accountCode: ACCOUNT_CODES.SALES_REVENUE, creditMinor: amountMinor },
+          ],
+        });
+
+        await withAudit(
+          tx,
+          async () => ({ id: input.id }),
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'REDEEM_GIFT_CARD',
+            tableName: 'gift_cards',
+            changes: { giftCardId: input.id, amountMinor, orderId: input.orderId ?? null },
+          }
+        );
+
+        return row;
+      });
+
+      if (!updated) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'رصيد غير كافٍ أو البطاقة غير نشطة' });
       }
 
       return { data: updated, error: null };
