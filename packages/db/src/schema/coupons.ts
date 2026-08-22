@@ -8,6 +8,7 @@ import {
     uniqueIndex,
     index,
     numeric,
+    bigint,
 } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
@@ -20,8 +21,13 @@ export const coupons = pgTable(
             .references(() => organizations.id, { onDelete: 'cascade' }),
         code: text('code').notNull(),
         type: text('type').notNull().$type<'percentage' | 'fixed' | 'free_shipping'>(),
+        // `value` is polymorphic — a percentage (0-100) when type='percentage',
+        // an EGP amount when type='fixed' — so it stays a plain decimal rather
+        // than joining the minor-units migration; application code branches on
+        // `type` before deciding whether to treat it as money at all.
         value: numeric('value', { precision: 10, scale: 2 }).notNull().default('0'),
         minOrderAmount: numeric('min_order_amount', { precision: 12, scale: 2 }),
+        minOrderAmountMinor: bigint('min_order_amount_minor', { mode: 'number' }),
         maxUses: integer('max_uses'),
         usedCount: integer('used_count').notNull().default(0),
         expiresAt: timestamp('expires_at'),

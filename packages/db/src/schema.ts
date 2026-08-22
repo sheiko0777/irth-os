@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, varchar, text, jsonb, decimal, boolean, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, varchar, text, jsonb, decimal, boolean, integer, bigint, pgEnum } from "drizzle-orm/pg-core";
 
 export const brandEnum = pgEnum('brand', ['irth']);
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
@@ -57,6 +57,11 @@ export const products = pgTable('products', {
   description: text('description'),
   descriptionAr: text('description_ar'),
   price: decimal('price', { precision: 12, scale: 2 }).notNull(),
+  // Authoritative money representation: integer minor units (piastres for
+  // EGP), never a float. `price` (decimal) is kept in sync for legacy
+  // readers during the migration; new code should read/write `priceMinor`
+  // via @irth/utils' money helpers. See packages/db/drizzle/0028_*.sql.
+  priceMinor: bigint('price_minor', { mode: 'number' }).notNull().default(0),
   currency: text('currency').notNull().default('USD'),
   stock: integer('stock').notNull().default(0),
   status: text('status').notNull().default('active'), // 'active' | 'draft' | 'archived'
@@ -72,6 +77,7 @@ export const productVariants = pgTable('product_variants', {
   name: text('name').notNull(),
   sku: text('sku').notNull().unique(),
   price: decimal('price', { precision: 12, scale: 2 }),
+  priceMinor: bigint('price_minor', { mode: 'number' }),
   stock: integer('stock').notNull().default(0),
   attributes: jsonb('attributes').default({}),
   createdAt: timestamp('created_at').defaultNow(),
@@ -82,6 +88,7 @@ export const orders = pgTable("orders", {
   orderNumber: varchar("order_number", { length: 50 }).notNull().unique(), // IRT-2026-0001
   status: orderStatusEnum("status").notNull().default('pending'),
   totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(),
+  totalAmountMinor: bigint("total_amount_minor", { mode: 'number' }).notNull().default(0),
   customerId: uuid("customer_id"), // Ref to auth users eventually
 });
 
@@ -91,6 +98,7 @@ export const orderItems = pgTable("order_items", {
   variantId: uuid("variant_id").references(() => productVariants.id).notNull(),
   quantity: integer("quantity").notNull(),
   price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+  priceMinor: bigint("price_minor", { mode: 'number' }).notNull().default(0),
 });
 
 export const shipmentTracking = pgTable("shipment_tracking", {

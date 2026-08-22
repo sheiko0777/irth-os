@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, text, numeric, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, text, numeric, bigint, integer } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
 export const suppliers = pgTable('suppliers', {
@@ -21,6 +21,7 @@ export const purchaseOrders = pgTable('purchase_orders', {
   status: text('status').notNull().default('draft'), // draft, ordered, partial, received, cancelled
   notes: text('notes'),
   totalAmount: numeric('total_amount', { precision: 12, scale: 2 }),
+  totalAmountMinor: bigint('total_amount_minor', { mode: 'number' }),
   orderedAt: timestamp('ordered_at'),
   receivedAt: timestamp('received_at'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -35,5 +36,6 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   sku: text('sku'),
   quantity: integer('quantity').notNull().default(1),
   unitCost: numeric('unit_cost', { precision: 12, scale: 2 }),
+  unitCostMinor: bigint('unit_cost_minor', { mode: 'number' }),
   receivedQuantity: integer('received_quantity').default(0),
 });

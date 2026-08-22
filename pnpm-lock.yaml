@@ -196,6 +196,9 @@ importers:
       '@irth/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@irth/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       '@trpc/client':
         specifier: ^11.0.0-rc.0
         version: 11.17.0(@trpc/server@11.17.0(typescript@5.9.3))(typescript@5.9.3)
@@ -337,10 +340,17 @@ importers:
         version: 5.9.3
 
   packages/utils:
+    dependencies:
+      dinero.js:
+        specifier: ^2.0.2
+        version: 2.0.2
     devDependencies:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.8.0)(lightningcss@1.32.0)(terser@5.47.1)
 
 packages:
 
@@ -2025,7 +2035,7 @@ packages:
 
   '@expo/bunyan@4.0.1':
     resolution: {integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==}
-    engines: {node: '>=0.10.0'}
+    engines: {'0': node >=0.10.0}
 
   '@expo/cli@0.22.28':
     resolution: {integrity: sha512-lvt72KNitGuixYD2l3SZmRKVu2G4zJpmg5V7WfUBNpmUU5oODBw/6qmiJ6kSLAlfDozscUk+BBGknBBzxUrwrA==}
@@ -4713,6 +4723,10 @@ packages:
   detect-node-es@1.1.0:
     resolution: {integrity: sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ==}
 
+  dinero.js@2.0.2:
+    resolution: {integrity: sha512-d+4egJTvNinkb66KSed11Daqz6MWaOHzyalLu6h3p+BLrsmwKFjHjvOKivOWeM7WyoX89te+xx4cKI6zrDtCfQ==}
+    engines: {node: '>=20.0.0'}
+
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
@@ -5067,6 +5081,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -12359,6 +12374,8 @@ snapshots:
   detect-libc@2.1.2: {}
 
   detect-node-es@1.1.0: {}
+
+  dinero.js@2.0.2: {}
 
   dir-glob@3.0.1:
     dependencies:

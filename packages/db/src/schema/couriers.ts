@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, decimal, boolean, timestamp, jsonb, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, decimal, bigint, boolean, timestamp, jsonb, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { organizations, orders } from '../schema';
 
 export const courierShipments = pgTable('courier_shipments', {
@@ -9,6 +9,7 @@ export const courierShipments = pgTable('courier_shipments', {
     trackingNumber: text('tracking_number'),
     courierStatus: text('courier_status').notNull().default('created'), // created/picked_up/in_transit/delivered/returned/failed
     codAmount: decimal('cod_amount', { precision: 12, scale: 2 }),
+    codAmountMinor: bigint('cod_amount_minor', { mode: 'number' }),
     codCollected: boolean('cod_collected').notNull().default(false),
     codRemitted: boolean('cod_remitted').notNull().default(false),
     remittanceId: text('remittance_id'),
@@ -29,6 +30,7 @@ export const courierRemittances = pgTable('courier_remittances', {
     courier: text('courier').notNull(),
     remittanceReference: text('remittance_reference').notNull(),
     amount: decimal('amount', { precision: 12, scale: 2 }).notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull().default(0),
     shipmentCount: integer('shipment_count').notNull().default(0),
     status: text('status').notNull().default('pending'), // pending/received/reconciled
     expectedDate: timestamp('expected_date'),

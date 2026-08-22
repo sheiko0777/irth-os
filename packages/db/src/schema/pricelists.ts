@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, text, decimal, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, text, decimal, bigint, boolean } from "drizzle-orm/pg-core";
 
 export const priceLists = pgTable("price_lists", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -22,5 +22,6 @@ export const priceListItems = pgTable("price_list_items", {
   productId: uuid("product_id").notNull(),
   variantId: uuid("variant_id"),
   price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+  priceMinor: bigint("price_minor", { mode: 'number' }).notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

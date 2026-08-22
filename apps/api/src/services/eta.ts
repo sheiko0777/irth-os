@@ -31,7 +31,7 @@ async function getAuthToken(): Promise<string> {
     return data.access_token;
 }
 
-export const issueInvoice = async (order: { id: string; orgId: string; totalAmount: string }): Promise<EtaResult> => {
+export const issueInvoice = async (order: { id: string; orgId: string; totalAmountMinor: number }): Promise<EtaResult> => {
     const issuerEin = process.env.ETA_ISSUER_EIN;
     if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET || !issuerEin) {
         console.warn('ETA credentials not fully configured. Skipping invoice issuance.');
@@ -40,8 +40,13 @@ export const issueInvoice = async (order: { id: string; orgId: string; totalAmou
 
     try {
         const token = await getAuthToken();
-        const amount = Number(order.totalAmount);
-        const vatAmount = amount * 0.14;
+        // Integer minor-unit math throughout — `amount * 0.14` here would be
+        // the exact float-rounding bug this whole invoice exists to avoid.
+        // Convert to decimal EGP only once, at the boundary with the ETA
+        // JSON payload, which is documented in decimal.
+        const vatMinor = Math.floor((order.totalAmountMinor * 14) / 100);
+        const amount = order.totalAmountMinor / 100;
+        const vatAmount = vatMinor / 100;
 
         const doc = {
             issuer: { type: 'B', id: issuerEin, name: 'IRTH Business' },
