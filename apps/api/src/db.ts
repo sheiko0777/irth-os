@@ -1,10 +1,44 @@
 import { createDb } from '@irth/db';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not set');
+function buildDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL is not set');
+  }
+  return createDb(url);
 }
 
-export const db = createDb(process.env.DATABASE_URL);
+type Db = ReturnType<typeof buildDb>;
+
+let cached: Db | undefined;
+
+function resolveDb(): Db {
+  if (!cached) {
+    cached = buildDb();
+  }
+  return cached;
+}
+
+/**
+ * Builds the real Drizzle connection lazily, on first use inside a request
+ * handler, instead of when this module is first evaluated.
+ *
+ * On Cloudflare Workers, env vars and secrets (including DATABASE_URL) are
+ * only guaranteed to be wired up once a request is actually in flight —
+ * constructing eagerly at import time (the previous behavior) risks running
+ * before that, throwing during isolate startup and taking down every request
+ * on that isolate instead of just the one that needed the DB. This proxy
+ * defers construction until the first property access (e.g. `db.select(...)`),
+ * which only ever happens from inside a route handler; the connection is then
+ * cached and reused for the lifetime of the isolate.
+ */
+export const db: Db = new Proxy({} as Db, {
+  get(_target, prop) {
+    const real = resolveDb();
+    const value = Reflect.get(real, prop, real);
+    return typeof value === 'function' ? value.bind(real) : value;
+  },
+});
 
 // Drizzle doesn't have a global hook for ALL operations (like Prisma middleware) directly built-in 
 // that captures generic inserts/updates across all tables out-of-the-box in a simple way without $onUpdateFn
