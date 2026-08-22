@@ -187,11 +187,96 @@ migration runner حقيقي مع baseline نظيف للهجرات.
 
 ---
 
-## 6) خلاصة الحالة الحالية
+## 6) تنظيف الـ Pull Requests المكررة (109 PR)
+
+طلب المستخدم "check repo and whole project" ثم "clean up the duplicate PRs first". اكتشفنا
+إن المستودع فيه **~110 PR مفتوح**، الغالبية الساحقة منها بوتات آلية (Sentinel/Bolt/Jules)
+بتكرر نفس الإصلاح لنفس المشكلة عشرات المرات. قبل قفل أي حاجة، اتعمل تحقق فعلي من كود `main`
+(مش عنوان الـ PR) لكل فئة:
+
+| الفئة | العدد | نتيجة التحقق |
+|---|---|---|
+| Timing attacks في webhooks | 17 | مُصلَّحة فعلاً (Aramex/Bosta/Paymob كلهم `timingSafeEqual` مع hashing) |
+| JSON.parse DoS في webhooks | 36 | Aramex/Bosta مُصلَّحين؛ **Paymob كان لسه عرضة** (اتصلح لاحقًا في §7) |
+| IDOR في categories/products | 7 | مُصلَّحة فعلاً (`ctx.orgId` في كل query) |
+| Authorization bypass في order status | 5 | مُصلَّحة فعلاً (Better Auth session حقيقي + orgId من السيرفر) |
+| مميزات قديمة من مايو (Phase 13-20) | 7 | نفس المميزات موجودة فعلاً في `main` بهيكلة مختلفة |
+| تحسينات أداء N+1 مكررة | 37 | تكرار بحت لنفس التحسين، مش bugs، تأجيل آمن |
+
+**109 PR اتقفلوا** (كل شيء ما عدا PR #169). التفاصيل الكاملة والمنهجية موجودة في نص المحادثة.
+
+---
+
+## 7) تقرير بحث هندسي شامل + إعادة صياغة الخطة بالكامل
+
+المستخدم رفع ملف **"IRTH OS — Master Engineering Research Report"** (تقرير بحثي معمّق، مصادره
+موثّقة: Veracode 2025، Apiiro، USENIX 2025، CVE-2025-48757، ETA SDK الرسمي، إلخ) وطلب تعديل
+المشروع بناءً عليه.
+
+**الخلاصة:** التقرير بيأكد نفس فجوات التدقيق السابق (فلوس float، مفيش idempotency، مفيش RLS،
+outbox معطّل) لكنه بيقترح معمارية أعمق بكتير: فلوس كـ **integer minor units** (قروش) مع
+`dinero.js`، **دفتر قيود مزدوج القيد غير قابل للتعديل** (ledger)، **RLS على كل جدول** كخط دفاع
+تاني، **CASL policy layer**، ومنهجية **Spec Kit** (`/speckit.*`) لقيادة التطوير.
+
+**قرار المستخدم (بعد سؤالين توضيحيين):**
+1. **معمارية الفلوس**: التحويل الكامل دلوقتي لـ integer minor units + dinero.js (مش الحل
+   السريع بـ decimal-safe فقط).
+2. **حجم التقرير**: إعادة صياغة الخطة بالكامل حول مراحل التقرير (Phase 0 Foundations → Phase 1
+   Accounting/Inventory → Phase 2 Order-to-cash → ...) بدل خطة A→F القديمة.
+
+### التنفيذ الفعلي (commit `3a33255` على فرع `claude/phase-a-production-boot`)
+
+**`@irth/utils/money`** (باكدج جديد بالكامل): المكان الوحيد المسموح فيه بحساب الفلوس. غلاف
+حول `dinero.js` فوق EGP (100 وحدة صغرى = جنيه واحد). 10 اختبارات (منها حالة `0.1 + 0.2` float
+الكلاسيكية) — واختبار واحد **كشف باگ حقيقي**: `decimalStringToMinor('1.2.3')` كان بيتم قصّه
+بصمت لـ `1.2` بدل ما يرفض المدخل الخاطئ — تم إصلاحه فورًا.
+
+**Migration `0028_money_minor_units.sql`** (مرحلة expand — إضافية فقط، مع backfill، الأعمدة
+القديمة decimal فاضلة زي ما هي): إضافة أعمدة `_minor` (bigint) بجانب **كل** عمود فلوس عبر 8
+جداول (products, product_variants, orders, order_items, courier_shipments/remittances,
+price_list_items, order_returns/return_items, shipping_rates, gift_cards/transactions,
+coupons.min_order_amount, purchase_orders/items). استثناءان متعمّدان وموثّقان: `coupons.value`
+(نسبة أو مبلغ حسب `type` — مش فلوس بشكل قاطع) و`shipping_rates` min/max_weight (وزن مش فلوس).
+
+**`apps/api/src/routes/orders.ts`** (إعادة كتابة كاملة — كان غير آمن بصمت):
+- **atomicity حقيقية**: الطلب + بنوده + خصم المخزون + رقم الطلب كلهم دلوقتي جوه
+  `db.transaction()` واحدة (كان `orderItems` بيتكتب **برا** الـ transaction تمامًا).
+- **المخزون بيتخصم فعليًا الآن** — كان مبيتخصمش إطلاقًا. `UPDATE ... WHERE quantity >= qty`
+  شرطي جوه الـ transaction؛ أي بند ناقص بيرجّع كل الطلب بالكامل (rollback).
+- **رقم طلب ذري**: جدول `order_number_counters` جديد + UPSERT ذري، بدل `count(*) + 1` اللي
+  كان فيه race condition وبيكرر الأرقام تحت الضغط، وكان الرقم "2026" مكتوب يدويًا بالكود.
+- variant من غير سعر بيرفض الطلب (422) بدل ما يتباع مجانًا بصمت (كان `Number(null) === 0`).
+
+**`apps/api/src/routes/webhooks/paymob.ts`** (تصليح 3 فجوات حقيقية مؤكدة):
+- `JSON.parse` جوه try/catch (كان بدونها).
+- **Idempotency** عبر جدول `payment_webhook_events` جديد — إعادة إرسال الـ webhook بقت no-op.
+- البحث عن الطلب بـ **UUID** (يُرسل كـ `merchant_order_id`) بدل `orderNumber` اللي مش unique
+  إلا لكل مستأجر لوحده — كان ممكن يأكّد طلب مستأجر غلط.
+- **مطابقة المبلغ**: `amount_cents` بيتقارن بإجمالي الطلب قبل التأكيد — مش تصديق أعمى للـ webhook.
+
+**`apps/api/src/services/eta.ts` + `orders.ts`** (فجوة idempotency فاتورة ETA اللي كانت موثّقة
+في التدقيق الأصلي): جدول `eta_invoices` كان فيه unique index على `order_id` من الأساس بس محدش
+كان بيستخدمه — الفاتورة كانت بتتبعت للمصلحة **في كل مرة** الطلب يتحدد كـ delivered. دلوقتي بيحجز
+صف في `eta_invoices` أولاً (`ON CONFLICT DO NOTHING`)؛ لو خسر السباق يبقى فيه فاتورة شغالة
+بالفعل. كمان استبدلنا `amount * 0.14` (float) بحساب VAT صحيح بالوحدات الصغرى.
+
+**النتيجة:** كل الـ gates فاضلة خضراء (lint/typecheck/test عبر الـ 7 باكدجات، 226 اختبار).
+
+**متعمّد تأجيله** (موثّق هنا عشان ما يتنساش): تحويل كود التطبيق الفعلي لـ
+coupons/gift-cards/returns/purchasing/shipping لاستخدام أعمدة `_minor` الجديدة (الـ schema
+جاهزة، الكود لسه بيقرا/يكتب decimal)؛ الـ ledger المزدوج القيد الكامل؛ RLS؛ CASL؛ Spec Kit.
+
+---
+
+## 8) خلاصة الحالة الحالية
 
 - ✅ **Phase 1 (UI/UX)** — مكتمل ومدموج في `main` (PR #129).
 - ✅ **إصلاح IDOR أمني** — مكتمل ومدموج في `main` (PR #128).
-- 🔄 **Phase A (Ops Foundation)** — جزء أول مفتوح كـ **PR #169 (draft)**، تحت متابعة حية لحد
-  الدمج. الجزء المتبقي (migration runner + اتصال DB على Workers) متوقف مؤقتًا في انتظار
-  قرارين من المستخدم (حالة بيانات Supabase، حساب Cloudflare).
-- ⏳ **Phases B–F** — لسه ماتبدأش، تنتظر اكتمال A.
+- ✅ **تنظيف الـ PRs** — 109 PR مكرر اتقفلوا، PR #169 هو الوحيد الشغّال.
+- 🔄 **Phase A/B (Money + Order Integrity)** — أول شريحة من الخطة المعاد صياغتها حول التقرير
+  البحثي، مدفوعة كـ commit جديد على **PR #169**. كل الـ gates خضراء (226 اختبار).
+- ⏸️ **متوقف مؤقتًا** — نفس القرارين من قبل: حالة بيانات Supabase الحقيقية، وحساب Cloudflare
+  للنشر الفعلي (Hyperdrive، migration runner على بيانات حقيقية).
+- ⏳ **المتبقي من التقرير** — الـ ledger المزدوج القيد، RLS على كل جدول، CASL، Spec Kit، تعميم
+  minor units على باقي الدومينات (coupons/gift cards/returns/purchasing/shipping)، ETA
+  CAdES-BES signing، PDPL compliance، React Native mobile.
