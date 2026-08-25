@@ -46,3 +46,17 @@ jobs:
           curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" \
             "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$VERCEL_ORG_ID" \
             | python3 -c "import json,sys; d=json.load(sys.stdin); print('name:', d.get('name')); print('rootDirectory:', d.get('rootDirectory')); print('framework:', d.get('framework'))"
+
+  compare-with-admin-project:
+    runs-on: ubuntu-latest
+    needs: fix-root-directory
+    steps:
+      - name: Read irth-os-admin's settings for comparison
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          set -euo pipefail
+          curl -sS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/prj_9nInO3kK3tmRjEBXEc0H6SFj5W1C?teamId=$VERCEL_ORG_ID" \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); print('name:', d.get('name')); print('rootDirectory:', d.get('rootDirectory')); print('framework:', d.get('framework')); print('buildCommand:', d.get('buildCommand')); print('link.productionBranch:', (d.get('link') or {}).get('productionBranch'))"
