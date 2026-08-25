@@ -5,6 +5,7 @@ jobs:
   push-env:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Add BETTER_AUTH_SECRET to Vercel project
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
