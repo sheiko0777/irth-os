@@ -1,155 +1,156 @@
-# irth-os Production Deployment Phase Plan
+# irth-os Production Deployment — Current State & Runbook
 
-This document outlines the systematic strategy for taking **irth-os** from local workspaces into a secure, robust, and highly available Cloudflare + Supabase production environment.
+Supersedes the previous version of this file, which described infrastructure
+(Supabase, `irth.eg`) that was never actually provisioned and referenced
+issues (RBAC matrix, `orgId` type consistency) that were fixed by the P0–P5
+foundation refactor. This version reflects what is actually built, checked
+against the live code, not what was once planned.
 
----
-
-## Phase 1: Code Sanitization & Pre-Flight Hardening
-Before provisioning production infrastructure, security vulnerabilities and code discrepancies identified during the codebase audit must be eliminated.
-
-### 1.1 DB Schema & Multi-Tenancy Unification
-- **The Issue**: Mixed types for `orgId` (some tables use `uuid` while others use `text`).
-- **Task**: Convert all occurrences of `orgId` inside `packages/db/src/schema/*.ts` to use consistent `uuid` columns referenced against `organizations.id`.
-- **Action**: Run `pnpm --filter @irth/db drizzle-kit generate` and apply the generated migrations to verify consistency.
-
-### 1.2 RBAC Matrix Consolidation
-- **The Issue**: Permissions matrix in `permissions.ts` only guards 3 resources (`products`, `categories`, `members`). Newer domain operations bypass formal RBAC schema definitions.
-- **Task**: Expand the `PERMISSIONS` object in `packages/db/src/permissions.ts` to cover all transaction layers:
-  - `orders`: `view` (all), `write` (owner/admin), `delete` (owner)
-  - `coupons` / `campaigns`: `view` (all), `write` (owner/admin)
-  - `inventory` / `stocktaking`: `view` (all), `write` (owner/admin)
-  - `finance` / `etaInvoices`: `view` (owner/admin), `write` (owner)
-
-### 1.3 Dependency & Lint Consolidation
-- **Task**: Remove app-specific dependencies mistakenly hoisted to the root `package.json` (such as `@trpc/*`, `@hookform/resolvers`, etc.) and pin them explicitly under their respective workspaces.
-- **Task**: Align `zod` library versions across the workspaces to use `^4.4.3` to avoid runtime type clashes.
-- **Task**: Integrate a type-check task for `apps/api` and `apps/mobile` into `turbo.json`. Include `pnpm turbo type-check` as a non-bypassable CI script gating pull requests.
+Target: **`app.irth-house.com`** — the IRTH HOUSE beauty brand's ops/ERP
+console. `irth-house.com` itself is a separate Shopify storefront; this app
+is not it.
 
 ---
 
-## Phase 2: Production Infrastructure Provisioning
-Provisioning the underlying services on Cloudflare and Supabase.
+## What's already real
 
-### 2.1 Database Provisioning (Supabase PostgreSQL)
-1. **Provision Enterprise Instance**: Spin up a multi-AZ production Supabase project located geographically close to the target market (e.g., EU-Central or ME-West if available, to reduce latency to Egypt).
-2. **Enable Connection Pooling**: Secure a transaction-mode connection pooler URL (e.g., Supavisor port `6543`) to prevent Cloudflare Worker isolates from exhausting database connections.
-3. **Run Production Migrations**: Run the Drizzle migration suite:
-   ```bash
-   pnpm --filter @irth/db drizzle-kit migrate
-   ```
+- **Database**: Neon Postgres, not Supabase. `DATABASE_URL` is a GitHub
+  secret already referenced by every workflow below.
+- **CI gate** (`.github/workflows/ci.yml`): unit tests (mocked `db`) plus a
+  separate integration job against a real, disposable Postgres branch
+  (`TEST_DATABASE_URL`) — the only way a constraint, trigger, or RLS policy
+  actually gets exercised before merge. Both are non-bypassable: the
+  integration job fails loudly if the secret is missing rather than silently
+  skipping.
+- **`apps/api` → Cloudflare Workers** (`deploy-api.yml` + `wrangler.toml`):
+  gated on `ci.yml`, runs real Drizzle migrations against production before
+  deploying, then curls the deployed `/health` endpoint and fails the deploy
+  if it doesn't return 200 within 5 retries. `/health` itself now runs a real
+  `select 1` against Postgres (fixed this session — it used to be a hardcoded
+  `{status:'ok'}` that would report healthy even with the database
+  unreachable, which made the smoke test worthless).
+- **RBAC**: `packages/db/src/permissions.ts` already covers orders, coupons,
+  campaigns, inventory, stocktaking, finance, and eta invoices, not just the
+  three resources an earlier version of this plan flagged as missing.
+- **`orgId` typing**: already consistently `uuid` across schema tables,
+  contrary to what this plan used to claim.
 
-### 2.2 Cloudflare Infrastructure Setup
-1. **Provision R2 Bucket**: Create a bucket named `irth-assets` in production to hold images, documents, and assets.
-2. **Domain Registration**: Delegate the root domain (e.g., `irth.eg` or `irth.com`) to Cloudflare Nameservers to enforce global DNS proxying, SSL/TLS termination, and Edge WAF.
-3. **Configure Edge Routing**:
-   - `admin.irth.eg` pointing to Cloudflare Pages (Dashboard).
-   - `api.irth.eg` pointing to Cloudflare Workers (Hono API).
+## What changed today
+
+- **CORS** (`apps/api/src/middlewares/cors.ts`): was hardcoded to
+  `irth.com`/`admin.irth.com` — domains nobody owns. Now allows
+  `https://app.irth-house.com` and `https://irth-house.com`.
+- **`apps/admin` production build was broken**: `next build` failed with
+  `Cannot find module 'picocolors'`. Root cause: `node_modules/.pnpm` had
+  corrupted (empty) content for `picocolors` and `@babel/parser` — the exact
+  "killed install corrupts node_modules" failure mode this repo has hit
+  before. Repaired via a scoped, forced reinstall
+  (`pnpm install --filter "@irth/admin..." --force`) rather than a full
+  workspace reinstall, to keep it fast and avoid re-triggering the same
+  class of corruption across the whole monorepo.
+- **Admin hosting decided: Vercel**, not Cloudflare Pages. The previous
+  `deploy-admin.yml` ran `wrangler pages deploy .next` — that does not work
+  for a dynamic Next.js app with server-side tRPC without the
+  `@opennextjs/cloudflare` (or `@cloudflare/next-on-pages`) build adapter,
+  which was never installed. Vercel needs no adapter for this stack
+  (Next.js 15, App Router) and is the standard target. `deploy-admin.yml`
+  now builds and deploys through the Vercel CLI, gated on `ci.yml`, with the
+  same "smoke test the real URL or fail the deploy" discipline as the API
+  workflow.
+
+## What still needs a human — I cannot do these myself
+
+### 1. Vercel project
+
+- Create a Vercel project linked to this repo, **Root Directory = `apps/admin`**.
+- Vercel auto-detects the pnpm workspace and Next.js; no extra config file
+  needed for that part.
+- Generate a token (`vercel.com/account/tokens`) and find the org/project
+  IDs (`vercel link` locally, or the project's Settings page).
+- Add as GitHub repo secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
+  `VERCEL_PROJECT_ID`.
+- Add as a GitHub repo **variable** (not secret — it's a public URL):
+  `ADMIN_HEALTH_URL` = `https://app.irth-house.com/ar/login` (or any route
+  that returns 200 without auth).
+
+### 2. DNS for `app.irth-house.com`
+
+Whoever controls the `irth-house.com` zone (check whether that's Shopify's
+own DNS or delegated elsewhere — Shopify-hosted storefronts sometimes keep
+DNS in Shopify, sometimes it's delegated to a registrar/Cloudflare) needs to
+add the CNAME record Vercel's dashboard specifies after the project is
+created (Vercel shows the exact record once you add the custom domain in
+Project Settings → Domains).
+
+### 3. Environment variables — set per target, not shared blindly
+
+**Vercel project settings** (`apps/admin`):
+| Variable | Notes |
+|---|---|
+| `DATABASE_URL` | Same Neon database `apps/api` uses — this app queries it directly via its own tRPC routers. |
+| `BETTER_AUTH_SECRET` | **Must be identical to `apps/api`'s value** — both read/write the same `session`/`account`/`user` tables (see `apps/admin/src/lib/auth-server.ts` and `apps/api/src/auth.ts`, which are already documented to require parity). |
+| `NEXT_PUBLIC_APP_URL` | `https://app.irth-house.com` — Better Auth's `baseURL` reads this; without it, cookies/redirects target `localhost:3000` in production. |
+
+**Cloudflare Workers secrets** (`apps/api`, via `wrangler secret put <KEY>` —
+already documented in `wrangler.toml`'s own comment, listed here for the
+one-shot checklist):
+`DATABASE_URL`, `BETTER_AUTH_SECRET` (same value as above),
+`PAYMOB_API_KEY`, `PAYMOB_HMAC_SECRET`, `BOSTA_API_KEY`, `BOSTA_ACCOUNT_ID`,
+`ETA_CLIENT_ID`, `ETA_CLIENT_SECRET`, `ETA_ISSUER_EIN`, `RESEND_API_KEY`,
+`ARCJET_KEY`.
+
+**GitHub repo secrets** (Settings → Secrets and variables → Actions), for
+the deploy workflows themselves to run at all:
+`DATABASE_URL`, `TEST_DATABASE_URL` (a **disposable** branch — the
+integration suite truncates every table it touches, never point this at
+production), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+`API_HEALTH_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
+
+### 4. Production database confirmation
+
+Whether the Neon `DATABASE_URL` already in use for this repo's other work is
+meant to become the production database, or a separate production branch
+should be provisioned, is a decision only you can make — I don't know which
+Neon project/branch is meant to hold real customer data versus dev/test
+data. Once decided: `pnpm --filter @irth/db db:migrate` against it (this is
+exactly what `deploy-api.yml` already automates on every deploy — it does
+not need to be run by hand once the secret points at the right database).
+
+### 5. Webhook registration
+
+Once `apps/api` has a stable public URL (Workers' own `*.workers.dev`
+subdomain works for this even without a custom domain — a custom domain for
+the API was not part of what you asked for and isn't required for it to
+function), register that URL as the webhook endpoint inside the Paymob,
+Bosta, and ETA portals, then trigger each provider's test webhook to confirm
+`verifyHmac`/`verifyWebhook` accepts real signed payloads.
 
 ---
 
-## Phase 3: CI/CD Pipeline & GitHub Actions Setup
-Integrate secure automatic delivery paths.
+## Verified, not assumed
 
-### 3.1 Environment Variable & Secret Injection
-Configure secrets in the GitHub Repository under **Settings > Secrets and variables > Actions**:
+Before calling this "ready," confirmed directly against this session's own
+work, not carried over from the old plan:
 
-| Secret Key | Description | Target Environment |
-|---|---|---|
-| `CLOUDFLARE_API_TOKEN` | Auth token with Pages/Workers deploy permission | CI/CD Runner |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account identifier | CI/CD Runner |
-| `DATABASE_URL` | Transaction pooled Supabase connection string | `apps/api` / `packages/db` |
-| `BETTER_AUTH_SECRET` | Secret key used to encrypt Auth cookies | `apps/api` |
-| `PAYMOB_API_KEY` | Payment Integration Key | `apps/api` (Secret) |
-| `BOSTA_API_KEY` | Shipping Courier API token | `apps/api` (Secret) |
-| `ETA_CLIENT_SECRET` | Egyptian Tax Authority integration credentials | `apps/api` (Secret) |
-| `RESEND_API_KEY` | Transactional email provider token | `apps/api` / `packages/emails` |
+- `pnpm --filter @irth/api typecheck` / `test` — clean.
+- `pnpm --filter @irth/admin typecheck` / `test` (251 tests) / `lint` — clean.
+- `pnpm --filter @irth/admin build` — was failing on a corrupted dependency;
+  fixed and reverified (see "What changed today").
+- CORS now names the real domain instead of a placeholder nobody owns.
+- The API health check the deploy pipeline's own smoke test depends on now
+  actually checks something.
 
-### 3.2 Establish `.github/workflows/ci.yml` (The PR Gate)
-Create a robust validation action that ensures code is perfectly safe before merging into `main`:
-```yaml
-name: CI Gate
+## Not verified — flagged, not guessed
 
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 10.30.3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo lint type-check test
-```
-
-### 3.3 Establish `.github/workflows/deploy.yml` (The Deployment Engine)
-Configure deployment on merges to `main`:
-```yaml
-name: Deploy to Production
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 10.30.3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo build
-      
-      # Deploy API Worker
-      - name: Deploy API to Cloudflare Workers
-        run: pnpm --filter @irth/api run deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          
-      # Deploy Admin Dashboard
-      - name: Deploy Admin to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/admin/.next --project-name=irth-admin
-```
-
----
-
-## Phase 4: Production Handshake & Dry-Run Verification
-
-### 4.1 Dry-Run System Verification
-- **Health Checks**: Access `https://api.irth.eg/health` to verify Worker availability, DB pool responsiveness, and Hono routing.
-- **Localization RTL Rendering**: Open `https://admin.irth.eg/ar` to confirm assets (Cairo font) load securely via CDN and Tailwind RTL properties align perfectly.
-- **Tenant Onboarding Flow**: Perform an registration test. Verify that:
-  1. Organization record is successfully generated with a secure UUID.
-  2. Owner membership is injected.
-  3. `auditLog` receives a transaction trace with corresponding changesets.
-
-### 4.2 Webhook & Integration Handshake
-- Register production webhook endpoints inside Paymob, Bosta, and ETA portals.
-- Trigger test webhooks to ensure Hono's `verifyWebhook` middleware handles headers/signatures correctly and translates payouts to order transitions.
-
-### 4.3 Zero-Downtime Rollback Plan
-In the event of a catastrophic failure:
-1. **Cloudflare Pages Rollback**: Revert to the previous deployment instantly inside the Cloudflare Dashboard with zero static asset downtime.
-2. **Workers Rollback**: Deploy the last known-good tag via Wrangler CLI within seconds:
-   ```bash
-   wrangler rollback <DEPLOYMENT_ID>
-   ```
-3. **DB Migration Contingency**: Ensure every Drizzle migration schema change has a manual down-migration playbook in case destructive field drops fail.
+- Whether `NEXT_PUBLIC_APP_URL` / Better Auth's `trustedOrigins` need an
+  explicit entry beyond `baseURL` for cross-subdomain cookie behavior between
+  `app.irth-house.com` (admin) and wherever `apps/api`'s Workers domain ends
+  up — Better Auth's default same-origin assumptions should hold since
+  admin's own tRPC talks to the same DB directly rather than to `apps/api`
+  over HTTP, but this was not tested against a real deployed pair of URLs.
+- Whether the Neon database plan/region is adequate for production load —
+  no load testing has been done at any point in this project.
+- Mobile app (`apps/mobile`) deployment is entirely out of scope here; it
+  was scaffolded (`feat-mobile-app-scaffold-...` — one of the stale branches
+  from the archaeology sweep) but nothing in the current `apps/mobile`
+  directory or this plan addresses shipping it.
