@@ -19,8 +19,17 @@ paymobRoute.post('/', async (c: Context) => {
   }
 
   const bodyRaw = await c.req.text();
-  const body = JSON.parse(bodyRaw);
-  
+
+  // The `hmac` header is checked below, but only after the concatenated-field
+  // string is built from `body` — so a malformed payload must be rejected
+  // before that point, not left to throw uncaught mid-handler.
+  let body;
+  try {
+    body = JSON.parse(bodyRaw);
+  } catch {
+    return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+  }
+
   const { obj } = body;
   if (!obj) {
       return c.json({ data: null, error: 'invalid_payload', meta: null }, 400);
