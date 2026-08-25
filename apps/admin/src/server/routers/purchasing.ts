@@ -418,10 +418,10 @@ export const purchasingRouter = router({
                 // Update inventory if requested and SKU exists
                 if (itemInput.updateInventory && poItem.sku && itemInput.receivedQuantity > 0) {
                     // Scope the SKU lookup to this org by joining through products:
-                    // productVariants has no orgId and `sku` is globally unique, so an
-                    // unscoped lookup silently resolves another tenant's variant and the
-                    // org-scoped inventory read below then finds nothing — received stock
-                    // would vanish with no error.
+                    // Scoped through products: `sku` is unique per org (0040), so an
+                    // unscoped lookup can match another tenant's variant and the
+                    // org-scoped inventory read below then finds nothing — received
+                    // stock would vanish with no error.
                     const [variant] = await tx.select({ id: productVariants.id })
                         .from(productVariants)
                         .innerJoin(products, eq(productVariants.productId, products.id))

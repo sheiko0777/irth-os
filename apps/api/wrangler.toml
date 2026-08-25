@@ -16,9 +16,30 @@ NODE_ENV = "production"
 # BOSTA_API_KEY, BOSTA_ACCOUNT_ID, ETA_CLIENT_ID, ETA_CLIENT_SECRET,
 # ETA_ISSUER_EIN, RESEND_API_KEY, ARCJET_KEY
 
+# Fires the `scheduled` handler in src/index.ts, which drains the outbox.
+#
+# The outbox producers were wired up before any consumer existed: events were
+# written on every order transition and nothing ever read them, so no
+# notification was ever delivered. A Worker isolate does not outlive the request
+# that created it, so a setInterval-based worker (which is what this repo had)
+# can never fire — a cron trigger is the only mechanism that runs without an
+# inbound request.
+#
+# Every minute is the finest granularity Cloudflare cron offers. Combined with
+# the batch ceiling in index.ts this drains up to 100 events/minute; raise the
+# frequency here before raising that ceiling, so a backlog never risks hitting
+# the CPU limit mid-send.
+[triggers]
+crons = ["* * * * *"]
+
 [observability]
 enabled = true
 
+# NOTE: nothing in src/ references this binding today. Left declared, but if you
+# start using `env.R2`, repeat this block under [env.production] and
+# [env.staging] as well — like [triggers] above, bindings are NOT inherited by
+# named environments, so it would be present in dev and undefined in production.
+# `wrangler deploy --dry-run --env production` warns about exactly this.
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "irth-assets"
@@ -26,7 +47,12 @@ bucket_name = "irth-assets"
 [env.production]
 name = "irth-api"
 vars = { NODE_ENV = "production" }
+# Repeated deliberately: a named environment does NOT inherit the top-level
+# [triggers], so omitting this ships production with no cron and a silently
+# undrained outbox — the exact bug this block exists to fix.
+triggers = { crons = ["* * * * *"] }
 
 [env.staging]
 name = "irth-api-staging"
 vars = { NODE_ENV = "staging" }
+triggers = { crons = ["* * * * *"] }

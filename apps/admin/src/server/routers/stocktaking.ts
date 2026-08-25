@@ -124,9 +124,8 @@ export const stocktakingRouter = router({
 
             let resolvedVariantId = item.variantId;
             if (!resolvedVariantId) {
-              // productVariants has no orgId and `sku` is globally unique, so an
-              // unscoped lookup resolves another tenant's variant. Scope through
-              // products.
+              // Scoped through products: `sku` is unique per org (0040), so an
+              // unscoped lookup can resolve another tenant's variant.
               const [variant] = await tx
                 .select({ id: productVariants.id })
                 .from(productVariants)
