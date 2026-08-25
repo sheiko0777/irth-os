@@ -2,6 +2,9 @@ name: (temp) Fix irth-os Vercel rootDirectory
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - chore/tmp-fix-vercel-root
 
 jobs:
   fix-root-directory:
