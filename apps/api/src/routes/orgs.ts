@@ -2,17 +2,12 @@ import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { db } from '../db';
-import { organizations, orgMembers, orgInvites, withAudit } from '@irth/db';
+import { db, getDb, withOrg } from '../db';
+import { organizations, orgMembers, orgInvites, withAudit, auditLog, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
-// import { Resend } from 'resend'; // Assume resend is installed, or we handle it
 
 export const orgsRouter = new Hono();
-
-// We expect user to be authenticated and have user id in context 
-// (assuming auth middleware sets it or we extract from headers/auth handler)
-// For simplicity we will read user_id from headers if present, or "unknown"
 
 const createOrgSchema = z.object({
   name: z.string().min(1),
@@ -27,23 +22,41 @@ orgsRouter.post('/', async (c: Context) => {
     const userId = c.get('userId') as string | undefined;
     if (!userId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
-    const org = await withAudit(db, async () => {
-      const [insertedOrg] = await db.insert(organizations).values({ name, slug }).returning();
-      await db.insert(orgMembers).values({
+    // Deliberately NOT withOrg: this creates the tenant, so there is no tenant
+    // to scope to yet and no org_id to put on the RLS session. It runs as the
+    // owning role, like platform administration in apps/admin.
+    //
+    // The audit row is written inside the transaction, keyed to the org just
+    // created. It used to pass the literal string 'system' as orgId — but
+    // audit_log.org_id is uuid, so Postgres rejected it with 22P02 (invalid
+    // input syntax for type uuid: "system"). Because none of the three writes
+    // shared a transaction, the organization and the owner membership had
+    // ALREADY COMMITTED by the time the audit insert threw: the caller got a
+    // 400 for a request that had in fact created their organization, and could
+    // not retry because the slug was now taken.
+    //
+    // insertedOrg.id is only known inside the callback — exactly what the old
+    // comment observed withAudit could not express — so the audit insert is
+    // written directly here rather than through it.
+    const org = await getDb().transaction(async (tx) => {
+      const [insertedOrg] = await tx.insert(organizations).values({ name, slug }).returning();
+      await tx.insert(orgMembers).values({
         orgId: insertedOrg.id,
         userId,
         role: 'owner',
       });
+      await tx.insert(auditLog).values({
+        orgId: insertedOrg.id,
+        userId,
+        action: 'CREATE_ORG',
+        tableName: 'organizations',
+        recordId: insertedOrg.id,
+        changes: { name, slug },
+      });
       return insertedOrg;
-    }, {
-      orgId: 'system', // the newly created org will have its own id, but it doesn't exist yet for the root audit orgId. Alternatively, use insertedOrg.id later if the withAudit function allowed it.
-      userId,
-      action: 'CREATE_ORG',
-      tableName: 'organizations',
-      changes: { name, slug }
     });
 
-    return c.json({ data: org, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(org), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -57,7 +70,7 @@ orgsRouter.get('/:id/members', async (c: Context) => {
     if (id !== orgId) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
 
     const members = await db.select().from(orgMembers).where(eq(orgMembers.orgId, orgId));
-    return c.json({ data: members, error: null, meta: null });
+    return c.json({ data: jsonSafe(members), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -100,12 +113,9 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
       expiresAt,
     }).returning();
 
-    // Mock sending email
-    // const resend = new Resend(process.env.RESEND_API_KEY);
-    // await resend.emails.send({ ... subject: `دعوة للانضمام إلى ${org.name}` ... })
-    console.log(`Sending email to ${email} with subject: دعوة للانضمام إلى ${org.name}`);
+    // Invite email delivery is not wired up yet.
 
-    return c.json({ data: invite, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(invite), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -142,7 +152,7 @@ orgsRouter.post('/invite/accept', async (c: Context) => {
 
     await db.delete(orgInvites).where(eq(orgInvites.id, invite.id));
 
-    return c.json({ data: member, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(member), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -163,8 +173,8 @@ orgsRouter.patch('/members/:memberId/role', requireRole('owner'), async (c: Cont
     const { role } = updateRoleSchema.parse(body);
     const userId = c.get('userId') as string;
 
-    const result = await withAudit(db, async () => {
-      const [updated] = await db.update(orgMembers)
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [updated] = await tx.update(orgMembers)
         .set({ role })
         .where(and(
           eq(orgMembers.id, memberId as string),
@@ -177,11 +187,11 @@ orgsRouter.patch('/members/:memberId/role', requireRole('owner'), async (c: Cont
       action: 'UPDATE_MEMBER_ROLE',
       tableName: 'org_members',
       changes: { role }
-    });
+    }));
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
-    return c.json({ data: result, error: null, meta: null });
+    return c.json({ data: jsonSafe(result), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }

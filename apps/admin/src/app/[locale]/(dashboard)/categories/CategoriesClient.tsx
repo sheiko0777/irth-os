@@ -88,10 +88,10 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="text-right">الاسم</TableHead>
-                            <TableHead className="text-right">الرابط (Slug)</TableHead>
-                            <TableHead className="text-right">الفئة الأب</TableHead>
-                            <TableHead className="text-right">الإجراءات</TableHead>
+                            <TableHead className="text-start">الاسم</TableHead>
+                            <TableHead className="text-start">الرابط (Slug)</TableHead>
+                            <TableHead className="text-start">الفئة الأب</TableHead>
+                            <TableHead className="text-start">الإجراءات</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>

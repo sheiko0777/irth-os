@@ -1,0 +1,32 @@
+-- audit_log.record_id becomes nullable.
+--
+-- THE DEFECT
+--
+-- `withAudit` (packages/db/src/index.ts) fell back to the *string* 'unknown_id'
+-- when the wrapped operation returned no `id`:
+--
+--     const recordId = result?.id || 'unknown_id';
+--
+-- but record_id is `uuid NOT NULL`. Postgres rejects that with 22P02
+-- (invalid input syntax for type uuid: "unknown_id"). So instead of a
+-- slightly-incomplete audit row you got a thrown error — and until the RLS work
+-- put these writes in transactions, the business write had ALREADY COMMITTED by
+-- the time the audit insert blew up. The change happened; recording it failed;
+-- the request reported failure. Worst of the three possible outcomes.
+--
+-- WHY NULLABLE RATHER THAN A REQUIRED ID
+--
+-- Some audited operations genuinely have no single subject row.
+-- `bulk.bulkUpdateOrderStatus` updates up to 100 orders at once; it was passing
+-- `ids[0]` purely to satisfy the constraint, which made the audit row claim one
+-- arbitrary order out of the batch. NULL states "this action did not target one
+-- row" honestly, and `changes` already carries the full id list.
+--
+-- The alternative — tightening the type so every call site must produce an id —
+-- would force exactly that kind of fabricated value at the bulk sites.
+--
+-- Existing rows are unaffected: this only widens what is accepted. No backfill,
+-- and no row currently holds 'unknown_id' because such an insert could never
+-- have succeeded.
+
+ALTER TABLE "audit_log" ALTER COLUMN "record_id" DROP NOT NULL;

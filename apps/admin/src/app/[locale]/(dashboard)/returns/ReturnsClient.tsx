@@ -1,4 +1,5 @@
 'use client';
+import type { Money } from '@irth/domain';
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
@@ -14,7 +15,7 @@ export interface Return {
   resolutionType: string;
   notes: string | null;
   adminNotes: string | null;
-  refundAmount: string | null;
+  refundAmountMinor: bigint | null;
   requestedAt: Date | string | null;
   resolvedAt: Date | string | null;
   createdAt: Date | string | null;
@@ -32,7 +33,7 @@ export interface SummaryData {
     refunded: number;
     exchanged: number;
   };
-  pendingRefundAmount: number;
+  pendingRefundAmount: Money;
 }
 
 interface ReturnsClientProps {
@@ -95,7 +96,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
     resolutionType: r.resolutionType,
     notes: r.notes,
     adminNotes: r.adminNotes,
-    refundAmount: r.refundAmount,
+    refundAmountMinor: r.refundAmountMinor,
     requestedAt: r.requestedAt,
     resolvedAt: r.resolvedAt,
     createdAt: r.createdAt,
@@ -171,7 +172,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
 
       <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right">
+          <table className="w-full text-sm text-start">
             <thead className="text-xs text-[var(--t2)] bg-[var(--surface)] border-b border-[var(--rim1)]">
               <tr>
                 <th className="px-6 py-4 font-medium">رقم الطلب</th>
@@ -266,7 +267,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
                               </button>
                             </div>
                           )}
-                          <Link href={`/${locale}/returns/${ret.id}`} className="text-azure hover:underline text-xs mr-2">
+                          <Link href={`/${locale}/returns/${ret.id}`} className="text-azure hover:underline text-xs ms-2">
                             عرض
                           </Link>
                         </div>

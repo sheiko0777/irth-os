@@ -7,6 +7,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import type { ShippingRate } from './ShippingClient';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Truck } from 'lucide-react';
 
 interface Props {
   zoneId: string;
@@ -35,11 +37,11 @@ export function RatesTable({ zoneId }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-right">الاسم</TableHead>
-            <TableHead className="text-right">النوع</TableHead>
-            <TableHead className="text-right">السعر</TableHead>
-            <TableHead className="text-right">التوصيل</TableHead>
-            <TableHead className="text-right">حذف</TableHead>
+            <TableHead className="text-start">الاسم</TableHead>
+            <TableHead className="text-start">النوع</TableHead>
+            <TableHead className="text-start">السعر</TableHead>
+            <TableHead className="text-start">التوصيل</TableHead>
+            <TableHead className="text-start">حذف</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -51,8 +53,12 @@ export function RatesTable({ zoneId }: Props) {
             </TableRow>
           ) : rates.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-[var(--t2)] py-6">
-                لا توجد أسعار
+              <TableCell colSpan={5} className="p-0">
+                <EmptyState
+                  icon={Truck}
+                  title="لا توجد أسعار شحن"
+                  hint="ضيف سعر للمنطقة دي عشان تظهر كخيار شحن عند إتمام الطلب."
+                />
               </TableCell>
             </TableRow>
           ) : (

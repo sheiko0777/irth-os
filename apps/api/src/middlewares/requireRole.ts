@@ -1,5 +1,5 @@
 import { MiddlewareHandler } from 'hono';
-import { Role } from '@irth/db/src/permissions';
+import { Role } from '@irth/db';
 
 // Authorizes the request against the trusted role established by authContext.
 // Relies on c.get('orgId'/'role') — never on client-supplied headers.

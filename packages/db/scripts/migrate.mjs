@@ -38,7 +38,13 @@ if (!url) {
 
 // max: 1 keeps every statement on one connection; DDL and the ledger write must
 // not land on different backends.
-const sql = postgres(url, { max: 1, onnotice: () => {} });
+//
+// prepare: false because DATABASE_URL may point at a pooled endpoint (Neon's
+// `-pooler` host is PgBouncer in transaction mode, which does not support
+// prepared statements). postgres-js prepares by default, so without this the
+// runner works against a direct endpoint and fails against a pooled one — a
+// difference nobody notices until a deploy uses the other URL.
+const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
 
 async function main() {
   await sql`

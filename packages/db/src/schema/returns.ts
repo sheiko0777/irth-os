@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, decimal, integer, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, bigint, integer, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const orderReturns = pgTable('order_returns', {
@@ -11,7 +11,7 @@ export const orderReturns = pgTable('order_returns', {
   resolutionType: text('resolution_type', { enum: ['refund', 'exchange', 'store_credit', 'none'] }).notNull().default('none'),
   notes: text('notes'),
   adminNotes: text('admin_notes'),
-  refundAmount: decimal('refund_amount', { precision: 12, scale: 2 }),
+  refundAmountMinor: bigint('refund_amount_minor', { mode: 'bigint' }),
   requestedAt: timestamp('requested_at').defaultNow(),
   resolvedAt: timestamp('resolved_at'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -19,16 +19,23 @@ export const orderReturns = pgTable('order_returns', {
 }, (table) => [
   index('order_returns_org_id_idx').on(table.orgId),
   index('order_returns_order_id_idx').on(table.orderId),
+  // Per tenant (0035). Was unconstrained entirely, so the count(*)+1
+  // generator's collisions were not merely likely — nothing rejected them,
+  // and two documents legitimately shared a number.
+  uniqueIndex('order_returns_org_return_number_idx').on(table.orgId, table.returnNumber),
 ]);
 
 export const returnItems = pgTable('return_items', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // Added in 0030, with a composite FK on (return_id, org_id) so a line can
+  // never belong to a different org than the return that owns it.
+  orgId: uuid('org_id').notNull(),
   returnId: uuid('return_id').notNull().references(() => orderReturns.id, { onDelete: 'cascade' }),
   orderItemId: uuid('order_item_id'),
   productName: text('product_name').notNull(),
   variantName: text('variant_name'),
   quantity: integer('quantity').notNull().default(1),
-  unitPrice: decimal('unit_price', { precision: 12, scale: 2 }),
+  unitPriceMinor: bigint('unit_price_minor', { mode: 'bigint' }),
   condition: text('condition', { enum: ['new', 'good', 'damaged', 'unknown'] }).default('unknown'),
   restock: boolean('restock').notNull().default(false),
 }, (table) => [

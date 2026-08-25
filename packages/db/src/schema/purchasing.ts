@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, text, numeric, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, text, bigint, char, integer, uniqueIndex } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
 export const suppliers = pgTable('suppliers', {
@@ -20,20 +20,32 @@ export const purchaseOrders = pgTable('purchase_orders', {
   poNumber: text('po_number').notNull(),
   status: text('status').notNull().default('draft'), // draft, ordered, partial, received, cancelled
   notes: text('notes'),
-  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }),
+  totalAmountMinor: bigint('total_amount_minor', { mode: 'bigint' }),
+  // A supplier may genuinely invoice in a foreign currency, so this document
+  // carries its own denomination rather than assuming the org's.
+  currency: char('currency', { length: 3 }).notNull().default('EGP'),
   orderedAt: timestamp('ordered_at'),
   receivedAt: timestamp('received_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => [
+  // Per tenant (0035). Was unconstrained entirely, so the count(*)+1
+  // generator's collisions were not merely likely — nothing rejected them,
+  // and two documents legitimately shared a number.
+  uniqueIndex('purchase_orders_org_po_number_idx').on(table.orgId, table.poNumber),
+]);
 
 export const purchaseOrderItems = pgTable('purchase_order_items', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // Added in 0030. A composite FK on (po_id, org_id) -> purchase_orders(id,
+  // org_id) makes a line whose org disagrees with its parent's unrepresentable,
+  // so this column cannot drift into showing a row to the wrong tenant.
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   poId: uuid('po_id').notNull().references(() => purchaseOrders.id, { onDelete: 'cascade' }),
   productName: text('product_name').notNull(),
   variantName: text('variant_name'),
   sku: text('sku'),
   quantity: integer('quantity').notNull().default(1),
-  unitCost: numeric('unit_cost', { precision: 12, scale: 2 }),
+  unitCostMinor: bigint('unit_cost_minor', { mode: 'bigint' }),
   receivedQuantity: integer('received_quantity').default(0),
 });

@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    // ES2020 for BigInt literals (0n). Money is bigint minor units, so the
+    // schema's defaults are bigint literals and ES2017 rejects the syntax
+    // outright (TS2737). Next 15 already compiles to a modern baseline.
+    "target": "ES2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,

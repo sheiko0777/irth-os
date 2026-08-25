@@ -1,7 +1,8 @@
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
-import { courierShipments, courierRemittances, withAudit } from '@irth/db';
-import { eq, and, sql, sum, inArray, count } from 'drizzle-orm';
+import { courierShipments, courierRemittances, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
+import { fromMinor, parseDecimal } from '@irth/domain';
+import { eq, and, ne, sql, sum, inArray, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const courierRouter = router({
@@ -34,10 +35,10 @@ export const courierRouter = router({
         remittanceId: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const updated = await withAudit(
-          ctx.db,
+        const updated = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [row] = await ctx.db
+            const [row] = await tx
               .update(courierShipments)
               .set({ codRemitted: true, remittanceId: input.remittanceId })
               .where(and(
@@ -54,7 +55,7 @@ export const courierRouter = router({
             tableName: 'courier_shipments',
             changes: input,
           }
-        );
+        ));
 
         return { data: updated, error: null, meta: null };
       }),
@@ -83,21 +84,24 @@ export const courierRouter = router({
       .input(z.object({
         courier: z.string(),
         reference: z.string(),
-        amount: z.string(), // decimal stored as string
+        // Accepted as a decimal string from the client and parsed exactly.
+        // parseDecimal never constructs a float, so "1234.56" cannot arrive as
+        // 1234.5600000000001 the way Number(...) would allow.
+        amount: z.string(),
         shipmentCount: z.number().int(),
         expectedDate: z.date().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const newRemittance = await withAudit(
-          ctx.db,
+        const newRemittance = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [row] = await ctx.db
+            const [row] = await tx
               .insert(courierRemittances)
               .values({
                 orgId: ctx.orgId,
                 courier: input.courier,
                 remittanceReference: input.reference,
-                amount: input.amount,
+                amountMinor: parseDecimal(input.amount).minor,
                 shipmentCount: input.shipmentCount,
                 expectedDate: input.expectedDate,
                 status: 'pending',
@@ -112,7 +116,7 @@ export const courierRouter = router({
             tableName: 'courier_remittances',
             changes: input as unknown as Record<string, unknown>,
           }
-        );
+        ));
 
         return { data: newRemittance, error: null, meta: null };
       }),
@@ -122,44 +126,94 @@ export const courierRouter = router({
         remittanceId: z.string().uuid(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const [remittance] = await ctx.db
-          .select()
-          .from(courierRemittances)
-          .where(and(
-            eq(courierRemittances.id, input.remittanceId),
-            eq(courierRemittances.orgId, ctx.orgId)
-          ));
+        // This was THREE separate autocommits: the remittance status, the audit
+        // row (withAudit was handed ctx.db rather than a transaction), and the
+        // shipments. A failure between any two left the remittance marked
+        // reconciled while its shipments still showed COD outstanding — money
+        // state that diverges permanently, with no report that would surface it.
+        //
+        // Now one transaction, scoped to the tenant by RLS as well as by the
+        // WHERE clauses.
+        const updatedRemittance = await ctx.withOrg(async (tx) => {
+          const [remittance] = await tx
+            .select()
+            .from(courierRemittances)
+            .where(and(
+              eq(courierRemittances.id, input.remittanceId),
+              eq(courierRemittances.orgId, ctx.orgId)
+            ));
 
-        if (!remittance) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Remittance not found' });
-        }
+          if (!remittance) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Remittance not found' });
+          }
 
-        const updatedRemittance = await withAudit(
-          ctx.db,
-          async () => {
-            const [row] = await ctx.db
-              .update(courierRemittances)
-              .set({ status: 'reconciled', receivedDate: new Date() })
-              .where(eq(courierRemittances.id, remittance.id))
-              .returning();
-            return row;
-          },
-          {
+          // Idempotency without a key: only a remittance that is not already
+          // reconciled can transition. A double submit updates zero rows and
+          // throws below, rather than writing a second audit row and
+          // re-stamping receivedDate. The guard lives in the WHERE so a
+          // concurrent caller cannot slip between the check and the write.
+          const [row] = await tx
+            .update(courierRemittances)
+            .set({ status: 'reconciled', receivedDate: new Date() })
+            .where(and(
+              eq(courierRemittances.id, remittance.id),
+              // orgId was missing from this UPDATE. The SELECT above is
+              // org-scoped so it was not exploitable, but the check and the
+              // write were separate statements — single-layer defence on a
+              // money-moving write.
+              eq(courierRemittances.orgId, ctx.orgId),
+              ne(courierRemittances.status, 'reconciled')
+            ))
+            .returning();
+
+          if (!row) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Remittance is already reconciled',
+            });
+          }
+
+          await tx
+            .update(courierShipments)
+            .set({ codRemitted: true })
+            .where(and(
+              eq(courierShipments.remittanceId, remittance.remittanceReference),
+              eq(courierShipments.orgId, ctx.orgId)
+            ));
+
+          // The courier has now actually handed over the cash it collected on
+          // delivery: clears the receivable that order.delivered opened
+          // (1030) into cash the business actually holds. Posted only for a
+          // nonzero amount — the guarded UPDATE above already rejects a
+          // second reconciliation of the same remittance, so this only ever
+          // runs once per remittance.
+          if (remittance.amountMinor > 0n) {
+            await postJournalEntry(tx, {
+              orgId: ctx.orgId,
+              journalType: 'cash',
+              description: `COD remitted — ${remittance.remittanceReference}`,
+              sourceTable: 'courier_remittances',
+              sourceId: remittance.id,
+              createdBy: ctx.userId,
+              lines: [
+                { accountCode: ACCOUNT_CODES.BANK, debitMinor: remittance.amountMinor },
+                { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, creditMinor: remittance.amountMinor },
+              ],
+            });
+          }
+
+          // Inside the transaction, so the audit row lands with the change it
+          // describes or not at all.
+          await withAudit(tx, async () => row, {
             orgId: ctx.orgId,
             userId: ctx.userId,
             action: 'RECONCILE_REMITTANCE',
             tableName: 'courier_remittances',
             changes: { remittanceId: input.remittanceId },
-          }
-        );
+          });
 
-        await ctx.db
-          .update(courierShipments)
-          .set({ codRemitted: true })
-          .where(and(
-            eq(courierShipments.remittanceId, remittance.remittanceReference),
-            eq(courierShipments.orgId, ctx.orgId)
-          ));
+          return row;
+        });
 
         return { data: updatedRemittance, error: null, meta: null };
       }),
@@ -168,15 +222,17 @@ export const courierRouter = router({
   summary: protectedProcedure.query(async ({ ctx }) => {
     // We will run the aggregations using Promise.all per the memory guidelines
     const [collectedRes, remittedRes, unremittedRes, statusesRes] = await Promise.all([
-      ctx.db.select({ total: sum(sql`CAST(${courierShipments.codAmount} AS numeric)`) })
+      // The CAST is gone with the column: cod_amount_minor is already bigint,
+      // so sum() aggregates it natively.
+      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true))),
 
-      ctx.db.select({ total: sum(sql`CAST(${courierShipments.codAmount} AS numeric)`) })
+      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codRemitted, true))),
 
-      ctx.db.select({ total: sum(sql`CAST(${courierShipments.codAmount} AS numeric)`) })
+      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true), eq(courierShipments.codRemitted, false))),
 
@@ -193,9 +249,12 @@ export const courierRouter = router({
 
     return {
       data: {
-        totalCodCollected: Number(collectedRes[0]?.total ?? 0),
-        totalCodRemitted: Number(remittedRes[0]?.total ?? 0),
-        pendingRemittance: Number(unremittedRes[0]?.total ?? 0),
+        // sum() returns a numeric string (null when nothing matched). BigInt
+        // keeps it exact; Number would silently cap at 2^53 and reintroduce a
+        // float for the COD balance the courier actually owes us.
+        totalCodCollected: fromMinor(BigInt((collectedRes[0]?.total as string | null) ?? '0')),
+        totalCodRemitted: fromMinor(BigInt((remittedRes[0]?.total as string | null) ?? '0')),
+        pendingRemittance: fromMinor(BigInt((unremittedRes[0]?.total as string | null) ?? '0')),
         shipmentsByStatus,
       },
       error: null,

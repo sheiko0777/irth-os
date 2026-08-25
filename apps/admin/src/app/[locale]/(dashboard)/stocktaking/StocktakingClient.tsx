@@ -80,11 +80,11 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
       <div className="rounded-md border border-[var(--rim1)] bg-[var(--surface)]">
         <Table>
           <TableHeader><TableRow>
-            <TableHead className="text-right">الحالة</TableHead>
-            <TableHead className="text-right">تاريخ البدء</TableHead>
-            <TableHead className="text-right">عدد الاصناف</TableHead>
-            <TableHead className="text-right">فروقات</TableHead>
-            <TableHead className="text-right">الاجراءات</TableHead>
+            <TableHead className="text-start">الحالة</TableHead>
+            <TableHead className="text-start">تاريخ البدء</TableHead>
+            <TableHead className="text-start">عدد الاصناف</TableHead>
+            <TableHead className="text-start">فروقات</TableHead>
+            <TableHead className="text-start">الاجراءات</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {initialSessions.length === 0 ? (
@@ -124,11 +124,11 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
             {getItemsQuery.isLoading ? <p className="text-center text-[var(--t2)] py-8">جاري التحميل...</p> : (
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead className="text-right">المنتج</TableHead>
-                  <TableHead className="text-right">SKU</TableHead>
-                  <TableHead className="text-right">الكمية المتوقعة</TableHead>
-                  <TableHead className="text-right">الكمية المحسوبة</TableHead>
-                  <TableHead className="text-right">الفرق</TableHead>
+                  <TableHead className="text-start">المنتج</TableHead>
+                  <TableHead className="text-start">SKU</TableHead>
+                  <TableHead className="text-start">الكمية المتوقعة</TableHead>
+                  <TableHead className="text-start">الكمية المحسوبة</TableHead>
+                  <TableHead className="text-start">الفرق</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {items.length === 0

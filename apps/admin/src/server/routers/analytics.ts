@@ -2,6 +2,7 @@ import { router, protectedProcedure } from '../trpc';
 import { orders, orderItems, productVariants, products, inventoryItems, inventoryMovements } from '@irth/db';
 import { eq, and, desc, sql, count, sum, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
+import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
 export const analyticsRouter = router({
   /**
@@ -14,14 +15,22 @@ export const analyticsRouter = router({
       since.setDate(since.getDate() - input.days);
       since.setHours(0, 0, 0, 0);
 
+      // Bound as an ISO string, not a Date. The query builder converts Date
+      // params for you; `db.execute` with a raw sql`` template does not, and
+      // postgres-js rejects the object with "The string argument must be of
+      // type string... Received an instance of Date". This threw on every
+      // request, so the analytics page had never rendered — it 500'd for
+      // everyone, always.
+      const sinceIso = since.toISOString();
+
       const rows = await ctx.db.execute(sql`
         SELECT
           date_trunc('day', created_at)::date AS day,
           COUNT(*)::int                        AS orders,
-          COALESCE(SUM(total_amount), 0)::numeric AS revenue
+          COALESCE(SUM(total_amount_minor), 0)::numeric AS revenue
         FROM orders
         WHERE org_id = ${ctx.orgId}
-          AND created_at >= ${since}
+          AND created_at >= ${sinceIso}
           AND status = 'delivered'
         GROUP BY 1
         ORDER BY 1 ASC
@@ -31,7 +40,7 @@ export const analyticsRouter = router({
       const data = (rows as unknown as Row[]).map((r) => ({
         day: r.day,
         orders: Number(r.orders),
-        revenue: parseFloat(r.revenue),
+        revenue: wholeMajorUnits(r.revenue),
       }));
 
       return { data, error: null, meta: null };
@@ -47,7 +56,7 @@ export const analyticsRouter = router({
         SELECT
           p.name                               AS product,
           SUM(oi.quantity)::int                AS units,
-          COALESCE(SUM(oi.quantity * oi.price), 0)::numeric AS revenue
+          COALESCE(SUM(oi.quantity * oi.price_minor), 0)::numeric AS revenue
         FROM order_items oi
         JOIN orders      o  ON o.id  = oi.order_id
         JOIN product_variants pv ON pv.id = oi.variant_id
@@ -63,7 +72,7 @@ export const analyticsRouter = router({
       const data = (rows as unknown as Row[]).map((r) => ({
         product: r.product,
         units: Number(r.units),
-        revenue: parseFloat(r.revenue),
+        revenue: wholeMajorUnits(r.revenue),
       }));
 
       return { data, error: null, meta: null };
@@ -78,6 +87,8 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       const since = new Date();
       since.setDate(since.getDate() - input.days);
+      // Same raw-execute Date binding trap as `revenue` above.
+      const sinceIso = since.toISOString();
 
       const rows = await ctx.db.execute(sql`
         SELECT
@@ -90,7 +101,7 @@ export const analyticsRouter = router({
         JOIN product_variants pv ON pv.id = ii.variant_id
         JOIN products         p  ON p.id  = pv.product_id
         LEFT JOIN inventory_movements im
-               ON im.item_id = ii.id AND im.created_at >= ${since}
+               ON im.item_id = ii.id AND im.created_at >= ${sinceIso}
         WHERE ii.org_id = ${ctx.orgId}
         GROUP BY pv.name, p.name, ii.quantity, ii.reorder_point
         ORDER BY ii.quantity ASC
@@ -145,15 +156,15 @@ export const analyticsRouter = router({
         .from(orders)
         .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart))),
       ctx.db
-        .select({ total: sum(orders.totalAmount) })
+        .select({ total: sum(orders.totalAmountMinor) })
         .from(orders)
         .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart), eq(orders.status, 'delivered'))),
       ctx.db
-        .select({ total: sum(orders.totalAmount) })
+        .select({ total: sum(orders.totalAmountMinor) })
         .from(orders)
         .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, thisMonthStart), eq(orders.status, 'delivered'))),
       ctx.db
-        .select({ total: sum(orders.totalAmount) })
+        .select({ total: sum(orders.totalAmountMinor) })
         .from(orders)
         .where(and(
           eq(orders.orgId, ctx.orgId),
@@ -174,15 +185,16 @@ export const analyticsRouter = router({
         )),
     ]);
 
-    const monthRev = parseFloat((monthRevenue[0]?.total as unknown as string) ?? '0');
-    const lastRev = parseFloat((lastMonthRevenue[0]?.total as unknown as string) ?? '0');
-    const revenueGrowth = lastRev > 0 ? +((monthRev - lastRev) / lastRev * 100).toFixed(1) : null;
+    const todayRevMinor = BigInt((todayRevenue[0]?.total as string | null) ?? '0');
+    const monthRevMinor = BigInt((monthRevenue[0]?.total as string | null) ?? '0');
+    const lastRevMinor = BigInt((lastMonthRevenue[0]?.total as string | null) ?? '0');
+    const revenueGrowth = percentDelta(monthRevMinor, lastRevMinor);
 
     return {
       data: {
         ordersToday: todayOrders[0]?.count ?? 0,
-        revenueToday: parseFloat((todayRevenue[0]?.total as unknown as string) ?? '0'),
-        revenueThisMonth: monthRev,
+        revenueToday: wholeMajorUnits(todayRevMinor.toString()),
+        revenueThisMonth: wholeMajorUnits(monthRevMinor.toString()),
         revenueGrowth,
         totalOrders: totalOrders[0]?.count ?? 0,
         lowStockCount: lowStockCount[0]?.count ?? 0,
@@ -192,3 +204,4 @@ export const analyticsRouter = router({
     };
   }),
 });
+

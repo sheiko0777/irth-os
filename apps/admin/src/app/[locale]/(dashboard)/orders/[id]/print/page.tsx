@@ -1,3 +1,4 @@
+import { formatMoney, fromMinor, multiply } from "@irth/domain";
 import { serverCaller } from '@/server/caller';
 import { notFound } from 'next/navigation';
 import { PrintButton } from './PrintButton';
@@ -15,9 +16,7 @@ export default async function PrintPage({
 
     const { order, items } = response.data;
 
-    const total = Number(order.totalAmount).toLocaleString('ar-EG', {
-        minimumFractionDigits: 2,
-    });
+    const total = formatMoney(fromMinor(order.totalAmountMinor));
 
     return (
         <>
@@ -43,7 +42,7 @@ export default async function PrintPage({
                         <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>نظام إرث</h1>
                         <p style={{ color: '#666', margin: '4px 0 0' }}>فاتورة / إيصال</p>
                     </div>
-                    <div style={{ textAlign: 'left' }}>
+                    <div style={{ textAlign: 'end' }}>
                         <p style={{ fontWeight: 600, margin: 0 }}>رقم الفاتورة: {order.orderNumber}</p>
                         <p style={{ color: '#666', margin: '4px 0 0' }}>
                             التاريخ:{' '}
@@ -68,27 +67,25 @@ export default async function PrintPage({
                     </thead>
                     <tbody>
                         {items.map((item) => {
-                            const unitPrice = Number(item.price);
-                            const lineTotal = unitPrice * item.quantity;
+                            // Was Number(item.price) * item.quantity — a float
+                            // multiply on every printed invoice line.
+                            const unitPrice = fromMinor(item.priceMinor);
+                            const lineTotal = multiply(unitPrice, item.quantity);
                             return (
                                 <tr key={item.id}>
                                     <td>{item.sku}</td>
                                     <td>{item.quantity}</td>
                                     <td>
-                                        {unitPrice.toLocaleString('ar-EG', {
-                                            minimumFractionDigits: 2,
-                                        })} ج.م
+                                        {formatMoney(unitPrice)}
                                     </td>
                                     <td>
-                                        {lineTotal.toLocaleString('ar-EG', {
-                                            minimumFractionDigits: 2,
-                                        })} ج.م
+                                        {formatMoney(lineTotal)}
                                     </td>
                                 </tr>
                             );
                         })}
                         <tr>
-                            <td colSpan={3} style={{ fontWeight: 700, textAlign: 'right' }}>
+                            <td colSpan={3} style={{ fontWeight: 700, textAlign: 'start' }}>
                                 الإجمالي
                             </td>
                             <td style={{ fontWeight: 700 }}>{total} ج.م</td>

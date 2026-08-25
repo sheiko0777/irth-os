@@ -1,4 +1,5 @@
 import { serverCaller } from "@/server/caller";
+import { formatMoney, fromMinor } from "@irth/domain";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { notFound } from "next/navigation";
@@ -61,7 +62,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         </div>
         <div className="rounded-lg border bg-[var(--surface)] p-4">
           <p className="text-sm text-[var(--t2)]">إجمالي الإنفاق</p>
-          <p className="text-2xl font-bold text-[var(--t1)]">{customer.totalSpent ? `${customer.totalSpent} ج.م` : '0 ج.م'}</p>
+          <p className="text-2xl font-bold text-[var(--t1)]">{formatMoney(fromMinor(customer.totalSpentMinor ?? 0n))}</p>
         </div>
       </div>
 

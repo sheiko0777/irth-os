@@ -23,7 +23,7 @@ export function NotificationBell() {
             >
                 <Bell className="h-5 w-5" />
                 {count > 0 && (
-                    <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-[var(--crimson)] text-void text-[10px] font-bold flex items-center justify-center leading-none">
+                    <span className="absolute top-1 start-1 h-4 w-4 rounded-full bg-[var(--crimson)] text-void text-[10px] font-bold flex items-center justify-center leading-none">
                         {count > 9 ? '9+' : count}
                     </span>
                 )}

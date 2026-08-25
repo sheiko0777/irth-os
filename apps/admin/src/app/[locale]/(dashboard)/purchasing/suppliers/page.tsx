@@ -1,6 +1,8 @@
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Factory } from 'lucide-react';
 
 export default async function SuppliersPage() {
   const caller = await serverCaller();
@@ -31,7 +33,13 @@ export default async function SuppliersPage() {
           <TableBody>
             {suppliers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center">لا يوجد موردين.</TableCell>
+                <TableCell colSpan={4} className="p-0">
+                  <EmptyState
+                    icon={Factory}
+                    title="لا يوجد موردون"
+                    hint="المورد بيتربط بأوامر الشراء، وبيحدّد مصدر كل صنف بيدخل المخزون."
+                  />
+                </TableCell>
               </TableRow>
             ) : (
               suppliers.map((supplier) => (

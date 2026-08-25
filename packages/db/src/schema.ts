@@ -1,4 +1,8 @@
-import { pgTable, uuid, timestamp, varchar, text, jsonb, decimal, boolean, integer, pgEnum } from "drizzle-orm/pg-core";
+// Money is bigint minor units (piastres), never decimal — see CLAUDE.md rule 1.
+// `mode: 'bigint'` makes Drizzle hand back a JS bigint rather than a string, so
+// values flow straight into @irth/domain's Money without a lossy hop through
+// Number on the way.
+import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const brandEnum = pgEnum('brand', ['irth']);
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
@@ -56,8 +60,8 @@ export const products = pgTable('products', {
   sku: text('sku').notNull().unique(),
   description: text('description'),
   descriptionAr: text('description_ar'),
-  price: decimal('price', { precision: 12, scale: 2 }).notNull(),
-  currency: text('currency').notNull().default('USD'),
+  priceMinor: bigint('price_minor', { mode: 'bigint' }).notNull(),
+  currency: text('currency').notNull().default('EGP'),
   stock: integer('stock').notNull().default(0),
   status: text('status').notNull().default('active'), // 'active' | 'draft' | 'archived'
   images: jsonb('images').default([]),
@@ -68,10 +72,18 @@ export const products = pgTable('products', {
 
 export const productVariants = pgTable('product_variants', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // Migration 0027 added org_id as uuid NOT NULL with no default, but this
+  // table never declared it. Drizzle omits columns it does not know about, so
+  // every variant insert was rejected with 23502 — proven against a real
+  // branch, and invisible to the mocked unit suite.
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   productId: uuid('product_id').notNull().references(() => products.id),
   name: text('name').notNull(),
   sku: text('sku').notNull().unique(),
-  price: decimal('price', { precision: 12, scale: 2 }),
+  // Nullable: a variant with no price of its own inherits the product's. This
+  // was NOT NULL in migration 0000 but nullable here — 0028 settles the drift
+  // on the behaviour the admin already assumes.
+  priceMinor: bigint('price_minor', { mode: 'bigint' }),
   stock: integer('stock').notNull().default(0),
   attributes: jsonb('attributes').default({}),
   createdAt: timestamp('created_at').defaultNow(),
@@ -79,18 +91,39 @@ export const productVariants = pgTable('product_variants', {
 
 export const orders = pgTable("orders", {
   ...baseColumns,
-  orderNumber: varchar("order_number", { length: 50 }).notNull().unique(), // IRT-2026-0001
+  // Unique per ORG, not globally — see the table-level constraint below and
+  // migration 0035. A bare .unique() here meant the second org ever to place
+  // an order collided with the first org's IRT-2026-0001 and could not order.
+  orderNumber: varchar("order_number", { length: 50 }).notNull(), // IRT-2026-0001
   status: orderStatusEnum("status").notNull().default('pending'),
-  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(),
-  customerId: uuid("customer_id"), // Ref to auth users eventually
-});
+  totalAmountMinor: bigint("total_amount_minor", { mode: 'bigint' }).notNull(),
+  currency: char("currency", { length: 3 }).notNull().default('EGP'),
+  // NOT a user id. This is uuid, while Better Auth user ids are text — see
+  // 0034. apps/api was writing the session's userId straight in here, which
+  // raised 22P02 and meant order creation through the API could never succeed.
+  // It refers to `customers.id` when a customer is linked, and is NULL when the
+  // order has no customer record yet.
+  customerId: uuid("customer_id"),
+}, (table) => ({
+  // Per tenant, not global (0035). A bare .unique() on order_number meant the
+  // second org ever to place an order collided with the first org's
+  // IRT-2026-0001 and was locked out of ordering entirely.
+  orgOrderNumberIdx: uniqueIndex('orders_org_order_number_idx').on(table.orgId, table.orderNumber),
+}));
 
 export const orderItems = pgTable("order_items", {
   ...baseColumns,
   orderId: uuid("order_id").references(() => orders.id).notNull(),
   variantId: uuid("variant_id").references(() => productVariants.id).notNull(),
   quantity: integer("quantity").notNull(),
-  price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+  // No currency column: a line is denominated in its order's currency by
+  // definition, and a second copy is a second thing that can disagree.
+  priceMinor: bigint("price_minor", { mode: 'bigint' }).notNull(),
+  // Cost basis captured when stock was decremented for this line (0039). NULL
+  // means the item had no cost basis yet — unknown, not free; the
+  // order-delivered ledger posting reports the gap rather than treating it
+  // as zero COGS.
+  costMinor: bigint("cost_minor", { mode: 'bigint' }),
 });
 
 export const shipmentTracking = pgTable("shipment_tracking", {
@@ -104,10 +137,16 @@ export const shipmentTracking = pgTable("shipment_tracking", {
 
 export const auditLog = pgTable("audit_log", {
   ...baseColumns,
-  userId: uuid("user_id"), // Ref to auth users
+  // TEXT, not uuid (0034). Better Auth owns `public."user"` and its ids are
+  // random alphanumeric strings, not uuids — writing one into a uuid column
+  // raised 22P02 on every audited mutation by a logged-in user.
+  // org_members.user_id is text for the same reason.
+  userId: text("user_id"),
   action: varchar("action", { length: 255 }).notNull(),
   tableName: varchar("table_name", { length: 255 }).notNull(),
-  recordId: uuid("record_id").notNull(),
+  // Nullable since 0033: some audited actions (bulk updates) have no single
+  // subject row, and the previous NOT NULL forced withAudit to invent one.
+  recordId: uuid("record_id"),
   changes: jsonb("changes").notNull(),
 });
 

@@ -3,6 +3,39 @@ import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../t
 import { db, coupons, withAudit } from '@irth/db';
 import { eq, and, desc, sql, or, isNull, lt, gt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+import { EGP, applyRate, compare, fromMinor, min, parseDecimal, zero } from '@irth/domain';
+
+const moneyInput = z.string().min(1).or(z.number().min(0));
+
+function moneyMinor(input: string | number): bigint {
+    return parseDecimal(String(input), EGP).minor;
+}
+
+function percentToBasisPoints(input: string | number): number {
+    const text = String(input).trim();
+    const match = /^(\d+)(?:\.(\d{0,2}))?$/.exec(text);
+    if (!match) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid percentage value' });
+    }
+
+    const whole = parseInt(match[1]!, 10);
+    const fraction = parseInt((match[2] ?? '').padEnd(2, '0') || '0', 10);
+    const basisPoints = whole * 100 + fraction;
+    if (basisPoints > 10000) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Percentage cannot exceed 100%' });
+    }
+    return basisPoints;
+}
+
+function discountColumns(type: 'percentage' | 'fixed' | 'free_shipping', value: string | number) {
+    if (type === 'percentage') {
+        return { percentBp: percentToBasisPoints(value), amountMinor: null };
+    }
+    if (type === 'fixed') {
+        return { percentBp: null, amountMinor: moneyMinor(value) };
+    }
+    return { percentBp: null, amountMinor: null };
+}
 
 export const couponsRouter = router({
     list: protectedProcedure
@@ -48,21 +81,21 @@ export const couponsRouter = router({
         .input(z.object({
             code: z.string().min(1).transform(s => s.toUpperCase()),
             type: z.enum(['percentage', 'fixed', 'free_shipping']),
-            value: z.number().min(0),
-            minOrderAmount: z.number().min(0).optional().nullable(),
+            value: moneyInput,
+            minOrderAmount: moneyInput.optional().nullable(),
             maxUses: z.number().int().min(1).optional().nullable(),
             expiresAt: z.date().optional().nullable(),
-            description: z.string().optional().nullable(),
+            description: z.string().max(500).optional().nullable(),
         }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
-                const result = await db.insert(coupons)
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
+                const result = await tx.insert(coupons)
                     .values({
                         orgId: ctx.orgId,
                         code: input.code,
                         type: input.type,
-                        value: input.value.toString(),
-                        minOrderAmount: input.minOrderAmount?.toString(),
+                        ...discountColumns(input.type, input.value),
+                        minOrderAmountMinor: input.minOrderAmount == null ? null : moneyMinor(input.minOrderAmount),
                         maxUses: input.maxUses ?? null,
                         expiresAt: input.expiresAt ?? null,
                         description: input.description ?? null,
@@ -75,7 +108,7 @@ export const couponsRouter = router({
                 action: 'create_coupon',
                 tableName: 'coupons',
                 changes: input,
-            });
+            }));
         }),
 
     update: adminProcedure
@@ -83,21 +116,28 @@ export const couponsRouter = router({
             id: z.string().uuid(),
             code: z.string().min(1).transform(s => s.toUpperCase()).optional(),
             type: z.enum(['percentage', 'fixed', 'free_shipping']).optional(),
-            value: z.number().min(0).optional(),
-            minOrderAmount: z.number().min(0).optional().nullable(),
+            value: moneyInput.optional(),
+            minOrderAmount: moneyInput.optional().nullable(),
             maxUses: z.number().int().min(1).optional().nullable(),
             expiresAt: z.date().optional().nullable(),
-            description: z.string().optional().nullable(),
+            description: z.string().max(500).optional().nullable(),
         }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
-                const { id, ...updateData } = input;
-                const formattedData: Record<string, unknown> = { ...updateData };
-                if (input.value !== undefined) formattedData.value = input.value.toString();
-                if (input.minOrderAmount !== undefined) formattedData.minOrderAmount = input.minOrderAmount?.toString() ?? null;
-                formattedData.updatedAt = new Date();
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
+                const { id, value: _value, minOrderAmount: _minOrderAmount, ...rest } = input;
+                const formattedData: Partial<typeof coupons.$inferInsert> = { ...rest, updatedAt: new Date() };
 
-                const result = await db.update(coupons)
+                if (input.type === 'free_shipping') {
+                    formattedData.percentBp = null;
+                    formattedData.amountMinor = null;
+                } else if (input.value !== undefined && input.type) {
+                    Object.assign(formattedData, discountColumns(input.type, input.value));
+                }
+                if (input.minOrderAmount !== undefined) {
+                    formattedData.minOrderAmountMinor = input.minOrderAmount == null ? null : moneyMinor(input.minOrderAmount);
+                }
+
+                const result = await tx.update(coupons)
                     .set(formattedData)
                     .where(and(eq(coupons.id, id), eq(coupons.orgId, ctx.orgId)))
                     .returning();
@@ -111,14 +151,14 @@ export const couponsRouter = router({
                 action: 'update_coupon',
                 tableName: 'coupons',
                 changes: input,
-            });
+            }));
         }),
 
     toggleActive: adminProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
-                const coupon = await db.select({ isActive: coupons.isActive })
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
+                const coupon = await tx.select({ isActive: coupons.isActive })
                     .from(coupons)
                     .where(and(eq(coupons.id, input.id), eq(coupons.orgId, ctx.orgId)))
                     .limit(1);
@@ -127,7 +167,7 @@ export const couponsRouter = router({
                     throw new TRPCError({ code: 'NOT_FOUND', message: 'Coupon not found' });
                 }
 
-                const result = await db.update(coupons)
+                const result = await tx.update(coupons)
                     .set({ isActive: !coupon[0].isActive, updatedAt: new Date() })
                     .where(and(eq(coupons.id, input.id), eq(coupons.orgId, ctx.orgId)))
                     .returning();
@@ -138,14 +178,14 @@ export const couponsRouter = router({
                 action: 'toggle_coupon_active',
                 tableName: 'coupons',
                 changes: { id: input.id },
-            });
+            }));
         }),
 
     delete: ownerProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
-                const result = await db.delete(coupons)
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
+                const result = await tx.delete(coupons)
                     .where(and(eq(coupons.id, input.id), eq(coupons.orgId, ctx.orgId)))
                     .returning();
                 if (!result.length) {
@@ -158,13 +198,13 @@ export const couponsRouter = router({
                 action: 'delete_coupon',
                 tableName: 'coupons',
                 changes: { id: input.id },
-            });
+            }));
         }),
 
     validate: protectedProcedure
         .input(z.object({
             code: z.string().transform(s => s.toUpperCase()),
-            orderAmount: z.number().min(0),
+            orderAmount: moneyInput,
         }))
         .query(async ({ ctx, input }) => {
             const result = await db.select()
@@ -172,42 +212,40 @@ export const couponsRouter = router({
                 .where(and(eq(coupons.code, input.code), eq(coupons.orgId, ctx.orgId)))
                 .limit(1);
 
+            const noDiscount = zero(EGP);
             if (!result.length) {
-                return { valid: false, error: 'invalid_code', discount: 0, discountType: null, couponId: null };
+                return { valid: false, error: 'invalid_code', discount: noDiscount, discountType: null, couponId: null };
             }
 
             const coupon = result[0];
 
             if (!coupon.isActive) {
-                return { valid: false, error: 'inactive', discount: 0, discountType: null, couponId: null };
+                return { valid: false, error: 'inactive', discount: noDiscount, discountType: null, couponId: null };
             }
 
             if (coupon.expiresAt && new Date() > coupon.expiresAt) {
-                return { valid: false, error: 'expired', discount: 0, discountType: null, couponId: null };
+                return { valid: false, error: 'expired', discount: noDiscount, discountType: null, couponId: null };
             }
 
             if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
-                return { valid: false, error: 'max_uses_reached', discount: 0, discountType: null, couponId: null };
+                return { valid: false, error: 'max_uses_reached', discount: noDiscount, discountType: null, couponId: null };
             }
 
-            if (coupon.minOrderAmount && input.orderAmount < Number(coupon.minOrderAmount)) {
-                return { valid: false, error: 'min_amount_not_met', discount: 0, discountType: null, couponId: null };
+            const orderTotal = parseDecimal(String(input.orderAmount), EGP);
+            if (coupon.minOrderAmountMinor && compare(orderTotal, fromMinor(coupon.minOrderAmountMinor, EGP)) < 0) {
+                return { valid: false, error: 'min_amount_not_met', discount: noDiscount, discountType: null, couponId: null };
             }
 
-            let discount = 0;
-            const value = Number(coupon.value);
-
-            if (coupon.type === 'percentage') {
-                discount = (input.orderAmount * value) / 100;
-            } else if (coupon.type === 'fixed') {
-                discount = value;
-            } else if (coupon.type === 'free_shipping') {
-                discount = value; // We return value for free shipping as well, could be 0, the type indicates it.
+            let discount = noDiscount;
+            if (coupon.type === 'percentage' && coupon.percentBp != null) {
+                discount = applyRate(orderTotal, coupon.percentBp);
+            } else if (coupon.type === 'fixed' && coupon.amountMinor != null) {
+                discount = fromMinor(coupon.amountMinor, EGP);
             }
 
             return {
                 valid: true,
-                discount: discount > input.orderAmount ? input.orderAmount : discount,
+                discount: min(discount, orderTotal),
                 discountType: coupon.type,
                 couponId: coupon.id,
                 error: null
@@ -222,14 +260,14 @@ export const couponsRouter = router({
             orderId: z.string().uuid().optional(), // For auditing if needed
         }))
         .mutation(async ({ ctx, input }) => {
-            return withAudit(db, async () => {
+            return ctx.withOrg((tx) => withAudit(tx, async () => {
                 // `validate` is a separate query, so its checks are stale by the
                 // time this runs — and this mutation is callable without it.
                 // Re-assert redeemability inside the UPDATE's WHERE so the check
                 // and the increment cannot be split: without this an expired,
                 // deactivated, or fully-used coupon still increments and reports
                 // success, and concurrent redemptions blow past maxUses.
-                const result = await db.update(coupons)
+                const result = await tx.update(coupons)
                     .set({
                         usedCount: sql`used_count + 1`,
                         updatedAt: new Date()
@@ -246,7 +284,7 @@ export const couponsRouter = router({
                 if (!result.length) {
                     // Distinguish "no such coupon" from "not redeemable" only
                     // after the atomic attempt has already failed.
-                    const [existing] = await db.select({ id: coupons.id })
+                    const [existing] = await tx.select({ id: coupons.id })
                         .from(coupons)
                         .where(and(eq(coupons.id, input.couponId), eq(coupons.orgId, ctx.orgId)))
                         .limit(1);
@@ -266,6 +304,6 @@ export const couponsRouter = router({
                 action: 'apply_coupon',
                 tableName: 'coupons',
                 changes: { couponId: input.couponId, orderId: input.orderId },
-            });
+            }));
         }),
 });

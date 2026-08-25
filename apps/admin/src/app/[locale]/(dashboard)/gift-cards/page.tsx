@@ -1,3 +1,4 @@
+import { EGP, zero } from '@irth/domain';
 import { serverCaller } from '@/server/caller';
 import GiftCardsClient, { type GiftCard, type GiftCardSummary } from './GiftCardsClient';
 
@@ -11,8 +12,13 @@ export default async function GiftCardsPage() {
       caller.giftCards.summary(),
     ]);
 
-    const initialData = (listRes.data ?? []) as unknown as GiftCard[];
-    const summary = (summaryRes.data ?? { total: 0, active: 0, totalIssued: 0, activeBalance: 0 }) as GiftCardSummary;
+    const initialData: GiftCard[] = listRes.data ?? [];
+    const summary: GiftCardSummary = summaryRes.data ?? {
+      total: 0,
+      active: 0,
+      totalIssued: zero(EGP),
+      activeBalance: zero(EGP),
+    };
 
     return (
       <div className="p-6">

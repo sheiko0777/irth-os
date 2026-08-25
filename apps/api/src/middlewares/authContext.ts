@@ -2,19 +2,11 @@ import type { MiddlewareHandler } from 'hono';
 import { db } from '../db';
 import { orgMembers } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
-import type { Role } from '@irth/db/src/permissions';
+import type { Role } from '@irth/db';
 import { auth } from '../auth';
-
-// Routes that authenticate by other means (Better Auth itself, signature-verified
-// webhooks) or need no auth (health) are skipped. Everything else under /api/*
-// must carry a valid session.
-const PUBLIC_PREFIXES = ['/api/auth', '/api/webhooks', '/webhooks', '/health'];
-
-function isPublic(path: string): boolean {
-  // Non-/api routes (health, webhooks, root) are not session-gated here.
-  if (!path.startsWith('/api/')) return true;
-  return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p + '/'));
-}
+// Kept in its own module so the predicate can be tested without importing
+// `../auth`, which initializes a database adapter at import time.
+import { isPublic } from './publicRoutes';
 
 /**
  * Establishes a trusted request identity from the Better Auth session and exposes
@@ -35,27 +27,26 @@ export const authContext = (): MiddlewareHandler => async (c, next) => {
   const userId = session.user.id;
   c.set('userId', userId);
 
-  // Resolve tenant + role from membership (active org preferred). Onboarding
-  // routes (e.g. invite accept) only need userId, so a missing membership is not
-  // fatal here — org-scoped routes guard on `orgId` themselves.
-  const activeOrgId = (session.session as { activeOrganizationId?: string } | undefined)
-    ?.activeOrganizationId;
-
-  let membership;
-  if (activeOrgId) {
-    [membership] = await db
-      .select()
-      .from(orgMembers)
-      .where(and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, activeOrgId)))
-      .limit(1);
-  }
-  if (!membership) {
-    [membership] = await db
-      .select()
-      .from(orgMembers)
-      .where(eq(orgMembers.userId, userId))
-      .limit(1);
-  }
+  // Resolve tenant + role from membership. Onboarding routes (e.g. invite
+  // accept) only need userId, so a missing membership is not fatal here —
+  // org-scoped routes guard on `orgId` themselves.
+  //
+  // This used to prefer `session.activeOrganizationId` and fall back to the
+  // first membership. That branch could never run: `active_organization_id` is
+  // added by Better Auth's organization plugin, which is deliberately not
+  // enabled (see ../auth.ts), so the column does not exist and the value was
+  // always undefined. The fallback was the only live path.
+  //
+  // The honest consequence, stated rather than hidden behind dead code: a user
+  // who belongs to more than one organization always lands in whichever
+  // membership Postgres returns first, and cannot switch. Implementing org
+  // switching means storing the choice somewhere real — a column on `session`
+  // or a `last_active_org_id` on the user — not reading a field nothing writes.
+  const [membership] = await db
+    .select()
+    .from(orgMembers)
+    .where(eq(orgMembers.userId, userId))
+    .limit(1);
 
   if (membership) {
     c.set('orgId', membership.orgId);

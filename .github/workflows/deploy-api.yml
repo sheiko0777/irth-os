@@ -43,3 +43,30 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # A `wrangler deploy` that returns 0 means the upload succeeded, NOT that
+      # the Worker runs. This app spent its whole life failing to BOOT --
+      # "Uncaught ReferenceError: process is not defined", then
+      # "DATABASE_URL is not set" -- and every deploy still reported success,
+      # because nothing ever issued a request. Curl the health route so a Worker
+      # that dies on startup fails the deploy instead of sitting there broken.
+      - name: Smoke test the deployed Worker
+        run: |
+          URL="${{ secrets.API_HEALTH_URL }}"
+          if [ -z "$URL" ]; then
+            echo "::error title=API_HEALTH_URL not set::Add the repository secret API_HEALTH_URL (e.g. https://irth-api.<subdomain>.workers.dev/health). Without it a deploy cannot be verified and a Worker that fails to boot ships silently."
+            exit 1
+          fi
+          echo "Probing $URL"
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -s -o /tmp/smoke.txt -w "%{http_code}" --max-time 20 "$URL" || echo 000)
+            echo "attempt $i -> HTTP $CODE"
+            if [ "$CODE" = "200" ]; then
+              cat /tmp/smoke.txt; echo; echo "Worker is serving."; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error title=Worker did not serve 200::Last response:"
+          cat /tmp/smoke.txt || true
+          exit 1
+

@@ -128,11 +128,11 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
                 <Table>
                     <TableHeader className="bg-[var(--rim1)]">
                         <TableRow>
-                            <TableHead className="text-right text-[var(--t1)]">رقم الطلب</TableHead>
-                            <TableHead className="text-right text-[var(--t1)]">الحالة</TableHead>
-                            <TableHead className="text-right text-[var(--t1)]">UUID</TableHead>
-                            <TableHead className="text-right text-[var(--t1)]">التاريخ</TableHead>
-                            <TableHead className="text-right text-[var(--t1)]">إجراءات</TableHead>
+                            <TableHead className="text-start text-[var(--t1)]">رقم الطلب</TableHead>
+                            <TableHead className="text-start text-[var(--t1)]">الحالة</TableHead>
+                            <TableHead className="text-start text-[var(--t1)]">UUID</TableHead>
+                            <TableHead className="text-start text-[var(--t1)]">التاريخ</TableHead>
+                            <TableHead className="text-start text-[var(--t1)]">إجراءات</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>

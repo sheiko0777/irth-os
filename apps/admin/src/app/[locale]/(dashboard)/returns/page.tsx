@@ -17,7 +17,7 @@ type DbReturn = {
     resolutionType: "refund" | "exchange" | "store_credit" | "none";
     notes: string | null;
     adminNotes: string | null;
-    refundAmount: string | null;
+    refundAmountMinor: bigint | null;
     requestedAt: Date | null;
     resolvedAt: Date | null;
 };
@@ -33,7 +33,7 @@ function mapReturn(dbRet: DbReturn): Return {
     resolutionType: dbRet.resolutionType,
     notes: dbRet.notes,
     adminNotes: dbRet.adminNotes,
-    refundAmount: dbRet.refundAmount,
+    refundAmountMinor: dbRet.refundAmountMinor,
     requestedAt: dbRet.requestedAt,
     resolvedAt: dbRet.resolvedAt,
     createdAt: dbRet.createdAt,

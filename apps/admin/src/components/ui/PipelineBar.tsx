@@ -66,7 +66,7 @@ export function PipelineBar({ data }: PipelineBarProps) {
             key={s.status}
             style={{ width: `${(s.count / total) * 100}%`, background: s.color }}
             // A hairline between segments keeps adjacent hues from bleeding together.
-            className="border-l border-[var(--surface)] last:border-l-0"
+            className="border-e border-[var(--surface)] last:border-e-0"
           />
         ))}
       </div>

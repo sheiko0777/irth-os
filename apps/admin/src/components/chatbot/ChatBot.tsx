@@ -113,7 +113,7 @@ export function ChatBot({ locale }: ChatBotProps) {
         style={{
           position: 'fixed',
           bottom: '24px',
-          left: '24px',
+          insetInlineEnd: '24px',
           width: '52px',
           height: '52px',
           borderRadius: '50%',
@@ -139,7 +139,7 @@ export function ChatBot({ locale }: ChatBotProps) {
           style={{
             position: 'fixed',
             bottom: '88px',
-            left: '24px',
+            insetInlineEnd: '24px',
             width: '340px',
             maxHeight: '520px',
             background: 'var(--surface)',
@@ -216,7 +216,7 @@ export function ChatBot({ locale }: ChatBotProps) {
                           fontSize: '12px',
                           cursor: 'pointer',
                           fontFamily: 'Cairo, sans-serif',
-                          textAlign: 'right',
+                          textAlign: 'start',
                         }}
                       >
                         {link.label} ←

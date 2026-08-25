@@ -1,9 +1,10 @@
+import { parseDecimal, EGP } from '@irth/domain';
 import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { db } from '../db';
-import { products, productVariants, withAudit } from '@irth/db';
+import { db, withOrg } from '../db';
+import { products, productVariants, withAudit, jsonSafe } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
 
@@ -38,7 +39,7 @@ productsRouter.get('/', async (c: Context) => {
     
     const total = Number(countResult[0].count);
 
-    return c.json({ data, error: null, meta: { total, page, limit } });
+    return c.json({ data: jsonSafe(data), error: null, meta: { total, page, limit } });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -76,13 +77,16 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
       }
     }
 
-    const priceStr = typeof data.price === 'number' ? data.price.toString() : data.price;
+    // Routed through String() then parseDecimal so a numeric body value never
+    // becomes a float here — only its decimal text does.
+    const { price, ...productData } = data;
+    const priceMinor = parseDecimal(String(price)).minor;
 
-    const result = await withAudit(db, async () => {
-      const [inserted] = await db.insert(products).values({
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [inserted] = await tx.insert(products).values({
         orgId,
-        ...data,
-        price: priceStr,
+        ...productData,
+        priceMinor,
       }).returning();
       return inserted;
     }, {
@@ -91,9 +95,9 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
       action: 'CREATE_PRODUCT',
       tableName: 'products',
       changes: data
-    });
+    }));
 
-    return c.json({ data: result, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(result), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -115,7 +119,7 @@ productsRouter.get('/:id', async (c: Context) => {
 
     const variants = await db.select().from(productVariants).where(eq(productVariants.productId, id));
 
-    return c.json({ data: { product, variants }, error: null, meta: null });
+    return c.json({ data: jsonSafe({ product, variants }), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -155,13 +159,25 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
       }
     }
 
-    const updateData: Record<string, unknown> = { ...data, updatedAt: new Date() };
-    if (data.price !== undefined) {
-       updateData.price = typeof data.price === 'number' ? data.price.toString() : data.price;
+    // `price` is destructured OUT: there is no such column since 0028, and
+    // leaving it spread in invites someone to "fix" the dead key by adding
+    // one back.
+    const { price, ...rest } = data;
+    const updateData: Record<string, unknown> = { ...rest, updatedAt: new Date() };
+    if (price !== undefined) {
+       // priceMinor, not price. 0028 renamed the column; Drizzle silently
+       // DROPS writes to keys that are not columns, so every price update
+       // through PATCH /api/products/:id reported success and changed nothing.
+       // Silent data loss on the most-used update path, invisible to a test
+       // that only asserts the response envelope.
+       //
+       // String() first so a numeric body never becomes a float: parseDecimal
+       // reads the decimal text, it does not do float arithmetic.
+       updateData.priceMinor = parseDecimal(String(price), EGP).minor;
     }
 
-    const result = await withAudit(db, async () => {
-      const [updated] = await db.update(products)
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [updated] = await tx.update(products)
         .set(updateData)
         .where(and(eq(products.id, id), eq(products.orgId, orgId)))
         .returning();
@@ -172,11 +188,11 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
       action: 'UPDATE_PRODUCT',
       tableName: 'products',
       changes: data
-    });
+    }));
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
-    return c.json({ data: result, error: null, meta: null });
+    return c.json({ data: jsonSafe(result), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -191,8 +207,8 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
     const userId = (c.get('userId') as string | undefined) ?? 'system';
 
-    const result = await withAudit(db, async () => {
-      const [updated] = await db.update(products)
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [updated] = await tx.update(products)
         .set({ status: 'archived', updatedAt: new Date() })
         .where(and(eq(products.id, id), eq(products.orgId, orgId)))
         .returning();
@@ -203,11 +219,11 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
       action: 'DELETE_PRODUCT',
       tableName: 'products',
       changes: { status: 'archived' }
-    });
+    }));
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
 
-    return c.json({ data: result, error: null, meta: null });
+    return c.json({ data: jsonSafe(result), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -230,7 +246,7 @@ productsRouter.get('/:id/variants', async (c: Context) => {
 
     const data = await db.select().from(productVariants).where(eq(productVariants.productId, id));
 
-    return c.json({ data, error: null, meta: null });
+    return c.json({ data: jsonSafe(data), error: null, meta: null });
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
@@ -263,13 +279,20 @@ productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Co
     const body = await c.req.json();
     const data = createVariantSchema.parse(body);
 
-    const priceStr = data.price !== undefined ? (typeof data.price === 'number' ? data.price.toString() : data.price) : undefined;
+    const { price: variantPrice, ...variantData } = data;
+    const variantPriceMinor =
+      variantPrice === undefined ? null : parseDecimal(String(variantPrice)).minor;
 
-    const result = await withAudit(db, async () => {
-      const [inserted] = await db.insert(productVariants).values({
+    const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [inserted] = await tx.insert(productVariants).values({
+        // org_id is uuid NOT NULL in the database with no default, but the
+        // Drizzle table did not declare it, so it was omitted from every insert
+        // and Postgres rejected the row with 23502 — variant creation was
+        // broken outright. orgId has been in scope here the whole time.
+        orgId,
         productId: id,
-        ...data,
-        price: priceStr || null,
+        ...variantData,
+        priceMinor: variantPriceMinor,
       }).returning();
       return inserted;
     }, {
@@ -278,9 +301,9 @@ productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Co
       action: 'CREATE_PRODUCT_VARIANT',
       tableName: 'product_variants',
       changes: data
-    });
+    }));
 
-    return c.json({ data: result, error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe(result), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }

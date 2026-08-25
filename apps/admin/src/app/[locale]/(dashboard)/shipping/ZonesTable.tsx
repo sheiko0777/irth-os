@@ -3,6 +3,8 @@
 import { trpc } from '@/lib/trpc';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ShippingZone } from './ShippingClient';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { MapPin } from 'lucide-react';
 
 interface Props {
   zones: ShippingZone[];
@@ -27,17 +29,21 @@ export function ZonesTable({ zones, selectedZoneId, onSelectZone }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-right">الاسم</TableHead>
-            <TableHead className="text-right">الدول</TableHead>
-            <TableHead className="text-right">الأسعار</TableHead>
-            <TableHead className="text-right">نشط</TableHead>
+            <TableHead className="text-start">الاسم</TableHead>
+            <TableHead className="text-start">الدول</TableHead>
+            <TableHead className="text-start">الأسعار</TableHead>
+            <TableHead className="text-start">نشط</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {zones.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-[var(--t2)] py-8">
-                لا توجد مناطق شحن
+              <TableCell colSpan={4} className="p-0">
+                <EmptyState
+                  icon={MapPin}
+                  title="لا توجد مناطق شحن"
+                  hint="منطقة الشحن بتجمّع المحافظات اللي ليها نفس التسعيرة."
+                />
               </TableCell>
             </TableRow>
           ) : (

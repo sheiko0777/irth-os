@@ -1,4 +1,5 @@
 'use client';
+import { formatMoney, fromMinor } from '@irth/domain';
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
@@ -13,7 +14,7 @@ export interface OrderRow {
     id: string;
     orderNumber: string;
     status: string;
-    totalAmount: string | number;
+    totalAmountMinor: bigint;
     createdAt: string | Date;
 }
 
@@ -59,7 +60,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
             {/* Table */}
             <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table key={key} className="w-full text-right">
+                    <table key={key} className="w-full text-start">
                         <thead className="bg-raised border-b border-[var(--rim1)]">
                             <tr>
                                 <th className="px-4 py-3 w-10">
@@ -115,10 +116,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                             <StatusBadge status={order.status} domain="order" />
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t1)]" dir="ltr">
-                                            {Number(order.totalAmount).toLocaleString('ar-EG', {
-                                                minimumFractionDigits: 2,
-                                            })}{' '}
-                                            ج.م
+                                            {formatMoney(fromMinor(order.totalAmountMinor))}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]">
                                             {order.createdAt

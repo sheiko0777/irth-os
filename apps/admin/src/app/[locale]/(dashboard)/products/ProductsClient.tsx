@@ -1,4 +1,5 @@
 'use client';
+import { formatMoney, fromMinor, toDecimalString } from '@irth/domain';
 
 import { useState } from "react";
 
@@ -35,7 +36,7 @@ export interface Product {
     id: string;
     name: string;
     sku: string;
-    price: string;
+    priceMinor: bigint;
     stock: number;
     status: string;
     category: string | null;
@@ -126,7 +127,9 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
         setFormName(p.name);
         setFormNameAr(""); // Using nameAr would be fetched if available in list payload, but it isn't returned by list. Just keep empty if unavailable.
         setFormSku(p.sku);
-        setFormPrice(p.price.toString());
+        // The form edits a decimal string; toDecimalString is the exact
+        // rendering of the stored minor units, with no float in between.
+        setFormPrice(toDecimalString(fromMinor(p.priceMinor)));
         setFormStatus(p.status);
         
         // Find category ID from category name
@@ -277,13 +280,13 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="text-right">الاسم</TableHead>
-                            <TableHead className="text-right">SKU</TableHead>
-                            <TableHead className="text-right">السعر</TableHead>
-                            <TableHead className="text-right">المخزون</TableHead>
-                            <TableHead className="text-right">الحالة</TableHead>
-                            <TableHead className="text-right">القسم</TableHead>
-                            <TableHead className="text-left">الإجراءات</TableHead>
+                            <TableHead className="text-start">الاسم</TableHead>
+                            <TableHead className="text-start">SKU</TableHead>
+                            <TableHead className="text-start">السعر</TableHead>
+                            <TableHead className="text-start">المخزون</TableHead>
+                            <TableHead className="text-start">الحالة</TableHead>
+                            <TableHead className="text-start">القسم</TableHead>
+                            <TableHead className="text-end">الإجراءات</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -310,11 +313,11 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                 <TableRow key={p.id}>
                                     <TableCell className="font-medium">{p.name}</TableCell>
                                     <TableCell>{p.sku}</TableCell>
-                                    <TableCell>{p.price}</TableCell>
+                                    <TableCell>{formatMoney(fromMinor(p.priceMinor))}</TableCell>
                                     <TableCell>{p.stock}</TableCell>
                                     <TableCell>{getStatusBadge(p.status)}</TableCell>
                                     <TableCell>{p.category || '-'}</TableCell>
-                                    <TableCell className="text-left">
+                                    <TableCell className="text-end">
                                         <PermissionGate resource="products" action="write">
                                             <div className="flex justify-end gap-2">
                                                 <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)}>

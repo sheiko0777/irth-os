@@ -24,7 +24,7 @@ export function Sidebar({ locale }: { locale: string }) {
   };
 
   return (
-    <aside className="flex h-screen w-[240px] flex-col border-l border-[var(--rim1)] bg-[var(--surface)] text-[var(--t2)] shrink-0 z-20">
+    <aside className="flex h-screen w-[240px] flex-col border-e border-[var(--rim1)] bg-[var(--surface)] text-[var(--t2)] shrink-0 z-20">
       {/* Logo */}
       <div className="flex h-14 items-center px-4 border-b border-[var(--rim1)] gap-2 shrink-0">
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--gold-bg)] border border-[var(--gold-br)]">
@@ -54,7 +54,7 @@ export function Sidebar({ locale }: { locale: string }) {
                     key={link.href}
                     href={link.href}
                     className={cn(
-                      'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors border-r-2',
+                      'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors border-s-2',
                       isActive
                         ? 'bg-[var(--gold-bg)] text-[var(--gold)] border-[var(--gold)] font-semibold'
                         : 'text-[var(--t2)] hover:bg-[var(--rim1)] hover:text-[var(--t1)] border-transparent'
@@ -78,7 +78,7 @@ export function Sidebar({ locale }: { locale: string }) {
               <Link
                 href={`/${locale}/platform-admin`}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors border-r-2',
+                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors border-s-2',
                   pathname.startsWith(`/${locale}/platform-admin`)
                     ? 'bg-[var(--gold-bg)] text-[var(--gold)] border-[var(--gold)] font-semibold'
                     : 'text-[var(--t2)] hover:bg-[var(--rim1)] hover:text-[var(--t1)] border-transparent'

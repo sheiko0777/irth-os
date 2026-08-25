@@ -1,4 +1,5 @@
 'use client';
+import { formatMoney } from "@irth/domain";
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
@@ -31,7 +32,7 @@ export function CouponValidator() {
             <CardContent>
                 <form onSubmit={handleValidate} className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="space-y-2 flex-1 w-full">
-                        <Label htmlFor="test-code" className="text-right block">الكود</Label>
+                        <Label htmlFor="test-code" className="text-start block">الكود</Label>
                         <Input
                             id="test-code"
                             value={code}
@@ -42,7 +43,7 @@ export function CouponValidator() {
                         />
                     </div>
                     <div className="space-y-2 flex-1 w-full">
-                        <Label htmlFor="test-amount" className="text-right block">قيمة الطلب</Label>
+                        <Label htmlFor="test-amount" className="text-start block">قيمة الطلب</Label>
                         <Input
                             id="test-amount"
                             type="number"
@@ -70,7 +71,10 @@ export function CouponValidator() {
                             {data.valid ? (
                                 <div className="space-y-1">
                                     <p className="font-bold">الكوبون صالح!</p>
-                                    <p>قيمة الخصم: {data.discount.toFixed(2)} {data.discountType === 'percentage' ? '%' : 'ج.م'}</p>
+                                    {/* discount is the resolved AMOUNT in both cases now — for a
+                                        percentage coupon the server already applied the rate — so the
+                                        old '%' suffix labelled a money value as a percentage. */}
+                                    <p>قيمة الخصم: {formatMoney(data.discount)}</p>
                                     <p>نوع الخصم: {data.discountType === 'percentage' ? 'نسبة مئوية' : data.discountType === 'fixed' ? 'خصم ثابت' : 'شحن مجاني'}</p>
                                 </div>
                             ) : (

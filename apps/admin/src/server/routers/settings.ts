@@ -34,10 +34,10 @@ export const settingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const parsedInput = z.object({ key: z.string(), value: z.string() }).parse(input);
 
-      await withAudit(
-        ctx.db,
+      await ctx.withOrg((tx) => withAudit(
+        tx,
         async () => {
-          await ctx.db
+          await tx
             .insert(orgSettings)
             .values({
               orgId: ctx.orgId,
@@ -66,7 +66,7 @@ export const settingsRouter = router({
             value: (SENSITIVE_KEYS as readonly string[]).includes(parsedInput.key) ? MASK_STRING : parsedInput.value,
           },
         }
-      );
+      ));
 
       return { data: { success: true }, error: null, meta: null };
     }),
@@ -85,7 +85,7 @@ export const settingsRouter = router({
           continue;
         }
 
-        await ctx.db
+        await ctx.withOrg(async (tx) => tx
           .insert(orgSettings)
           .values({
             orgId: ctx.orgId,
@@ -100,13 +100,13 @@ export const settingsRouter = router({
               updatedBy: ctx.userId,
               updatedAt: new Date(),
             },
-          });
+          }));
         writtenKeys.push(item.key);
       }
 
       if (writtenKeys.length > 0) {
-        await withAudit(
-          ctx.db,
+        await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => ({}),
           {
             orgId: ctx.orgId,
@@ -116,7 +116,7 @@ export const settingsRouter = router({
             // Key names only — values may contain secrets.
             changes: { keys: writtenKeys },
           }
-        );
+        ));
       }
 
       return { data: { success: true }, error: null, meta: null };

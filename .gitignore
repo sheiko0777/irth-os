@@ -24,3 +24,13 @@ graphify-out/
 codeflow-*
 hazy-spinning-blum.md
 /irth-os/
+
+# Wrangler local secrets — never commit
+.dev.vars
+.dev.vars.*
+
+# Wrangler local state
+.wrangler/
+
+# Scratch/worktree dir created by tooling; contains nested git repos.
+.freebuff/

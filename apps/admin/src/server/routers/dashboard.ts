@@ -2,6 +2,8 @@ import { router, protectedProcedure } from '../trpc';
 import { orders, orderItems, shipmentTracking, productVariants, products, inventoryItems, orderReturns } from '@irth/db';
 import { eq, and, desc, sql, count, sum, ilike, gte, lte, lt, or, inArray, lte as lteOp } from 'drizzle-orm';
 import { z } from 'zod';
+import { fromMinor } from '@irth/domain';
+import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
 /**
  * An order still sitting in pending or confirmed after this long has missed its
@@ -10,6 +12,9 @@ import { z } from 'zod';
  * than a hunt through query predicates.
  */
 const LATE_ORDER_HOURS = 48;
+function bigintTotal(value: unknown): bigint {
+    return BigInt((value as string | null) ?? '0');
+}
 
 export const dashboardRouter = router({
     getStats: protectedProcedure.query(async ({ ctx }) => {
@@ -57,7 +62,7 @@ export const dashboardRouter = router({
                 .from(orders)
                 .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay))),
             ctx.db
-                .select({ total: sum(orders.totalAmount) })
+                .select({ total: sum(orders.totalAmountMinor) })
                 .from(orders)
                 .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay), eq(orders.status, 'delivered'))),
             ctx.db
@@ -77,7 +82,7 @@ export const dashboardRouter = router({
                     lt(orders.createdAt, startOfDay),
                 )),
             ctx.db
-                .select({ total: sum(orders.totalAmount) })
+                .select({ total: sum(orders.totalAmountMinor) })
                 .from(orders)
                 .where(and(
                     eq(orders.orgId, ctx.orgId),
@@ -101,7 +106,7 @@ export const dashboardRouter = router({
             ctx.db
                 .select({
                     day: sql<string>`${dayBucket}::date::text`,
-                    revenue: sum(orders.totalAmount),
+                    revenue: sum(orders.totalAmountMinor),
                 })
                 .from(orders)
                 .where(and(
@@ -118,17 +123,21 @@ export const dashboardRouter = router({
                 .groupBy(orders.status),
         ]);
 
-        const num = (v: unknown) => parseFloat((v as string | null) ?? '0') || 0;
-
         const ordersToday = ordersTodayQuery[0]?.count ?? 0;
-        const revenueToday = num(revenueTodayQuery[0]?.total);
         const ordersYesterday = ordersYesterdayQuery[0]?.count ?? 0;
-        const revenueYesterday = num(revenueYesterdayQuery[0]?.total);
+
+        // Drizzle's sum() over a bigint column returns a numeric STRING (and null
+        // when no rows matched). BigInt() keeps it exact; parseFloat would put
+        // revenue back on a float the moment it left the database.
+        const revenueTodayMinor = bigintTotal(revenueTodayQuery[0]?.total);
+        const revenueYesterdayMinor = bigintTotal(revenueYesterdayQuery[0]?.total);
 
         // Percent change against the same window a day earlier. Null rather than
         // a fabricated 0% or an Infinity when there is no prior value to divide by.
-        const delta = (current: number, previous: number): number | null =>
-            previous === 0 ? null : ((current - previous) / previous) * 100;
+        // Counts are plain integers, so they get their own delta — percentDelta
+        // takes bigint minor units and is for money.
+        const countDelta = (current: number, previous: number): number | null =>
+            previous === 0 ? null : Math.round(((current - previous) / previous) * 1000) / 10;
 
         // The grouped queries only emit rows for days that actually traded, so
         // fill the gaps — a sparkline needs a point per day or it misreads the shape.
@@ -141,18 +150,18 @@ export const dashboardRouter = router({
             d.setUTCDate(d.getUTCDate() + i);
             const key = d.toISOString().slice(0, 10);
             ordersSeries.push(ordersByDay.get(key) ?? 0);
-            revenueSeries.push(num(revenueByDay.get(key)));
+            revenueSeries.push(wholeMajorUnits(bigintTotal(revenueByDay.get(key))));
         }
 
         return {
             data: {
                 ordersToday,
-                revenueToday,
+                revenueToday: fromMinor(revenueTodayMinor),
                 pendingOrders: pendingOrdersQuery[0]?.count ?? 0,
                 activeProducts: activeProductsQuery[0]?.count ?? 0,
                 deltas: {
-                    ordersToday: delta(ordersToday, ordersYesterday),
-                    revenueToday: delta(revenueToday, revenueYesterday),
+                    ordersToday: countDelta(ordersToday, ordersYesterday),
+                    revenueToday: percentDelta(revenueTodayMinor, revenueYesterdayMinor),
                 },
                 series: { orders: ordersSeries, revenue: revenueSeries },
                 pipeline: pipelineQuery.map((r) => ({ status: r.status, count: r.count })),
@@ -215,7 +224,7 @@ export const dashboardRouter = router({
                 id: orders.id,
                 orderNumber: orders.orderNumber,
                 status: orders.status,
-                totalAmount: orders.totalAmount,
+                totalAmountMinor: orders.totalAmountMinor,
                 createdAt: orders.createdAt,
             })
             .from(orders)
@@ -226,3 +235,4 @@ export const dashboardRouter = router({
         return { data: recentOrders, error: null, meta: null };
     }),
 });
+

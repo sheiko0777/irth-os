@@ -1,4 +1,5 @@
 "use client";
+import { currency, formatMoney, fromMinor } from '@irth/domain';
 
 import { useState } from "react";
 
@@ -6,7 +7,7 @@ import { trpc } from "@/lib/trpc";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 
 import { Button } from "@/components/ui/button";
 
@@ -23,6 +24,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ShoppingBag } from 'lucide-react';
+import { Factory } from 'lucide-react';
 
 
 type Supplier = {
@@ -40,7 +42,8 @@ type PurchaseOrder = {
   poNumber: string;
   supplierName: string | null;
   status: string;
-  totalAmount: string | null;
+  totalAmountMinor: bigint | null;
+  currency: string;
   createdAt: Date | string | null;
 };
 
@@ -93,26 +96,6 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
   const updatePoStatus = trpc.purchasing.po.updateStatus.useMutation({
     onSuccess: () => utils.purchasing.po.list.invalidate(),
   });
-
-  const getStatusColor = (status: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (status) {
-      case "draft": return "outline";
-      case "ordered": return "secondary";
-      case "received": return "default";
-      case "cancelled": return "destructive";
-      default: return "outline";
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "draft": return "مسودة";
-      case "ordered": return "مطلوب";
-      case "received": return "مستلم";
-      case "cancelled": return "ملغي";
-      default: return status;
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -191,17 +174,21 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-right">الاسم</TableHead>
-                  <TableHead className="text-right">الهاتف</TableHead>
-                  <TableHead className="text-right">البريد الإلكتروني</TableHead>
-                  <TableHead className="text-right">إجراءات</TableHead>
+                  <TableHead className="text-start">الاسم</TableHead>
+                  <TableHead className="text-start">الهاتف</TableHead>
+                  <TableHead className="text-start">البريد الإلكتروني</TableHead>
+                  <TableHead className="text-start">إجراءات</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {suppliers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-[var(--t2)]">
-                      لا يوجد موردون
+                    <TableCell colSpan={4} className="p-0">
+                      <EmptyState
+                        icon={Factory}
+                        title="لا يوجد موردون"
+                        hint="ضيف مورد الأول عشان تقدر تعمل أمر شراء."
+                      />
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -290,12 +277,12 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-right">رقم الأمر</TableHead>
-                  <TableHead className="text-right">المورد</TableHead>
-                  <TableHead className="text-right">الحالة</TableHead>
-                  <TableHead className="text-right">الإجمالي</TableHead>
-                  <TableHead className="text-right">التاريخ</TableHead>
-                  <TableHead className="text-right">الإجراءات</TableHead>
+                  <TableHead className="text-start">رقم الأمر</TableHead>
+                  <TableHead className="text-start">المورد</TableHead>
+                  <TableHead className="text-start">الحالة</TableHead>
+                  <TableHead className="text-start">الإجمالي</TableHead>
+                  <TableHead className="text-start">التاريخ</TableHead>
+                  <TableHead className="text-start">الإجراءات</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -311,20 +298,10 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                       <TableCell className="font-medium text-[var(--t1)]">{po.poNumber}</TableCell>
                       <TableCell className="text-[var(--t2)]">{po.supplierName || "غير محدد"}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant={getStatusColor(po.status)}
-                          className={
-                            po.status === "ordered" ? "bg-[var(--gold)] text-void" :
-                            po.status === "received" ? "bg-[var(--emerald)] text-void" :
-                            po.status === "cancelled" ? "bg-[var(--crimson)] text-void" :
-                            "bg-raised text-t1"
-                          }
-                        >
-                          {getStatusLabel(po.status)}
-                        </Badge>
+                        <StatusBadge status={po.status} domain="purchaseOrder" />
                       </TableCell>
                       <TableCell className="text-[var(--t2)]">
-                        {po.totalAmount ? `${po.totalAmount} ج.م` : "-"}
+                        {po.totalAmountMinor === null ? "-" : formatMoney(fromMinor(po.totalAmountMinor, currency(po.currency)))}
                       </TableCell>
                       <TableCell className="text-[var(--t2)]">
                         {po.createdAt ? format(new Date(po.createdAt), "PP", { locale: ar }) : "-"}

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
-import { mockDb } from '../helpers/mockDb';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 const { returnsRouter } = await import('@/server/routers/returns');
 const { giftCardsRouter } = await import('@/server/routers/giftCards');
@@ -10,9 +10,11 @@ const { couponsRouter } = await import('@/server/routers/coupons');
 const { campaignsRouter } = await import('@/server/routers/campaigns');
 const { customersRouter } = await import('@/server/routers/customers');
 
-function ctx(): Context {
+function ctx(withOrg: unknown = withOrgMock): Context {
   return {
     db: mockDb,
+    withOrg,
+    idempotent: idempotentMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',
@@ -42,26 +44,27 @@ describe('returns.restock — idempotency', () => {
     mockDb.select = vi.fn()
       .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1' }]))
       .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, restock: true, orderItemId: UUID }]));
-    const txSpy = vi.fn();
-    mockDb.transaction = txSpy;
+    // Spy on ctx.withOrg, not mockDb.transaction: the procedure now opens its
+    // transaction through the RLS-scoped runner, so asserting on the old seam
+    // would pass no matter what the code did.
+    const withOrgSpy = vi.fn(withOrgMock);
 
-    const res = await returnsRouter.createCaller(ctx()).restock({ returnId: UUID, itemId: UUID });
+    const res = await returnsRouter.createCaller(ctx(withOrgSpy)).restock({ returnId: UUID, itemId: UUID });
 
     expect(res.data).toMatchObject({ restocked: false, alreadyRestocked: true });
     // The guard must short-circuit before any write — this is the whole fix.
-    expect(txSpy).not.toHaveBeenCalled();
+    expect(withOrgSpy).not.toHaveBeenCalled();
   });
 
   it('a first restock does enter the transaction', async () => {
     mockDb.select = vi.fn()
       .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1' }]))
       .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, restock: false, orderItemId: null }]));
-    const txSpy = vi.fn(async (fn: (tx: unknown) => unknown) => fn(mockDb));
-    mockDb.transaction = txSpy;
+    const withOrgSpy = vi.fn(withOrgMock);
 
-    const res = await returnsRouter.createCaller(ctx()).restock({ returnId: UUID, itemId: UUID });
+    const res = await returnsRouter.createCaller(ctx(withOrgSpy)).restock({ returnId: UUID, itemId: UUID });
 
-    expect(txSpy).toHaveBeenCalled();
+    expect(withOrgSpy).toHaveBeenCalled();
     // No orderItemId -> nothing to credit, but the line is still flagged.
     expect(res.data).toMatchObject({ restocked: false, reason: 'no_order_item_link' });
   });
@@ -69,7 +72,13 @@ describe('returns.restock — idempotency', () => {
 
 describe('giftCards.topup — decimal safety', () => {
   it('increments the balance in SQL, not by writing back a JS float', async () => {
-    mockDb.select = vi.fn(() => chainOf([{ id: UUID, orgId: 'org-1', balance: '0.10', status: 'active' }]));
+    // Mirrors the real row: balance is bigint minor units since 0028, and
+    // currency is `text NOT NULL DEFAULT 'EGP'`. The fixture previously omitted
+    // currency, which the code now reads — a mock that does not match the
+    // schema hides exactly the class of bug the integration suite exists for.
+    mockDb.select = vi.fn(() =>
+      chainOf([{ id: UUID, orgId: 'org-1', balanceMinor: 10n, currency: 'EGP', status: 'active' }]),
+    );
 
     let capturedSet: Record<string, unknown> | undefined;
     const updateChain = chainOf([{ id: UUID }]);
@@ -80,10 +89,10 @@ describe('giftCards.topup — decimal safety', () => {
     await giftCardsRouter.createCaller(ctx()).topup({ id: UUID, amount: 0.2 });
 
     expect(capturedSet).toBeDefined();
-    const balance = capturedSet!.balance;
+    const balance = capturedSet!.balanceMinor;
     // A string or number here means the parseFloat read-modify-write is back
     // (0.1 + 0.2 === 0.30000000000000004, and concurrent top-ups get lost).
-    // It must be a drizzle SQL fragment so Postgres does the decimal math.
+    // It must be a drizzle SQL fragment so Postgres does the addition.
     expect(typeof balance).not.toBe('string');
     expect(typeof balance).not.toBe('number');
     expect(balance?.constructor?.name).toBe(sql``.constructor.name);
@@ -139,5 +148,55 @@ describe('atomic guards — no read-before-write on the success path', () => {
 
     expect(res.data).toMatchObject({ loyaltyPoints: 50 });
     expect(mockDb.insert).toHaveBeenCalled();
+  });
+
+  it('customers.linkOrder credits in SQL without pre-reading the customer', async () => {
+    // Same tell as redeemPoints: mockDb.query is {}, so the old
+    // db.query.customers.findFirst pre-read would throw before any write. It
+    // also read the balance to compute an absolute new value — two orders
+    // linked at once both read the same figure and the second discarded the
+    // first. Every counter must now be a SQL fragment.
+    let capturedSet: Record<string, unknown> | undefined;
+    const updateChain = chainOf([{ id: UUID, loyaltyPoints: 10 }]);
+    updateChain.set = vi.fn((v: Record<string, unknown>) => { capturedSet = v; return updateChain; });
+    mockDb.update = vi.fn(() => updateChain);
+    mockDb.insert = vi.fn(() => chainOf([]));
+
+    const res = await customersRouter.createCaller(ctx()).linkOrder({
+      customerId: UUID,
+      orderId: UUID,
+      orderAmount: 100,
+    });
+
+    expect(res.data).toMatchObject({ loyaltyPoints: 10 });
+    const sqlName = sql``.constructor.name;
+    const points = capturedSet!.loyaltyPoints;
+    const orders = capturedSet!.totalOrders;
+    const spent = capturedSet!.totalSpentMinor;
+    expect(points?.constructor?.name).toBe(sqlName);
+    expect(orders?.constructor?.name).toBe(sqlName);
+    expect(spent?.constructor?.name).toBe(sqlName);
+    // The ledger's balanceAfter must be the value RETURNING gave back, not a
+    // total computed here from a stale read.
+    expect(mockDb.insert).toHaveBeenCalled();
+  });
+
+  it('giftCards.topup rejects when the cancelled guard matches nothing', async () => {
+    // The card read for its currency still looks active; the guarded UPDATE
+    // matches nothing because a cancel landed in between. That must surface as
+    // the same BAD_REQUEST the old pre-read raised — never a silent success
+    // that credits a written-off card and flips it back to 'active'.
+    mockDb.select = vi.fn(() =>
+      chainOf([{ id: UUID, orgId: 'org-1', balanceMinor: 10n, currency: 'EGP', status: 'active' }]),
+    );
+    const insertSpy = vi.fn(() => chainOf([]));
+    mockDb.insert = insertSpy;
+    mockDb.update = vi.fn(() => chainOf([]));
+
+    await expect(
+      giftCardsRouter.createCaller(ctx()).topup({ id: UUID, amount: 50 })
+    ).rejects.toSatisfy((e: unknown) => e instanceof TRPCError && e.code === 'BAD_REQUEST');
+    // No ledger line for a topup that did not happen.
+    expect(insertSpy).not.toHaveBeenCalled();
   });
 });

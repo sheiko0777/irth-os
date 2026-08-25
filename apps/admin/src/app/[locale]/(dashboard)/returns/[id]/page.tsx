@@ -1,3 +1,4 @@
+import { formatMoney, fromMinor, toDecimalString } from "@irth/domain";
 import { serverCaller } from '@/server/caller';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -81,7 +82,7 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
           <h2 className="text-xl font-bold text-[var(--t1)]">العناصر (Items)</h2>
           <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
+              <table className="w-full text-sm text-start">
                 <thead className="text-xs text-[var(--t2)] bg-[var(--surface)] border-b border-[var(--rim1)]">
                   <tr>
                     <th className="px-4 py-3 font-medium">المنتج (Product)</th>
@@ -106,7 +107,7 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
                           {item.variantName && <span className="text-[var(--t2)] block text-xs">{item.variantName}</span>}
                         </td>
                         <td className="px-4 py-3 text-[var(--t1)]">{item.quantity}</td>
-                        <td className="px-4 py-3 text-[var(--t1)]">{item.unitPrice ? `${item.unitPrice} EGP` : '-'}</td>
+                        <td className="px-4 py-3 text-[var(--t1)]">{item.unitPriceMinor === null ? '-' : formatMoney(fromMinor(item.unitPriceMinor))}</td>
                         <td className="px-4 py-3 text-[var(--t1)] capitalize">{item.condition}</td>
                         <td className="px-4 py-3">
                           {item.restock ? (
@@ -131,7 +132,7 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
               returnId={returnObj.id}
               currentStatus={returnObj.status}
               adminNotes={returnObj.adminNotes || ''}
-              refundAmount={returnObj.refundAmount || ''}
+              refundAmount={returnObj.refundAmountMinor === null ? '' : toDecimalString(fromMinor(returnObj.refundAmountMinor))}
               resolutionType={returnObj.resolutionType}
             />
           </div>

@@ -1,6 +1,10 @@
 name = "irth-api"
 # account_id: set CLOUDFLARE_ACCOUNT_ID env or run: wrangler login
-compatibility_date = "2024-03-20"
+# 2024-09-23 is the cutoff where `nodejs_compat` switches to v2 behaviour,
+# which provides `process` and the node:net/node:tls needed by postgres-js.
+# Below it the Worker did not merely fail to reach Postgres — it failed to
+# START: "Uncaught ReferenceError: process is not defined" at packages/db.
+compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 main = "src/index.ts"
 

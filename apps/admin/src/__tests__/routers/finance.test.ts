@@ -1,13 +1,16 @@
+import { EGP, zero } from '@irth/domain';
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
-import { mockDb } from '../helpers/mockDb';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 const { financeRouter } = await import('@/server/routers/finance');
 
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
   return {
     db: mockDb,
+    withOrg: withOrgMock,
+    idempotent: idempotentMock,
     session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
     orgId: 'org-1',
     userId: 'user-1',
@@ -30,9 +33,9 @@ describe('finance', () => {
 
   it('pnl resolves with zeroed metrics when aggregates are empty', async () => {
     const res = await caller.pnl(RANGE);
-    expect(res.data.totalRevenue).toBe(0);
+    expect(res.data.totalRevenue).toEqual(zero(EGP));
     expect(res.data.totalOrders).toBe(0);
-    expect(res.data.avgOrderValue).toBe(0);
+    expect(res.data.avgOrderValue).toEqual(zero(EGP));
     expect(res.data.cancelledOrders).toBe(0);
     expect(res.data.pendingOrders).toBe(0);
     expect(res.data.startDate).toBe(RANGE.startDate);
@@ -53,9 +56,9 @@ describe('finance', () => {
 
   it('vatReport computes zero VAT from empty aggregates', async () => {
     const res = await caller.vatReport(RANGE);
-    expect(res.data.grossRevenue).toBe(0);
-    expect(res.data.vatAmount).toBe(0);
-    expect(res.data.netRevenue).toBe(0);
+    expect(res.data.grossRevenue).toEqual(zero(EGP));
+    expect(res.data.vatAmount).toEqual(zero(EGP));
+    expect(res.data.netRevenue).toEqual(zero(EGP));
     expect(res.data.orderCount).toBe(0);
     expect(res.error).toBeNull();
   });

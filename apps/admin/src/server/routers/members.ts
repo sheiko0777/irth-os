@@ -57,10 +57,10 @@ export const membersRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'You cannot change your own role.' });
       }
 
-      const updated = await withAudit(
-        ctx.db,
+      const updated = await ctx.withOrg((tx) => withAudit(
+        tx,
         async () => {
-          const [row] = await ctx.db
+          const [row] = await tx
             .update(orgMembers)
             .set({ role: input.role })
             .where(and(eq(orgMembers.id, input.memberId), eq(orgMembers.orgId, ctx.orgId)))
@@ -74,7 +74,7 @@ export const membersRouter = router({
           tableName: 'org_members',
           changes: { memberId: input.memberId, from: target.role, to: input.role },
         },
-      );
+      ));
 
       return { data: updated, error: null, meta: null };
     }),

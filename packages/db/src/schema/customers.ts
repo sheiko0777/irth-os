@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, text, integer, numeric } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, text, integer, bigint } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
 export const customers = pgTable('customers', {
@@ -10,7 +10,7 @@ export const customers = pgTable('customers', {
   address: text('address'),
   loyaltyPoints: integer('loyalty_points').notNull().default(0),
   totalOrders: integer('total_orders').notNull().default(0),
-  totalSpent: numeric('total_spent', { precision: 12, scale: 2 }).notNull().default('0'),
+  totalSpentMinor: bigint('total_spent_minor', { mode: 'bigint' }).notNull().default(0n),
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { eq, and, desc, sql, count, ilike, or, gte } from 'drizzle-orm';
 import { customers, loyaltyTransactions, withAudit } from '@irth/db';
 import { TRPCError } from '@trpc/server';
+import { EGP, parseDecimal } from '@irth/domain';
 
 export const customersRouter = router({
   list: protectedProcedure
@@ -81,10 +82,10 @@ export const customersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await withAudit(
-        ctx.db,
+      const result = await ctx.withOrg((tx) => withAudit(
+        tx,
         async () => {
-          const [customer] = await ctx.db
+          const [customer] = await tx
             .insert(customers)
             .values({
               orgId: ctx.orgId,
@@ -104,7 +105,7 @@ export const customersRouter = router({
           tableName: 'customers',
           changes: input,
         }
-      );
+      ));
       return { data: result, error: null, meta: null };
     }),
 
@@ -122,26 +123,25 @@ export const customersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
 
-      const customer = await ctx.db.query.customers.findFirst({
-        where: and(eq(customers.id, id), eq(customers.orgId, ctx.orgId)),
-      });
-
-      if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
-
       const mappedData = {
         ...updateData,
         email: updateData.email === '' ? null : updateData.email,
         updatedAt: new Date(),
       };
 
-      const result = await withAudit(
-        ctx.db,
+      const result = await ctx.withOrg((tx) => withAudit(
+        tx,
         async () => {
-          const [updated] = await ctx.db
+          // Existence is decided by the UPDATE's own result. A SELECT first and
+          // an UPDATE after are two statements: the row can be deleted between
+          // them, and the update then matches nothing while this reports
+          // success with `data: undefined`.
+          const [updated] = await tx
             .update(customers)
             .set(mappedData)
             .where(and(eq(customers.id, id), eq(customers.orgId, ctx.orgId)))
             .returning();
+          if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
           return updated;
         },
         {
@@ -151,7 +151,7 @@ export const customersRouter = router({
           tableName: 'customers',
           changes: updateData,
         }
-      );
+      ));
       return { data: result, error: null, meta: null };
     }),
 
@@ -161,13 +161,18 @@ export const customersRouter = router({
         id: z.string().uuid(),
         points: z.number().int().min(1),
         note: z.string().optional(),
+        // Optional so existing callers are unaffected; a client opts in by
+        // sending one. Granting the same customer the same points twice in a
+        // minute is legitimate, so only the caller can call this a retry.
+        idempotencyKey: z.string().min(1).max(255).optional(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) =>
+      ctx.idempotent('customers.addPoints', input.idempotencyKey, input, async () => {
       // Increment in SQL rather than read-then-write-absolute: two concurrent
       // grants both read the same starting balance and the second overwrites
       // the first, silently dropping points.
-      const result = await ctx.db.transaction(async (tx) => {
+      const result = await ctx.withOrg(async (tx) => {
         const [updated] = await tx
           .update(customers)
           .set({
@@ -192,7 +197,7 @@ export const customersRouter = router({
       });
 
       return { data: result, error: null, meta: null };
-    }),
+    })),
 
   redeemPoints: adminProcedure
     .input(
@@ -203,7 +208,7 @@ export const customersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.db.transaction(async (tx) => {
+      const result = await ctx.withOrg(async (tx) => {
         // The sufficient-balance check is part of the UPDATE's WHERE clause, so
         // check and decrement are one atomic step. Checking first and updating
         // after lets two concurrent redemptions both pass the check and spend
@@ -258,29 +263,27 @@ export const customersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const customer = await ctx.db.query.customers.findFirst({
-        where: and(eq(customers.id, input.customerId), eq(customers.orgId, ctx.orgId)),
-      });
+      const orderAmountMinor = parseDecimal(String(input.orderAmount), EGP).minor;
+      const earnedPoints = parseInt((orderAmountMinor / parseDecimal('10', EGP).minor).toString(), 10);
 
-      if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
-
-      // 1 point per 10 EGP, rounded down
-      const earnedPoints = Math.floor(input.orderAmount / 10);
-      const newBalance = (customer.loyaltyPoints ?? 0) + earnedPoints;
-      const newTotal = (customer.totalOrders ?? 0) + 1;
-      const newSpent = (parseFloat(customer.totalSpent ?? '0') + input.orderAmount).toFixed(2);
-
-      const result = await ctx.db.transaction(async (tx) => {
+      const result = await ctx.withOrg(async (tx) => {
+        // Both counters are incremented in SQL and the customer's existence is
+        // decided by this UPDATE, not by a SELECT before it. Reading the row
+        // first and writing back absolute values is a lost update: two orders
+        // linked concurrently read the same balance and the second write
+        // discards the first order's points and its order count.
         const [updated] = await tx
           .update(customers)
           .set({
-            loyaltyPoints: newBalance,
-            totalOrders: newTotal,
-            totalSpent: newSpent,
+            loyaltyPoints: sql`${customers.loyaltyPoints} + ${earnedPoints}`,
+            totalOrders: sql`${customers.totalOrders} + 1`,
+            totalSpentMinor: sql`${customers.totalSpentMinor} + ${orderAmountMinor}`,
             updatedAt: new Date(),
           })
           .where(and(eq(customers.id, input.customerId), eq(customers.orgId, ctx.orgId)))
           .returning();
+
+        if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
 
         if (earnedPoints > 0) {
           await tx.insert(loyaltyTransactions).values({
@@ -288,7 +291,9 @@ export const customersRouter = router({
             customerId: input.customerId,
             type: 'earn',
             points: earnedPoints,
-            balanceAfter: newBalance,
+            // The balance the ledger records is the one the database actually
+            // wrote, read back from RETURNING — never a figure computed here.
+            balanceAfter: updated.loyaltyPoints,
             note: `طلب مرتبط`,
             referenceId: input.orderId,
           });
@@ -319,3 +324,4 @@ export const customersRouter = router({
     };
   }),
 });
+

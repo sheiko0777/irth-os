@@ -3,6 +3,7 @@ import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../t
 import { shippingZones, shippingRates } from '@irth/db';
 import { eq, and, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+import { EGP, fromMinor, parseDecimal } from '@irth/domain';
 
 export const shippingRouter = router({
   zones: router({
@@ -40,21 +41,21 @@ export const shippingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const [zone] = await ctx.db
+        const [zone] = await ctx.withOrg(async (tx) => tx
           .insert(shippingZones)
           .values({ orgId: ctx.orgId, name: input.name, countries: input.countries })
-          .returning();
+          .returning());
         return { data: zone, error: null };
       }),
 
     setActive: adminProcedure
       .input(z.object({ id: z.string().uuid(), isActive: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
-        const [zone] = await ctx.db
+        const [zone] = await ctx.withOrg(async (tx) => tx
           .update(shippingZones)
           .set({ isActive: input.isActive, updatedAt: new Date() })
           .where(and(eq(shippingZones.id, input.id), eq(shippingZones.orgId, ctx.orgId)))
-          .returning();
+          .returning());
         if (!zone) throw new TRPCError({ code: 'NOT_FOUND', message: 'Zone not found' });
         return { data: zone, error: null };
       }),
@@ -78,9 +79,9 @@ export const shippingRouter = router({
         return {
           data: rates.map((r) => ({
             ...r,
-            price: Number(r.price),
-            minOrderValue: r.minOrderValue ? Number(r.minOrderValue) : null,
-            maxOrderValue: r.maxOrderValue ? Number(r.maxOrderValue) : null,
+            price: fromMinor(r.priceMinor, EGP),
+            minOrderValue: r.minOrderValueMinor == null ? null : fromMinor(r.minOrderValueMinor, EGP),
+            maxOrderValue: r.maxOrderValueMinor == null ? null : fromMinor(r.maxOrderValueMinor, EGP),
             minWeight: r.minWeight ? Number(r.minWeight) : null,
             maxWeight: r.maxWeight ? Number(r.maxWeight) : null,
           })),
@@ -104,31 +105,31 @@ export const shippingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const [rate] = await ctx.db
+        const [rate] = await ctx.withOrg(async (tx) => tx
           .insert(shippingRates)
           .values({
             orgId: ctx.orgId,
             zoneId: input.zoneId,
             name: input.name,
             rateType: input.rateType,
-            price: input.price.toString(),
-            minOrderValue: input.minOrderValue?.toString() ?? null,
-            maxOrderValue: input.maxOrderValue?.toString() ?? null,
+            priceMinor: parseDecimal(String(input.price), EGP).minor,
+            minOrderValueMinor: input.minOrderValue == null ? null : parseDecimal(String(input.minOrderValue), EGP).minor,
+            maxOrderValueMinor: input.maxOrderValue == null ? null : parseDecimal(String(input.maxOrderValue), EGP).minor,
             minWeight: input.minWeight?.toString() ?? null,
             maxWeight: input.maxWeight?.toString() ?? null,
             estimatedDaysMin: input.estimatedDaysMin ?? null,
             estimatedDaysMax: input.estimatedDaysMax ?? null,
           })
-          .returning();
+          .returning());
         return { data: rate, error: null };
       }),
 
     delete: ownerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
-        await ctx.db
+        await ctx.withOrg(async (tx) => tx
           .delete(shippingRates)
-          .where(and(eq(shippingRates.id, input.id), eq(shippingRates.orgId, ctx.orgId)));
+          .where(and(eq(shippingRates.id, input.id), eq(shippingRates.orgId, ctx.orgId))));
         return { success: true };
       }),
   }),

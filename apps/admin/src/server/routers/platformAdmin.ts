@@ -22,7 +22,7 @@ export const platformAdminRouter = router({
         .groupBy(organizations.id)
         .orderBy(organizations.name);
 
-      const configs = await ctx.db.select().from(orgFeatureFlags);
+      const configs = await ctx.dbUnscoped.select().from(orgFeatureFlags);
       const configMap: Record<string, (typeof configs)[number]> = {};
       for (const c of configs) configMap[c.orgId] = c;
 
@@ -71,7 +71,7 @@ export const platformAdminRouter = router({
   resetConfig: platformAdminProcedure
     .input(z.object({ orgId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db.delete(orgFeatureFlags).where(eq(orgFeatureFlags.orgId, input.orgId));
+      await ctx.dbUnscoped.delete(orgFeatureFlags).where(eq(orgFeatureFlags.orgId, input.orgId));
       return { data: { reset: true }, error: null };
     }),
 
@@ -96,7 +96,7 @@ export const platformAdminRouter = router({
         .values({ name: input.name, slug: input.slug, brand: 'irth' })
         .returning();
 
-      await ctx.db.insert(orgFeatureFlags).values({
+      await ctx.dbUnscoped.insert(orgFeatureFlags).values({
         orgId: org.id,
         plan: input.plan,
         enabledScreens: input.enabledScreens,
@@ -107,7 +107,7 @@ export const platformAdminRouter = router({
 
       const token = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await ctx.db.insert(orgInvites).values({
+      await ctx.dbUnscoped.insert(orgInvites).values({
         orgId: org.id,
         email: input.ownerEmail,
         token,
@@ -132,7 +132,7 @@ export const platformAdminRouter = router({
   revokeInvite: platformAdminProcedure
     .input(z.object({ inviteId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db.delete(orgInvites).where(eq(orgInvites.id, input.inviteId));
+      await ctx.dbUnscoped.delete(orgInvites).where(eq(orgInvites.id, input.inviteId));
       return { data: { revoked: true }, error: null };
     }),
 });

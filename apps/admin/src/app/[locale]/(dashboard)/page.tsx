@@ -1,3 +1,4 @@
+import { formatMoney, fromMinor } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -105,7 +106,7 @@ export default async function DashboardPage({
           id="revenue"
           variant="hero"
           title={t("revenueToday")}
-          value={`${revenueToday.toLocaleString("ar-EG")} ج.م`}
+          value={formatMoney(revenueToday)}
           sub="الإيراد من الطلبات المسلَّمة"
           trend={deltas.revenueToday}
           series={series.revenue}
@@ -174,16 +175,16 @@ export default async function DashboardPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--rim1)]">
-                <th className="px-5 py-3 text-right text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
+                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
                   رقم الطلب
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
+                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
                   الحالة
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
+                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
                   الإجمالي
                 </th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
+                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
                   التاريخ
                 </th>
               </tr>
@@ -206,7 +207,7 @@ export default async function DashboardPage({
                     <StatusBadge status={order.status} domain="order" />
                   </td>
                   <td className="px-5 py-3.5 text-[var(--t1)] font-medium tabular-nums" dir="ltr">
-                    {parseFloat(order.totalAmount ?? "0").toLocaleString("ar-EG")} ج.م
+                    {formatMoney(fromMinor(order.totalAmountMinor))}
                   </td>
                   <td className="px-5 py-3.5 text-[var(--t3)] text-xs">
                     {order.createdAt

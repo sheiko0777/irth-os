@@ -147,7 +147,7 @@ message directly beneath in `crimson` at 12px.
 border, rows divided by `rim1`, hover to `raised/50`. Numeric columns are
 `ltr` and right-aligned within the RTL layout.
 
-**Status badge** — driven by `lib/statusMaps.ts`, which maps 14 domains
+**Status badge** — driven by `lib/statusMaps.ts`, which maps 15 domains
 (order, payment, shipment, return, purchase order, stocktaking, …) to a label
 and a status colour. Components pass `domain` and `status`; they never pick a
 colour themselves.

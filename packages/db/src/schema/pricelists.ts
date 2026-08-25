@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, text, decimal, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, text, bigint, integer, boolean } from "drizzle-orm/pg-core";
 
 export const priceLists = pgTable("price_lists", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -6,7 +6,9 @@ export const priceLists = pgTable("price_lists", {
   name: text("name").notNull(),
   description: text("description"),
   currency: text("currency").notNull().default('EGP'),
-  discountPercent: decimal("discount_percent", { precision: 5, scale: 2 }),
+  // A rate, not money — basis points so nobody writes `total * (pct / 100)`
+  // in a float. 10% is 1000. CHECK-constrained to 0..10000 in 0028.
+  discountBp: integer("discount_bp"),
   isDefault: boolean("is_default").notNull().default(false),
   customerGroupId: uuid("customer_group_id"),
   startDate: timestamp("start_date"),
@@ -21,6 +23,6 @@ export const priceListItems = pgTable("price_list_items", {
   orgId: uuid("org_id").notNull(),
   productId: uuid("product_id").notNull(),
   variantId: uuid("variant_id"),
-  price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+  priceMinor: bigint("price_minor", { mode: 'bigint' }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -17,6 +17,13 @@
     "pnpm": ">=9.0.0"
   },
   "packageManager": "pnpm@10.30.3",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ]
+  },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@trpc/client": "^11.13.0",

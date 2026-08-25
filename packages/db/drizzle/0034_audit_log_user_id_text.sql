@@ -1,0 +1,38 @@
+-- audit_log.user_id becomes text, to match what a user id actually is here.
+--
+-- THE DEFECT, verified against real Postgres
+--
+-- Better Auth owns `public."user"`, and its `id` column is `text`. This project
+-- does not set `advanced.database.generateId`, so ids come from Better Auth's
+-- default generator — `createRandomStringGenerator("a-z","0-9","A-Z","-_")`,
+-- a random alphanumeric string. Not a uuid. (Better Auth does offer
+-- `generateId: "uuid"`; it is not enabled, and switching it now would orphan
+-- every existing id.)
+--
+-- `audit_log.user_id` was declared `uuid`. `withAudit` writes `ctx.userId`
+-- straight into it, so EVERY audited mutation performed by a logged-in user
+-- raised
+--
+--     22P02  invalid input syntax for type uuid: "yLmN3pQr7sT9uVwX2yZaB4cD..."
+--
+-- Confirmed by inserting a Better-Auth-shaped id into the column on the test
+-- branch: rejected with 22P02.
+--
+-- Every audited write in both apps goes through that one line, so this was not
+-- an edge case — it was every create, update and delete that records an audit
+-- row, for any real session. It survived because the unit suite mocks the
+-- database entirely (mockDb resolves inserts to []), and the integration suite
+-- only ever wrote `userId: null`.
+--
+-- WHY text RATHER THAN CONVERTING THE IDS
+--
+-- `org_members.user_id` is ALREADY text and already holds these ids — it is the
+-- column tenancy is resolved through on every request. So text is the
+-- established representation of a user id in this schema, and audit_log was the
+-- lone outlier. Making the outlier conform is a one-line widening; converting
+-- Better Auth to uuids would rewrite the auth tables and every id in them.
+--
+-- uuid -> text is a widening cast, so no data can be lost and no backfill is
+-- needed. Existing rows keep their values in canonical uuid text form.
+
+ALTER TABLE "audit_log" ALTER COLUMN "user_id" TYPE text USING "user_id"::text;

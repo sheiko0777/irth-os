@@ -1,7 +1,8 @@
 import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
+import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
+import { parseDecimal } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
 
 export const purchasingRouter = router({
@@ -26,10 +27,10 @@ export const purchasingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const result = await withAudit(
-          ctx.db,
+        const result = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [supplier] = await ctx.db
+            const [supplier] = await tx
               .insert(suppliers)
               .values({
                 orgId: ctx.orgId,
@@ -49,7 +50,7 @@ export const purchasingRouter = router({
             tableName: 'suppliers',
             changes: input,
           }
-        );
+        ));
         return { data: result, error: null, meta: null };
       }),
 
@@ -67,26 +68,26 @@ export const purchasingRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { id, ...updateData } = input;
 
-        const supplier = await ctx.db.query.suppliers.findFirst({
-            where: and(eq(suppliers.id, id), eq(suppliers.orgId, ctx.orgId))
-        });
-
-        if (!supplier) throw new TRPCError({ code: 'NOT_FOUND' });
-
         const mappedData = {
           ...updateData,
           email: updateData.email === '' ? null : updateData.email,
           updatedAt: new Date(),
         };
 
-        const result = await withAudit(
-          ctx.db,
+        const result = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [updated] = await ctx.db
+            // The UPDATE's own result is the existence check. Looking the
+            // supplier up first and updating after are two statements — a
+            // delete landing between them left this reporting success with an
+            // undefined row and writing an audit entry for a write that never
+            // happened.
+            const [updated] = await tx
               .update(suppliers)
               .set(mappedData)
               .where(and(eq(suppliers.id, id), eq(suppliers.orgId, ctx.orgId)))
               .returning();
+            if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
             return updated;
           },
           {
@@ -96,20 +97,20 @@ export const purchasingRouter = router({
             tableName: 'suppliers',
             changes: updateData,
           }
-        );
+        ));
         return { data: result, error: null, meta: null };
       }),
 
     delete: ownerProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
-        const supplier = await ctx.db.query.suppliers.findFirst({
-            where: and(eq(suppliers.id, input.id), eq(suppliers.orgId, ctx.orgId))
-        });
-
-        if (!supplier) throw new TRPCError({ code: 'NOT_FOUND' });
-
-        // Ensure no POs are linked to the supplier
+        // Stays a separate read: the condition is a count over ANOTHER table,
+        // which the DELETE's own WHERE cannot express. It is safe to leave
+        // split because the outcome it guards is enforced by the database
+        // regardless — purchase_orders.supplier_id references suppliers.id with
+        // no ON DELETE action, so a purchase order created concurrently makes
+        // the DELETE fail on the foreign key rather than orphan anything. This
+        // check only turns that 500 into a message the caller can act on.
         const [linkedPo] = await ctx.db
             .select({ count: count() })
             .from(purchaseOrders)
@@ -119,13 +120,17 @@ export const purchasingRouter = router({
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete supplier with linked purchase orders' });
         }
 
-        const result = await withAudit(
-          ctx.db,
+        const result = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [deleted] = await ctx.db
+            // Existence comes from the DELETE's RETURNING, not from a lookup
+            // before it. A supplier with no linked POs cannot exist and match
+            // nothing here, so an empty result means no such supplier.
+            const [deleted] = await tx
               .delete(suppliers)
               .where(and(eq(suppliers.id, input.id), eq(suppliers.orgId, ctx.orgId)))
               .returning();
+            if (!deleted) throw new TRPCError({ code: 'NOT_FOUND' });
             return deleted;
           },
           {
@@ -135,7 +140,7 @@ export const purchasingRouter = router({
             tableName: 'suppliers',
             changes: { id: input.id },
           }
-        );
+        ));
         return { data: result, error: null, meta: null };
       }),
   }),
@@ -154,7 +159,8 @@ export const purchasingRouter = router({
             id: purchaseOrders.id,
             poNumber: purchaseOrders.poNumber,
             status: purchaseOrders.status,
-            totalAmount: purchaseOrders.totalAmount,
+            totalAmountMinor: purchaseOrders.totalAmountMinor,
+            currency: purchaseOrders.currency,
             orderedAt: purchaseOrders.orderedAt,
             createdAt: purchaseOrders.createdAt,
             supplierName: suppliers.name,
@@ -222,33 +228,32 @@ export const purchasingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        // Generate PO number: PO-YYYY-XXXX
-        const year = new Date().getFullYear();
+        // The PO number is claimed inside the transaction below, from the
+        // tenant's counter.
+        //
+        // What this replaced read the highest existing PO number and added one,
+        // which was wrong twice over:
+        //
+        //   - Read-then-write, so two concurrent creates both derived the same
+        //     next number. Nothing rejected the duplicate until 0035.
+        //   - It ordered by the number as TEXT. 'PO-2026-10000' sorts before
+        //     'PO-2026-9999', so on the ten-thousandth PO of a year the "latest"
+        //     is no longer the highest and the series silently restarts into
+        //     numbers already issued.
+        // parseDecimal both when the client sends a string and when it sends a
+        // number: routing the number through String() first means the value
+        // never becomes a float here, only its decimal text.
+        const totalAmountMinor =
+          input.totalAmount === undefined || input.totalAmount === null
+            ? null
+            : parseDecimal(String(input.totalAmount)).minor;
 
-        // Get latest PO for this year to sequence
-        const latestPoRows = await ctx.db
-            .select({ poNumber: purchaseOrders.poNumber })
-            .from(purchaseOrders)
-            .where(and(
-                eq(purchaseOrders.orgId, ctx.orgId),
-                sql`${purchaseOrders.poNumber} LIKE ${`PO-${year}-%`}`
-            ))
-            .orderBy(desc(purchaseOrders.poNumber))
-            .limit(1);
-        const latestPo = latestPoRows[0];
+        const result = await ctx.withOrg(async (tx) => {
+          const poNumber = formatDocumentNumber(
+            'purchase_order',
+            await nextDocumentNumber(tx, ctx.orgId, 'purchase_order'),
+          );
 
-        let seq = 1;
-        if (latestPo && latestPo.poNumber) {
-            const parts = latestPo.poNumber.split('-');
-            if (parts.length === 3) {
-                seq = parseInt(parts[2], 10) + 1;
-            }
-        }
-
-        const poNumber = `PO-${year}-${seq.toString().padStart(4, '0')}`;
-        const totalAmt = typeof input.totalAmount === 'number' ? input.totalAmount.toString() : input.totalAmount;
-
-        const result = await ctx.db.transaction(async (tx) => {
           const [po] = await tx
             .insert(purchaseOrders)
             .values({
@@ -257,17 +262,25 @@ export const purchasingRouter = router({
               poNumber,
               status: 'draft',
               notes: input.notes,
-              totalAmount: totalAmt,
+              totalAmountMinor,
             })
             .returning();
 
           const itemsData = input.items.map((item) => ({
+            // Denormalised from the parent so RLS can use the same
+            // `org_id = current_setting(...)` predicate as every other table.
+            // The composite FK in 0030 rejects any value that disagrees with
+            // the purchase order's own org.
+            orgId: ctx.orgId,
             poId: po.id,
             productName: item.productName,
             variantName: item.variantName,
             sku: item.sku,
             quantity: item.quantity,
-            unitCost: typeof item.unitCost === 'number' ? item.unitCost.toString() : item.unitCost,
+            unitCostMinor:
+              item.unitCost === undefined || item.unitCost === null
+                ? null
+                : parseDecimal(String(item.unitCost)).minor,
           }));
 
           const insertedItems = await tx.insert(purchaseOrderItems).values(itemsData).returning();
@@ -298,11 +311,15 @@ export const purchasingRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        // Read purely to record where the status came FROM: RETURNING hands
+        // back the new row, never the old one, so the previous value has to be
+        // read to be audited. The existence check is deliberately not taken
+        // from here — it is the UPDATE's own result below, so a PO deleted
+        // between the two statements reports NOT_FOUND instead of succeeding
+        // with an undefined row.
         const po = await ctx.db.query.purchaseOrders.findFirst({
             where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId))
         });
-
-        if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
         const updateData: {
           status: typeof input.status;
@@ -316,14 +333,15 @@ export const purchasingRouter = router({
             updateData.receivedAt = new Date();
         }
 
-        const result = await withAudit(
-          ctx.db,
+        const result = await ctx.withOrg((tx) => withAudit(
+          tx,
           async () => {
-            const [updated] = await ctx.db
+            const [updated] = await tx
               .update(purchaseOrders)
               .set(updateData)
               .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
               .returning();
+            if (!updated) throw new TRPCError({ code: 'NOT_FOUND' });
             return updated;
           },
           {
@@ -331,9 +349,9 @@ export const purchasingRouter = router({
             userId: ctx.userId,
             action: 'UPDATE_PO_STATUS',
             tableName: 'purchase_orders',
-            changes: { from: po.status, to: input.status },
+            changes: { from: po?.status ?? null, to: input.status },
           }
-        );
+        ));
         return { data: result, error: null, meta: null };
       }),
 
@@ -348,32 +366,54 @@ export const purchasingRouter = router({
               updateInventory: z.boolean().default(false),
             })
           ),
+          // The highest-consequence of the three: receiving twice adds the
+          // quantity to stock twice, and nothing downstream can tell the
+          // difference between that and a genuine second delivery.
+          idempotencyKey: z.string().min(1).max(255).optional(),
         })
       )
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx, input }) =>
+        ctx.idempotent('purchasing.receive', input.idempotencyKey, input, async () => {
         const po = await ctx.db.query.purchaseOrders.findFirst({
             where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId))
         });
         if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
-        const result = await ctx.db.transaction(async (tx) => {
+        const result = await ctx.withOrg(async (tx) => {
             let fullyReceived = true;
+            // Total cost of everything costed in this call, across every line —
+            // what the goods-received ledger posting debits to Inventory. Stays
+            // 0n (and posts nothing) when no line had a known unit cost, rather
+            // than silently valuing free stock at zero and posting a fictitious
+            // liability.
+            let totalReceivedCostMinor = 0n;
 
             for (const itemInput of input.items) {
-                // Get item to know its original requested qty and sku
-                const [poItem] = await tx.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.id, itemInput.id)).limit(1);
-                if (!poItem || poItem.poId !== po.id) continue;
+                // One statement does the lot: the "line belongs to this PO and
+                // this org" check is the UPDATE's own WHERE, and the quantity
+                // is incremented in SQL. Reading the line first, adding in JS
+                // and writing back an absolute total let two concurrent
+                // receipts both read the same figure and the second overwrite
+                // the first — stock credited, but the line still short.
+                // RETURNING then supplies the sku and the total the database
+                // actually holds.
+                const [poItem] = await tx.update(purchaseOrderItems)
+                    .set({
+                        receivedQuantity: sql`COALESCE(${purchaseOrderItems.receivedQuantity}, 0) + ${itemInput.receivedQuantity}`,
+                    })
+                    .where(and(
+                        eq(purchaseOrderItems.id, itemInput.id),
+                        eq(purchaseOrderItems.orgId, ctx.orgId),
+                        eq(purchaseOrderItems.poId, po.id),
+                    ))
+                    .returning();
+                // No such line, or it belongs to a different PO — the same
+                // silent skip as before, now decided by the database.
+                if (!poItem) continue;
 
-                const currentReceived = poItem.receivedQuantity || 0;
-                const newReceivedTotal = currentReceived + itemInput.receivedQuantity;
-
-                if (newReceivedTotal < poItem.quantity) {
+                if ((poItem.receivedQuantity ?? 0) < poItem.quantity) {
                     fullyReceived = false;
                 }
-
-                await tx.update(purchaseOrderItems)
-                    .set({ receivedQuantity: newReceivedTotal })
-                    .where(eq(purchaseOrderItems.id, itemInput.id));
 
                 // Update inventory if requested and SKU exists
                 if (itemInput.updateInventory && poItem.sku && itemInput.receivedQuantity > 0) {
@@ -391,6 +431,42 @@ export const purchasingRouter = router({
                         // Find inventory item
                         const [invItem] = await tx.select().from(inventoryItems).where(and(eq(inventoryItems.variantId, variant.id), eq(inventoryItems.orgId, ctx.orgId))).limit(1);
                         if (invItem) {
+                            // recordCostedReceipt MUST run before the quantity
+                            // increment below, not after: it reads
+                            // inventory_items.quantity to compute the weighted
+                            // average, and that read has to see the count as it
+                            // stood BEFORE this receipt. Reversing the order would
+                            // have it average against a total that already
+                            // includes the units being priced, understating the
+                            // new average every time.
+                            //
+                            // unitCostMinor is nullable — a PO line entered with no
+                            // cost has no basis to average against. Recording it as
+                            // zero would drag the item's weighted average toward
+                            // zero, valuing every unit already held as if this batch
+                            // arrived free. Skip the cost update and fall back to a
+                            // plain (uncosted) movement, matching what this line did
+                            // before costing existed at all.
+                            if (poItem.unitCostMinor != null) {
+                                const lineCostMinor = poItem.unitCostMinor * BigInt(itemInput.receivedQuantity);
+                                await recordCostedReceipt(tx, {
+                                    orgId: ctx.orgId,
+                                    itemId: invItem.id,
+                                    quantity: itemInput.receivedQuantity,
+                                    totalCostMinor: lineCostMinor,
+                                    note: `PO ${po.poNumber} receipt`,
+                                });
+                                totalReceivedCostMinor += lineCostMinor;
+                            } else {
+                                await tx.insert(inventoryMovements).values({
+                                    orgId: ctx.orgId,
+                                    itemId: invItem.id,
+                                    type: 'in',
+                                    quantity: itemInput.receivedQuantity,
+                                    note: `PO ${po.poNumber} receipt`,
+                                });
+                            }
+
                             // Increment in SQL — reading the quantity and writing back an
                             // absolute value loses concurrent receipts.
                             await tx.update(inventoryItems)
@@ -398,25 +474,47 @@ export const purchasingRouter = router({
                                     quantity: sql`${inventoryItems.quantity} + ${itemInput.receivedQuantity}`,
                                     updatedAt: new Date()
                                 })
-                                .where(eq(inventoryItems.id, invItem.id));
-
-                            await tx.insert(inventoryMovements).values({
-                                orgId: ctx.orgId,
-                                itemId: invItem.id,
-                                type: 'in',
-                                quantity: itemInput.receivedQuantity,
-                                note: `PO ${po.poNumber} receipt`,
-                            });
+                                .where(and(
+                                  eq(inventoryItems.id, invItem.id),
+                                  eq(inventoryItems.orgId, ctx.orgId),
+                                ));
                         }
                     }
                 }
             }
 
+            // Re-asserts the org scope the lookup above established rather than
+            // trusting it across statements, and takes NOT_FOUND from this
+            // write's own result: without the predicate this was the one write
+            // in the procedure the tenant filter never reached.
             const newStatus = fullyReceived ? 'received' : 'partial';
             const [updatedPo] = await tx.update(purchaseOrders)
                 .set({ status: newStatus, receivedAt: new Date(), updatedAt: new Date() })
-                .where(eq(purchaseOrders.id, po.id))
+                .where(and(eq(purchaseOrders.id, po.id), eq(purchaseOrders.orgId, ctx.orgId)))
                 .returning();
+
+            if (!updatedPo) throw new TRPCError({ code: 'NOT_FOUND' });
+
+            // Goods received: inventory (an asset) increases, accounts payable
+            // (what is owed the supplier) increases by the same figure. Posted
+            // only when at least one line had a known cost — a call that only
+            // received uncosted lines (or received nothing this time) has
+            // nothing to post, and posting a zero/zero entry would be a journal
+            // entry that documents no event.
+            if (totalReceivedCostMinor > 0n) {
+                await postJournalEntry(tx, {
+                    orgId: ctx.orgId,
+                    journalType: 'purchases',
+                    description: `Goods received — PO ${po.poNumber}`,
+                    sourceTable: 'purchase_orders',
+                    sourceId: po.id,
+                    createdBy: ctx.userId,
+                    lines: [
+                        { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: totalReceivedCostMinor },
+                        { accountCode: ACCOUNT_CODES.ACCOUNTS_PAYABLE, creditMinor: totalReceivedCostMinor },
+                    ],
+                });
+            }
 
             await withAudit(
               tx,
@@ -434,6 +532,6 @@ export const purchasingRouter = router({
         });
 
         return { data: result, error: null, meta: null };
-      }),
+      })),
   }),
 });
