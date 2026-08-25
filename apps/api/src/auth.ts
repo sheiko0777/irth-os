@@ -32,6 +32,16 @@ import * as authSchema from '@irth/db/src/schema/auth';
  * Tenancy is NOT Better Auth's job here. Identity is. The tenant is resolved
  * from `org_members` in `middlewares/authContext.ts`.
  */
+// Fail at boot, not at the first login attempt in production with an unset
+// secret — Better Auth would otherwise sign sessions with `undefined`, which
+// is indistinguishable from working until someone forges one. Found in the
+// archaeology sweep (a 2-month-stale claude/phase-a-production-boot branch
+// had already caught this; ported the check, not the branch — everything
+// else about that branch's auth.ts predates the drizzleAdapter rewrite above).
+if (!process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('BETTER_AUTH_SECRET must be set in production');
+}
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: 'pg',

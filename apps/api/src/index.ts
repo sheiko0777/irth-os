@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { sql } from 'drizzle-orm'
 import { auth } from './auth'
 import { ordersRoute } from './routes/orders'
 import { shippingRoute } from './routes/shipping'
@@ -13,7 +14,7 @@ import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
 import { authContext } from './middlewares/authContext'
-import { dbContext } from './db'
+import { dbContext, getDb } from './db'
 
 const app = new Hono()
 
@@ -30,8 +31,24 @@ app.use('/api/auth/*', rateLimit(10, 60_000, trustedProxyCount))
 // route handlers run. Skips /api/auth, webhooks, and /health internally.
 app.use('*', authContext())
 
-app.get('/health', (c) => {
-  return c.json({ data: { status: 'ok', environment: 'development' }, error: null, meta: null })
+// Real DB-connectivity check, not a hardcoded 'ok' — a load balancer that
+// trusts this without one keeps routing traffic to a Worker that can't reach
+// Postgres. environment now reads NODE_ENV instead of a literal
+// 'development' string that lied in every other environment. Ported from a
+// 2-month-stale claude/phase-a-production-boot branch found in the
+// archaeology sweep, adapted to getDb() (the request-scoped handle this file
+// didn't have then).
+app.get('/health', async (c) => {
+  const environment = process.env.NODE_ENV || 'development'
+  try {
+    await getDb().execute(sql`select 1`)
+    return c.json({ data: { status: 'ok', db: 'up', environment }, error: null, meta: null })
+  } catch {
+    return c.json(
+      { data: { status: 'degraded', db: 'down', environment }, error: 'db_unreachable', meta: null },
+      503,
+    )
+  }
 })
 
 app.on(['POST', 'GET'], '/api/auth/**', (c) => {
