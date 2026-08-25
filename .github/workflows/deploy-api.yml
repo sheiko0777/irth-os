@@ -11,6 +11,7 @@ on:
 jobs:
   gates:
     uses: ./.github/workflows/ci.yml
+    secrets: inherit
 
   deploy:
     needs: gates
