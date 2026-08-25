@@ -2,7 +2,8 @@ import { router, protectedProcedure } from '../trpc';
 import { orders, orderItems, shipmentTracking, productVariants, products, inventoryItems, orderReturns } from '@irth/db';
 import { eq, and, desc, sql, count, sum, ilike, gte, lte, lt, or, inArray, lte as lteOp } from 'drizzle-orm';
 import { z } from 'zod';
-import { divideRoundHalfEven, fromMinor } from '@irth/domain';
+import { fromMinor } from '@irth/domain';
+import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
 /**
  * An order still sitting in pending or confirmed after this long has missed its
@@ -13,21 +14,6 @@ import { divideRoundHalfEven, fromMinor } from '@irth/domain';
 const LATE_ORDER_HOURS = 48;
 function bigintTotal(value: unknown): bigint {
     return BigInt((value as string | null) ?? '0');
-}
-
-function wholeMajorUnits(minor: bigint): number {
-    const text = minor.toString();
-    const negative = text.startsWith('-');
-    const digits = negative ? text.slice(1) : text;
-    const whole = digits.length > 2 ? digits.slice(0, -2) : '0';
-    const parsed = parseInt(whole || '0', 10);
-    return negative ? -parsed : parsed;
-}
-
-function percentDelta(current: bigint, previous: bigint): number | null {
-    if (previous === BigInt(0)) return null;
-    const tenths = divideRoundHalfEven((current - previous) * BigInt(1000), previous);
-    return parseInt(tenths.toString(), 10) / 10;
 }
 
 export const dashboardRouter = router({

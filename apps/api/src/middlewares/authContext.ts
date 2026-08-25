@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import { db } from '../db';
 import { orgMembers } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
-import type { Role } from '@irth/db/src/permissions';
+import type { Role } from '@irth/db';
 import { auth } from '../auth';
 // Kept in its own module so the predicate can be tested without importing
 // `../auth`, which initializes a database adapter at import time.

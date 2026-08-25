@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
 import { db, orgMembers, withOrgContext, withIdempotency, IdempotencyError } from '@irth/db';
 import { and, eq } from 'drizzle-orm';
-import type { Role } from '@irth/db/src/permissions';
+import type { Role } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {

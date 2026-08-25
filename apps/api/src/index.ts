@@ -5,7 +5,6 @@ import { shippingRoute } from './routes/shipping'
 import { paymobRoute } from './routes/webhooks/paymob'
 import { bostaRoute } from './routes/webhooks/bosta'
 import { webhooksRouter } from './routes/webhooks'
-import { auditMiddleware } from './middlewares/audit'
 import { orgsRouter } from './routes/orgs'
 import { notificationsRouter } from './routes/notifications'
 import { productsRouter } from './routes/products'
@@ -27,10 +26,9 @@ app.use('*', securityHeaders)
 const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT || '0', 10);
 app.use('/api/*', rateLimit(100, 60_000, trustedProxyCount))
 app.use('/api/auth/*', rateLimit(10, 60_000, trustedProxyCount))
-// Establish trusted identity (userId/orgId/role) from the session before audit
-// and route handlers run. Skips /api/auth, webhooks, and /health internally.
+// Establish trusted identity (userId/orgId/role) from the session before
+// route handlers run. Skips /api/auth, webhooks, and /health internally.
 app.use('*', authContext())
-app.use('*', auditMiddleware())
 
 app.get('/health', (c) => {
   return c.json({ data: { status: 'ok', environment: 'development' }, error: null, meta: null })

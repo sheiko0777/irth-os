@@ -73,7 +73,13 @@ bostaWebhookRoute.post('/', async (c: Context) => {
 
   const trackingNumber = data.trackingNumber as string;
   const state = data.state as string;
-  const cashOnDelivery = data.cashOnDelivery ? parseFloat(data.cashOnDelivery) : 0;
+  // Parsed once, directly from the webhook's decimal string. The old code did
+  // `parseFloat(data.cashOnDelivery)` here, then later re-stringified that
+  // float and parsed it again for storage (`parseDecimal(String(...))`) at
+  // both write sites below — two unneeded float round-trips on a real money
+  // value, exactly the re-entry point CLAUDE.md rule 1 forbids. `parseDecimal`
+  // reads the decimal text directly; nothing here ever becomes a `number`.
+  const codMinor = data.cashOnDelivery ? parseDecimal(String(data.cashOnDelivery)).minor : 0n;
 
   // Map states
   let courierStatus = 'created';
@@ -108,7 +114,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
 
   if (existingShipment) {
     const updatedEvents = [...(existingShipment.webhookEvents || []), payload];
-    const isDeliveredAndCod = state === 'DELIVERED' && cashOnDelivery > 0;
+    const isDeliveredAndCod = state === 'DELIVERED' && codMinor > 0n;
 
     // The tenant comes from the shipment row, not from a session: a webhook has
     // no authenticated user. That is also why this uses withOrgContext directly
@@ -173,7 +179,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
     const [order] = await db.select().from(orders).where(eq(orders.id, data.businessReference));
 
     if (order) {
-        const isDeliveredAndCod = state === 'DELIVERED' && cashOnDelivery > 0;
+        const isDeliveredAndCod = state === 'DELIVERED' && codMinor > 0n;
         const { sql } = await import('drizzle-orm');
         await db.insert(courierShipments).values({
             orgId: order.orgId,
@@ -181,7 +187,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
             courier: 'bosta',
             trackingNumber: trackingNumber,
             courierStatus,
-            codAmountMinor: parseDecimal(String(cashOnDelivery)).minor,
+            codAmountMinor: codMinor,
             codCollected: isDeliveredAndCod,
             webhookEvents: [payload]
         }).onConflictDoUpdate({
@@ -189,7 +195,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
             set: {
                 courierStatus,
                 trackingNumber,
-                codAmountMinor: parseDecimal(String(cashOnDelivery)).minor,
+                codAmountMinor: codMinor,
                 codCollected: isDeliveredAndCod,
                 webhookEvents: sql`${courierShipments.webhookEvents} || ${JSON.stringify([payload])}::jsonb`,
                 updatedAt: new Date()

@@ -1,23 +1,9 @@
 import { router, protectedProcedure } from '../trpc';
 import { orders, orderItems, productVariants, products, inventoryItems, inventoryMovements } from '@irth/db';
 import { eq, and, desc, sql, count, sum, gte, lte } from 'drizzle-orm';
-import { divideRoundHalfEven } from '@irth/domain';
 import { z } from 'zod';
+import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
-function wholeMajorUnits(minorText: string | null): number {
-  const text = minorText ?? '0';
-  const negative = text.startsWith('-');
-  const digits = negative ? text.slice(1) : text;
-  const whole = digits.length > 2 ? digits.slice(0, -2) : '0';
-  const parsed = parseInt(whole || '0', 10);
-  return negative ? -parsed : parsed;
-}
-
-function percentDelta(current: bigint, previous: bigint): number | null {
-  if (previous === BigInt(0)) return null;
-  const tenths = divideRoundHalfEven((current - previous) * BigInt(1000), previous);
-  return parseInt(tenths.toString(), 10) / 10;
-}
 export const analyticsRouter = router({
   /**
    * Daily revenue (delivered orders) for last N days.

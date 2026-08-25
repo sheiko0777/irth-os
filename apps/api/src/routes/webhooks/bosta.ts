@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { orders, orderItems, productVariants, products, customers, shipmentTracking, auditLog, withOrgContext } from '@irth/db';
+import { orders, shipmentTracking, auditLog, withOrgContext } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { verifyHmac } from '../../middlewares/verifyWebhook';
-import { issueInvoice, type EtaOrderInput } from '../../services/eta';
+import { issueInvoice } from '../../services/eta';
+import { buildEtaOrderInput } from '../../services/buildEtaOrderInput';
 
 /**
  * NOTE FOR ANYONE TRYING TO UNDERSTAND BOSTA INTEGRATION: there are TWO live,
@@ -27,52 +28,6 @@ import { issueInvoice, type EtaOrderInput } from '../../services/eta';
  */
 
 const bostaRoute = new Hono();
-
-/** Same shape as the identically-purposed helper in apps/api/src/routes/orders.ts and apps/admin/src/server/routers/eta.ts. */
-async function buildEtaOrderInput(orgId: string, orderId: string, orderNumber: string, orderCurrency: string): Promise<EtaOrderInput | null> {
-  const [order] = await db.select({ customerId: orders.customerId })
-    .from(orders)
-    .where(and(eq(orders.id, orderId), eq(orders.orgId, orgId)))
-    .limit(1);
-  if (!order) return null;
-
-  const lineRows = await db
-    .select({
-      quantity: orderItems.quantity,
-      priceMinor: orderItems.priceMinor,
-      productName: products.name,
-      sku: productVariants.sku,
-    })
-    .from(orderItems)
-    .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-    .innerJoin(products, eq(productVariants.productId, products.id))
-    .where(eq(orderItems.orderId, orderId));
-  if (lineRows.length === 0) return null;
-
-  let customerName: string | null = null;
-  if (order.customerId) {
-    const [customer] = await db
-      .select({ name: customers.name })
-      .from(customers)
-      .where(and(eq(customers.id, order.customerId), eq(customers.orgId, orgId)))
-      .limit(1);
-    customerName = customer?.name ?? null;
-  }
-
-  return {
-    id: orderId,
-    orgId,
-    orderNumber,
-    currency: orderCurrency,
-    customerName,
-    items: lineRows.map((r) => ({
-      description: r.productName,
-      itemCode: r.sku,
-      quantity: r.quantity,
-      unitPriceMinor: r.priceMinor,
-    })),
-  };
-}
 
 bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), async (c: Context) => {
   const bodyRaw = c.get('rawBody') as string;

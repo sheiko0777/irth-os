@@ -1,3 +1,10 @@
+// Deep import deliberately, NOT from '@irth/db': this file is bundled into
+// the browser (widely imported by 'use client' components). The package root
+// (packages/db/src/index.ts) runs `createDb(process.env.DATABASE_URL!)` at
+// module scope — a real Postgres connection — which a client bundle must
+// never evaluate. permissions.ts itself has no imports and no side effects,
+// so reaching past the barrel straight to it is safe; going through '@irth/db'
+// is not.
 export { can, PERMISSIONS } from '@irth/db/src/permissions';
 import type { Role } from '@irth/db/src/permissions';
 import { trpc } from './trpc';

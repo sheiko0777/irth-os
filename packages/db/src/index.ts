@@ -31,6 +31,7 @@ const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSetti
 import { auditLog } from './schema';
 
 export * from './json';
+export * from './permissions';
 export * from './schema';
 // Better Auth's tables. Exported here so consumers join against them by name
 // rather than reaching through '@irth/db/src/schema/auth' — no name collides

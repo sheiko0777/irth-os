@@ -6,13 +6,8 @@ import { db, getDb, withOrg } from '../db';
 import { organizations, orgMembers, orgInvites, withAudit, auditLog, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
-// import { Resend } from 'resend'; // Assume resend is installed, or we handle it
 
 export const orgsRouter = new Hono();
-
-// We expect user to be authenticated and have user id in context 
-// (assuming auth middleware sets it or we extract from headers/auth handler)
-// For simplicity we will read user_id from headers if present, or "unknown"
 
 const createOrgSchema = z.object({
   name: z.string().min(1),
@@ -118,10 +113,7 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
       expiresAt,
     }).returning();
 
-    // Mock sending email
-    // const resend = new Resend(process.env.RESEND_API_KEY);
-    // await resend.emails.send({ ... subject: `دعوة للانضمام إلى ${org.name}` ... })
-    console.log(`Sending email to ${email} with subject: دعوة للانضمام إلى ${org.name}`);
+    // Invite email delivery is not wired up yet.
 
     return c.json({ data: jsonSafe(invite), error: null, meta: null }, 201);
   } catch (error: unknown) {

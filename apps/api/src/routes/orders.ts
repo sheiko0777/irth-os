@@ -2,10 +2,11 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, getDb, withOrg } from '../db';
-import { orders, orderItems, productVariants, products, customers, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS } from '@irth/db';
+import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
-import { issueInvoice, type EtaOrderInput } from '../services/eta';
+import { issueInvoice } from '../services/eta';
+import { buildEtaOrderInput } from '../services/buildEtaOrderInput';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
 
 /** Thrown inside the order transaction so the whole thing rolls back. */
@@ -17,67 +18,6 @@ class InsufficientStockError extends Error {
 }
 
 const ordersRoute = new Hono();
-
-/**
- * Assembles the real order/line/receiver data issueInvoice needs, from the
- * order id alone. Duplicated from apps/admin/src/server/routers/eta.ts's
- * identically-named helper — that file's own copy has the fuller comment on
- * why (itemCode is the SKU, not an ETA-conformant code; the schema has no
- * national-ID field for the >150,000 EGP threshold). Not consolidated into
- * services/eta.ts because that file is deliberately free of any `@irth/db`
- * import — see its own file-banner comment.
- *
- * Returns `null` when the order has no items to declare.
- */
-async function buildEtaOrderInput(
-  orgId: string,
-  orderId: string,
-  orderNumber: string,
-  orderCurrency: string,
-): Promise<EtaOrderInput | null> {
-  const [order] = await db.select({ customerId: orders.customerId })
-    .from(orders)
-    .where(and(eq(orders.id, orderId), eq(orders.orgId, orgId)))
-    .limit(1);
-  if (!order) return null;
-
-  const lineRows = await db
-    .select({
-      quantity: orderItems.quantity,
-      priceMinor: orderItems.priceMinor,
-      productName: products.name,
-      sku: productVariants.sku,
-    })
-    .from(orderItems)
-    .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-    .innerJoin(products, eq(productVariants.productId, products.id))
-    .where(eq(orderItems.orderId, orderId));
-  if (lineRows.length === 0) return null;
-
-  let customerName: string | null = null;
-  if (order.customerId) {
-    const [customer] = await db
-      .select({ name: customers.name })
-      .from(customers)
-      .where(and(eq(customers.id, order.customerId), eq(customers.orgId, orgId)))
-      .limit(1);
-    customerName = customer?.name ?? null;
-  }
-
-  return {
-    id: orderId,
-    orgId,
-    orderNumber,
-    currency: orderCurrency,
-    customerName,
-    items: lineRows.map((r) => ({
-      description: r.productName,
-      itemCode: r.sku,
-      quantity: r.quantity,
-      unitPriceMinor: r.priceMinor,
-    })),
-  };
-}
 
 const getOrgId = (c: Context): string | undefined => c.get('orgId') as string | undefined;
 const getUserId = (c: Context): string | undefined => c.get('userId') as string | undefined;
