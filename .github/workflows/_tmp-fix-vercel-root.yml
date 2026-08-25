@@ -28,12 +28,16 @@ jobs:
             | tee /tmp/before.json | python3 -c "import json,sys; d=json.load(sys.stdin); print('name:', d.get('name')); print('rootDirectory:', d.get('rootDirectory')); print('framework:', d.get('framework'))"
 
           echo "--- patching ---"
+          # framework too: irth-os-admin (the working project, same rootDirectory)
+          # has framework=nextjs. This project was auto-provisioned blank with
+          # framework=null — comparison run confirmed the mismatch — so
+          # rootDirectory alone likely leaves Vercel guessing the build command.
           HTTP_CODE=$(curl -sS -o /tmp/patch_response.json -w "%{http_code}" \
             -X PATCH \
             -H "Authorization: Bearer $VERCEL_TOKEN" \
             -H "Content-Type: application/json" \
             "https://api.vercel.com/v9/projects/$PROJECT_ID?teamId=$VERCEL_ORG_ID" \
-            -d '{"rootDirectory":"apps/admin"}')
+            -d '{"rootDirectory":"apps/admin","framework":"nextjs"}')
           echo "HTTP $HTTP_CODE"
           cat /tmp/patch_response.json
           if [ "$HTTP_CODE" -ge 300 ]; then
