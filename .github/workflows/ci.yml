@@ -31,9 +31,36 @@ jobs:
   # that silently skips itself when misconfigured is not a gate; if
   # TEST_DATABASE_URL is missing the suite fails with instructions rather than
   # reporting a green tick it did not earn.
+  #
+  # CONCURRENCY: this job runs against ONE shared, persistent Neon branch —
+  # globalSetup.ts claims it once via a marker table rather than provisioning a
+  # fresh branch per run, and every integration test file truncates every table
+  # in its own beforeAll. Two invocations of this job at once — e.g. a push to
+  # main that touches both apps/api/** and apps/admin/**, which fires
+  # deploy-api.yml AND deploy-admin.yml, and each independently calls this
+  # workflow with secrets: inherit — race on that one branch: one run's
+  # truncateAll() can erase the fixtures another run just inserted mid-test.
+  #
+  # Caught live on 58b98aa (PR #211's merge): both workflows' `integration` job
+  # started in the same second and both failed, on exactly the assertions that
+  # depend on isolated state (an idempotency-key collision check, a stock guard
+  # concurrency count) — never before that day, because until #211 nothing had
+  # touched both apps/api/** and apps/admin/** in one push. Deploy has 0/19
+  # successful runs in this repo's history for reasons layered on top of this
+  # one, but this was the first time gates itself was the failure.
+  #
+  # The group is a fixed literal, not an expression like `github.workflow` —
+  # that resolves to the CALLING workflow's name ("Deploy API" vs "Deploy
+  # Admin") when this runs via workflow_call, which would give the two
+  # invocations different groups and not serialize them at all. cancel-in-
+  # progress is false: the goal is queueing onto the one shared branch, not
+  # cancelling one deploy's gate because another happened to start first.
   integration:
     runs-on: ubuntu-latest
     needs: test
+    concurrency:
+      group: shared-neon-integration-branch
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
