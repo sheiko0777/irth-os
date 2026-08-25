@@ -80,7 +80,7 @@ export default async function FinancePage() {
                     </Card>
                     <Card className="bg-[var(--surface)] border-[var(--rim1)]">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-[var(--t2)]">قيمة ضريبة القيمة المضافة (14%)</CardTitle>
+                            <CardTitle className="text-sm font-medium text-[var(--t2)]">قيمة ضريبة القيمة المضافة</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-[var(--crimson)]">{vat.vatAmount.toLocaleString('ar-EG', { maximumFractionDigits: 2 })} ج.م</div>
@@ -95,6 +95,13 @@ export default async function FinancePage() {
                         </CardContent>
                     </Card>
                 </div>
+                {vat.ordersWithoutTaxBreakdown > 0 && (
+                    <p className="text-sm text-[var(--t2)] border-r-2 border-[var(--gold)] pr-3">
+                        ملاحظة: {vat.ordersWithoutTaxBreakdown.toLocaleString('ar-EG')} من الطلبات في هذه
+                        الفترة سابقة لتسجيل تفصيل الضريبة، ولا تحمل ضريبة مُفصَّلة. الرقم أعلاه لا يشملها،
+                        فراجِعها يدويًا قبل الاعتماد عليه في إقرار ضريبي.
+                    </p>
+                )}
             </section>
 
             {/* COD Reconciliation */}

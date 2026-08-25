@@ -41,7 +41,10 @@ export const etaRouter = router({
             const result = await issueInvoice({
                 id: order.id,
                 orgId: ctx.orgId,
-                totalAmount: String(order.totalAmount ?? 0),
+                subtotalMinor: order.subtotalMinor,
+                taxAmountMinor: order.taxAmountMinor,
+                totalAmountMinor: order.totalAmountMinor,
+                taxRateBps: order.taxRateBps,
             });
 
             if (!result) {
@@ -133,7 +136,13 @@ export const etaRouter = router({
     submitPending: adminProcedure
         .mutation(async ({ ctx }) => {
             const pendingOrders = await ctx.db
-                .select({ id: orders.id, totalAmount: orders.totalAmount })
+                .select({
+                    id: orders.id,
+                    subtotalMinor: orders.subtotalMinor,
+                    taxAmountMinor: orders.taxAmountMinor,
+                    totalAmountMinor: orders.totalAmountMinor,
+                    taxRateBps: orders.taxRateBps,
+                })
                 .from(orders)
                 .leftJoin(etaInvoices, eq(etaInvoices.orderId, orders.id))
                 .where(and(
@@ -147,7 +156,10 @@ export const etaRouter = router({
                 const result = await issueInvoice({
                     id: order.id,
                     orgId: ctx.orgId,
-                    totalAmount: String(order.totalAmount ?? 0),
+                    subtotalMinor: order.subtotalMinor,
+                    taxAmountMinor: order.taxAmountMinor,
+                    totalAmountMinor: order.totalAmountMinor,
+                    taxRateBps: order.taxRateBps,
                 });
                 if (result) {
                     await ctx.db.insert(etaInvoices).values({

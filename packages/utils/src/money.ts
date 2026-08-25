@@ -75,3 +75,65 @@ export function minorToDecimalString(minor: MinorUnits): string {
   const frac = String(abs % 100).padStart(2, '0');
   return `${negative ? '-' : ''}${whole}.${frac}`;
 }
+
+/**
+ * Tax rate in basis points: 1400 = 14.00%, 500 = 5.00%, 0 = zero-rated.
+ * Basis points keep the rate an exact integer, so a rate can never pick up
+ * the float error this module exists to prevent (0.14 is not representable
+ * in binary floating point; 1400 is).
+ */
+export type RateBps = number;
+
+/** Rounds half away from zero, on exact integer inputs. */
+function divRound(numerator: number, denominator: number): number {
+  const sign = numerator < 0 ? -1 : 1;
+  const abs = Math.abs(numerator);
+  return sign * Math.floor((abs + Math.floor(denominator / 2)) / denominator);
+}
+
+/**
+ * Splits a set of line amounts into the subtotal/tax/total triple that the
+ * `orders` table records, under an explicit tax-inclusive-or-not convention.
+ *
+ * The convention is a parameter, never an assumption: reading the same
+ * stored number as tax-inclusive in one module and tax-exclusive in another
+ * is exactly the bug this function was written to retire (finance.vatReport
+ * and services/eta.ts each guessed, and guessed differently).
+ *
+ * Guarantees, for both conventions and any rate:
+ *   subtotalMinor + taxAmountMinor === totalAmountMinor
+ * This invariant is also enforced as a CHECK constraint on `orders`, so a
+ * row that violates it cannot be written even by code that bypasses this
+ * helper.
+ */
+export function splitTax(
+  lineTotalMinor: MinorUnits,
+  rateBps: RateBps,
+  pricesIncludeTax: boolean,
+): { subtotalMinor: MinorUnits; taxAmountMinor: MinorUnits; totalAmountMinor: MinorUnits } {
+  if (!Number.isInteger(lineTotalMinor)) {
+    throw new Error(`lineTotalMinor must be an integer, got: ${lineTotalMinor}`);
+  }
+  if (!Number.isInteger(rateBps) || rateBps < 0) {
+    throw new Error(`rateBps must be a non-negative integer, got: ${rateBps}`);
+  }
+
+  if (pricesIncludeTax) {
+    // Catalog price is what the customer pays; the tax is already inside it.
+    // tax = gross * rate / (10000 + rate)
+    const taxAmountMinor = divRound(lineTotalMinor * rateBps, 10000 + rateBps);
+    return {
+      subtotalMinor: lineTotalMinor - taxAmountMinor,
+      taxAmountMinor,
+      totalAmountMinor: lineTotalMinor,
+    };
+  }
+
+  // Catalog price is net; tax is added on top.
+  const taxAmountMinor = divRound(lineTotalMinor * rateBps, 10000);
+  return {
+    subtotalMinor: lineTotalMinor,
+    taxAmountMinor,
+    totalAmountMinor: lineTotalMinor + taxAmountMinor,
+  };
+}

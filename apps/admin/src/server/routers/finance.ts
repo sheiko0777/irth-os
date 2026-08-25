@@ -123,10 +123,26 @@ export const financeRouter = router({
             const end = new Date(input.endDate);
             end.setHours(23, 59, 59, 999);
 
+            // Sum the tax that each order actually recorded at the time of
+            // sale. This previously derived VAT as `grossRevenue * 0.14`,
+            // which is wrong twice over: it read a float out of a decimal
+            // column, and extracting 14% from a tax-INCLUSIVE total is
+            // total * 14/114 (0.1228), not * 0.14 — overstating VAT on a tax
+            // filing by ~14%. It also disagreed with services/eta.ts, which
+            // read the same column as tax-EXCLUSIVE. Neither module guesses
+            // any more; the split lives on the row.
             const result = await ctx.db
                 .select({
-                    total: sum(orders.totalAmount),
+                    subtotalMinor: sum(orders.subtotalMinor),
+                    taxMinor: sum(orders.taxAmountMinor),
+                    totalMinor: sum(orders.totalAmountMinor),
                     count: count(),
+                    // Orders predating the tax breakdown (backfilled with
+                    // tax_rate_bps = 0 by migration 0029) carry no broken-out
+                    // tax. Surfaced separately so a low VAT figure is visibly
+                    // "some orders have no tax recorded" rather than silently
+                    // read as "we owe less tax".
+                    unbrokenOut: sql<number>`count(*) filter (where ${orders.taxRateBps} = 0)`.mapWith(Number),
                 })
                 .from(orders)
                 .where(and(
@@ -136,17 +152,25 @@ export const financeRouter = router({
                     eq(orders.status, 'delivered')
                 ));
 
-            const grossRevenue = parseFloat((result[0]?.total as unknown as string) ?? '0');
-            const orderCount = result[0]?.count ?? 0;
-            const vatAmount = grossRevenue * 0.14;
-            const netRevenue = grossRevenue * 0.86;
+            const row = result[0];
+            const toMinor = (v: unknown) => Number(v ?? 0);
+
+            const netRevenueMinor = toMinor(row?.subtotalMinor);
+            const vatAmountMinor = toMinor(row?.taxMinor);
+            const grossRevenueMinor = toMinor(row?.totalMinor);
 
             return {
                 data: {
-                    grossRevenue,
-                    vatAmount,
-                    netRevenue,
-                    orderCount,
+                    // Minor units are authoritative; the decimal fields are
+                    // for display only.
+                    grossRevenueMinor,
+                    vatAmountMinor,
+                    netRevenueMinor,
+                    grossRevenue: grossRevenueMinor / 100,
+                    vatAmount: vatAmountMinor / 100,
+                    netRevenue: netRevenueMinor / 100,
+                    orderCount: row?.count ?? 0,
+                    ordersWithoutTaxBreakdown: row?.unbrokenOut ?? 0,
                     startDate: input.startDate,
                     endDate: input.endDate
                 },

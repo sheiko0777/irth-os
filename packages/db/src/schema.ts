@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, varchar, text, jsonb, decimal, boolean, integer, bigint, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, varchar, text, jsonb, decimal, boolean, integer, bigint, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const brandEnum = pgEnum('brand', ['irth']);
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
@@ -85,12 +85,31 @@ export const productVariants = pgTable('product_variants', {
 
 export const orders = pgTable("orders", {
   ...baseColumns,
-  orderNumber: varchar("order_number", { length: 50 }).notNull().unique(), // IRT-2026-0001
+  // Unique per org, NOT globally — see the table-level uniqueIndex below.
+  orderNumber: varchar("order_number", { length: 50 }).notNull(), // IRT-2026-0001
   status: orderStatusEnum("status").notNull().default('pending'),
   totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull(),
+
+  // Money breakdown. The invariant subtotal + tax = total is enforced by a
+  // CHECK constraint in 0029, so no reader ever has to guess whether
+  // total_amount_minor is tax-inclusive — the split is recorded explicitly.
+  subtotalMinor: bigint("subtotal_minor", { mode: 'number' }).notNull().default(0),
+  taxAmountMinor: bigint("tax_amount_minor", { mode: 'number' }).notNull().default(0),
   totalAmountMinor: bigint("total_amount_minor", { mode: 'number' }).notNull().default(0),
+  // Snapshots of the tax treatment at the moment of sale. Rates and settings
+  // change; a historical order must still reproduce the tax it was filed
+  // with, so these are copied onto the row rather than looked up at read time.
+  taxRateBps: integer("tax_rate_bps").notNull().default(0), // 1400 = 14.00%
+  pricesIncludeTax: boolean("prices_include_tax").notNull().default(true),
+  currency: text("currency").notNull().default('EGP'),
+
   customerId: uuid("customer_id"), // Ref to auth users eventually
-});
+}, (table) => ({
+  // Order numbers restart per tenant, so "IRT-2026-0001" legitimately exists
+  // once per org. The original global UNIQUE meant the second org to open its
+  // books collided on its very first order and could never create one.
+  orgOrderNumberIdx: uniqueIndex("orders_org_id_order_number_idx").on(table.orgId, table.orderNumber),
+}));
 
 export const orderItems = pgTable("order_items", {
   ...baseColumns,

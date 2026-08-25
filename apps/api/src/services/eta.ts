@@ -31,7 +31,14 @@ async function getAuthToken(): Promise<string> {
     return data.access_token;
 }
 
-export const issueInvoice = async (order: { id: string; orgId: string; totalAmountMinor: number }): Promise<EtaResult> => {
+export const issueInvoice = async (order: {
+    id: string;
+    orgId: string;
+    subtotalMinor: number;
+    taxAmountMinor: number;
+    totalAmountMinor: number;
+    taxRateBps: number;
+}): Promise<EtaResult> => {
     const issuerEin = process.env.ETA_ISSUER_EIN;
     if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET || !issuerEin) {
         console.warn('ETA credentials not fully configured. Skipping invoice issuance.');
@@ -40,13 +47,19 @@ export const issueInvoice = async (order: { id: string; orgId: string; totalAmou
 
     try {
         const token = await getAuthToken();
-        // Integer minor-unit math throughout — `amount * 0.14` here would be
-        // the exact float-rounding bug this whole invoice exists to avoid.
-        // Convert to decimal EGP only once, at the boundary with the ETA
-        // JSON payload, which is documented in decimal.
-        const vatMinor = Math.floor((order.totalAmountMinor * 14) / 100);
-        const amount = order.totalAmountMinor / 100;
-        const vatAmount = vatMinor / 100;
+        // Use the tax split recorded on the order. This previously derived VAT
+        // itself as `totalAmount * 0.14` and submitted `total * 1.14` as the
+        // invoice total — treating the order total as tax-EXCLUSIVE while
+        // finance.vatReport read the same column as tax-INCLUSIVE. One of the
+        // two was always wrong; under tax-inclusive pricing this filed the
+        // customer 14% more than they actually paid. The split now comes from
+        // the row, so this module no longer has an opinion to get wrong.
+        // Convert to decimal EGP only at the boundary with the ETA JSON
+        // payload, which is documented in decimal.
+        const amount = order.subtotalMinor / 100;
+        const vatAmount = order.taxAmountMinor / 100;
+        const grandTotal = order.totalAmountMinor / 100;
+        const ratePercent = order.taxRateBps / 100;
 
         const doc = {
             issuer: { type: 'B', id: issuerEin, name: 'IRTH Business' },
@@ -71,7 +84,7 @@ export const issueInvoice = async (order: { id: string; orgId: string; totalAmou
                     totalTaxableFees: 0,
                     netTotal: amount,
                     itemsDiscount: 0,
-                    taxableItems: [{ taxType: 'T1', amount: vatAmount, subType: 'V009', rate: 14 }],
+                    taxableItems: [{ taxType: 'T1', amount: vatAmount, subType: 'V009', rate: ratePercent }],
                 },
             ],
             totalSalesAmount: amount,
@@ -80,7 +93,7 @@ export const issueInvoice = async (order: { id: string; orgId: string; totalAmou
             taxTotals: [{ taxType: 'T1', amount: vatAmount }],
             extraDiscountAmount: 0,
             totalItemsDiscountAmount: 0,
-            totalAmount: amount + vatAmount,
+            totalAmount: grandTotal,
         };
 
         const res = await fetch(`${ETA_API_URL}/documentsubmissions`, {

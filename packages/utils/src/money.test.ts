@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decimalStringToMinor, minorToDecimalString, sumMinor, multiplyMinorByQuantity, egp } from './money';
+import { decimalStringToMinor, minorToDecimalString, sumMinor, multiplyMinorByQuantity, egp, splitTax } from './money';
 
 describe('decimalStringToMinor', () => {
   it('parses whole and fractional amounts exactly', () => {
@@ -64,5 +64,60 @@ describe('multiplyMinorByQuantity', () => {
 describe('egp', () => {
   it('rejects non-integer minor amounts', () => {
     expect(() => egp(10.5)).toThrow();
+  });
+});
+
+describe('splitTax', () => {
+  const EGYPT_VAT = 1400; // 14.00% in basis points
+
+  it('extracts tax from a tax-inclusive price (the vatReport bug)', () => {
+    // 114,000.00 EGP gross at 14% contains 14,000.00 tax over 100,000.00 net.
+    // The old finance.vatReport did gross * 0.14 = 15,960 — a 14% overstatement
+    // on a tax filing.
+    const r = splitTax(11_400_000, EGYPT_VAT, true);
+    expect(r.subtotalMinor).toBe(10_000_000);
+    expect(r.taxAmountMinor).toBe(1_400_000);
+    expect(r.totalAmountMinor).toBe(11_400_000);
+  });
+
+  it('adds tax on top of a tax-exclusive price', () => {
+    const r = splitTax(10_000_000, EGYPT_VAT, false);
+    expect(r.subtotalMinor).toBe(10_000_000);
+    expect(r.taxAmountMinor).toBe(1_400_000);
+    expect(r.totalAmountMinor).toBe(11_400_000);
+  });
+
+  it('holds subtotal + tax === total for every amount, rate and convention', () => {
+    for (const rate of [0, 500, 1400, 2000]) {
+      for (const inclusive of [true, false]) {
+        for (const amount of [0, 1, 7, 99, 12_345, 999_999, 100_000_001]) {
+          const r = splitTax(amount, rate, inclusive);
+          expect(r.subtotalMinor + r.taxAmountMinor).toBe(r.totalAmountMinor);
+        }
+      }
+    }
+  });
+
+  it('is a no-op at a zero rate (exports, exempt goods)', () => {
+    const r = splitTax(50_000, 0, true);
+    expect(r).toEqual({ subtotalMinor: 50_000, taxAmountMinor: 0, totalAmountMinor: 50_000 });
+  });
+
+  it('supports the 5% reduced rate', () => {
+    const r = splitTax(10_000, 500, false);
+    expect(r.taxAmountMinor).toBe(500);
+  });
+
+  it('rounds to whole piastres rather than leaving fractions', () => {
+    // 100.01 EGP inclusive of 14%: tax = 10001 * 1400 / 11400 = 1228.19... -> 1228
+    const r = splitTax(10_001, EGYPT_VAT, true);
+    expect(Number.isInteger(r.taxAmountMinor)).toBe(true);
+    expect(r.taxAmountMinor).toBe(1_228);
+    expect(r.subtotalMinor + r.taxAmountMinor).toBe(10_001);
+  });
+
+  it('rejects non-integer amounts and negative rates', () => {
+    expect(() => splitTax(10.5, EGYPT_VAT, true)).toThrow();
+    expect(() => splitTax(1000, -1, true)).toThrow();
   });
 });

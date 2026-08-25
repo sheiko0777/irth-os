@@ -5,7 +5,8 @@ import { db } from '../db';
 import { orders, orderItems, productVariants, products, inventoryItems, orderNumberCounters, etaInvoices } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, gte, inArray, sql } from 'drizzle-orm';
-import { sumMinor, multiplyMinorByQuantity, minorToDecimalString } from '@irth/utils';
+import { sumMinor, multiplyMinorByQuantity, minorToDecimalString, splitTax } from '@irth/utils';
+import { getTaxConfig } from '../services/taxConfig';
 import { issueInvoice } from '../services/eta';
 
 const ordersRoute = new Hono();
@@ -113,15 +114,31 @@ ordersRoute.post('/', async (c: Context) => {
         .returning({ lastSeq: orderNumberCounters.lastSeq });
       const orderNumber = `IRT-${year}-${String(lastSeq).padStart(4, '0')}`;
 
-      const totalMinor = sumMinor(lines.map(l => multiplyMinorByQuantity(l.unitPriceMinor, l.quantity)));
+      const lineTotalMinor = sumMinor(lines.map(l => multiplyMinorByQuantity(l.unitPriceMinor, l.quantity)));
+
+      // Record the tax split explicitly instead of leaving readers to infer it
+      // from a single total. The rate and convention are snapshotted onto the
+      // row so a historical order always reproduces the tax it was filed with,
+      // even after the org changes its settings.
+      const taxConfig = await getTaxConfig(tx, orgId);
+      const { subtotalMinor, taxAmountMinor, totalAmountMinor } = splitTax(
+        lineTotalMinor,
+        taxConfig.rateBps,
+        taxConfig.pricesIncludeTax,
+      );
 
       const order = await withAudit(tx, async () => {
         const [row] = await tx.insert(orders).values({
           orgId,
           orderNumber,
           status: 'pending',
-          totalAmount: minorToDecimalString(totalMinor),
-          totalAmountMinor: totalMinor,
+          totalAmount: minorToDecimalString(totalAmountMinor),
+          subtotalMinor,
+          taxAmountMinor,
+          totalAmountMinor,
+          taxRateBps: taxConfig.rateBps,
+          pricesIncludeTax: taxConfig.pricesIncludeTax,
+          currency: taxConfig.currency,
           customerId: userId,
         }).returning();
         return row;

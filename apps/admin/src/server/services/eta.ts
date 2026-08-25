@@ -31,7 +31,14 @@ async function getAuthToken(): Promise<string> {
     return data.access_token;
 }
 
-export async function issueInvoice(order: { id: string; orgId: string; totalAmount: string }): Promise<EtaResult> {
+export async function issueInvoice(order: {
+    id: string;
+    orgId: string;
+    subtotalMinor: number;
+    taxAmountMinor: number;
+    totalAmountMinor: number;
+    taxRateBps: number;
+}): Promise<EtaResult> {
     const issuerEin = process.env.ETA_ISSUER_EIN;
     if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET || !issuerEin) {
         console.warn('ETA credentials not configured. Skipping.');
@@ -40,8 +47,16 @@ export async function issueInvoice(order: { id: string; orgId: string; totalAmou
 
     try {
         const token = await getAuthToken();
-        const amount = Number(order.totalAmount);
-        const vatAmount = amount * 0.14;
+        // Use the tax split recorded on the order rather than deriving it.
+        // This previously did `Number(order.totalAmount) * 0.14` and submitted
+        // `amount + vat` as the invoice total, treating the order total as
+        // tax-EXCLUSIVE — while finance.vatReport read the same column as
+        // tax-INCLUSIVE. Under tax-inclusive pricing this filed the customer
+        // 14% more than they actually paid, to the tax authority.
+        const amount = order.subtotalMinor / 100;
+        const vatAmount = order.taxAmountMinor / 100;
+        const grandTotal = order.totalAmountMinor / 100;
+        const ratePercent = order.taxRateBps / 100;
 
         const doc = {
             issuer: { type: 'B', id: issuerEin, name: 'IRTH Business' },
@@ -65,7 +80,7 @@ export async function issueInvoice(order: { id: string; orgId: string; totalAmou
                 totalTaxableFees: 0,
                 netTotal: amount,
                 itemsDiscount: 0,
-                taxableItems: [{ taxType: 'T1', amount: vatAmount, subType: 'V009', rate: 14 }],
+                taxableItems: [{ taxType: 'T1', amount: vatAmount, subType: 'V009', rate: ratePercent }],
             }],
             totalSalesAmount: amount,
             totalDiscountAmount: 0,
@@ -73,7 +88,7 @@ export async function issueInvoice(order: { id: string; orgId: string; totalAmou
             taxTotals: [{ taxType: 'T1', amount: vatAmount }],
             extraDiscountAmount: 0,
             totalItemsDiscountAmount: 0,
-            totalAmount: amount + vatAmount,
+            totalAmount: grandTotal,
         };
 
         const res = await fetch(`${ETA_API_URL}/documentsubmissions`, {

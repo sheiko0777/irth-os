@@ -67,11 +67,11 @@ paymobRoute.post('/', async (c: Context) => {
   }
 
   // Correlator into our system: the order's own UUID, not the human-readable
-  // orderNumber. orderNumber ("IRT-2026-0001") is only unique per org — two
-  // different orgs' orders can share one, so a lookup keyed on it alone
-  // could confirm the wrong tenant's order. The order UUID is globally
-  // unique by construction, so it's the only safe correlator to send
-  // Paymob as merchant_order_id.
+  // orderNumber. Order numbers restart per tenant, so "IRT-2026-0001" exists
+  // once per org (UNIQUE(org_id, order_number), migration 0029) — a lookup
+  // keyed on the number alone has no tenant to disambiguate it and could
+  // confirm the wrong org's order. The order UUID is unique by construction,
+  // so it is the only safe correlator to hand Paymob as merchant_order_id.
   const orderId = (obj.order as Record<string, unknown> | undefined)?.merchant_order_id as string | undefined;
   if (!orderId || !UUID_RE.test(orderId)) {
     return c.json({ data: null, error: 'invalid_order_id', meta: null }, 400);
