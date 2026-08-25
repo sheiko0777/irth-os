@@ -2,11 +2,6 @@ name: Deploy All
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/deploy-all.yml'
 
 jobs:
   deploy-api:
