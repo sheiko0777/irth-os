@@ -8,6 +8,7 @@ import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { issueInvoice } from '../services/eta';
 import { buildEtaOrderInput } from '../services/buildEtaOrderInput';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
+import { requireRole } from '../middlewares/requireRole';
 
 /** Thrown inside the order transaction so the whole thing rolls back. */
 class InsufficientStockError extends Error {
@@ -268,7 +269,14 @@ const updateStatusSchema = z.object({
   status: z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'])
 });
 
-ordersRoute.patch('/:id/status', async (c: Context) => {
+// requireRole, not just the generic orgId/userId presence check every other
+// route here does: this transition can post ledger entries (revenue, COGS)
+// and fire a real ETA e-invoice submission on 'delivered' (see below), so it
+// needs the same admin/owner restriction as the identical mutation's
+// tRPC counterpart, apps/admin/src/server/routers/orders.ts's updateStatus
+// (adminProcedure). Found via the archaeology sweep: this route had no role
+// guard at all — any authenticated member could trigger both side effects.
+ordersRoute.patch('/:id/status', requireRole('owner', 'admin'), async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
   if (!orgId || !userId) {
