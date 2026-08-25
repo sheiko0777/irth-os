@@ -16,6 +16,18 @@ jobs:
   deploy:
     needs: gates
     runs-on: ubuntu-latest
+    env:
+      # Pinning these explicitly because `vercel pull` with only --token and
+      # no linked .vercel/project.json falls back to git-remote-based
+      # project auto-detection — which silently created and kept re-linking
+      # to a *different*, blank auto-provisioned project ("irth-os", no
+      # Root Directory, no framework, no env vars) instead of the real
+      # "irth-os-admin" project configured in the dashboard. That ghost
+      # project is why builds failed with "No Output Directory named
+      # 'public'" and why BETTER_AUTH_SECRET (set on the real project)
+      # was never seen.
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
