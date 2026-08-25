@@ -42,9 +42,22 @@ type WorkerEnv = { DATABASE_URL?: string } & Record<string, unknown>;
 let cached: DbInstance | null = null;
 let envRef: WorkerEnv | null = null;
 
+/**
+ * Hands this module the Worker's env.
+ *
+ * Exported separately from `dbContext` because the middleware chain only runs
+ * for `fetch`. A `scheduled()` invocation (the outbox drain) never passes
+ * through Hono, so it must seed the env itself or `getDb()` falls back to
+ * `process.env`, which is empty on Workers — the exact failure documented at
+ * the top of this file, just on the cron path instead of the request path.
+ */
+export function captureEnv(env: WorkerEnv): void {
+  envRef = env;
+}
+
 /** Captures the request env. Must run before anything touches the database. */
 export const dbContext = (): MiddlewareHandler => async (c, next) => {
-  envRef = c.env as WorkerEnv;
+  captureEnv(c.env as WorkerEnv);
   await next();
 };
 

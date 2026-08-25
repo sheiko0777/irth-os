@@ -57,7 +57,10 @@ export const products = pgTable('products', {
   categoryId: uuid('category_id').references(() => categories.id),
   name: text('name').notNull(),
   nameAr: text('name_ar'),
-  sku: text('sku').notNull().unique(),
+  // Unique per ORG, not globally — see the table-level index below and
+  // migration 0040. A bare .unique() meant the first tenant to register a SKU
+  // blocked every other tenant from ever using that code.
+  sku: text('sku').notNull(),
   description: text('description'),
   descriptionAr: text('description_ar'),
   priceMinor: bigint('price_minor', { mode: 'bigint' }).notNull(),
@@ -68,7 +71,9 @@ export const products = pgTable('products', {
   brand: brandEnum('brand').default('irth').notNull(), // Keeping brand to not break existing tests/code without need, or maybe we drop it? The spec didn't mention it. I will keep it for safety unless told otherwise. Actually I will just keep it since it's an enum we have.
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
+}, (table) => ({
+  orgSkuIdx: uniqueIndex('products_org_id_sku_idx').on(table.orgId, table.sku),
+}));
 
 export const productVariants = pgTable('product_variants', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -79,7 +84,9 @@ export const productVariants = pgTable('product_variants', {
   orgId: uuid('org_id').notNull().references(() => organizations.id),
   productId: uuid('product_id').notNull().references(() => products.id),
   name: text('name').notNull(),
-  sku: text('sku').notNull().unique(),
+  // Unique per ORG, not globally — see the table-level index below and
+  // migration 0040.
+  sku: text('sku').notNull(),
   // Nullable: a variant with no price of its own inherits the product's. This
   // was NOT NULL in migration 0000 but nullable here — 0028 settles the drift
   // on the behaviour the admin already assumes.
@@ -87,7 +94,9 @@ export const productVariants = pgTable('product_variants', {
   stock: integer('stock').notNull().default(0),
   attributes: jsonb('attributes').default({}),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  orgSkuIdx: uniqueIndex('product_variants_org_id_sku_idx').on(table.orgId, table.sku),
+}));
 
 export const orders = pgTable("orders", {
   ...baseColumns,

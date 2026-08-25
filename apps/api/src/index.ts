@@ -14,7 +14,8 @@ import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
 import { authContext } from './middlewares/authContext'
-import { dbContext, getDb } from './db'
+import { dbContext, getDb, captureEnv } from './db'
+import { processOutbox, OUTBOX_BATCH_SIZE } from './workers/outboxWorker'
 
 const app = new Hono()
 
@@ -66,4 +67,49 @@ app.route('/api/notifications', notificationsRouter)
 app.route('/api/products', productsRouter)
 app.route('/api/categories', categoriesRouter)
 
-export default app
+/**
+ * How many batches one cron tick will drain before yielding.
+ *
+ * Bounded rather than "loop until empty" so a backlog cannot run the invocation
+ * into the Workers CPU limit and get killed mid-send — a killed run leaves
+ * events it already delivered still marked unprocessed, and the next tick sends
+ * them again. With the default every-minute trigger this ceiling is 100
+ * events/minute; a standing backlog above that rate is a signal to raise the
+ * cron frequency, not this number.
+ */
+const OUTBOX_MAX_BATCHES_PER_TICK = 10
+
+export default {
+  fetch: app.fetch,
+
+  /**
+   * Drains the outbox on a cron trigger (see [triggers] in wrangler.toml).
+   *
+   * The producers were wired up before any consumer existed, so events
+   * accumulated in the table and no notification was ever sent. `scheduled` is
+   * the only thing on Workers that runs without an inbound request; the old
+   * setInterval-based starter could not work, because an isolate does not
+   * outlive the request that created it.
+   *
+   * `captureEnv` is required: middleware only runs for `fetch`, so without it
+   * getDb() falls through to `process.env`, which is empty on Workers, and
+   * every tick would fail on a missing DATABASE_URL.
+   *
+   * The work is wrapped in waitUntil so the runtime keeps the invocation alive
+   * until the drain settles instead of tearing it down when `scheduled`
+   * returns.
+   */
+  async scheduled(_event: ScheduledEvent, env: unknown, ctx: ExecutionContext): Promise<void> {
+    captureEnv(env as Record<string, unknown>)
+    const db = getDb()
+
+    ctx.waitUntil((async () => {
+      for (let i = 0; i < OUTBOX_MAX_BATCHES_PER_TICK; i++) {
+        const handled = await processOutbox(db)
+        // A short batch means the queue is drained; only a full one implies
+        // there may be more waiting.
+        if (handled < OUTBOX_BATCH_SIZE) break
+      }
+    })())
+  },
+}

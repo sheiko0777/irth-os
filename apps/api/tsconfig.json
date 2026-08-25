@@ -8,7 +8,19 @@
     "lib": ["ESNext"],
     "types": ["@cloudflare/workers-types", "node"],
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
+    "jsxImportSource": "hono/jsx",
+    // Without this, `build` (plain `tsc`) emits a .js beside every .ts in
+    // src/ — 29 untracked files in the working tree after any build, one
+    // `git add -A` away from committing compiled output. It also left
+    // turbo's declared `outputs: ["dist/**"]` unsatisfied, so every
+    // @irth/api#build logged "no output files found" and could not be cached.
+    //
+    // Nothing consumes this output: wrangler bundles from `main =
+    // "src/index.ts"` directly (see wrangler.toml), so `build` is in effect a
+    // compile check. It still emits rather than using --noEmit, because
+    // turbo.json declares outputs for this task and an empty result disables
+    // caching for it.
+    "outDir": "./dist"
   },
   "include": ["src/**/*"]
 }
