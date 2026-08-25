@@ -39,8 +39,14 @@ app.use('*', authContext())
 // 2-month-stale claude/phase-a-production-boot branch found in the
 // archaeology sweep, adapted to getDb() (the request-scoped handle this file
 // didn't have then).
+//
+// NODE_ENV comes from `c.env`, not `process.env` — same reason getDb() reads
+// `envRef` instead of `process.env.DATABASE_URL` (see db.ts): `[vars]` in
+// wrangler.toml is only reachable through the request's env on Workers.
+// `process.env.NODE_ENV` stays as the fallback for local/test/node contexts,
+// where c.env carries no such binding.
 app.get('/health', async (c) => {
-  const environment = process.env.NODE_ENV || 'development'
+  const environment = (c.env as { NODE_ENV?: string }).NODE_ENV || process.env.NODE_ENV || 'development'
   try {
     await getDb().execute(sql`select 1`)
     return c.json({ data: { status: 'ok', db: 'up', environment }, error: null, meta: null })
