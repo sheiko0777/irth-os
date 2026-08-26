@@ -4,6 +4,7 @@ import { db, getDb } from '../../db';
 import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { envVar } from '../../utils/env';
 
 /**
  * Courier states that mean "the parcel is moving" — the natural trigger for
@@ -19,7 +20,8 @@ const SHIPPED_STATUSES = new Set(['picked_up', 'in_transit']);
 export const aramexWebhookRoute = new Hono();
 
 aramexWebhookRoute.post('/', async (c: Context) => {
-  const token = process.env.ARAMEX_WEBHOOK_TOKEN;
+  // Request-time read through the captured Worker env — see utils/env.ts.
+  const token = envVar('ARAMEX_WEBHOOK_TOKEN');
   if (!token) {
     return c.json({ data: null, error: 'webhook_token_not_configured', meta: null }, 500);
   }

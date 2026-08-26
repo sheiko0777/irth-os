@@ -1,9 +1,12 @@
 import { MiddlewareHandler } from 'hono';
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
+import { envVar } from '../utils/env';
 
 export function verifyHmac(secretEnvKey: string, headerName: string): MiddlewareHandler {
   return async (c, next) => {
-    const secret = process.env[secretEnvKey];
+    // Request-time read through the captured Worker env — process.env is
+    // empty on Workers (see db.ts), so a direct read here 500s every call.
+    const secret = envVar(secretEnvKey);
     if (!secret) return c.json({ data: null, error: 'Webhook secret not configured', meta: null }, 500);
 
     const signature = c.req.header(headerName);

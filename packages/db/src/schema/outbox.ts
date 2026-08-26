@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, boolean, integer, uuid } from 'drizzle-orm/pg-core';
+import { organizations } from '../schema';
 
 export const outboxEvents = pgTable('outbox_events', {
     id: uuid('id').primaryKey().defaultRandom(),

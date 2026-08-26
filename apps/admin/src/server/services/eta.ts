@@ -20,16 +20,39 @@ import { EGYPT_VAT_BP, currency, exponentOf, fromMinor, netOfTax, taxIncludedIn,
  * Until an install can run: EDIT BOTH FILES IDENTICALLY, or file the drift as
  * a known defect the moment you cannot. The follow-up is to extract this into
  * `packages/eta` the next time an install is safe to run, and delete the copy.
+ *
+ * KNOWN, DELIBERATE ONE-LINE DIVERGENCE (2026-08): `envVar()` below. The API
+ * copy resolves it through its captured Worker env because `process.env` is
+ * empty there; this Next.js copy reads plain `process.env`, which Next populates.
+ * Every other line is kept identical — ETA_ENV is read lazily per call in BOTH,
+ * so production never falls through to the unsigned preprod signer or preprod
+ * hosts just because a module-scope read saw an empty env.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-const isProd = process.env.ETA_ENV === 'production';
-const ETA_ID_URL = isProd
-    ? 'https://id.eta.gov.eg/connect/token'
-    : 'https://id.preprod.eta.gov.eg/connect/token';
-const ETA_API_URL = isProd
-    ? 'https://api.invoicing.eta.gov.eg/api/v1'
-    : 'https://api.preprod.invoicing.eta.gov.eg/api/v1';
+function envVar(key: string): string | undefined {
+    return process.env[key];
+}
+
+// ETA_ENV decides which ETA host set to use (production vs preprod). It is
+// read lazily per call, not frozen at module scope, so resolveSigner can never
+// fall through to the unsigned passthrough signer in production and hosts are
+// always chosen from the live environment. Kept identical to the API copy.
+function isEtaProd(): boolean {
+    return envVar('ETA_ENV') === 'production';
+}
+
+function etaIdUrl(): string {
+    return isEtaProd()
+        ? 'https://id.eta.gov.eg/connect/token'
+        : 'https://id.preprod.eta.gov.eg/connect/token';
+}
+
+function etaApiUrl(): string {
+    return isEtaProd()
+        ? 'https://api.invoicing.eta.gov.eg/api/v1'
+        : 'https://api.preprod.invoicing.eta.gov.eg/api/v1';
+}
 
 type EtaTokenResponse = { access_token: string };
 type EtaSubmitResponse = { submissionId: string; acceptedDocuments: { uuid: string; longId?: string }[] };
@@ -111,14 +134,14 @@ const preprodUnsignedPassthroughSigner: EtaSigner = {
 };
 
 export function resolveSigner(): EtaSigner {
-    // Reads process.env.ETA_ENV freshly on every call, deliberately NOT the
+    // Reads envVar('ETA_ENV') freshly on every call, deliberately NOT the
     // module-level `isProd` used for the URL constants above. A real process
     // sets ETA_ENV once at deploy time and never changes it, so this
     // distinction has no runtime consequence there — but freezing "is this
     // production" at first import is also the one thing that would make a
     // signer choice IMPOSSIBLE to unit test without re-importing the module
     // per case. The extra env read costs nothing and removes that trap.
-    return process.env.ETA_ENV === 'production' ? productionSigner : preprodUnsignedPassthroughSigner;
+    return envVar('ETA_ENV') === 'production' ? productionSigner : preprodUnsignedPassthroughSigner;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -163,7 +186,7 @@ export class EtaUuidNotAvailableError extends Error {
 async function computeDocumentUuid(canonicalPayload: string): Promise<string> {
     // Fresh read, not the frozen module-level `isProd` — same reasoning as
     // resolveSigner above.
-    if (process.env.ETA_ENV === 'production') throw new EtaUuidNotAvailableError();
+    if (envVar('ETA_ENV') === 'production') throw new EtaUuidNotAvailableError();
     // Node's webcrypto — available without a new dependency (no install
     // possible right now, see the file banner above). Deterministic per
     // input, NOT what ETA would compute.
@@ -207,11 +230,11 @@ export function toEtaAmountString(m: Money): string {
 // AUTH
 // ─────────────────────────────────────────────────────────────────────────
 async function getAuthToken(): Promise<string> {
-    const clientId = process.env.ETA_CLIENT_ID;
-    const clientSecret = process.env.ETA_CLIENT_SECRET;
+    const clientId = envVar('ETA_CLIENT_ID');
+    const clientSecret = envVar('ETA_CLIENT_SECRET');
     if (!clientId || !clientSecret) throw new Error('ETA credentials not configured');
 
-    const res = await fetch(ETA_ID_URL, {
+    const res = await fetch(etaIdUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -248,8 +271,8 @@ export interface EtaOrderInput {
 }
 
 export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
-    const issuerEin = process.env.ETA_ISSUER_EIN;
-    if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET || !issuerEin) {
+    const issuerEin = envVar('ETA_ISSUER_EIN');
+    if (!envVar('ETA_CLIENT_ID') || !envVar('ETA_CLIENT_SECRET') || !issuerEin) {
         console.warn('ETA credentials not configured. Skipping.');
         return null;
     }
@@ -313,7 +336,7 @@ export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
             documentType: 'I',
             documentTypeVersion: '1.0',
             dateTimeIssued: new Date().toISOString(),
-            taxpayerActivityCode: process.env.ETA_ACTIVITY_CODE ?? '',
+            taxpayerActivityCode: envVar('ETA_ACTIVITY_CODE') ?? '',
             internalId: order.id,
             purchaseOrderReference: order.orderNumber,
             invoiceLines: lines.map(({ item, gross, vat, net }) => ({
@@ -348,7 +371,7 @@ export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
         const signer = resolveSigner();
         const signedDoc = await signer.sign(doc);
 
-        const res = await fetch(`${ETA_API_URL}/documentsubmissions`, {
+        const res = await fetch(`${etaApiUrl()}/documentsubmissions`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ documents: [signedDoc] }),
@@ -368,10 +391,10 @@ export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
 // STATUS / CANCEL
 // ─────────────────────────────────────────────────────────────────────────
 export async function getInvoiceStatus(uuid: string): Promise<{ status: string; qrCodeData?: string; longId?: string }> {
-    if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET) return { status: 'Unknown' };
+    if (!envVar('ETA_CLIENT_ID') || !envVar('ETA_CLIENT_SECRET')) return { status: 'Unknown' };
     try {
         const token = await getAuthToken();
-        const res = await fetch(`${ETA_API_URL}/documents/${uuid}/details`, {
+        const res = await fetch(`${etaApiUrl()}/documents/${uuid}/details`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json() as EtaStatusResponse;
@@ -395,7 +418,7 @@ export async function getInvoiceStatus(uuid: string): Promise<{ status: string; 
  * activeFrom/activeTo is that ETA can change it. Only a parameter whose active
  * window covers *now* is used.
  *
- * `${ETA_API_URL}/documenttypes/{id}` reuses this file's existing v1 base
+ * `${etaApiUrl()}/documenttypes/{id}` reuses this file's existing v1 base
  * rather than the literal `v1.0` path segment shown in ETA's docs for this one
  * endpoint — that discrepancy could not be resolved without calling the real
  * API (out of scope for this task) and should be confirmed against the
@@ -407,12 +430,12 @@ export async function getInvoiceStatus(uuid: string): Promise<{ status: string; 
  * via `ETA_INVOICE_DOCUMENT_TYPE_ID`.
  */
 export async function getCancellationWindowHours(): Promise<number | null> {
-    const documentTypeId = process.env.ETA_INVOICE_DOCUMENT_TYPE_ID;
-    if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET || !documentTypeId) return null;
+    const documentTypeId = envVar('ETA_INVOICE_DOCUMENT_TYPE_ID');
+    if (!envVar('ETA_CLIENT_ID') || !envVar('ETA_CLIENT_SECRET') || !documentTypeId) return null;
 
     try {
         const token = await getAuthToken();
-        const res = await fetch(`${ETA_API_URL}/documenttypes/${documentTypeId}`, {
+        const res = await fetch(`${etaApiUrl()}/documenttypes/${documentTypeId}`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return null;
@@ -439,7 +462,7 @@ export async function getCancellationWindowHours(): Promise<number | null> {
 }
 
 export async function cancelInvoice(uuid: string, reason: string, submittedAt: Date | null): Promise<{ ok: boolean; error?: string }> {
-    if (!process.env.ETA_CLIENT_ID || !process.env.ETA_CLIENT_SECRET) return { ok: false, error: 'not_configured' };
+    if (!envVar('ETA_CLIENT_ID') || !envVar('ETA_CLIENT_SECRET')) return { ok: false, error: 'not_configured' };
 
     // Read from ETA rather than hardcode. `null` (the API call itself failed,
     // or ETA_INVOICE_DOCUMENT_TYPE_ID is not set) means the window is UNKNOWN
@@ -459,7 +482,7 @@ export async function cancelInvoice(uuid: string, reason: string, submittedAt: D
 
     try {
         const token = await getAuthToken();
-        const res = await fetch(`${ETA_API_URL}/documents/state/${uuid}/state`, {
+        const res = await fetch(`${etaApiUrl()}/documents/state/${uuid}/state`, {
             method: 'PUT',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'cancelled', reason }),

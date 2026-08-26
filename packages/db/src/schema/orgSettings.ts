@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, uuid, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { organizations } from '../schema';
 
 export const orgSettings = pgTable('org_settings', {
   id: uuid('id').defaultRandom().primaryKey(),

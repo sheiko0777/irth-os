@@ -1,5 +1,6 @@
 import { pgTable, uuid, timestamp, text, integer, bigint, pgEnum } from "drizzle-orm/pg-core";
 import { productVariants } from "../schema";
+import { organizations } from '../schema';
 
 export const movementTypeEnum = pgEnum('movement_type', ['in', 'out', 'adjustment']);
 

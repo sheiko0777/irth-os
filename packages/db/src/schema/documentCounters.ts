@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, bigint, timestamp } from 'drizzle-orm/pg-core';
+import { organizations } from '../schema';
 
 /**
  * Per-tenant, per-kind counters for human-facing document numbers.

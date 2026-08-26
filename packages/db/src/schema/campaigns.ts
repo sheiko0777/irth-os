@@ -1,4 +1,5 @@
 import { pgTable, uuid, timestamp, text, integer, pgEnum } from "drizzle-orm/pg-core";
+import { organizations } from '../schema';
 
 export const campaignStatusEnum = pgEnum('campaign_status', ['draft', 'scheduled', 'sending', 'sent', 'failed']);
 export const campaignChannelEnum = pgEnum('campaign_channel', ['whatsapp', 'sms', 'email']);

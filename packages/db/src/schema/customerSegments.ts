@@ -1,4 +1,5 @@
 import { pgTable, uuid, timestamp, text } from 'drizzle-orm/pg-core';
+import { organizations } from '../schema';
 
 export const customerSegments = pgTable('customer_segments', {
   id: uuid('id').primaryKey().defaultRandom(),

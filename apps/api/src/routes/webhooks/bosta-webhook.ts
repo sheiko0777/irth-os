@@ -5,6 +5,7 @@ import { db, getDb } from '../../db';
 import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { timingSafeEqual } from 'node:crypto';
+import { envVar } from '../../utils/env';
 
 /**
  * Courier states that mean "the parcel is moving" — the natural trigger for
@@ -20,7 +21,8 @@ const SHIPPED_STATUSES = new Set(['picked_up', 'in_transit']);
 export const bostaWebhookRoute = new Hono();
 
 bostaWebhookRoute.post('/', async (c: Context) => {
-  const secret = process.env.BOSTA_WEBHOOK_SECRET;
+  // Request-time read through the captured Worker env — see utils/env.ts.
+  const secret = envVar('BOSTA_WEBHOOK_SECRET');
   if (!secret) {
     return c.json({ data: null, error: 'webhook_secret_not_configured', meta: null }, 500);
   }

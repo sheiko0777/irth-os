@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { orders, shipmentTracking, auditLog, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
+import { envVar } from '../utils/env';
 
 const shippingRoute = new Hono();
 
@@ -34,7 +35,8 @@ shippingRoute.post('/create', async (c: Context) => {
      return c.json({ data: null, error: 'order_not_confirmed', meta: null }, 400);
   }
 
-  const bostaApiKey = process.env.BOSTA_API_KEY;
+  // Request-time read through the captured Worker env — see utils/env.ts.
+  const bostaApiKey = envVar('BOSTA_API_KEY');
   if (!bostaApiKey) {
      console.error('BOSTA_API_KEY not configured');
      return c.json({ data: null, error: 'shipping_unavailable', meta: null }, 200); 

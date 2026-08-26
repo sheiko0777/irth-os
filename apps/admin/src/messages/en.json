@@ -174,10 +174,18 @@
   "auth": {
     "email": "Email",
     "password": "Password",
+    "name": "Full Name",
     "login": "Sign in",
     "logout": "Sign out",
     "loginError": "Invalid credentials, please try again",
-    "loginSuccess": "Welcome"
+    "loginSuccess": "Welcome",
+    "signup": "Create account",
+    "signupError": "Could not create account, please try again",
+    "signupSuccess": "Account created",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "goToSignup": "Sign up",
+    "goToLogin": "Sign in"
   },
   "notifications": {
     "title": "Notifications",

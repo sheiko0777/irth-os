@@ -177,10 +177,18 @@
   "auth": {
     "email": "البريد الإلكتروني",
     "password": "كلمة المرور",
+    "name": "الاسم الكامل",
     "login": "تسجيل الدخول",
     "logout": "تسجيل الخروج",
     "loginError": "بيانات غير صحيحة، حاول مرة أخرى",
-    "loginSuccess": "مرحباً بك"
+    "loginSuccess": "مرحباً بك",
+    "signup": "إنشاء حساب",
+    "signupError": "تعذر إنشاء الحساب، حاول مرة أخرى",
+    "signupSuccess": "تم إنشاء الحساب",
+    "noAccount": "ليس لديك حساب؟",
+    "haveAccount": "لديك حساب بالفعل؟",
+    "goToSignup": "إنشاء حساب",
+    "goToLogin": "تسجيل الدخول"
   },
   "notifications": {
     "title": "الإشعارات",

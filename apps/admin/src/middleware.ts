@@ -25,8 +25,13 @@ export async function middleware(request: NextRequest) {
   const locale = segments[1] || routing.defaultLocale;
   const pathWithoutLocale = segments.slice(2).join("/");
 
-  // Public routes mapping
-  const isPublicRoute = pathWithoutLocale === "login" || pathWithoutLocale === "";
+  // Public routes mapping. "join" must be here: it is the invite-acceptance
+  // page, and by definition every visitor arriving on it has no session yet
+  // — without this it always 307'd to /login before the JoinClient form
+  // (and the token in the query string) ever rendered, silently breaking
+  // the only onboarding path this app has (it is invite-only; there is no
+  // open self-signup page).
+  const isPublicRoute = pathWithoutLocale === "login" || pathWithoutLocale === "join" || pathWithoutLocale === "";
 
   // Check Better Auth Session
   // CVE-2025-29927 Mitigation: Validate Host Header properly or use API
@@ -57,7 +62,13 @@ export async function middleware(request: NextRequest) {
 
   // Optional: Redirect authenticated users away from login
   if (pathWithoutLocale === "login" && hasValidSession) {
-    const dashboardUrl = new URL(`/${locale}/dashboard`, request.url);
+    // `/${locale}`, not `/${locale}/dashboard` — that route was removed (see
+    // login/page.tsx's own comment: it "used to point at a stale duplicate
+    // that sat outside the (dashboard) group and so rendered with no
+    // sidebar and no header"). This redirect target was never updated to
+    // match, so an already-authenticated visitor landing on /login was sent
+    // to a 404 instead of the dashboard.
+    const dashboardUrl = new URL(`/${locale}`, request.url);
     return NextResponse.redirect(dashboardUrl);
   }
 

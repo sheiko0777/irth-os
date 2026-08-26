@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { db } from './db';
+import { db, getEnv } from './db';
+import { envVar, nodeEnv } from './utils/env';
 import * as authSchema from '@irth/db/src/schema/auth';
 
 /**
@@ -31,25 +32,58 @@ import * as authSchema from '@irth/db/src/schema/auth';
  *
  * Tenancy is NOT Better Auth's job here. Identity is. The tenant is resolved
  * from `org_members` in `middlewares/authContext.ts`.
+ *
+ * WHY THE INSTANCE IS BUILT LAZILY, NOT AT MODULE SCOPE
+ *
+ * The old code read `process.env.BETTER_AUTH_SECRET` at module scope. On
+ * Workers `process.env` is empty — even inside a handler (proven for
+ * DATABASE_URL in db.ts; true for every secret) — and the module-scope boot
+ * guard could not fire either, because its own NODE_ENV check read the same
+ * empty source. Net effect in production: Better Auth configured with an
+ * `undefined` signing secret, indistinguishable from working until a session
+ * was forged. The secret is now resolved on first access through `envVar()`,
+ * which reads the request's actual env binding captured by `dbContext()` —
+ * which runs first in the chain, before `authContext()` or the `/api/auth/**`
+ * handler can touch this module. `env` is constant per deployment, so caching
+ * the built instance per isolate is correct.
  */
-// Fail at boot, not at the first login attempt in production with an unset
-// secret — Better Auth would otherwise sign sessions with `undefined`, which
-// is indistinguishable from working until someone forges one. Found in the
-// archaeology sweep (a 2-month-stale claude/phase-a-production-boot branch
-// had already caught this; ported the check, not the branch — everything
-// else about that branch's auth.ts predates the drizzleAdapter rewrite above).
-if (!process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('BETTER_AUTH_SECRET must be set in production');
+type Auth = ReturnType<typeof buildAuth>;
+
+let cached: Auth | null = null;
+
+function buildAuth() {
+  const secret = envVar('BETTER_AUTH_SECRET');
+
+  // Fail loudly at first use rather than sign with `undefined`. The guard
+  // moved here from module scope because module scope has no env on Workers.
+  if (!secret && nodeEnv() === 'production') {
+    throw new Error('BETTER_AUTH_SECRET must be set in production');
+  }
+
+  return betterAuth({
+    database: drizzleAdapter(db, {
+      provider: 'pg',
+      schema: authSchema,
+    }),
+    emailAndPassword: {
+      enabled: true,
+    },
+    secret,
+    baseURL: envVar('API_BASE_URL') ?? 'http://localhost:8787',
+  });
 }
 
-export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: 'pg',
-    schema: authSchema,
-  }),
-  emailAndPassword: {
-    enabled: true,
+/**
+ * Lazy handle over the Better Auth instance. First property access builds it,
+ * after `dbContext()` has captured the request env. Function-valued
+ * properties are bound to the real instance; nested objects (`auth.api`) are
+ * returned as-is — their methods are closures over the instance, not `this`
+ * dispatches, so no further binding is needed.
+ */
+export const auth: Auth = new Proxy({} as Auth, {
+  get(_target, prop, receiver) {
+    if (!cached) cached = buildAuth();
+    const value = Reflect.get(cached as object, prop, receiver);
+    return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(cached) : value;
   },
-  secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.API_BASE_URL ?? 'http://localhost:8787',
 });

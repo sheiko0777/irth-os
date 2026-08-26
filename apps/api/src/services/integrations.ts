@@ -1,3 +1,5 @@
+import { envVar } from '../utils/env';
+
 export interface FawryChargeRequest {
     merchantRefNum: string;
     customerProfileId: string;
@@ -58,9 +60,10 @@ async function hmacSha256(key: string, data: string): Promise<ArrayBuffer> {
 }
 
 export async function createFawryCharge(req: FawryChargeRequest): Promise<FawryChargeResponse> {
-    const baseUrl = process.env.FAWRY_BASE_URL;
-    const merchantCode = process.env.FAWRY_MERCHANT_CODE;
-    const secKey = process.env.FAWRY_SEC_KEY;
+    // Request-time reads through the captured Worker env — see utils/env.ts.
+    const baseUrl = envVar('FAWRY_BASE_URL');
+    const merchantCode = envVar('FAWRY_MERCHANT_CODE');
+    const secKey = envVar('FAWRY_SEC_KEY');
 
     if (!baseUrl || !merchantCode || !secKey) {
         throw new Error('Missing Fawry environment variables');
@@ -116,7 +119,7 @@ export interface WhatsAppTemplateComponent {
 }
 
 export async function sendWhatsAppTemplate(to: string, templateName: string, components: WhatsAppTemplateComponent[] = []): Promise<unknown> {
-    const apiKey = process.env.WHATSAPP_360DIALOG_API_KEY;
+    const apiKey = envVar('WHATSAPP_360DIALOG_API_KEY');
 
     if (!apiKey) {
         throw new Error('Missing WhatsApp 360dialog API key');
@@ -159,8 +162,8 @@ export interface SendEmailOptions {
 }
 
 export async function sendTransactionalEmail(opts: SendEmailOptions): Promise<unknown> {
-    const apiKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.RESEND_FROM;
+    const apiKey = envVar('RESEND_API_KEY');
+    const fromEmail = envVar('RESEND_FROM');
 
     if (!apiKey || !fromEmail) {
         throw new Error('Missing Resend environment variables');
@@ -205,11 +208,11 @@ async function getSignatureKey(key: string, dateStamp: string, regionName: strin
 }
 
 export async function uploadToR2(key: string, buffer: ArrayBuffer, contentType: string): Promise<string> {
-    const accountId = process.env.CF_ACCOUNT_ID;
-    const bucket = process.env.CF_R2_BUCKET;
-    const accessKeyId = process.env.CF_R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.CF_R2_SECRET_ACCESS_KEY;
-    const publicUrl = process.env.CF_R2_PUBLIC_URL;
+    const accountId = envVar('CF_ACCOUNT_ID');
+    const bucket = envVar('CF_R2_BUCKET');
+    const accessKeyId = envVar('CF_R2_ACCESS_KEY_ID');
+    const secretAccessKey = envVar('CF_R2_SECRET_ACCESS_KEY');
+    const publicUrl = envVar('CF_R2_PUBLIC_URL');
 
     if (!accountId || !bucket || !accessKeyId || !secretAccessKey || !publicUrl) {
         throw new Error('Missing Cloudflare R2 environment variables');

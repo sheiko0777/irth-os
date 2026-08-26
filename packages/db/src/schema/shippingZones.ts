@@ -1,4 +1,5 @@
 import { pgTable, uuid, timestamp, text, decimal, bigint, boolean, integer, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { organizations } from '../schema';
 
 export const shippingRateTypeEnum = pgEnum('shipping_rate_type', ['flat', 'weight_based', 'price_based', 'free']);
 

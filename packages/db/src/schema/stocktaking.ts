@@ -1,4 +1,5 @@
 import { pgTable, uuid, timestamp, text, integer, pgEnum } from "drizzle-orm/pg-core";
+import { organizations } from '../schema';
 
 export const stocktakingStatusEnum = pgEnum('stocktaking_status', ['draft', 'in_progress', 'completed', 'cancelled']);
 

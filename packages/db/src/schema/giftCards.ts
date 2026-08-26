@@ -1,4 +1,5 @@
 import { pgTable, uuid, timestamp, text, bigint, pgEnum } from 'drizzle-orm/pg-core';
+import { organizations } from '../schema';
 
 export const giftCardStatusEnum = pgEnum('gift_card_status', ['active', 'redeemed', 'expired', 'cancelled']);
 export const giftCardTxTypeEnum = pgEnum('gift_card_tx_type', ['issue', 'redeem', 'topup', 'refund', 'expire', 'cancel']);

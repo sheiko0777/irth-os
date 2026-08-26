@@ -4,11 +4,14 @@ import { db } from '../../db';
 import { orders, auditLog } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
+import { envVar } from '../../utils/env';
 
 const paymobRoute = new Hono();
 
 paymobRoute.post('/', async (c: Context) => {
-  const hmacSecret = process.env.PAYMOB_HMAC_SECRET;
+  // Request-time read through the captured Worker env — process.env is empty
+  // on Workers (see db.ts), so this secret was previously always undefined.
+  const hmacSecret = envVar('PAYMOB_HMAC_SECRET');
   if (!hmacSecret) {
     return c.json({ data: null, error: 'hmac_secret_not_configured', meta: null }, 500);
   }

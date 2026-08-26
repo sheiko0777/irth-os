@@ -63,6 +63,23 @@ function shopifyGid(resource: string, id: number | string): string {
   return raw.startsWith('gid://') ? raw : `gid://shopify/${resource}/${raw}`;
 }
 
+/**
+ * A validly-signed body can still be malformed (Shopify-side serialization
+ * bugs, proxy mangling). An unguarded JSON.parse throws past the handler,
+ * surfaces as a plain-text 500, and — because Shopify redelivers anything it
+ * did not get a 200 for — turns one bad payload into a permanent retry storm.
+ * Same guard pattern as the paymob/bosta/aramex webhooks (commit baf16d1);
+ * this file was added later and missed it. Returns null instead of throwing;
+ * callers reject with 400 so Shopify drops the delivery.
+ */
+function parseWebhookBody<T>(raw: string): T | null {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function findOrCreateCustomer(
   tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
   orgId: string,
@@ -113,7 +130,8 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
   const bodyRaw = c.get('rawBody') as string;
-  const payload = JSON.parse(bodyRaw) as ShopifyOrderPayload;
+  const payload = parseWebhookBody<ShopifyOrderPayload>(bodyRaw);
+  if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const shopifyOrderId = shopifyGid('Order', payload.id);
 
   const db = getDb();
@@ -239,7 +257,8 @@ shopifyWebhookRoute.post('/orders-updated', verifyShopifyWebhook(), async (c: Co
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
   const bodyRaw = c.get('rawBody') as string;
-  const payload = JSON.parse(bodyRaw) as ShopifyOrderPayload;
+  const payload = parseWebhookBody<ShopifyOrderPayload>(bodyRaw);
+  if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const shopifyOrderId = shopifyGid('Order', payload.id);
   const db = getDb();
 
@@ -278,7 +297,8 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
   const bodyRaw = c.get('rawBody') as string;
-  const payload = JSON.parse(bodyRaw) as { id: number | string };
+  const payload = parseWebhookBody<{ id: number | string }>(bodyRaw);
+  if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const shopifyOrderId = shopifyGid('Order', payload.id);
   const db = getDb();
 
@@ -310,7 +330,8 @@ shopifyWebhookRoute.post('/customers-upsert', verifyShopifyWebhook(), async (c: 
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
   const bodyRaw = c.get('rawBody') as string;
-  const payload = JSON.parse(bodyRaw) as ShopifyCustomerPayload;
+  const payload = parseWebhookBody<ShopifyCustomerPayload>(bodyRaw);
+  if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const db = getDb();
 
   const customerId = await withOrgContext(db, orgId, (tx) => findOrCreateCustomer(tx, orgId, payload));
@@ -323,7 +344,8 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
   const bodyRaw = c.get('rawBody') as string;
-  const payload = JSON.parse(bodyRaw) as { inventory_item_id: number | string; available: number };
+  const payload = parseWebhookBody<{ inventory_item_id: number | string; available: number }>(bodyRaw);
+  if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const shopifyInventoryItemId = shopifyGid('InventoryItem', payload.inventory_item_id);
   const db = getDb();
 

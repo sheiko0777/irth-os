@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, boolean, integer, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { organizations } from '../schema';
 
 export const orgFeatureFlags = pgTable('org_feature_flags', {
   id: uuid('id').primaryKey().defaultRandom(),

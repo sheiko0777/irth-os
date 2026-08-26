@@ -1,4 +1,5 @@
 import { pgTable, uuid, timestamp, text, bigint, integer, boolean } from "drizzle-orm/pg-core";
+import { organizations } from '../schema';
 
 export const priceLists = pgTable("price_lists", {
   id: uuid("id").defaultRandom().primaryKey(),

@@ -15,7 +15,9 @@ import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
 import { authContext } from './middlewares/authContext'
+import { handleError } from './utils/errors'
 import { dbContext, getDb, captureEnv } from './db'
+import { envVar } from './utils/env'
 import { processOutbox, OUTBOX_BATCH_SIZE } from './workers/outboxWorker'
 
 const app = new Hono()
@@ -26,9 +28,18 @@ const app = new Hono()
 app.use('*', dbContext())
 app.use('*', corsMiddleware)
 app.use('*', securityHeaders)
-const trustedProxyCount = parseInt(process.env.TRUSTED_PROXY_COUNT || '0', 10);
+// TRUSTED_PROXY_COUNT is resolved per request, not at module scope — on
+// Workers the module-scope read saw an empty process.env and silently
+// disabled X-Forwarded-For handling (see db.ts / utils/env.ts).
+const trustedProxyCount = () => parseInt(envVar('TRUSTED_PROXY_COUNT') || '0', 10);
 app.use('/api/*', rateLimit(100, 60_000, trustedProxyCount))
 app.use('/api/auth/*', rateLimit(10, 60_000, trustedProxyCount))
+// Webhook mounts were previously unlimited: they are unauthenticated by
+// design, so a flood here is cheap CPU + retry-storm amplification against
+// downstream writes. A generous-but-real ceiling; signature verification still
+// gates every mutation.
+app.use('/webhooks/*', rateLimit(600, 60_000, trustedProxyCount))
+app.use('/health', rateLimit(60, 60_000, trustedProxyCount))
 // Establish trusted identity (userId/orgId/role) from the session before
 // route handlers run. Skips /api/auth, webhooks, and /health internally.
 app.use('*', authContext())
@@ -61,6 +72,21 @@ app.get('/health', async (c) => {
 
 app.on(['POST', 'GET'], '/api/auth/**', (c) => {
   return auth.handler(c.req.raw)
+})
+
+/**
+ * Global fallback handlers. Without these, an uncaught throw (malformed JSON
+ * body, a Zod parse failure, anything a route forgot to wrap) surfaces as
+ * Hono's default plain-text 500 — breaking the {data,error,meta} envelope
+ * every client parses, and in dev leaking the raw error message. `handleError`
+ * scrubs the message in production and is env-aware on Workers.
+ */
+app.onError((err, c) => {
+  return c.json({ data: null, error: handleError(err), meta: null }, 500)
+})
+
+app.notFound((c) => {
+  return c.json({ data: null, error: 'not_found', meta: null }, 404)
 })
 
 

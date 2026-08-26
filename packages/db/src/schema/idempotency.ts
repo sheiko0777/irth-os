@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, jsonb, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { organizations } from '../schema';
 
 /**
  * Records that a given (tenant, operation, key) has been attempted, and what it
