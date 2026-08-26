@@ -1,5 +1,6 @@
 import { MiddlewareHandler } from 'hono';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { getEnv } from '../db';
 
 /**
  * Shopify signs webhooks with HMAC-SHA256, base64-encoded, in the
@@ -12,7 +13,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  */
 export function verifyShopifyWebhook(): MiddlewareHandler {
   return async (c, next) => {
-    const secret = process.env.SHOPIFY_APP_CLIENT_SECRET;
+    // process.env is empty on Workers even inside a handler (db.ts's
+    // file-header comment) — read the request's actual env via getEnv(),
+    // captured earlier in the chain by dbContext(). process.env stays as the
+    // fallback for Node contexts (this middleware's own test suite).
+    const secret = (getEnv()?.SHOPIFY_APP_CLIENT_SECRET as string | undefined) ?? process.env.SHOPIFY_APP_CLIENT_SECRET;
     if (!secret) return c.json({ data: null, error: 'Webhook secret not configured', meta: null }, 500);
 
     const signature = c.req.header('X-Shopify-Hmac-Sha256');

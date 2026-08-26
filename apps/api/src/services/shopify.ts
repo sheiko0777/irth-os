@@ -1,3 +1,18 @@
+import { getEnv } from '../db';
+
+/**
+ * `process.env` is empty on Workers even inside a handler — see db.ts's
+ * file-header comment, proven there for DATABASE_URL and true for every
+ * secret, not just that one. `getEnv()` reads the request's actual `env`
+ * binding, captured by `dbContext()` (or `captureEnv` on the scheduled/cron
+ * path); `process.env` stays as the fallback so this keeps working unchanged
+ * in Node contexts (tests, the webhook-registration script).
+ */
+function envVar(key: string): string | undefined {
+  const captured = getEnv();
+  return (captured?.[key] as string | undefined) ?? process.env[key];
+}
+
 // Shopify Admin API client.
 //
 // AUTH: this app is a custom-distribution app created after Jan 1 2026, when
@@ -29,14 +44,14 @@ let cachedToken: CachedToken | null = null;
 const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 function shopDomain(): string {
-  const domain = process.env.SHOPIFY_SHOP_DOMAIN;
+  const domain = envVar('SHOPIFY_SHOP_DOMAIN');
   if (!domain) throw new Error('SHOPIFY_SHOP_DOMAIN is not set');
   return domain;
 }
 
 async function fetchAccessToken(): Promise<CachedToken> {
-  const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
-  const clientSecret = process.env.SHOPIFY_APP_CLIENT_SECRET;
+  const clientId = envVar('SHOPIFY_APP_CLIENT_ID');
+  const clientSecret = envVar('SHOPIFY_APP_CLIENT_SECRET');
   if (!clientId || !clientSecret) {
     throw new Error('Missing SHOPIFY_APP_CLIENT_ID / SHOPIFY_APP_CLIENT_SECRET');
   }

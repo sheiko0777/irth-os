@@ -55,6 +55,17 @@ export function captureEnv(env: WorkerEnv): void {
   envRef = env;
 }
 
+/**
+ * Exposes the captured Worker env to other modules that need a secret
+ * `process.env` cannot see — see the file-header comment. `null` outside a
+ * request/scheduled context (nothing has captured yet); callers fall back to
+ * `process.env` themselves for Node contexts (tests, scripts), same as
+ * `getDb()` does for DATABASE_URL.
+ */
+export function getEnv(): WorkerEnv | null {
+  return envRef;
+}
+
 /** Captures the request env. Must run before anything touches the database. */
 export const dbContext = (): MiddlewareHandler => async (c, next) => {
   captureEnv(c.env as WorkerEnv);

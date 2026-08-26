@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { getDb } from '../../db';
+import { getDb, getEnv } from '../../db';
 import {
   orders, orderItems, customers, productVariants, inventoryItems, inventoryMovements,
   withOrgContext, withAudit, jsonSafe,
@@ -26,7 +26,11 @@ import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
 const shopifyWebhookRoute = new Hono();
 
 function getSyncOrgId(): string | undefined {
-  return process.env.SHOPIFY_ORG_ID;
+  // process.env is empty on Workers even inside a handler — see db.ts's
+  // file-header comment. process.env stays as the fallback for Node
+  // contexts (this route has no test suite yet that relies on it, but the
+  // convention is consistent across every secret read in this app).
+  return (getEnv()?.SHOPIFY_ORG_ID as string | undefined) ?? process.env.SHOPIFY_ORG_ID;
 }
 
 interface ShopifyLineItem {
