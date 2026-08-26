@@ -14,7 +14,10 @@ NODE_ENV = "production"
 # Secrets managed via: wrangler secret put <KEY>
 # DATABASE_URL, BETTER_AUTH_SECRET, PAYMOB_API_KEY, PAYMOB_HMAC_SECRET,
 # BOSTA_API_KEY, BOSTA_ACCOUNT_ID, ETA_CLIENT_ID, ETA_CLIENT_SECRET,
-# ETA_ISSUER_EIN, RESEND_API_KEY, ARCJET_KEY
+# ETA_ISSUER_EIN, RESEND_API_KEY, ARCJET_KEY,
+# SHOPIFY_APP_CLIENT_ID, SHOPIFY_APP_CLIENT_SECRET, SHOPIFY_SHOP_DOMAIN,
+# SHOPIFY_ORG_ID (which org the Shopify webhooks write into — see
+# apps/api/src/routes/webhooks/shopify.ts)
 
 # Fires the `scheduled` handler in src/index.ts, which drains the outbox.
 #

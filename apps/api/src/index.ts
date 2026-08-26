@@ -5,6 +5,7 @@ import { ordersRoute } from './routes/orders'
 import { shippingRoute } from './routes/shipping'
 import { paymobRoute } from './routes/webhooks/paymob'
 import { bostaRoute } from './routes/webhooks/bosta'
+import { shopifyWebhookRoute } from './routes/webhooks/shopify'
 import { webhooksRouter } from './routes/webhooks'
 import { orgsRouter } from './routes/orgs'
 import { notificationsRouter } from './routes/notifications'
@@ -67,6 +68,7 @@ app.route('/api/orders', ordersRoute)
 app.route('/api/shipping', shippingRoute)
 app.route('/api/webhooks/paymob', paymobRoute)
 app.route('/api/webhooks/bosta', bostaRoute)
+app.route('/api/webhooks/shopify', shopifyWebhookRoute)
 app.route('/webhooks', webhooksRouter)
 app.route('/api/orgs', orgsRouter)
 app.route('/api/notifications', notificationsRouter)

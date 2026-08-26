@@ -57,6 +57,9 @@ export const products = pgTable('products', {
   categoryId: uuid('category_id').references(() => categories.id),
   name: text('name').notNull(),
   nameAr: text('name_ar'),
+  // Dashboard owns the catalog; this is the Shopify counterpart's GID once
+  // pushed. NULL until first sync — see migration 0041.
+  shopifyProductId: text('shopify_product_id'),
   // Unique per ORG, not globally — see the table-level index below and
   // migration 0040. A bare .unique() meant the first tenant to register a SKU
   // blocked every other tenant from ever using that code.
@@ -73,6 +76,7 @@ export const products = pgTable('products', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   orgSkuIdx: uniqueIndex('products_org_id_sku_idx').on(table.orgId, table.sku),
+  orgShopifyProductIdIdx: uniqueIndex('products_org_id_shopify_product_id_idx').on(table.orgId, table.shopifyProductId),
 }));
 
 export const productVariants = pgTable('product_variants', {
@@ -84,6 +88,11 @@ export const productVariants = pgTable('product_variants', {
   orgId: uuid('org_id').notNull().references(() => organizations.id),
   productId: uuid('product_id').notNull().references(() => products.id),
   name: text('name').notNull(),
+  // Shopify counterpart's GID once pushed — see migration 0041.
+  shopifyVariantId: text('shopify_variant_id'),
+  // Shopify's own inventory-item GID, distinct from the variant GID — its
+  // inventory_levels/update webhook keys by this, not by variant id.
+  shopifyInventoryItemId: text('shopify_inventory_item_id'),
   // Unique per ORG, not globally — see the table-level index below and
   // migration 0040.
   sku: text('sku').notNull(),
@@ -96,6 +105,8 @@ export const productVariants = pgTable('product_variants', {
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => ({
   orgSkuIdx: uniqueIndex('product_variants_org_id_sku_idx').on(table.orgId, table.sku),
+  orgShopifyVariantIdIdx: uniqueIndex('product_variants_org_id_shopify_variant_id_idx').on(table.orgId, table.shopifyVariantId),
+  orgShopifyInventoryItemIdIdx: uniqueIndex('product_variants_org_id_shopify_inventory_item_id_idx').on(table.orgId, table.shopifyInventoryItemId),
 }));
 
 export const orders = pgTable("orders", {
@@ -113,11 +124,16 @@ export const orders = pgTable("orders", {
   // It refers to `customers.id` when a customer is linked, and is NULL when the
   // order has no customer record yet.
   customerId: uuid("customer_id"),
+  // Set only for orders that originated on the Shopify storefront (inbound
+  // webhook). NULL for orders placed through the dashboard itself — see
+  // migration 0041.
+  shopifyOrderId: text("shopify_order_id"),
 }, (table) => ({
   // Per tenant, not global (0035). A bare .unique() on order_number meant the
   // second org ever to place an order collided with the first org's
   // IRT-2026-0001 and was locked out of ordering entirely.
   orgOrderNumberIdx: uniqueIndex('orders_org_order_number_idx').on(table.orgId, table.orderNumber),
+  orgShopifyOrderIdIdx: uniqueIndex('orders_org_id_shopify_order_id_idx').on(table.orgId, table.shopifyOrderId),
 }));
 
 export const orderItems = pgTable("order_items", {
