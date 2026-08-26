@@ -22,7 +22,19 @@ import { orgSettings } from './schema/orgSettings';
  */
 const TRACKING_URL_TEMPLATE_KEY = 'shipping.tracking_url_template';
 
-export type OutboxEventType = 'order.confirmed' | 'order.shipped';
+export type OutboxEventType = 'order.confirmed' | 'order.shipped' | 'eta.invoice.issue';
+
+/**
+ * Carries just the ids, not a snapshot of the order — by the time this
+ * drains (up to a minute later, per the cron cadence), re-reading the order
+ * fresh via packages/db/src/etaOrderInput.ts is cheaper than reasoning about
+ * whether a carried snapshot is still accurate. Same reasoning already used
+ * for `shopify.product.push`'s payload.
+ */
+export interface EtaInvoiceIssuePayload {
+    orgId: string;
+    orderId: string;
+}
 
 /**
  * The payload shape the worker parses out of `outbox_events.payload`.
@@ -102,7 +114,7 @@ type OutboxWriter = Pick<DbTx, 'insert' | 'rollback'>;
  */
 export async function emitOutboxEvent(
     tx: OutboxWriter,
-    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload },
+    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload },
 ): Promise<void> {
     await tx.insert(outboxEvents).values({
         orgId: event.orgId,

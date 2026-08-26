@@ -1,79 +1,14 @@
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure } from '../trpc';
-import { etaInvoices, orders, orderItems, productVariants, products, customers } from '@irth/db';
-import type { DbTx } from '@irth/db';
+import { etaInvoices, orders, buildEtaOrderInput } from '@irth/db';
 import { eq, and, desc, isNull, or } from 'drizzle-orm';
-import { issueInvoice, getInvoiceStatus, cancelInvoice, type EtaOrderInput } from '../services/eta';
+import { issueInvoice, getInvoiceStatus, cancelInvoice, buildEtaConfig } from '@irth/domain';
 
-/**
- * Assembles the real order/line/receiver data issueInvoice needs, from the
- * order id alone. Lives here (not in services/eta.ts) because the service
- * file is deliberately free of any `@irth/db` import — see its own comment on
- * why it stays a pure fetch-and-arithmetic module.
- *
- * Returns `null` when the order has no items to declare — issueInvoice
- * refuses that case too, but checking here avoids a wasted auth round trip.
- */
-async function buildEtaOrderInput(
-    db: Pick<DbTx, 'select'>,
-    orgId: string,
-    orderId: string,
-): Promise<EtaOrderInput | null> {
-    const [order] = await db
-        .select()
-        .from(orders)
-        .where(and(eq(orders.id, orderId), eq(orders.orgId, orgId)))
-        .limit(1);
-    if (!order) return null;
-
-    // Real invoice lines, not one synthetic "Order Items" row: each order_item
-    // becomes its own ETA line, priced at what was actually charged
-    // (order_items.price_minor), described with the real product name and
-    // SKU as the item code.
-    //
-    // itemCode uses the SKU because nothing in this schema stores a GS1/EGS/
-    // GPC-format ETA item code — the SKU is real and traceable to a specific
-    // product, which the previous hardcoded 'EG-1234567' was not, but it is
-    // NOT itself an ETA-conformant code. Flagged rather than silently assumed
-    // correct.
-    const lineRows = await db
-        .select({
-            quantity: orderItems.quantity,
-            priceMinor: orderItems.priceMinor,
-            productName: products.name,
-            sku: productVariants.sku,
-        })
-        .from(orderItems)
-        .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-        .innerJoin(products, eq(productVariants.productId, products.id))
-        .where(eq(orderItems.orderId, orderId));
-
-    if (lineRows.length === 0) return null;
-
-    let customerName: string | null = null;
-    if (order.customerId) {
-        const [customer] = await db
-            .select({ name: customers.name })
-            .from(customers)
-            .where(and(eq(customers.id, order.customerId), eq(customers.orgId, orgId)))
-            .limit(1);
-        customerName = customer?.name ?? null;
-    }
-
-    return {
-        id: order.id,
-        orgId,
-        orderNumber: order.orderNumber,
-        currency: order.currency,
-        customerName,
-        items: lineRows.map((r) => ({
-            description: r.productName,
-            itemCode: r.sku,
-            quantity: r.quantity,
-            unitPriceMinor: r.priceMinor,
-        })),
-    };
-}
+// Config is process.env directly here (not envVar() from apps/api/src/utils/
+// env.ts) — this is Next.js, not a Worker, so process.env is populated at
+// runtime. Built once per call rather than cached at module scope so a
+// changed env var (e.g. after a redeploy) takes effect immediately.
+const etaConfig = () => buildEtaConfig((k) => process.env[k]);
 
 export const etaRouter = router({
     list: protectedProcedure
@@ -109,24 +44,29 @@ export const etaRouter = router({
             // OUTSIDE any transaction, same reasoning as ctx.withOrg everywhere
             // else in this codebase: holding a pooled connection open across a
             // call to a government API is how the pool gets exhausted.
-            const result = await issueInvoice(etaInput);
+            const result = await issueInvoice(etaInput, etaConfig());
 
-            if (!result) {
+            if (!result.ok) {
+                // A manual "Submit Now" click failing does not need the
+                // retryable/nextRetryAt bookkeeping the outbox worker uses —
+                // an admin can just click again. Still record what happened,
+                // consistent with every other write to this row.
                 await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
                     orgId: ctx.orgId,
                     orderId: input.orderId,
                     status: 'error',
-                    errorMessage: 'ETA service unavailable or not configured',
+                    errorMessage: result.message,
                     retryCount: (existing?.retryCount ?? 0) + 1,
                 }).onConflictDoUpdate({
                     target: etaInvoices.orderId,
                     set: {
                         status: 'error',
-                        errorMessage: 'ETA service unavailable or not configured',
+                        errorMessage: result.message,
                         retryCount: (existing?.retryCount ?? 0) + 1,
+                        updatedAt: new Date(),
                     },
                 }));
-                return { data: null, error: 'ETA submission failed', meta: null };
+                return { data: null, error: result.message, meta: null };
             }
 
             const [row] = await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
@@ -138,6 +78,7 @@ export const etaRouter = router({
                 status: 'submitted',
                 submittedAt: new Date(),
                 retryCount: 0,
+                nextRetryAt: null,
             }).onConflictDoUpdate({
                 target: etaInvoices.orderId,
                 set: {
@@ -147,7 +88,9 @@ export const etaRouter = router({
                     status: 'submitted',
                     submittedAt: new Date(),
                     retryCount: 0,
+                    nextRetryAt: null,
                     errorMessage: null,
+                    updatedAt: new Date(),
                 },
             }).returning());
 
@@ -164,7 +107,7 @@ export const etaRouter = router({
                 .limit(1);
             if (!invoice?.etaUuid) return { data: null, error: 'No ETA invoice found', meta: null };
 
-            const statusResult = await getInvoiceStatus(invoice.etaUuid);
+            const statusResult = await getInvoiceStatus(invoice.etaUuid, etaConfig());
             await ctx.withOrg(async (tx) => tx
                 .update(etaInvoices)
                 .set({
@@ -190,7 +133,7 @@ export const etaRouter = router({
             // The window is read from ETA (Get Document Type), not hardcoded —
             // see getCancellationWindowHours's own comment for the source and
             // why an unknown window refuses rather than assumes "no limit".
-            const result = await cancelInvoice(invoice.etaUuid, input.reason, invoice.submittedAt);
+            const result = await cancelInvoice(invoice.etaUuid, input.reason, invoice.submittedAt, etaConfig());
             if (result.ok) {
                 await ctx.withOrg(async (tx) => tx
                     .update(etaInvoices)
@@ -217,8 +160,8 @@ export const etaRouter = router({
                 const etaInput = await buildEtaOrderInput(ctx.db, ctx.orgId, orderId);
                 if (!etaInput) continue;
 
-                const result = await issueInvoice(etaInput);
-                if (result) {
+                const result = await issueInvoice(etaInput, etaConfig());
+                if (result.ok) {
                     await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
                         orgId: ctx.orgId,
                         orderId,
@@ -227,11 +170,27 @@ export const etaRouter = router({
                         status: 'submitted',
                         submittedAt: new Date(),
                         retryCount: 0,
+                        nextRetryAt: null,
                     }).onConflictDoUpdate({
                         target: etaInvoices.orderId,
-                        set: { etaUuid: result.uuid, status: 'submitted', submittedAt: new Date(), retryCount: 0 },
+                        set: {
+                            etaUuid: result.uuid, status: 'submitted', submittedAt: new Date(),
+                            retryCount: 0, nextRetryAt: null, errorMessage: null, updatedAt: new Date(),
+                        },
                     }));
                     submitted++;
+                } else {
+                    // Matches `submit`'s own behaviour of always recording a
+                    // failure — previously this left a failed bulk-retry
+                    // silent (no row written at all for an order with no
+                    // prior invoice, and an untouched errorMessage for one
+                    // that already had an error row).
+                    await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
+                        orgId: ctx.orgId, orderId, status: 'error', errorMessage: result.message,
+                    }).onConflictDoUpdate({
+                        target: etaInvoices.orderId,
+                        set: { status: 'error', errorMessage: result.message, updatedAt: new Date() },
+                    }));
                 }
             }
             return { data: { submitted, total: pendingOrders.length }, error: null, meta: null };

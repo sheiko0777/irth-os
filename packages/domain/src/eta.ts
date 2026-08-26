@@ -1,72 +1,103 @@
-import { EGYPT_VAT_BP, currency, exponentOf, fromMinor, netOfTax, taxIncludedIn, type Money } from '@irth/domain';
+import { EGYPT_VAT_BP, currency, exponentOf, fromMinor, netOfTax, taxIncludedIn, type Money } from './money';
 
 /**
  * Egyptian Tax Authority (ETA) e-invoicing integration.
  *
- * ═══════════════════════════════════════════════════════════════════════════
- * THIS FILE IS DUPLICATED, NOT SHARED — READ BEFORE EDITING
- * ═══════════════════════════════════════════════════════════════════════════
- * A byte-for-byte copy lives at apps/api/src/services/eta.ts. It should be
- * ONE shared module (e.g. a `packages/eta` workspace package both apps
- * depend on), and was not made one here because linking a NEW workspace
- * package — or adding a new workspace dependency to an existing package —
- * needs `pnpm install` to create the symlink in node_modules, and that
- * install takes 10-30 minutes on this repo and has corrupted node_modules
- * when killed mid-run before (see this refactor's own history). The two
- * previously drifted once already: the VAT-inclusive/exclusive bug was fixed
- * in one copy and not the other for a period, and only the fact that someone
- * happened to notice and hand-port it kept them in sync.
+ * Formerly duplicated byte-for-byte between apps/api/src/services/eta.ts and
+ * apps/admin/src/server/services/eta.ts (their own banners explained why:
+ * a genuinely shared module needed a new workspace dependency, and linking
+ * one needs `pnpm install`, which takes 10-30 minutes on this repo and has
+ * corrupted node_modules when killed mid-run). This file lives in
+ * `packages/domain` rather than `packages/db` specifically because it has
+ * ZERO dependency on `@irth/db` — every function here is pure computation
+ * or an HTTP call, and `packages/domain` already has zero dependencies of
+ * its own and is already a workspace dependency of both apps. Moving this
+ * logic here needed no new install at all.
  *
- * Until an install can run: EDIT BOTH FILES IDENTICALLY, or file the drift as
- * a known defect the moment you cannot. The follow-up is to extract this into
- * `packages/eta` the next time an install is safe to run, and delete the copy.
+ * The one thing that DID need `@irth/db` — assembling an `EtaOrderInput`
+ * from an order id — stays out of this file for exactly that reason; see
+ * `packages/db/src/etaOrderInput.ts`.
  *
- * KNOWN, DELIBERATE ONE-LINE DIVERGENCE (2026-08): `envVar()` below. The API
- * copy resolves it through its captured Worker env because `process.env` is
- * empty there; this Next.js copy reads plain `process.env`, which Next populates.
- * Every other line is kept identical — ETA_ENV is read lazily per call in BOTH,
- * so production never falls through to the unsigned preprod signer or preprod
- * hosts just because a module-scope read saw an empty env.
- * ═══════════════════════════════════════════════════════════════════════════
+ * Config is INJECTED (`EtaConfig`), not read from `process.env`/Worker env
+ * directly — the one real divergence between the two old copies was how
+ * each app reads its own env var, and a `packages/domain` module must never
+ * import an app-specific env helper. `buildEtaConfig()` is how each app
+ * bridges the gap: `apps/api` calls `buildEtaConfig(envVar)` (its own
+ * Worker-env-aware reader), `apps/admin` calls
+ * `buildEtaConfig((k) => process.env[k])`.
  */
 
-function envVar(key: string): string | undefined {
-    return process.env[key];
-}
-
-// ETA_ENV decides which ETA host set to use (production vs preprod). It is
-// read lazily per call, not frozen at module scope, so resolveSigner can never
-// fall through to the unsigned passthrough signer in production and hosts are
-// always chosen from the live environment. Kept identical to the API copy.
-function isEtaProd(): boolean {
-    return envVar('ETA_ENV') === 'production';
-}
-
-function etaIdUrl(): string {
-    return isEtaProd()
+function etaIdUrl(env: EtaConfig['env']): string {
+    return env === 'production'
         ? 'https://id.eta.gov.eg/connect/token'
         : 'https://id.preprod.eta.gov.eg/connect/token';
 }
 
-function etaApiUrl(): string {
-    return isEtaProd()
+function etaApiUrl(env: EtaConfig['env']): string {
+    return env === 'production'
         ? 'https://api.invoicing.eta.gov.eg/api/v1'
         : 'https://api.preprod.invoicing.eta.gov.eg/api/v1';
+}
+
+export interface EtaConfig {
+    env: 'production' | 'preprod';
+    clientId?: string;
+    clientSecret?: string;
+    issuerEin?: string;
+    activityCode?: string;
+    documentTypeId?: string;
+}
+
+/** Builds an `EtaConfig` from whatever env-reading function the calling app uses. */
+export function buildEtaConfig(read: (key: string) => string | undefined): EtaConfig {
+    return {
+        env: read('ETA_ENV') === 'production' ? 'production' : 'preprod',
+        clientId: read('ETA_CLIENT_ID'),
+        clientSecret: read('ETA_CLIENT_SECRET'),
+        issuerEin: read('ETA_ISSUER_EIN'),
+        activityCode: read('ETA_ACTIVITY_CODE'),
+        documentTypeId: read('ETA_INVOICE_DOCUMENT_TYPE_ID'),
+    };
 }
 
 type EtaTokenResponse = { access_token: string };
 type EtaSubmitResponse = { submissionId: string; acceptedDocuments: { uuid: string; longId?: string }[] };
 type EtaStatusResponse = { status: string; qrCodeData?: string; longId?: string };
-export type EtaResult = { uuid: string; longId?: string; qrCodeData?: string } | null;
+
+/**
+ * The typed outcome of `issueInvoice`. Replaces the old `EtaResult | null`,
+ * which collapsed every failure mode — bad config, no items, over the
+ * national-ID threshold, a signer that refuses to run, an HTTP failure —
+ * into a single `null` with only a `console.error` to tell them apart. A
+ * durable job (the outbox worker) needs to know which failures are worth
+ * retrying and which are not:
+ *
+ *   retryable: false — a config/data/compliance problem. No amount of
+ *   retrying fixes a missing credential, an order with no items, an amount
+ *   over the national-ID threshold, or a signer/UUID seam that is not wired
+ *   up. A human has to act.
+ *
+ *   retryable: true — a transient HTTP/network failure. Worth another
+ *   attempt.
+ */
+export type IssueInvoiceResult =
+    | { ok: true; uuid: string; longId?: string; qrCodeData?: string }
+    | { ok: false; retryable: true; code: 'auth_failed' | 'http_error' | 'network_error'; message: string }
+    | {
+        ok: false;
+        retryable: false;
+        code: 'not_configured' | 'no_items' | 'national_id_required' | 'signer_not_configured' | 'uuid_not_available';
+        message: string;
+    };
 
 /**
  * ETA rejects a document whose declared national ID is missing when the
  * amount exceeds this threshold (verified: search result on Egypt's B2C
  * e-invoicing rules — "the national ID number of the buyer is required only
  * if the amount exceeds 150,000 Egyptian pounds"). `customers` has no field
- * to capture a national ID at all (see CustomerReceiver below), so an order
- * above this line cannot currently be submitted compliantly — issueInvoice
- * refuses rather than submit one ETA would flag.
+ * to capture a national ID at all, so an order above this line cannot
+ * currently be submitted compliantly — issueInvoice refuses rather than
+ * submit one ETA would flag.
  */
 const NATIONAL_ID_REQUIRED_ABOVE_EGP = 150_000_00n; // minor units (piastres)
 
@@ -79,11 +110,10 @@ const NATIONAL_ID_REQUIRED_ABOVE_EGP = 150_000_00n; // minor units (piastres)
  * token or an HSM-backed signing service). Nobody has that token yet — it has
  * not been provisioned — so there is no real signer to call.
  *
- * This is the seam the plan asked for: a pluggable interface so the real
- * implementation drops in later without touching `issueInvoice` or its
- * callers. Resolution is env-driven (`ETA_ENV`), matching every other
- * environment switch already in this file, rather than a parameter threaded
- * through every call site.
+ * This is a pluggable interface so the real implementation drops in later
+ * without touching `issueInvoice` or its callers. Resolution is
+ * `EtaConfig.env`-driven, matching every other environment switch in this
+ * file, rather than a parameter threaded through every call site.
  */
 export interface EtaSigner {
     sign(document: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -133,15 +163,8 @@ const preprodUnsignedPassthroughSigner: EtaSigner = {
     },
 };
 
-export function resolveSigner(): EtaSigner {
-    // Reads envVar('ETA_ENV') freshly on every call, deliberately NOT the
-    // module-level `isProd` used for the URL constants above. A real process
-    // sets ETA_ENV once at deploy time and never changes it, so this
-    // distinction has no runtime consequence there — but freezing "is this
-    // production" at first import is also the one thing that would make a
-    // signer choice IMPOSSIBLE to unit test without re-importing the module
-    // per case. The extra env read costs nothing and removes that trap.
-    return envVar('ETA_ENV') === 'production' ? productionSigner : preprodUnsignedPassthroughSigner;
+export function resolveSigner(config: EtaConfig): EtaSigner {
+    return config.env === 'production' ? productionSigner : preprodUnsignedPassthroughSigner;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -183,13 +206,11 @@ export class EtaUuidNotAvailableError extends Error {
     }
 }
 
-async function computeDocumentUuid(canonicalPayload: string): Promise<string> {
-    // Fresh read, not the frozen module-level `isProd` — same reasoning as
-    // resolveSigner above.
-    if (envVar('ETA_ENV') === 'production') throw new EtaUuidNotAvailableError();
-    // Node's webcrypto — available without a new dependency (no install
-    // possible right now, see the file banner above). Deterministic per
-    // input, NOT what ETA would compute.
+async function computeDocumentUuid(canonicalPayload: string, config: EtaConfig): Promise<string> {
+    if (config.env === 'production') throw new EtaUuidNotAvailableError();
+    // Web Crypto — available in every runtime this repo targets (Workers,
+    // Node, browser) with no dependency. Deterministic per input, NOT what
+    // ETA would compute.
     const bytes = new TextEncoder().encode(canonicalPayload);
     const digest = await crypto.subtle.digest('SHA-256', bytes);
     return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -204,9 +225,9 @@ async function computeDocumentUuid(canonicalPayload: string): Promise<string> {
  * (piastres), so the extra three are always zero, never rounded.
  *
  * Pure integer scaling, not a float conversion: `Number(toDecimalString(m))`
- * (what this file did before) round-trips through a float and cannot reliably
- * print a fixed 5 decimals for every value — and re-introduces exactly the
- * float-money defect the rest of this codebase exists to eliminate.
+ * round-trips through a float and cannot reliably print a fixed 5 decimals
+ * for every value — and re-introduces exactly the float-money defect the
+ * rest of this codebase exists to eliminate.
  */
 export function toEtaAmountString(m: Money): string {
     const ETA_DECIMALS = 5;
@@ -229,22 +250,33 @@ export function toEtaAmountString(m: Money): string {
 // ─────────────────────────────────────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────────────────────────────────────
-async function getAuthToken(): Promise<string> {
-    const clientId = envVar('ETA_CLIENT_ID');
-    const clientSecret = envVar('ETA_CLIENT_SECRET');
+class EtaAuthError extends Error {
+    constructor(readonly kind: 'auth_failed' | 'network_error', message: string) {
+        super(message);
+        this.name = 'EtaAuthError';
+    }
+}
+
+async function getAuthToken(config: EtaConfig): Promise<string> {
+    const { clientId, clientSecret } = config;
     if (!clientId || !clientSecret) throw new Error('ETA credentials not configured');
 
-    const res = await fetch(etaIdUrl(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'client_credentials',
-            client_id: clientId,
-            client_secret: clientSecret,
-            scope: 'InvoicingAPI',
-        }),
-    });
-    if (!res.ok) throw new Error(`ETA auth failed: ${res.status}`);
+    let res: Response;
+    try {
+        res = await fetch(etaIdUrl(config.env), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'client_credentials',
+                client_id: clientId,
+                client_secret: clientSecret,
+                scope: 'InvoicingAPI',
+            }),
+        });
+    } catch (err) {
+        throw new EtaAuthError('network_error', err instanceof Error ? err.message : 'ETA auth request failed');
+    }
+    if (!res.ok) throw new EtaAuthError('auth_failed', `ETA auth failed: ${res.status}`);
     const data = await res.json() as EtaTokenResponse;
     return data.access_token;
 }
@@ -270,15 +302,13 @@ export interface EtaOrderInput {
     items: EtaInvoiceLine[];
 }
 
-export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
-    const issuerEin = envVar('ETA_ISSUER_EIN');
-    if (!envVar('ETA_CLIENT_ID') || !envVar('ETA_CLIENT_SECRET') || !issuerEin) {
-        console.warn('ETA credentials not configured. Skipping.');
-        return null;
+export async function issueInvoice(order: EtaOrderInput, config: EtaConfig): Promise<IssueInvoiceResult> {
+    const { issuerEin } = config;
+    if (!config.clientId || !config.clientSecret || !issuerEin) {
+        return { ok: false, retryable: false, code: 'not_configured', message: 'ETA credentials not configured.' };
     }
     if (order.items.length === 0) {
-        console.warn(`ETA issueInvoice: order ${order.id} has no items to declare. Skipping.`);
-        return null;
+        return { ok: false, retryable: false, code: 'no_items', message: `Order ${order.id} has no items to declare.` };
     }
 
     try {
@@ -287,8 +317,8 @@ export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
         // Per-line net/VAT, not one figure computed on the order total: ETA
         // validates that invoiceLines sum to the document totals, and rounding
         // an aggregate independently from its parts is exactly the kind of
-        // reconciliation gap this refactor's ledger work exists to prevent
-        // elsewhere (packages/domain's allocate()). Each line's own gross is
+        // reconciliation gap this repo's ledger work exists to prevent
+        // elsewhere (this package's own allocate()). Each line's own gross is
         // exact by construction (unit price x quantity, both already integers).
         const lines = order.items.map((item) => {
             const grossMinor = item.unitPriceMinor * BigInt(item.quantity);
@@ -303,18 +333,27 @@ export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
         const totalVatMinor = lines.reduce((acc, l) => acc + l.vat.minor, 0n);
 
         if (totalGrossMinor > NATIONAL_ID_REQUIRED_ABOVE_EGP) {
-            console.error(
-                `ETA issueInvoice: order ${order.id} (${order.orderNumber}) totals ` +
-                `${toEtaAmountString(fromMinor(totalGrossMinor, cur))} EGP, above the ` +
-                '150,000 EGP threshold where ETA requires the buyer\'s national ID. ' +
-                'This schema has no field to capture one (packages/db/src/schema/' +
-                'customers.ts). Refusing to submit rather than declare an anonymous ' +
-                'receiver ETA would reject or flag.'
-            );
-            return null;
+            return {
+                ok: false,
+                retryable: false,
+                code: 'national_id_required',
+                message:
+                    `Order ${order.id} (${order.orderNumber}) totals ` +
+                    `${toEtaAmountString(fromMinor(totalGrossMinor, cur))} EGP, above the 150,000 EGP ` +
+                    "threshold where ETA requires the buyer's national ID. This schema has no field " +
+                    'to capture one (packages/db/src/schema/customers.ts).',
+            };
         }
 
-        const token = await getAuthToken();
+        let token: string;
+        try {
+            token = await getAuthToken(config);
+        } catch (err) {
+            if (err instanceof EtaAuthError) {
+                return { ok: false, retryable: true, code: err.kind, message: err.message };
+            }
+            throw err;
+        }
 
         const doc: Record<string, unknown> = {
             issuer: { type: 'B', id: issuerEin, name: 'IRTH Business' },
@@ -336,7 +375,7 @@ export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
             documentType: 'I',
             documentTypeVersion: '1.0',
             dateTimeIssued: new Date().toISOString(),
-            taxpayerActivityCode: envVar('ETA_ACTIVITY_CODE') ?? '',
+            taxpayerActivityCode: config.activityCode ?? '',
             internalId: order.id,
             purchaseOrderReference: order.orderNumber,
             invoiceLines: lines.map(({ item, gross, vat, net }) => ({
@@ -366,35 +405,65 @@ export async function issueInvoice(order: EtaOrderInput): Promise<EtaResult> {
             totalAmount: toEtaAmountString(fromMinor(totalGrossMinor, cur)),
         };
 
-        doc.uuid = await computeDocumentUuid(JSON.stringify(doc));
+        try {
+            doc.uuid = await computeDocumentUuid(JSON.stringify(doc), config);
+        } catch (err) {
+            if (err instanceof EtaUuidNotAvailableError) {
+                return { ok: false, retryable: false, code: 'uuid_not_available', message: err.message };
+            }
+            throw err;
+        }
 
-        const signer = resolveSigner();
-        const signedDoc = await signer.sign(doc);
+        let signedDoc: Record<string, unknown>;
+        try {
+            signedDoc = await resolveSigner(config).sign(doc);
+        } catch (err) {
+            if (err instanceof EtaSignerNotConfiguredError) {
+                return { ok: false, retryable: false, code: 'signer_not_configured', message: err.message };
+            }
+            throw err;
+        }
 
-        const res = await fetch(`${etaApiUrl()}/documentsubmissions`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ documents: [signedDoc] }),
-        });
-        if (!res.ok) throw new Error(`ETA submission failed: ${res.status}`);
+        let res: Response;
+        try {
+            res = await fetch(`${etaApiUrl(config.env)}/documentsubmissions`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ documents: [signedDoc] }),
+            });
+        } catch (err) {
+            return {
+                ok: false, retryable: true, code: 'network_error',
+                message: err instanceof Error ? err.message : 'ETA submission request failed',
+            };
+        }
+        if (!res.ok) {
+            return { ok: false, retryable: true, code: 'http_error', message: `ETA submission failed: ${res.status}` };
+        }
 
         const data = await res.json() as EtaSubmitResponse;
         const accepted = data.acceptedDocuments?.[0];
-        return { uuid: accepted?.uuid ?? (doc.uuid as string), longId: accepted?.longId };
+        return { ok: true, uuid: accepted?.uuid ?? (doc.uuid as string), longId: accepted?.longId };
     } catch (err) {
-        console.error('ETA issueInvoice error:', err);
-        return null;
+        // Anything not already classified above (a genuine bug, an unexpected
+        // shape from ETA's API) is treated as worth one more try rather than
+        // silently dropped — the conservative default, since we cannot prove
+        // it is a permanent condition.
+        return {
+            ok: false, retryable: true, code: 'network_error',
+            message: err instanceof Error ? err.message : 'Unexpected ETA issueInvoice failure',
+        };
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // STATUS / CANCEL
 // ─────────────────────────────────────────────────────────────────────────
-export async function getInvoiceStatus(uuid: string): Promise<{ status: string; qrCodeData?: string; longId?: string }> {
-    if (!envVar('ETA_CLIENT_ID') || !envVar('ETA_CLIENT_SECRET')) return { status: 'Unknown' };
+export async function getInvoiceStatus(uuid: string, config: EtaConfig): Promise<{ status: string; qrCodeData?: string; longId?: string }> {
+    if (!config.clientId || !config.clientSecret) return { status: 'Unknown' };
     try {
-        const token = await getAuthToken();
-        const res = await fetch(`${etaApiUrl()}/documents/${uuid}/details`, {
+        const token = await getAuthToken(config);
+        const res = await fetch(`${etaApiUrl(config.env)}/documents/${uuid}/details`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json() as EtaStatusResponse;
@@ -418,24 +487,18 @@ export async function getInvoiceStatus(uuid: string): Promise<{ status: string; 
  * activeFrom/activeTo is that ETA can change it. Only a parameter whose active
  * window covers *now* is used.
  *
- * `${etaApiUrl()}/documenttypes/{id}` reuses this file's existing v1 base
- * rather than the literal `v1.0` path segment shown in ETA's docs for this one
- * endpoint — that discrepancy could not be resolved without calling the real
- * API (out of scope for this task) and should be confirmed against the
- * preprod sandbox once credentials exist.
- *
  * `documentTypeId` is deliberately NOT hardcoded (ETA's docs describe it as a
  * per-taxpayer/per-registration identifier, not a fixed constant across
  * integrations) — callers must supply the id from their own ETA registration,
  * via `ETA_INVOICE_DOCUMENT_TYPE_ID`.
  */
-export async function getCancellationWindowHours(): Promise<number | null> {
-    const documentTypeId = envVar('ETA_INVOICE_DOCUMENT_TYPE_ID');
-    if (!envVar('ETA_CLIENT_ID') || !envVar('ETA_CLIENT_SECRET') || !documentTypeId) return null;
+export async function getCancellationWindowHours(config: EtaConfig): Promise<number | null> {
+    const { documentTypeId } = config;
+    if (!config.clientId || !config.clientSecret || !documentTypeId) return null;
 
     try {
-        const token = await getAuthToken();
-        const res = await fetch(`${etaApiUrl()}/documenttypes/${documentTypeId}`, {
+        const token = await getAuthToken(config);
+        const res = await fetch(`${etaApiUrl(config.env)}/documenttypes/${documentTypeId}`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return null;
@@ -461,15 +524,15 @@ export async function getCancellationWindowHours(): Promise<number | null> {
     }
 }
 
-export async function cancelInvoice(uuid: string, reason: string, submittedAt: Date | null): Promise<{ ok: boolean; error?: string }> {
-    if (!envVar('ETA_CLIENT_ID') || !envVar('ETA_CLIENT_SECRET')) return { ok: false, error: 'not_configured' };
+export async function cancelInvoice(uuid: string, reason: string, submittedAt: Date | null, config: EtaConfig): Promise<{ ok: boolean; error?: string }> {
+    if (!config.clientId || !config.clientSecret) return { ok: false, error: 'not_configured' };
 
     // Read from ETA rather than hardcode. `null` (the API call itself failed,
     // or ETA_INVOICE_DOCUMENT_TYPE_ID is not set) means the window is UNKNOWN
     // — that is refused rather than treated as "no limit", since submitting
     // past an unknown-but-real window would be rejected by ETA anyway, and
     // silently allowing it here would hide the actual reason for that failure.
-    const windowHours = await getCancellationWindowHours();
+    const windowHours = await getCancellationWindowHours(config);
     if (windowHours === null) {
         return { ok: false, error: 'cancellation_window_unknown' };
     }
@@ -481,8 +544,8 @@ export async function cancelInvoice(uuid: string, reason: string, submittedAt: D
     }
 
     try {
-        const token = await getAuthToken();
-        const res = await fetch(`${etaApiUrl()}/documents/state/${uuid}/state`, {
+        const token = await getAuthToken(config);
+        const res = await fetch(`${etaApiUrl(config.env)}/documents/state/${uuid}/state`, {
             method: 'PUT',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'cancelled', reason }),

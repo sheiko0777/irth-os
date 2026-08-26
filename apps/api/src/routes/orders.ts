@@ -5,8 +5,6 @@ import { db, getDb, withOrg } from '../db';
 import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
-import { issueInvoice } from '../services/eta';
-import { buildEtaOrderInput } from '../services/buildEtaOrderInput';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
 import { requireRole } from '../middlewares/requireRole';
 
@@ -326,19 +324,24 @@ ordersRoute.patch('/:id/status', requireRole('owner', 'admin'), async (c: Contex
       }
     }
 
+    // Same transaction as the status change, and only on a genuine
+    // transition (same reasoning as the eventType guard above — without it,
+    // re-PATCHing an already-delivered order would resubmit to ETA every
+    // time). This replaces what used to be a fire-and-forget
+    // .then().catch() run AFTER this transaction committed, with no
+    // waitUntil() — on Cloudflare Workers an un-awaited promise not
+    // registered with waitUntil can be killed the instant the response
+    // returns to the client, so the submission could silently never run at
+    // all. Routing through the outbox means the event's existence commits
+    // atomically with the status change: a killed isolate loses nothing, and
+    // the cron drain (already running under waitUntil — see index.ts's
+    // scheduled() handler) picks it up regardless.
+    if (status === 'delivered' && order.status !== status) {
+      await emitOutboxEvent(tx, { orgId, eventType: 'eta.invoice.issue', payload: { orgId, orderId: res.id } });
+    }
+
     return res;
   });
-
-  if (status === 'delivered') {
-      // Fire-and-forget, AFTER the transaction above has committed — issueInvoice
-      // makes external HTTP calls, and this route's own withOrg discipline
-      // exists specifically so a government API round trip never holds a
-      // pooled connection open. Building the input is a plain read, not part
-      // of that transaction.
-      buildEtaOrderInput(orgId, updatedOrder.id, updatedOrder.orderNumber, updatedOrder.currency)
-        .then((etaInput) => etaInput && issueInvoice(etaInput))
-        .catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));
-  }
 
   return c.json({ data: jsonSafe(updatedOrder), error: null, meta: null });
 });

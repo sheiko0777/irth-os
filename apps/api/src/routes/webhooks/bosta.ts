@@ -1,11 +1,9 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { orders, shipmentTracking, auditLog, withOrgContext } from '@irth/db';
+import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { verifyHmac } from '../../middlewares/verifyWebhook';
-import { issueInvoice } from '../../services/eta';
-import { buildEtaOrderInput } from '../../services/buildEtaOrderInput';
 
 /**
  * NOTE FOR ANYONE TRYING TO UNDERSTAND BOSTA INTEGRATION: there are TWO live,
@@ -68,7 +66,7 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     newOrderStatus = 'cancelled';
   }
 
-  const updatedOrder = await withOrgContext(getDb(), shipment.orgId, async (tx) => {
+  await withOrgContext(getDb(), shipment.orgId, async (tx) => {
     // Update shipment status — was an unscoped `db.update`, i.e. no org_id in
     // its own WHERE; RLS would have refused a cross-tenant write, but a query
     // should be correct on its own rather than rely on that backstop (the
@@ -100,17 +98,20 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
       changes: { oldStatus: order.status, newStatus: newOrderStatus, bostaState },
     });
 
+    // Same transaction as the status change — this replaces what used to be
+    // a fire-and-forget .then().catch() run AFTER this transaction
+    // committed, with no waitUntil(). See apps/api/src/routes/orders.ts's
+    // identical fix for the full reasoning: on Workers, an un-awaited
+    // promise not registered with waitUntil can be killed the instant the
+    // response returns, so the ETA submission could silently never run.
+    // `order.status !== newOrderStatus` is already guaranteed by the guard
+    // above (`row` only exists on a genuine transition).
+    if (newOrderStatus === 'delivered') {
+      await emitOutboxEvent(tx, { orgId: order.orgId, eventType: 'eta.invoice.issue', payload: { orgId: order.orgId, orderId: order.id } });
+    }
+
     return row;
   });
-
-  if (updatedOrder?.status === 'delivered') {
-    // Outside the transaction and fire-and-forget, same reasoning as the
-    // identical call in apps/api/src/routes/orders.ts: issueInvoice makes
-    // external HTTP calls, which must never hold a pooled connection open.
-    buildEtaOrderInput(updatedOrder.orgId, updatedOrder.id, updatedOrder.orderNumber, updatedOrder.currency)
-      .then((etaInput) => etaInput && issueInvoice(etaInput))
-      .catch(e => console.error('issueInvoice failed:', e instanceof Error ? e.message : 'unknown error'));
-  }
 
   return c.json({ data: { success: true }, error: null, meta: null });
 });

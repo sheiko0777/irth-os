@@ -1,8 +1,10 @@
 import { db } from '@irth/db';
-import { outboxEvents, products, productVariants } from '@irth/db';
+import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, type EtaInvoiceIssuePayload } from '@irth/db';
+import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
+import { envVar } from '../utils/env';
 
 interface OrderPayload {
     customerPhone: string;
@@ -119,6 +121,86 @@ export async function processOutbox(database: typeof db): Promise<number> {
                     await database.update(outboxEvents)
                         .set({ processed: true, processedAt: new Date() })
                         .where(eq(outboxEvents.id, event.id));
+                    continue;
+                }
+
+                if (event.eventType === 'eta.invoice.issue') {
+                    const { orgId, orderId } = JSON.parse(event.payload) as EtaInvoiceIssuePayload;
+
+                    const [existing] = await database.select().from(etaInvoices)
+                        .where(and(eq(etaInvoices.orgId, orgId), eq(etaInvoices.orderId, orderId)));
+
+                    // Still cooling down from a previous retryable failure —
+                    // leave the outbox row untouched (not processed, attempts
+                    // unchanged) so the next tick re-evaluates, instead of
+                    // burning an attempt on a retry that isn't due yet.
+                    if (existing?.nextRetryAt && existing.nextRetryAt > new Date()) {
+                        continue;
+                    }
+
+                    const etaInput = await buildEtaOrderInput(database, orgId, orderId);
+                    if (!etaInput) {
+                        // Order missing or has no items — not something a
+                        // retry fixes.
+                        await database.update(outboxEvents)
+                            .set({ processed: true, processedAt: new Date() })
+                            .where(eq(outboxEvents.id, event.id));
+                        continue;
+                    }
+
+                    const result = await issueInvoice(etaInput, buildEtaConfig(envVar));
+
+                    if (result.ok) {
+                        await database.insert(etaInvoices).values({
+                            orgId, orderId, etaUuid: result.uuid, longId: result.longId ?? null,
+                            qrCodeData: result.qrCodeData ?? null, status: 'submitted',
+                            submittedAt: new Date(), retryCount: 0, nextRetryAt: null, errorMessage: null,
+                        }).onConflictDoUpdate({
+                            target: etaInvoices.orderId,
+                            set: {
+                                etaUuid: result.uuid, longId: result.longId ?? null, qrCodeData: result.qrCodeData ?? null,
+                                status: 'submitted', submittedAt: new Date(), retryCount: 0, nextRetryAt: null, errorMessage: null,
+                            },
+                        });
+                        await database.update(outboxEvents)
+                            .set({ processed: true, processedAt: new Date() })
+                            .where(eq(outboxEvents.id, event.id));
+                    } else if (!result.retryable) {
+                        // No amount of outbox retrying fixes a config/data/
+                        // compliance problem — stop auto-retrying, but leave
+                        // the row for the existing manual "Submit" in
+                        // apps/admin's eta router.
+                        await database.insert(etaInvoices).values({
+                            orgId, orderId, status: 'error', errorMessage: result.message, nextRetryAt: null,
+                        }).onConflictDoUpdate({
+                            target: etaInvoices.orderId,
+                            set: { status: 'error', errorMessage: result.message, nextRetryAt: null },
+                        });
+                        await database.update(outboxEvents)
+                            .set({ processed: true, processedAt: new Date() })
+                            .where(eq(outboxEvents.id, event.id));
+                    } else {
+                        const attempts = (existing?.retryCount ?? 0) + 1;
+                        // Exponential, capped at 60 minutes — no existing
+                        // backoff utility in this codebase to reuse, and the
+                        // outbox's own attempts<5 ceiling (below) already
+                        // caps total retries; this only spaces them out.
+                        const backoffMinutes = Math.min(2 ** attempts, 60);
+                        const nextRetryAt = new Date(Date.now() + backoffMinutes * 60_000);
+                        await database.insert(etaInvoices).values({
+                            orgId, orderId, status: 'error', errorMessage: result.message, retryCount: attempts, nextRetryAt,
+                        }).onConflictDoUpdate({
+                            target: etaInvoices.orderId,
+                            set: { status: 'error', errorMessage: result.message, retryCount: attempts, nextRetryAt },
+                        });
+                        // Re-thrown so the outer catch still bumps
+                        // outbox_events.attempts/lastError — the existing
+                        // attempts<5 ceiling stays the dead-letter safety net
+                        // for every event type; only the RATE changes here
+                        // (exponential backoff via nextRetryAt), not the
+                        // ceiling.
+                        throw new Error(result.message);
+                    }
                     continue;
                 }
 
