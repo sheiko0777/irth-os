@@ -1,9 +1,10 @@
 import { pgTable, text, timestamp, uuid, bigint, integer, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { organizations } from '../schema';
 
 export const orderReturns = pgTable('order_returns', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   orderId: uuid('order_id').notNull(),
   returnNumber: text('return_number').notNull(), // e.g. RMA-0001
   status: text('status', { enum: ['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged'] }).notNull().default('requested'),
@@ -28,8 +29,12 @@ export const orderReturns = pgTable('order_returns', {
 export const returnItems = pgTable('return_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   // Added in 0030, with a composite FK on (return_id, org_id) so a line can
-  // never belong to a different org than the return that owns it.
-  orgId: uuid('org_id').notNull(),
+  // never belong to a different org than the return that owns it. 0030 also
+  // added a plain FK straight to organizations(id) — declared below — on top
+  // of that composite one; Drizzle's column-level .references() can only
+  // express the single-column FK, not the composite (return_id, org_id) one,
+  // but both exist in the database.
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   returnId: uuid('return_id').notNull().references(() => orderReturns.id, { onDelete: 'cascade' }),
   orderItemId: uuid('order_item_id'),
   productName: text('product_name').notNull(),

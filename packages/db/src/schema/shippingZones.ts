@@ -5,7 +5,7 @@ export const shippingRateTypeEnum = pgEnum('shipping_rate_type', ['flat', 'weigh
 
 export const shippingZones = pgTable("shipping_zones", {
   id: uuid("id").defaultRandom().primaryKey(),
-  orgId: uuid("org_id").notNull(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   countries: jsonb("countries").notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
@@ -16,7 +16,7 @@ export const shippingZones = pgTable("shipping_zones", {
 export const shippingRates = pgTable("shipping_rates", {
   id: uuid("id").defaultRandom().primaryKey(),
   zoneId: uuid("zone_id").notNull().references(() => shippingZones.id, { onDelete: 'cascade' }),
-  orgId: uuid("org_id").notNull(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   rateType: shippingRateTypeEnum("rate_type").notNull().default('flat'),
   priceMinor: bigint("price_minor", { mode: 'bigint' }).notNull().default(0n),

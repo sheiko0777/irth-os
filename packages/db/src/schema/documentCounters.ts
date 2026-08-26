@@ -13,7 +13,7 @@ import { organizations } from '../schema';
  * back, which reintroduces exactly the race this replaced.
  */
 export const orgDocumentCounters = pgTable('org_document_counters', {
-  orgId: uuid('org_id').notNull(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   /** 'order' | 'return' | 'purchase_order'. See DocumentKind. */
   kind: text('kind').notNull(),
   /** The number most recently handed out. Starts at 0, so the first is 1. */

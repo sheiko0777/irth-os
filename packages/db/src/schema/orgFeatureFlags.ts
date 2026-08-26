@@ -3,7 +3,7 @@ import { organizations } from '../schema';
 
 export const orgFeatureFlags = pgTable('org_feature_flags', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull().unique(),
+  orgId: uuid('org_id').notNull().unique().references(() => organizations.id),
   plan: text('plan').notNull().default('starter'),
   isActive: boolean('is_active').notNull().default(true),
   enabledScreens: text('enabled_screens').array().notNull().default([]),

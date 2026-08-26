@@ -3,7 +3,7 @@ import { organizations } from '../schema';
 
 export const outboxEvents = pgTable('outbox_events', {
     id: uuid('id').primaryKey().defaultRandom(),
-    orgId: uuid('org_id').notNull(),
+    orgId: uuid('org_id').notNull().references(() => organizations.id),
     eventType: text('event_type').notNull(),
     payload: text('payload').notNull(),
     processed: boolean('processed').default(false).notNull(),

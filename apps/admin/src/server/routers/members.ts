@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { adminProcedure, ownerProcedure, router } from '../trpc';
 import { eq, and } from 'drizzle-orm';
-import { orgMembers, user, withAudit } from '@irth/db';
+import { orgMembers, orgInvites, user, withAudit } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 
 export const membersRouter = router({
@@ -28,6 +28,55 @@ export const membersRouter = router({
 
     return { data: members, error: null, meta: { orgId: ctx.orgId } };
   }),
+
+  // Invite a new member to the active org (owner/admin only — matrix: members.invite).
+  //
+  // This used to be a client-side fetch() straight to the Workers API
+  // (apps/api's `orgsRouter.post('/:id/invite', ...)`), cross-origin from
+  // app.irth-house.com to irth-api.*.workers.dev. That could never work: the
+  // two apps run separate Better Auth instances on unrelated domains, so the
+  // admin session cookie set for app.irth-house.com is never sent to a
+  // workers.dev origin no matter what CORS/credentials config the fetch
+  // carries — cookies are domain-scoped, not something a client can forward
+  // across origins. Same-origin tRPC, reusing the request's own session
+  // (already verified by `protectedProcedure`/`adminProcedure`), is the actual
+  // fix — not a CORS tweak.
+  invite: adminProcedure
+    .input(z.object({
+      email: z.string().email(),
+      role: z.enum(['owner', 'admin', 'member']).default('member'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Mirrors apps/api's own check: an admin may invite members and other
+      // admins, but only an owner may invite a new owner.
+      if (ctx.role === 'admin' && input.role === 'owner') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only an owner can invite another owner.' });
+      }
+
+      const token = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      const invite = await ctx.withOrg((tx) => withAudit(
+        tx,
+        async () => {
+          const [row] = await tx
+            .insert(orgInvites)
+            .values({ orgId: ctx.orgId, email: input.email, token, role: input.role, expiresAt })
+            .returning();
+          return row;
+        },
+        {
+          orgId: ctx.orgId,
+          userId: ctx.userId,
+          action: 'INVITE_MEMBER',
+          tableName: 'org_invites',
+          changes: { email: input.email, role: input.role },
+        },
+      ));
+
+      // Invite email delivery is not wired up yet (matches apps/api's route).
+      return { data: invite, error: null, meta: null };
+    }),
 
   // Change a member's role (owner only — matrix: members.changeRole).
   changeRole: ownerProcedure

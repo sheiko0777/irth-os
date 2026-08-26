@@ -6,7 +6,7 @@ export const giftCardTxTypeEnum = pgEnum('gift_card_tx_type', ['issue', 'redeem'
 
 export const giftCards = pgTable('gift_cards', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   code: text('code').notNull(),
   initialAmountMinor: bigint('initial_amount_minor', { mode: 'bigint' }).notNull().default(0n),
   // CHECK (balance_minor >= 0) in 0028: a gift card is a liability, and one
@@ -26,7 +26,7 @@ export const giftCards = pgTable('gift_cards', {
 export const giftCardTransactions = pgTable('gift_card_transactions', {
   id: uuid('id').primaryKey().defaultRandom(),
   giftCardId: uuid('gift_card_id').notNull().references(() => giftCards.id, { onDelete: 'cascade' }),
-  orgId: uuid('org_id').notNull(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
   txType: giftCardTxTypeEnum('tx_type').notNull(),
   orderId: uuid('order_id'),

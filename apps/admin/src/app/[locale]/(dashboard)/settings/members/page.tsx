@@ -13,7 +13,6 @@ export default async function MembersPage() {
   const caller = await serverCaller();
   const res = await caller.members.list();
   const members = res.data;
-  const orgId = res.meta.orgId;
 
   return (
     <div className="space-y-6">
@@ -71,7 +70,7 @@ export default async function MembersPage() {
               <CardTitle>{t("invite")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <InviteForm orgId={orgId} />
+              <InviteForm />
             </CardContent>
           </Card>
         </PermissionGate>

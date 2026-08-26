@@ -7,7 +7,7 @@ export const campaignSegmentEnum = pgEnum('campaign_segment', ['all', 'vip', 'in
 
 export const campaigns = pgTable("campaigns", {
   id: uuid("id").defaultRandom().primaryKey(),
-  orgId: uuid("org_id").notNull(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   message: text("message").notNull(),
   channel: campaignChannelEnum("channel").notNull().default('whatsapp'),

@@ -3,7 +3,7 @@ import { organizations } from '../schema';
 
 export const orgSettings = pgTable('org_settings', {
   id: uuid('id').defaultRandom().primaryKey(),
-  orgId: uuid('org_id').notNull(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   key: text('key').notNull(),
   value: text('value').notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

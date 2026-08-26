@@ -6,7 +6,7 @@ export const movementTypeEnum = pgEnum('movement_type', ['in', 'out', 'adjustmen
 
 export const inventoryItems = pgTable("inventory_items", {
   id: uuid("id").defaultRandom().primaryKey(),
-  orgId: uuid("org_id").notNull(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
   variantId: uuid("variant_id").notNull().references(() => productVariants.id, { onDelete: 'cascade' }),
   quantity: integer("quantity").notNull().default(0),
   reorderPoint: integer("reorder_point").notNull().default(10),
@@ -19,7 +19,7 @@ export const inventoryItems = pgTable("inventory_items", {
 
 export const inventoryMovements = pgTable("inventory_movements", {
   id: uuid("id").defaultRandom().primaryKey(),
-  orgId: uuid("org_id").notNull(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
   itemId: uuid("item_id").notNull().references(() => inventoryItems.id, { onDelete: 'cascade' }),
   type: movementTypeEnum("type").notNull(),
   quantity: integer("quantity").notNull(),

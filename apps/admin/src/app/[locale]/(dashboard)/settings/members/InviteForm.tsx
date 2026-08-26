@@ -1,39 +1,28 @@
-import type React from "react";
 "use client";
 
+import type React from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTranslations } from "next-intl";
+import { trpc } from "@/lib/trpc";
 
-export function InviteForm({ orgId }: { orgId: string }) {
+export function InviteForm() {
   const t = useTranslations("settings");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("member");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [role, setRole] = useState<"admin" | "member">("member");
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setStatus("loading");
-
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-      const res = await fetch(`${apiUrl}/api/orgs/${orgId}/invite`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "org_id": orgId,
-        },
-        body: JSON.stringify({ email, role }),
-      });
-
-      if (!res.ok) throw new Error("Failed to invite");
-      
-      setStatus("success");
+  const utils = trpc.useUtils();
+  const inviteMutation = trpc.members.invite.useMutation({
+    onSuccess: () => {
       setEmail("");
-    } catch (error) {
-      setStatus("error");
-    }
+      utils.members.list.invalidate();
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    inviteMutation.mutate({ email, role });
   };
 
   return (
@@ -53,21 +42,21 @@ export function InviteForm({ orgId }: { orgId: string }) {
         <select
           id="role"
           value={role}
-          onChange={(e) => setRole(e.target.value)}
+          onChange={(e) => setRole(e.target.value as "admin" | "member")}
           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value="admin">مدير</option>
           <option value="member">عضو</option>
         </select>
       </div>
-      <Button type="submit" disabled={status === "loading"}>
-        {status === "loading" ? "جاري الإرسال..." : t("invite")}
+      <Button type="submit" disabled={inviteMutation.isPending}>
+        {inviteMutation.isPending ? "جاري الإرسال..." : t("invite")}
       </Button>
-      {status === "success" && (
+      {inviteMutation.isSuccess && (
         <p className="text-sm text-emerald">{t("inviteSuccess")}</p>
       )}
-      {status === "error" && (
-        <p className="text-sm text-crimson">حدث خطأ</p>
+      {inviteMutation.isError && (
+        <p className="text-sm text-crimson">{inviteMutation.error.message || "حدث خطأ"}</p>
       )}
     </form>
   );

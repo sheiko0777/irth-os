@@ -69,4 +69,25 @@ describe('members router', () => {
   it('changeRole: admin caller rejects FORBIDDEN (ownerProcedure)', async () => {
     await expectCode(adminCaller.changeRole({ memberId: UUID, role: 'admin' }), 'FORBIDDEN');
   });
+
+  it('invite: member caller rejects FORBIDDEN (adminProcedure)', async () => {
+    await expectCode(memberCaller.invite({ email: 'a@test.com', role: 'member' }), 'FORBIDDEN');
+  });
+
+  it('invite: admin caller inviting an owner rejects FORBIDDEN', async () => {
+    await expectCode(adminCaller.invite({ email: 'a@test.com', role: 'owner' }), 'FORBIDDEN');
+  });
+
+  it('invite: owner caller creates an invite row', async () => {
+    mockDb.insert = vi.fn(() => chainOf([{ id: UUID, orgId: 'org-1', email: 'a@test.com', role: 'member' }]));
+    const res = await caller.invite({ email: 'a@test.com', role: 'member' });
+    expect(res.data).toEqual({ id: UUID, orgId: 'org-1', email: 'a@test.com', role: 'member' });
+    expect(mockDb.insert).toHaveBeenCalled();
+  });
+
+  it('invite: admin caller can invite a member', async () => {
+    mockDb.insert = vi.fn(() => chainOf([{ id: UUID, orgId: 'org-1', email: 'b@test.com', role: 'member' }]));
+    const res = await adminCaller.invite({ email: 'b@test.com', role: 'member' });
+    expect(res.data).toEqual({ id: UUID, orgId: 'org-1', email: 'b@test.com', role: 'member' });
+  });
 });

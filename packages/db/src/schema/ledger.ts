@@ -55,7 +55,7 @@ export const journalEntries = pgTable('journal_entries', {
 
 export const journalLines = pgTable('journal_lines', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   entryId: uuid('entry_id').notNull(),
   accountId: uuid('account_id').notNull(),
   debitMinor: bigint('debit_minor', { mode: 'bigint' }).notNull().default(0n),
