@@ -33,15 +33,10 @@ ordersRoute.post('/', async (c: Context) => {
   if (data.items.length === 0) return c.json({ data: null, error: 'empty_items', meta: null }, 400);
 
   const variantIds = data.items.map(item => item.variantId);
-  const variants = await db.select({
-    id: productVariants.id,
-    priceMinor: productVariants.priceMinor,
-    productId: productVariants.productId
-  })
+  const variants = await db.select({ id: productVariants.id, priceMinor: productVariants.priceMinor, productId: productVariants.productId })
     .from(productVariants)
     .innerJoin(products, eq(productVariants.productId, products.id))
     .where(and(inArray(productVariants.id, variantIds), eq(products.orgId, orgId)));
-
   const variantMap = new Map<string, typeof variants[0]>();
   for (const v of variants) variantMap.set(v.id, v);
 
@@ -51,8 +46,7 @@ ordersRoute.post('/', async (c: Context) => {
     const variant = variantMap.get(item.variantId);
     if (!variant) return c.json({ data: null, error: 'variant_not_found', meta: null }, 404);
     if (variant.priceMinor === null) return c.json({ data: null, error: 'variant_has_no_price', meta: null }, 422);
-    const unit = fromMinor(variant.priceMinor, EGP);
-    total = add(total, multiply(unit, item.quantity));
+    total = add(total, multiply(fromMinor(variant.priceMinor, EGP), item.quantity));
     itemsToInsert.push({ orgId, variantId: item.variantId, quantity: item.quantity, priceMinor: variant.priceMinor });
   }
 
@@ -69,61 +63,27 @@ ordersRoute.post('/', async (c: Context) => {
         for (const item of itemsToInsert) {
           const updated = await tx.update(inventoryItems)
             .set({ quantity: sql`${inventoryItems.quantity} - ${item.quantity}`, updatedAt: new Date() })
-            .where(and(
-              eq(inventoryItems.orgId, orgId),
-              eq(inventoryItems.variantId, item.variantId),
-              sql`${inventoryItems.quantity} >= ${item.quantity}`,
-            ))
-            .returning({ id: inventoryItems.id, quantity: inventoryItems.quantity, averageCostMinor: inventoryItems.averageCostMinor });
+            .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, item.variantId), sql`${inventoryItems.quantity} >= ${item.quantity}`))
+            .returning({ id: inventoryItems.id, averageCostMinor: inventoryItems.averageCostMinor });
           if (updated.length === 0) throw new InsufficientStockError(item.variantId);
-
           const avg = updated[0].averageCostMinor;
           const lineCostMinor = avg == null ? null : avg * BigInt(item.quantity);
           lineCostsMinor.push(lineCostMinor);
-          await tx.insert(inventoryMovements).values({
-            orgId,
-            itemId: updated[0].id,
-            type: 'out',
-            quantity: item.quantity,
-            costMinor: lineCostMinor,
-            note: `Order ${orderNumber}`,
-          });
+          await tx.insert(inventoryMovements).values({ orgId, itemId: updated[0].id, type: 'out', quantity: item.quantity, costMinor: lineCostMinor, note: `Order ${orderNumber}` });
         }
 
         return withAudit(tx, async () => {
-          const [insertedOrder] = await tx.insert(orders).values({
-            orgId,
-            orderNumber,
-            status: 'pending',
-            totalAmountMinor: total.minor,
-            currency: total.currency,
-            customerId: null,
-          }).returning();
-
+          const [insertedOrder] = await tx.insert(orders).values({ orgId, orderNumber, status: 'pending', totalAmountMinor: total.minor, currency: total.currency, customerId: null }).returning();
           if (itemsToInsert.length > 0) {
-            await tx.insert(orderItems).values(itemsToInsert.map((item, i) => ({
-              ...item,
-              orderId: insertedOrder.id,
-              costMinor: lineCostsMinor[i] ?? null,
-            })));
+            await tx.insert(orderItems).values(itemsToInsert.map((item, i) => ({ ...item, orderId: insertedOrder.id, costMinor: lineCostsMinor[i] ?? null })));
           }
           return insertedOrder;
-        }, {
-          orgId,
-          userId,
-          action: 'CREATE',
-          tableName: 'orders',
-          changes: { items: itemsToInsert }
-        });
+        }, { orgId, userId, action: 'CREATE', tableName: 'orders', changes: { items: itemsToInsert } });
       }),
     );
   } catch (err) {
-    if (err instanceof InsufficientStockError) {
-      return c.json({ data: null, error: 'insufficient_stock', meta: { variantId: err.variantId } }, 409);
-    }
-    if (err instanceof IdempotencyError) {
-      return c.json({ data: null, error: err.message, meta: null }, err.code === 'CONFLICT' ? 409 : 400);
-    }
+    if (err instanceof InsufficientStockError) return c.json({ data: null, error: 'insufficient_stock', meta: { variantId: err.variantId } }, 409);
+    if (err instanceof IdempotencyError) return c.json({ data: null, error: err.message, meta: null }, err.code === 'CONFLICT' ? 409 : 400);
     throw err;
   }
 
@@ -149,17 +109,14 @@ ordersRoute.get('/:id', async (c: Context) => {
   return c.json({ data: jsonSafe(order), error: null, meta: null });
 });
 
-const updateStatusSchema = z.object({
-  status: z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'])
-});
+const updateStatusSchema = z.object({ status: z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']) });
 
 ordersRoute.patch('/:id/status', requireRole('owner', 'admin'), async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
   if (!orgId || !userId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
   const id = c.req.param('id');
-  const body = await c.req.json();
-  const { status } = updateStatusSchema.parse(body);
+  const { status } = updateStatusSchema.parse(await c.req.json());
   const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
   if (!order) return c.json({ data: null, error: 'not_found', meta: null }, 404);
 
@@ -171,35 +128,19 @@ ordersRoute.patch('/:id/status', requireRole('owner', 'admin'), async (c: Contex
         .where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)))
         .returning();
       return row;
-    }, {
-      orgId,
-      userId,
-      action: 'UPDATE_STATUS',
-      tableName: 'orders',
-      changes: { oldStatus: order.status, newStatus: status }
-    });
+    }, { orgId, userId, action: 'UPDATE_STATUS', tableName: 'orders', changes: { oldStatus: order.status, newStatus: status } });
 
     if (eventType && order.status !== status) {
       const payload = await buildOrderNotification(tx, orgId, res, eventType);
       if (payload) await emitOutboxEvent(tx, { orgId, eventType, payload });
     }
 
-    // Delivered is an external-government side effect. Persist the intent in
-    // the same transaction as the status change, then let the scheduled outbox
-    // worker perform the network call. This removes the old fire-and-forget
-    // promise and guarantees a durable retryable job.
     if (status === 'delivered' && order.status !== 'delivered') {
-      await tx.insert(etaInvoices).values({
-        orgId,
-        orderId: res.id,
-        status: 'pending',
-        retryCount: 0,
-      }).onConflictDoNothing({ target: etaInvoices.orderId });
-
+      await tx.insert(etaInvoices).values({ orgId, orderId: res.id, status: 'pending', retryCount: 0 }).onConflictDoNothing({ target: etaInvoices.orderId });
       await emitOutboxEvent(tx, {
         orgId,
         eventType: 'eta.invoice.issue',
-        payload: JSON.stringify({ orgId, orderId: res.id, orderNumber: res.orderNumber, currency: res.currency }),
+        payload: { orgId, orderId: res.id, orderNumber: res.orderNumber, currency: res.currency },
       });
     }
 
