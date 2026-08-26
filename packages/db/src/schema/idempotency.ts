@@ -10,7 +10,7 @@ import { organizations } from '../schema';
  */
 export const idempotencyKeys = pgTable('idempotency_keys', {
   id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
   /** Caller-supplied. Only the caller can distinguish a retry from a second intent. */
   key: text('key').notNull(),
   /** The procedure name. One key under two operations is two intents. */

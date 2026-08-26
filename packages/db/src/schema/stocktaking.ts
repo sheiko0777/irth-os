@@ -5,7 +5,7 @@ export const stocktakingStatusEnum = pgEnum('stocktaking_status', ['draft', 'in_
 
 export const stocktakingSessions = pgTable("stocktaking_sessions", {
   id: uuid("id").defaultRandom().primaryKey(),
-  orgId: uuid("org_id").notNull(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
   status: stocktakingStatusEnum("status").notNull().default('draft'),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
@@ -20,7 +20,7 @@ export const stocktakingSessions = pgTable("stocktaking_sessions", {
 export const stocktakingItems = pgTable("stocktaking_items", {
   id: uuid("id").defaultRandom().primaryKey(),
   sessionId: uuid("session_id").notNull().references(() => stocktakingSessions.id, { onDelete: 'cascade' }),
-  orgId: uuid("org_id").notNull(),
+  orgId: uuid("org_id").notNull().references(() => organizations.id),
   productId: uuid("product_id").notNull(),
   variantId: uuid("variant_id"),
   sku: text("sku").notNull(),

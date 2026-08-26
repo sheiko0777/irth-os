@@ -71,7 +71,42 @@ export const createDb = (url: string) => {
 
 export type DbInstance = ReturnType<typeof createDb>;
 
-export const db = createDb(process.env.DATABASE_URL!);
+let _dbInstance: DbInstance | null = null;
+function realDb(): DbInstance {
+  if (!_dbInstance) {
+    _dbInstance = createDb(process.env.DATABASE_URL!);
+  }
+  return _dbInstance;
+}
+
+/**
+ * Lazy so a bare `import { db } from '@irth/db'` does NOT open a Postgres
+ * connection (or parse DATABASE_URL) at module-load time.
+ *
+ * Next.js's build step ("Collecting page data") imports every route module
+ * to statically analyze it, and Vercel does not expose "Sensitive"
+ * environment variables during build — only at runtime, inside an actual
+ * request (confirmed by testing: `pnpm run build` failed with
+ * `TypeError: Invalid URL` on `undefined` at every route importing `db`,
+ * the first time DATABASE_URL was added to Vercel as a Sensitive var,
+ * because the eager `createDb(process.env.DATABASE_URL!)` this replaced ran
+ * during that build-time import with an empty process.env).
+ *
+ * A Proxy defers both the env read and the real connection until the first
+ * property access, which for every caller in this codebase only ever
+ * happens inside a request handler — never at import time. `get` binds
+ * function properties to the real instance so `db.select()` etc. do not see
+ * the Proxy as `this`; non-function properties (`db.query`, already a
+ * fully-formed object with its own correctly-bound methods) pass through
+ * unchanged.
+ */
+export const db: DbInstance = new Proxy({} as DbInstance, {
+  get(_target, prop, _receiver) {
+    const instance = realDb();
+    const value = Reflect.get(instance as object, prop, instance);
+    return typeof value === 'function' ? value.bind(instance) : value;
+  },
+});
 
 /**
  * Runs `fn` in a transaction that the database will only let touch one tenant's
