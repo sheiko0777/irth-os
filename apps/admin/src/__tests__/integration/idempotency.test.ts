@@ -11,6 +11,8 @@ import {
   IdempotencyError,
   fingerprint,
   inventoryItems,
+  inventoryDiscrepancies,
+  orders,
   organizations,
   productVariants,
   products,
@@ -227,5 +229,87 @@ describe('stock guard', () => {
     expect(row.quantity).toBe(1);
     // The assertion that matters: stock never goes below zero.
     expect(row.quantity).toBeGreaterThanOrEqual(0);
+  });
+});
+
+/**
+ * The Shopify webhook variant of the guard above
+ * (apps/api/src/routes/webhooks/shopify.ts's orders/create handler): the
+ * sale already happened on Shopify's side, so a shortfall cannot reject the
+ * way `takeStock` above does — it must apply what's on hand, floor at zero,
+ * and record the shortfall. Own fixtures (a fresh variant + a real order row
+ * for inventory_discrepancies' FK) rather than reusing `variantId`, which
+ * the concurrency test above has already partially consumed.
+ */
+describe('stock guard — Shopify shortfall (applies available instead of rejecting)', () => {
+  let shortfallVariantId: string;
+  let orderId: string;
+
+  beforeAll(async () => {
+    const [product] = await testDb.insert(products).values({
+      orgId: orgA, name: 'Shortfall Widget', sku: `SF-SKU-${Date.now()}`, priceMinor: 1000n, currency: 'EGP',
+    }).returning();
+    const [variant] = await testDb.insert(productVariants).values({
+      orgId: orgA, productId: product.id, name: 'Default', sku: `SF-V-${Date.now()}`, priceMinor: 1000n,
+    }).returning();
+    shortfallVariantId = variant.id;
+    await testDb.insert(inventoryItems).values({ orgId: orgA, variantId: shortfallVariantId, quantity: 5 });
+
+    const [order] = await testDb.insert(orders).values({
+      orgId: orgA, orderNumber: `SF-ORDER-${Date.now()}`, totalAmountMinor: 1000n, status: 'confirmed',
+    }).returning();
+    orderId = order.id;
+  });
+
+  const takeStockOrRecordShortfall = (qty: number) =>
+    withOrgContext(testDb, orgA, async (tx) => {
+      const guarded = await tx.update(inventoryItems)
+        .set({ quantity: sql`${inventoryItems.quantity} - ${qty}` })
+        .where(and(
+          eq(inventoryItems.orgId, orgA),
+          eq(inventoryItems.variantId, shortfallVariantId),
+          sql`${inventoryItems.quantity} >= ${qty}`,
+        ))
+        .returning({ quantity: inventoryItems.quantity });
+      if (guarded.length > 0) return { applied: qty, shortfall: 0 };
+
+      const [item] = await tx.select({ quantity: inventoryItems.quantity }).from(inventoryItems)
+        .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, shortfallVariantId)));
+      const applied = item ? Math.max(0, Math.min(item.quantity, qty)) : 0;
+      if (applied > 0) {
+        await tx.update(inventoryItems)
+          .set({ quantity: sql`${inventoryItems.quantity} - ${applied}` })
+          .where(eq(inventoryItems.variantId, shortfallVariantId));
+      }
+      await tx.insert(inventoryDiscrepancies).values({
+        orgId: orgA, orderId, variantId: shortfallVariantId,
+        requestedQuantity: qty, appliedQuantity: applied, shortfallQuantity: qty - applied,
+      });
+      return { applied, shortfall: qty - applied };
+    });
+
+  it('never goes negative under concurrency, and every unit is accounted for', async () => {
+    // Five "webhook deliveries" each requesting 2 units against 5 on hand —
+    // same shape as the concurrency test above, but nothing here is allowed
+    // to throw/reject; every call must resolve.
+    const results = await Promise.all(Array.from({ length: 5 }, () => takeStockOrRecordShortfall(2)));
+
+    const [row] = await testDb.select().from(inventoryItems)
+      .where(eq(inventoryItems.variantId, shortfallVariantId));
+    expect(row.quantity).toBeGreaterThanOrEqual(0);
+    expect(row.quantity).toBe(0); // 5 on hand, 10 requested — all consumed, none negative
+
+    const totalApplied = results.reduce((sum, r) => sum + r.applied, 0);
+    const totalShortfall = results.reduce((sum, r) => sum + r.shortfall, 0);
+    expect(totalApplied + totalShortfall).toBe(10); // 5 callers x 2 requested each
+    expect(totalApplied).toBe(5); // exactly what was on hand
+
+    const discrepancyRows = await testDb.select().from(inventoryDiscrepancies)
+      .where(eq(inventoryDiscrepancies.orderId, orderId));
+    // Every caller that could not be fully satisfied produced a discrepancy
+    // row — including a caller satisfied for 0 of 2 once stock hit zero.
+    const shortfallCallers = results.filter((r) => r.shortfall > 0).length;
+    expect(discrepancyRows).toHaveLength(shortfallCallers);
+    expect(discrepancyRows.reduce((sum, d) => sum + d.shortfallQuantity, 0)).toBe(totalShortfall);
   });
 });

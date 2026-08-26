@@ -3,11 +3,12 @@ import type { Context } from 'hono';
 import { getDb, getEnv } from '../../db';
 import {
   orders, orderItems, customers, productVariants, inventoryItems, inventoryMovements,
+  inventoryDiscrepancies, orgMembers, notifications,
   withOrgContext, withAudit, jsonSafe,
   nextDocumentNumber, formatDocumentNumber,
   emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
 } from '@irth/db';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, inArray } from 'drizzle-orm';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
 
 /**
@@ -148,7 +149,9 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
 
   const status = mapFinancialStatusToOrderStatus(payload.financial_status, payload.cancelled_at);
 
-  const result = await withOrgContext(db, orgId, async (tx) => {
+  let result;
+  try {
+    result = await withOrgContext(db, orgId, async (tx) => {
     const customerId = await findOrCreateCustomer(tx, orgId, payload.customer);
 
     // Resolve each Shopify line to a local variant. A line with no match
@@ -158,6 +161,13 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
     // and cannot be undone by a sync gap on this side.
     const unmatchedSkus: string[] = [];
     const resolvedItems: Array<{ variantId: string; quantity: number; priceMinor: bigint }> = [];
+    const discrepancies: Array<{
+      variantId: string;
+      requestedQuantity: number;
+      appliedQuantity: number;
+      shortfallQuantity: number;
+      movementId: string | null;
+    }> = [];
 
     for (const line of payload.line_items) {
       const shopifyVariantId = line.variant_id ? shopifyGid('ProductVariant', line.variant_id) : null;
@@ -178,26 +188,66 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
 
       resolvedItems.push({ variantId: variant.id, quantity: line.quantity, priceMinor });
 
-      // Best-effort stock decrement, matching the dashboard's own order path
-      // in spirit but not its strictness: a dashboard order can refuse an
-      // oversell, a Shopify webhook cannot — the money has already moved. A
-      // short row count here is a real signal (stock drifted, or a variant
-      // linked but never given an inventory row) and is left in
-      // inventory_movements' absence rather than thrown past.
-      const updated = await tx.update(inventoryItems)
+      // Same atomic `quantity >= n` guard the dashboard's own order-creation
+      // path uses (apps/api/src/routes/orders.ts) — but on a miss, this
+      // cannot reject the sale the way that path does (throw, roll back):
+      // Shopify already took the money. Apply what's actually on hand, floor
+      // at zero, and record the shortfall — the previous behaviour here was
+      // an unconditional decrement with no floor at all, which could drive
+      // quantity negative.
+      const guarded = await tx.update(inventoryItems)
         .set({ quantity: sql`${inventoryItems.quantity} - ${line.quantity}`, updatedAt: new Date() })
-        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)))
+        .where(and(
+          eq(inventoryItems.orgId, orgId),
+          eq(inventoryItems.variantId, variant.id),
+          sql`${inventoryItems.quantity} >= ${line.quantity}`,
+        ))
         .returning({ id: inventoryItems.id });
 
-      if (updated.length > 0) {
+      if (guarded.length > 0) {
         await tx.insert(inventoryMovements).values({
           orgId,
-          itemId: updated[0].id,
+          itemId: guarded[0].id,
           type: 'out',
           quantity: line.quantity,
           note: `Shopify order ${payload.name}`,
         });
+        continue;
       }
+
+      // Either no inventory_items row exists for this variant, or not enough
+      // is on hand. Read the real current quantity (0 if no row at all) and
+      // apply the most this sale can take without going negative; the rest
+      // is a genuine shortfall, recorded below rather than hidden.
+      const [item] = await tx.select({ id: inventoryItems.id, quantity: inventoryItems.quantity })
+        .from(inventoryItems)
+        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)));
+
+      const appliedQuantity = item ? Math.max(0, Math.min(item.quantity, line.quantity)) : 0;
+      let movementId: string | null = null;
+
+      if (item && appliedQuantity > 0) {
+        await tx.update(inventoryItems)
+          .set({ quantity: sql`${inventoryItems.quantity} - ${appliedQuantity}`, updatedAt: new Date() })
+          .where(and(eq(inventoryItems.id, item.id), eq(inventoryItems.orgId, orgId)));
+
+        const [movement] = await tx.insert(inventoryMovements).values({
+          orgId,
+          itemId: item.id,
+          type: 'adjustment',
+          quantity: -appliedQuantity,
+          note: `Shopify order ${payload.name}: requested ${line.quantity}, only ${appliedQuantity} on hand — floored, see inventory_discrepancies`,
+        }).returning({ id: inventoryMovements.id });
+        movementId = movement.id;
+      }
+
+      discrepancies.push({
+        variantId: variant.id,
+        requestedQuantity: line.quantity,
+        appliedQuantity,
+        shortfallQuantity: line.quantity - appliedQuantity,
+        movementId,
+      });
     }
 
     const seq = await nextDocumentNumber(tx, orgId, 'order');
@@ -240,6 +290,39 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       changes: { shopifyOrderId, orderNumber, unmatchedSkus },
     });
 
+    if (discrepancies.length > 0) {
+      await tx.insert(inventoryDiscrepancies).values(
+        discrepancies.map((d) => ({
+          orgId,
+          orderId: insertedOrder.id,
+          shopifyOrderId,
+          variantId: d.variantId,
+          requestedQuantity: d.requestedQuantity,
+          appliedQuantity: d.appliedQuantity,
+          shortfallQuantity: d.shortfallQuantity,
+          movementId: d.movementId,
+        })),
+      );
+
+      // Fan out one notification per owner/admin — this webhook has no
+      // authenticated caller (notifications.user_id is NOT NULL, and there
+      // is no org-wide broadcast variant of this table), and a stock
+      // shortfall is exactly the kind of thing whoever runs this org needs
+      // to see promptly, not discover later as a mysteriously short shelf.
+      const admins = await tx.select({ userId: orgMembers.userId }).from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), inArray(orgMembers.role, ['owner', 'admin'])));
+      for (const { userId } of admins) {
+        await tx.insert(notifications).values({
+          orgId,
+          userId,
+          type: 'stock_discrepancy',
+          title: `نقص في المخزون — طلب Shopify ${payload.name}`,
+          body: `${discrepancies.length} صنف/أصناف لم يتوفر لها مخزون كافٍ لتلبية الطلب بالكامل، وتم تطبيق الكمية المتاحة فقط.`,
+          read: false,
+        });
+      }
+    }
+
     const eventType = OUTBOX_EVENT_BY_STATUS[status];
     if (eventType) {
       const notification = await buildOrderNotification(tx, orgId, insertedOrder, eventType);
@@ -247,7 +330,21 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
     }
 
     return { order: insertedOrder, unmatchedSkus };
-  });
+    });
+  } catch (err) {
+    // Two concurrent deliveries of the same order can both pass the
+    // alreadySynced pre-check above before either commits — the unique index
+    // on (org_id, shopify_order_id) is the real backstop, and until now
+    // nothing caught the violation it raises, so the losing request
+    // surfaced as an unhandled 500 instead of the same idempotent response
+    // the pre-check already returns for a genuine duplicate delivery.
+    if ((err as { code?: string }).code === '23505') {
+      const [synced] = await db.select({ id: orders.id }).from(orders)
+        .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
+      if (synced) return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
+    }
+    throw err;
+  }
 
   return c.json({ data: jsonSafe(result), error: null, meta: null }, 201);
 });
@@ -313,6 +410,43 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
       .set({ status: 'cancelled', updatedAt: new Date() })
       .where(and(eq(orders.id, existing.id), eq(orders.orgId, orgId)))
       .returning();
+
+    // Restock what was actually taken, not what was requested — for a line
+    // that orders/create floored on a shortfall, that's
+    // inventory_discrepancies.applied_quantity, not order_items.quantity;
+    // restocking the requested amount for a floored line would inflate
+    // stock beyond what was ever removed. This is new: cancelling a Shopify
+    // order never gave inventory back before.
+    const items = await tx.select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, existing.id));
+    const discrepancyRows = await tx.select({
+      variantId: inventoryDiscrepancies.variantId,
+      appliedQuantity: inventoryDiscrepancies.appliedQuantity,
+    }).from(inventoryDiscrepancies).where(eq(inventoryDiscrepancies.orderId, existing.id));
+    const appliedByVariant = new Map(discrepancyRows.map((d) => [d.variantId, d.appliedQuantity]));
+
+    for (const item of items) {
+      const restockQuantity = appliedByVariant.get(item.variantId) ?? item.quantity;
+      if (restockQuantity <= 0) continue;
+
+      const [invItem] = await tx.select({ id: inventoryItems.id }).from(inventoryItems)
+        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, item.variantId)));
+      if (!invItem) continue;
+
+      await tx.update(inventoryItems)
+        .set({ quantity: sql`${inventoryItems.quantity} + ${restockQuantity}`, updatedAt: new Date() })
+        .where(eq(inventoryItems.id, invItem.id));
+
+      await tx.insert(inventoryMovements).values({
+        orgId,
+        itemId: invItem.id,
+        type: 'in',
+        quantity: restockQuantity,
+        note: `Shopify order ${existing.orderNumber} cancelled — restocked`,
+      });
+    }
+
     return row;
   }, {
     orgId,

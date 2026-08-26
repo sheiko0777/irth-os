@@ -41,6 +41,7 @@ export * from './schema/inventory';
 export * from './schema/outbox';
 export * from './schema/orgSettings';
 export * from './schema/etaInvoices';
+export * from './schema/inventoryDiscrepancies';
 export * from './schema/couriers';
 export * from './schema/returns';
 export * from './schema/purchasing';
