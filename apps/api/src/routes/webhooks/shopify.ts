@@ -10,26 +10,9 @@ import {
 import { eq, and, sql } from 'drizzle-orm';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
 
-/**
- * Inbound half of the Shopify sync (the dashboard-owns-catalog outbound half
- * lives in the outbox worker). A webhook carries no session, so every write
- * here is scoped through `withOrgContext` to the single org this integration
- * is wired to — see SHOPIFY_ORG_ID below — the same "no authenticated caller,
- * scope comes from context instead" shape as the Bosta webhook route.
- *
- * Registered event topics (see scripts/registerShopifyWebhooks.mjs for the
- * one-time Shopify-side subscription): orders/create, orders/updated,
- * orders/cancelled, customers/create, customers/update,
- * inventory_levels/update.
- */
-
 const shopifyWebhookRoute = new Hono();
 
 function getSyncOrgId(): string | undefined {
-  // process.env is empty on Workers even inside a handler — see db.ts's
-  // file-header comment. process.env stays as the fallback for Node
-  // contexts (this route has no test suite yet that relies on it, but the
-  // convention is consistent across every secret read in this app).
   return (getEnv()?.SHOPIFY_ORG_ID as string | undefined) ?? process.env.SHOPIFY_ORG_ID;
 }
 
@@ -48,8 +31,8 @@ interface ShopifyCustomerPayload {
 }
 interface ShopifyOrderPayload {
   id: number | string;
-  name: string; // "#1001"
-  financial_status: string | null; // 'paid' | 'pending' | 'refunded' | ...
+  name: string;
+  financial_status: string | null;
   cancelled_at: string | null;
   currency: string;
   total_price: string;
@@ -57,21 +40,11 @@ interface ShopifyOrderPayload {
   line_items: ShopifyLineItem[];
 }
 
-/** Shopify's numeric/GID id, normalised to the string form this schema stores. */
 function shopifyGid(resource: string, id: number | string): string {
   const raw = String(id);
   return raw.startsWith('gid://') ? raw : `gid://shopify/${resource}/${raw}`;
 }
 
-/**
- * A validly-signed body can still be malformed (Shopify-side serialization
- * bugs, proxy mangling). An unguarded JSON.parse throws past the handler,
- * surfaces as a plain-text 500, and — because Shopify redelivers anything it
- * did not get a 200 for — turns one bad payload into a permanent retry storm.
- * Same guard pattern as the paymob/bosta/aramex webhooks (commit baf16d1);
- * this file was added later and missed it. Returns null instead of throwing;
- * callers reject with 400 so Shopify drops the delivery.
- */
 function parseWebhookBody<T>(raw: string): T | null {
   try {
     return JSON.parse(raw) as T;
@@ -92,10 +65,6 @@ async function findOrCreateCustomer(
     .where(and(eq(customers.orgId, orgId), eq(customers.shopifyCustomerId, shopifyCustomerId)));
   if (existing) return existing.id;
 
-  // Fall back to matching by email before creating a new row — a customer
-  // who first ordered through the dashboard and later checked out on the
-  // storefront with the same address should link to their existing record,
-  // not fork into a duplicate with no order/loyalty history.
   if (payload.email) {
     const [byEmail] = await tx.select().from(customers)
       .where(and(eq(customers.orgId, orgId), eq(customers.email, payload.email)));
@@ -118,28 +87,30 @@ async function findOrCreateCustomer(
   return created.id;
 }
 
-function mapFinancialStatusToOrderStatus(financialStatus: string | null, cancelledAt: string | null): 'pending' | 'confirmed' | 'payment_failed' | 'cancelled' {
+function mapFinancialStatusToOrderStatus(
+  financialStatus: string | null,
+  cancelledAt: string | null,
+): 'pending' | 'confirmed' | 'payment_failed' | 'cancelled' {
   if (cancelledAt) return 'cancelled';
   if (financialStatus === 'paid' || financialStatus === 'partially_paid') return 'confirmed';
   if (financialStatus === 'voided' || financialStatus === 'refunded') return 'payment_failed';
   return 'pending';
 }
 
+function parseMinor(value: string): bigint {
+  const [whole, fraction = '0'] = value.split('.');
+  return BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
+}
+
 shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Context) => {
   const orgId = getSyncOrgId();
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
-  const bodyRaw = c.get('rawBody') as string;
-  const payload = parseWebhookBody<ShopifyOrderPayload>(bodyRaw);
+  const payload = parseWebhookBody<ShopifyOrderPayload>(c.get('rawBody') as string);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const shopifyOrderId = shopifyGid('Order', payload.id);
-
   const db = getDb();
 
-  // Idempotent by design, not just by intent: Shopify redelivers webhooks it
-  // did not get a 200 for, and this topic in particular is documented as
-  // "at least once, not exactly once". Re-processing the same order id must
-  // be a no-op, not a second order or a second stock decrement.
   const [alreadySynced] = await db.select({ id: orders.id }).from(orders)
     .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
   if (alreadySynced) {
@@ -150,13 +121,8 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
 
   const result = await withOrgContext(db, orgId, async (tx) => {
     const customerId = await findOrCreateCustomer(tx, orgId, payload.customer);
-
-    // Resolve each Shopify line to a local variant. A line with no match
-    // (never pushed from the dashboard, or pushed to a different org) is
-    // recorded on the order's audit trail rather than silently dropped or
-    // used to block the whole order — the sale on Shopify already happened
-    // and cannot be undone by a sync gap on this side.
     const unmatchedSkus: string[] = [];
+    const inventoryShortages: string[] = [];
     const resolvedItems: Array<{ variantId: string; quantity: number; priceMinor: bigint }> = [];
 
     for (const line of payload.line_items) {
@@ -171,22 +137,22 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
         continue;
       }
 
-      // Shopify's price is a decimal string already, in the same currency as
-      // the order — parsed as fixed-point cents, never through a float.
-      const [whole, fraction = '0'] = line.price.split('.');
-      const priceMinor = BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
+      resolvedItems.push({
+        variantId: variant.id,
+        quantity: line.quantity,
+        priceMinor: parseMinor(line.price),
+      });
 
-      resolvedItems.push({ variantId: variant.id, quantity: line.quantity, priceMinor });
-
-      // Best-effort stock decrement, matching the dashboard's own order path
-      // in spirit but not its strictness: a dashboard order can refuse an
-      // oversell, a Shopify webhook cannot — the money has already moved. A
-      // short row count here is a real signal (stock drifted, or a variant
-      // linked but never given an inventory row) and is left in
-      // inventory_movements' absence rather than thrown past.
+      // Shopify has already accepted the sale, so this path must not reject
+      // the order. It does, however, refuse to create negative local stock.
+      // The atomic quantity guard makes concurrent webhook deliveries safe.
       const updated = await tx.update(inventoryItems)
         .set({ quantity: sql`${inventoryItems.quantity} - ${line.quantity}`, updatedAt: new Date() })
-        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)))
+        .where(and(
+          eq(inventoryItems.orgId, orgId),
+          eq(inventoryItems.variantId, variant.id),
+          sql`${inventoryItems.quantity} >= ${line.quantity}`,
+        ))
         .returning({ id: inventoryItems.id });
 
       if (updated.length > 0) {
@@ -197,23 +163,20 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
           quantity: line.quantity,
           note: `Shopify order ${payload.name}`,
         });
+      } else {
+        inventoryShortages.push(line.sku ?? String(line.variant_id ?? variant.id));
       }
     }
 
     const seq = await nextDocumentNumber(tx, orgId, 'order');
     const orderNumber = formatDocumentNumber('order', seq);
 
-    const totalMinor = (() => {
-      const [whole, fraction = '0'] = payload.total_price.split('.');
-      return BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
-    })();
-
     const insertedOrder = await withAudit(tx, async () => {
       const [row] = await tx.insert(orders).values({
         orgId,
         orderNumber,
         status,
-        totalAmountMinor: totalMinor,
+        totalAmountMinor: parseMinor(payload.total_price),
         currency: (payload.currency || 'EGP').slice(0, 3).toUpperCase(),
         customerId,
         shopifyOrderId,
@@ -237,7 +200,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       userId: null,
       action: 'SHOPIFY_ORDER_CREATE',
       tableName: 'orders',
-      changes: { shopifyOrderId, orderNumber, unmatchedSkus },
+      changes: { shopifyOrderId, orderNumber, unmatchedSkus, inventoryShortages },
     });
 
     const eventType = OUTBOX_EVENT_BY_STATUS[status];
@@ -246,7 +209,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       if (notification) await emitOutboxEvent(tx, { orgId, eventType, payload: notification });
     }
 
-    return { order: insertedOrder, unmatchedSkus };
+    return { order: insertedOrder, unmatchedSkus, inventoryShortages };
   });
 
   return c.json({ data: jsonSafe(result), error: null, meta: null }, 201);
@@ -256,18 +219,13 @@ shopifyWebhookRoute.post('/orders-updated', verifyShopifyWebhook(), async (c: Co
   const orgId = getSyncOrgId();
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
-  const bodyRaw = c.get('rawBody') as string;
-  const payload = parseWebhookBody<ShopifyOrderPayload>(bodyRaw);
+  const payload = parseWebhookBody<ShopifyOrderPayload>(c.get('rawBody') as string);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const shopifyOrderId = shopifyGid('Order', payload.id);
   const db = getDb();
 
   const [existing] = await db.select().from(orders)
     .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
-  // orders/updated can arrive before orders/create has been processed (no
-  // ordering guarantee across topics) — nothing to update yet is not an
-  // error, just early; orders/create will pick up the current state when it
-  // lands.
   if (!existing) return c.json({ data: { skipped: 'order_not_found_yet' }, error: null, meta: null });
 
   const newStatus = mapFinancialStatusToOrderStatus(payload.financial_status, payload.cancelled_at);
@@ -296,8 +254,7 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
   const orgId = getSyncOrgId();
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
-  const bodyRaw = c.get('rawBody') as string;
-  const payload = parseWebhookBody<{ id: number | string }>(bodyRaw);
+  const payload = parseWebhookBody<{ id: number | string }>(c.get('rawBody') as string);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const shopifyOrderId = shopifyGid('Order', payload.id);
   const db = getDb();
@@ -329,11 +286,9 @@ shopifyWebhookRoute.post('/customers-upsert', verifyShopifyWebhook(), async (c: 
   const orgId = getSyncOrgId();
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
-  const bodyRaw = c.get('rawBody') as string;
-  const payload = parseWebhookBody<ShopifyCustomerPayload>(bodyRaw);
+  const payload = parseWebhookBody<ShopifyCustomerPayload>(c.get('rawBody') as string);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const db = getDb();
-
   const customerId = await withOrgContext(db, orgId, (tx) => findOrCreateCustomer(tx, orgId, payload));
 
   return c.json({ data: { customerId }, error: null, meta: null });
@@ -343,24 +298,18 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
   const orgId = getSyncOrgId();
   if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
 
-  const bodyRaw = c.get('rawBody') as string;
-  const payload = parseWebhookBody<{ inventory_item_id: number | string; available: number }>(bodyRaw);
+  const payload = parseWebhookBody<{ inventory_item_id: number | string; available: number }>(c.get('rawBody') as string);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const shopifyInventoryItemId = shopifyGid('InventoryItem', payload.inventory_item_id);
   const db = getDb();
 
   const [variant] = await db.select().from(productVariants)
     .where(and(eq(productVariants.orgId, orgId), eq(productVariants.shopifyInventoryItemId, shopifyInventoryItemId)));
-
-  // Not every Shopify inventory item is one this dashboard has pushed (e.g. a
-  // product created directly in Shopify, outside the sync) — nothing to
-  // reconcile against, not an error.
   if (!variant) return c.json({ data: { skipped: 'no_matching_variant' }, error: null, meta: null });
 
   await withOrgContext(db, orgId, async (tx) => {
     const [item] = await tx.select().from(inventoryItems)
       .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)));
-
     if (!item) return;
 
     const delta = payload.available - item.quantity;
