@@ -1,0 +1,19 @@
+name: _tmp show api url
+
+on:
+  workflow_dispatch:
+
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull and show NEXT_PUBLIC_API_URL
+        run: |
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          grep -i "NEXT_PUBLIC_API_URL" .vercel/.env.production.local
