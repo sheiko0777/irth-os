@@ -1,8 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, orgMembers, withOrgContext, withIdempotency, IdempotencyError } from '@irth/db';
-import { and, eq } from 'drizzle-orm';
-import type { Role } from '@irth/db';
+import { db, resolveActiveOrgMembership, withOrgContext, withIdempotency, IdempotencyError } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
@@ -18,21 +16,10 @@ export const createContext = async () => {
     // Better Auth does not put orgId/role on the user — derive the tenant scope
     // and role from the user's org membership.
     //
-    // The `session.activeOrganizationId` branch that used to sit here could
-    // never execute: that column comes from Better Auth's organization plugin,
-    // which is deliberately off (see lib/auth-server.ts), so it does not exist
-    // and the value was always undefined. Only the fallback ever ran.
-    //
-    // Stated plainly instead of implied by dead code: a user in more than one
-    // organization always gets whichever membership Postgres returns first and
-    // cannot switch. Org switching needs the choice stored somewhere real, not
-    // read from a field nothing writes. Mirrored in
-    // apps/api/src/middlewares/authContext.ts.
-    const [membership] = await db
-        .select()
-        .from(orgMembers)
-        .where(eq(orgMembers.userId, userId))
-        .limit(1);
+    // Single shared resolver — see packages/db/src/orgContext.ts for why (this
+    // used to be its own copy of the same query as
+    // apps/api/src/middlewares/authContext.ts).
+    const membership = await resolveActiveOrgMembership(db, userId);
 
     if (!membership) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'No organization membership.' });
@@ -45,7 +32,7 @@ export const createContext = async () => {
         session,
         orgId,
         userId,
-        role: membership.role as Role,
+        role: membership.role,
 
         /**
          * Runs `fn` in a transaction the database will only let touch this

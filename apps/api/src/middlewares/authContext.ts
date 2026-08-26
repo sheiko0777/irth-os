@@ -1,8 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import { db } from '../db';
-import { orgMembers } from '@irth/db';
-import { eq, and } from 'drizzle-orm';
-import type { Role } from '@irth/db';
+import { resolveActiveOrgMembership } from '@irth/db';
 import { auth } from '../auth';
 // Kept in its own module so the predicate can be tested without importing
 // `../auth`, which initializes a database adapter at import time.
@@ -31,26 +29,14 @@ export const authContext = (): MiddlewareHandler => async (c, next) => {
   // accept) only need userId, so a missing membership is not fatal here —
   // org-scoped routes guard on `orgId` themselves.
   //
-  // This used to prefer `session.activeOrganizationId` and fall back to the
-  // first membership. That branch could never run: `active_organization_id` is
-  // added by Better Auth's organization plugin, which is deliberately not
-  // enabled (see ../auth.ts), so the column does not exist and the value was
-  // always undefined. The fallback was the only live path.
-  //
-  // The honest consequence, stated rather than hidden behind dead code: a user
-  // who belongs to more than one organization always lands in whichever
-  // membership Postgres returns first, and cannot switch. Implementing org
-  // switching means storing the choice somewhere real — a column on `session`
-  // or a `last_active_org_id` on the user — not reading a field nothing writes.
-  const [membership] = await db
-    .select()
-    .from(orgMembers)
-    .where(eq(orgMembers.userId, userId))
-    .limit(1);
+  // Single shared resolver — see packages/db/src/orgContext.ts for why (this
+  // file and apps/admin/src/server/trpc.ts::createContext used to each run
+  // their own copy of the same "first membership wins" query independently).
+  const membership = await resolveActiveOrgMembership(db, userId);
 
   if (membership) {
     c.set('orgId', membership.orgId);
-    c.set('role', membership.role as Role);
+    c.set('role', membership.role);
   }
 
   await next();

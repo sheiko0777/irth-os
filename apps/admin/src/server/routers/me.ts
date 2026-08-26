@@ -1,4 +1,7 @@
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
+import { listMembershipsForUser, setActiveOrg, NotAMemberError } from '@irth/db';
 
 /**
  * The caller's own identity and membership.
@@ -16,13 +19,32 @@ import { router, protectedProcedure } from '../trpc';
  * This only tells the UI which affordances are worth drawing.
  */
 export const meRouter = router({
-    get: protectedProcedure.query(({ ctx }) => ({
+    get: protectedProcedure.query(async ({ ctx }) => ({
         data: {
             userId: ctx.userId,
             orgId: ctx.orgId,
             role: ctx.role,
+            orgs: await listMembershipsForUser(ctx.db, ctx.userId),
         },
         error: null,
         meta: null,
     })),
+
+    // Records which org this user is acting in (packages/db/src/orgContext.ts).
+    // The client must invalidate its ENTIRE query cache after this succeeds,
+    // not just me.get — every other cached procedure is still holding data
+    // scoped to the org the caller just left. See OrgSwitcher.tsx.
+    switchOrg: protectedProcedure
+        .input(z.object({ orgId: z.string().uuid() }))
+        .mutation(async ({ ctx, input }) => {
+            try {
+                const membership = await setActiveOrg(ctx.db, ctx.userId, input.orgId);
+                return { data: membership, error: null, meta: null };
+            } catch (err) {
+                if (err instanceof NotAMemberError) {
+                    throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a member of that organization.' });
+                }
+                throw err;
+            }
+        }),
 });

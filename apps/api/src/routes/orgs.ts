@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, getDb, withOrg } from '../db';
-import { organizations, orgMembers, orgInvites, withAudit, auditLog, jsonSafe } from '@irth/db';
+import { organizations, orgMembers, orgInvites, withAudit, auditLog, jsonSafe, setActiveOrg, NotAMemberError } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
 
@@ -58,6 +58,33 @@ orgsRouter.post('/', async (c: Context) => {
 
     return c.json({ data: jsonSafe(org), error: null, meta: null }, 201);
   } catch (error: unknown) {
+    return c.json({ data: null, error: handleError(error), meta: null }, 400);
+  }
+});
+
+const switchOrgSchema = z.object({
+  orgId: z.string().uuid(),
+});
+
+// Kept symmetric with apps/admin/src/server/routers/me.ts's `switchOrg`
+// mutation — authContext.ts does the exact same resolution as createContext,
+// so a client hitting this API directly (a future mobile client, an
+// integration test) would otherwise have no way to ever change its active
+// org. Both surfaces call the same packages/db/src/orgContext.ts function.
+orgsRouter.post('/switch', async (c: Context) => {
+  try {
+    const userId = c.get('userId') as string | undefined;
+    if (!userId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+
+    const body = await c.req.json();
+    const { orgId } = switchOrgSchema.parse(body);
+
+    const membership = await setActiveOrg(db, userId, orgId);
+    return c.json({ data: jsonSafe(membership), error: null, meta: null });
+  } catch (error: unknown) {
+    if (error instanceof NotAMemberError) {
+      return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
+    }
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });

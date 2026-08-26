@@ -2,7 +2,7 @@
 // `mode: 'bigint'` makes Drizzle hand back a JS bigint rather than a string, so
 // values flow straight into @irth/domain's Money without a lossy hop through
 // Number on the way.
-import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 export const brandEnum = pgEnum('brand', ['irth']);
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
@@ -30,7 +30,12 @@ export const orgMembers = pgTable("org_members", {
   userId: text("user_id").notNull(),
   role: text("role").notNull().default("member"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  // The exact column both org-context resolvers filter on (packages/db/src/
+  // orgContext.ts) had no index at all until migration 0043.
+  userIdIdx: index('org_members_user_id_idx').on(table.userId),
+  orgUserUniqueIdx: uniqueIndex('org_members_org_id_user_id_idx').on(table.orgId, table.userId),
+}));
 
 export const orgInvites = pgTable("org_invites", {
   id: uuid("id").primaryKey().defaultRandom(),
