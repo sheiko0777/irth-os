@@ -1,0 +1,35 @@
+name: _tmp set NEXT_PUBLIC_API_URL
+
+on:
+  workflow_dispatch:
+
+jobs:
+  set:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      # InviteForm.tsx builds `${NEXT_PUBLIC_API_URL}/api/orgs/${orgId}/invite`,
+      # so the value must be the API's bare origin - no trailing slash, no
+      # /api suffix. API_HEALTH_URL is that same origin + "/health" (see
+      # deploy-api.yml's smoke test), so strip the suffix to get it - same
+      # class of bug as NEXT_PUBLIC_APP_URL: this must be Non-sensitive so
+      # Next.js's build step (which runs on Vercel, where Sensitive vars are
+      # withheld) can inline it into the client bundle.
+      - name: Derive API base URL and set NEXT_PUBLIC_API_URL (Plain, Production)
+        env:
+          API_HEALTH_URL: ${{ secrets.API_HEALTH_URL }}
+        run: |
+          BASE="${API_HEALTH_URL%/health}"
+          if [ -z "$BASE" ] || [ "$BASE" = "$API_HEALTH_URL" ]; then
+            echo "::error::API_HEALTH_URL missing or did not end in /health - refusing to guess"
+            exit 1
+          fi
+          echo "$BASE" | vercel env add NEXT_PUBLIC_API_URL production --no-sensitive --force --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Confirm
+        run: vercel env ls production --token=${{ secrets.VERCEL_TOKEN }}
