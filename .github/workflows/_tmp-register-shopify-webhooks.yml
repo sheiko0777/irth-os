@@ -1,0 +1,21 @@
+name: (temp) Register Shopify webhooks
+on: workflow_dispatch
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Register webhook subscriptions
+        env:
+          SHOPIFY_APP_CLIENT_ID: ${{ secrets.SHOPIFY_APP_CLIENT_ID }}
+          SHOPIFY_APP_CLIENT_SECRET: ${{ secrets.SHOPIFY_APP_CLIENT_SECRET }}
+          SHOPIFY_SHOP_DOMAIN: ${{ vars.SHOPIFY_SHOP_DOMAIN }}
+          WEBHOOK_BASE_URL: https://irth-api.irth-os-api.workers.dev
+        run: node scripts/registerShopifyWebhooks.mjs
