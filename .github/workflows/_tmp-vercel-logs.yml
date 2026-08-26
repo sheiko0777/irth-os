@@ -1,0 +1,16 @@
+name: (temp) Fetch Vercel runtime logs
+on: workflow_dispatch
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the 500 and pull logs
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npm install --global vercel@latest
+          # Trigger a fresh 500 right before pulling logs, so it's within window.
+          curl -s -o /dev/null "https://irth-os-admin.vercel.app/ar/join?token=52e6e1a2-3c5d-4e51-81bd-a9f078cec202" || true
+          sleep 3
+          timeout 20 vercel logs https://irth-os-admin.vercel.app --token="$VERCEL_TOKEN" || true
