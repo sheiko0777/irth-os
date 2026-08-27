@@ -7,224 +7,67 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PipelineBar } from "@/components/ui/PipelineBar";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import {
-  ShoppingCart, DollarSign, Clock, Package,
-  ArrowLeft, TrendingUp,
-} from "lucide-react";
+import { ShoppingCart, DollarSign, Clock, Package, ArrowLeft, ArrowUpLeft, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
 export const revalidate = 60;
 
-export default async function DashboardPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+export default async function DashboardPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const headersList = await headers();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-
   let sessionData = null;
   try {
-    const sessionRes = await fetch(`${appUrl}/api/auth/get-session`, {
-      headers: {
-        cookie: headersList.get("cookie") || "",
-        "x-forwarded-host":
-          headersList.get("x-forwarded-host") || headersList.get("host") || "",
-      },
-    });
+    const sessionRes = await fetch(`${appUrl}/api/auth/get-session`, { headers: { cookie: headersList.get("cookie") || "", "x-forwarded-host": headersList.get("x-forwarded-host") || headersList.get("host") || "" } });
     if (sessionRes.ok) sessionData = await sessionRes.json();
-  } catch {
-    // ignore
-  }
-
+  } catch {}
   if (!sessionData?.session) redirect(`/${locale}/login`);
 
   const t = await getTranslations("dashboard");
   const caller = await serverCaller();
-  const [stats, recent] = await Promise.all([
-    caller.dashboard.getStats(),
-    caller.dashboard.getRecentOrders(),
-  ]);
+  const [stats, recent] = await Promise.all([caller.dashboard.getStats(), caller.dashboard.getRecentOrders()]);
+  if (stats.error) return <div className="text-[var(--crimson)]">حدث خطأ أثناء تحميل إحصائيات لوحة القيادة</div>;
 
-  if (stats.error) {
-    return (
-      <div className="text-[var(--crimson)]">
-        حدث خطأ أثناء تحميل إحصائيات لوحة القيادة
-      </div>
-    );
-  }
-
-  const {
-    ordersToday,
-    revenueToday,
-    pendingOrders,
-    activeProducts,
-    deltas,
-    series,
-    pipeline,
-  } = stats.data;
+  const { ordersToday, revenueToday, pendingOrders, activeProducts, deltas, series, pipeline } = stats.data;
   const recentOrders = recent.data ?? [];
+  const attentionCount = pendingOrders;
 
   return (
-    <div className="space-y-8">
-      {/* Page title */}
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-[1600px] space-y-8">
+      <header className="rise flex flex-col gap-5 border-b border-[var(--rim1)] pb-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--t1)]">
-            {t("title")}
-          </h1>
-          <p className="text-sm text-[var(--t3)] mt-1">
-            مرحباً بك في نظام إرث — اليوم{" "}
-            {new Date().toLocaleDateString("ar-EG", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
+          <div className="mb-3 flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.28em] text-[var(--gold)]"><span>IRTH OS</span><span className="h-px w-8 bg-[var(--gold)]/40"/><span>COMMAND CENTER</span></div>
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--t1)] md:text-4xl">{t("title")}</h1>
+          <p className="mt-2 text-sm text-[var(--t3)]">مساحة التشغيل اليومية — {new Date().toLocaleDateString("ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
         </div>
-        <Link
-          href={`/${locale}/orders`}
-          className="flex items-center gap-1.5 text-xs text-[var(--gold)] hover:text-[var(--gold2)] transition-colors font-medium"
-        >
-          <TrendingUp size={13} />
-          عرض كل الطلبات
-        </Link>
-      </div>
+        <Link href={`/${locale}/orders`} className="inline-flex min-h-11 items-center gap-2 border border-[var(--rim2)] px-4 text-xs font-medium text-[var(--t2)] transition-colors hover:border-[var(--gold)]/50 hover:text-[var(--gold)]"><span>فتح مركز الطلبات</span><ArrowLeft size={13}/></Link>
+      </header>
 
-      {/*
-        Revenue is the one hero card. Gold fills exactly two things in this
-        console — this card and the active nav bar — so the other three stay
-        neutral rather than each taking a decorative hue.
-        Sparklines and deltas only appear on the flow metrics; pending orders
-        and active products are stocks, and a day-over-day delta on a stock
-        would be meaningless.
-      */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 rise">
-        <KpiCard
-          id="revenue"
-          variant="hero"
-          title={t("revenueToday")}
-          value={formatMoney(revenueToday)}
-          sub="الإيراد من الطلبات المسلَّمة"
-          trend={deltas.revenueToday}
-          series={series.revenue}
-          href={`/${locale}/reports`}
-          icon={<DollarSign size={16} />}
-        />
-        <KpiCard
-          id="orders"
-          title={t("ordersToday")}
-          value={ordersToday.toLocaleString("ar-EG")}
-          sub="إجمالي الطلبات اليوم"
-          trend={deltas.ordersToday}
-          series={series.orders}
-          href={`/${locale}/orders`}
-          icon={<ShoppingCart size={16} />}
-        />
-        <KpiCard
-          id="pending"
-          title={t("pendingOrders")}
-          value={pendingOrders.toLocaleString("ar-EG")}
-          sub="في انتظار المراجعة"
-          href={`/${locale}/orders`}
-          icon={<Clock size={16} />}
-        />
-        <KpiCard
-          id="products"
-          title={t("activeProducts")}
-          value={activeProducts.toLocaleString("ar-EG")}
-          sub="منتجات متاحة للبيع"
-          href={`/${locale}/products`}
-          icon={<Package size={16} />}
-        />
-      </div>
+      <section aria-label="مؤشرات التشغيل" className="grid gap-px overflow-hidden border border-[var(--rim1)] bg-[var(--rim1)] md:grid-cols-2 xl:grid-cols-4 rise" style={{ animationDelay: "70ms" }}>
+        <KpiCard id="revenue" variant="hero" title={t("revenueToday")} value={formatMoney(revenueToday)} sub="الإيراد من الطلبات المسلَّمة" trend={deltas.revenueToday} series={series.revenue} href={`/${locale}/reports`} icon={<DollarSign size={16}/>}/>
+        <KpiCard id="orders" title={t("ordersToday")} value={ordersToday.toLocaleString("ar-EG")} sub="إجمالي الطلبات اليوم" trend={deltas.ordersToday} series={series.orders} href={`/${locale}/orders`} icon={<ShoppingCart size={16}/>}/>
+        <KpiCard id="pending" title={t("pendingOrders")} value={pendingOrders.toLocaleString("ar-EG")} sub="تحتاج إلى متابعة" href={`/${locale}/orders`} icon={<Clock size={16}/>}/>
+        <KpiCard id="products" title={t("activeProducts")} value={activeProducts.toLocaleString("ar-EG")} sub="منتجات متاحة للبيع" href={`/${locale}/products`} icon={<Package size={16}/>}/>
+      </section>
 
-      {/* One entrance sequence, ~90ms apart: KPI row, then the state track,
-          then the table. Enough to establish reading order, not enough to make
-          an operator wait. Collapses to instant under reduced motion. */}
-      <div className="rise" style={{ animationDelay: '90ms' }}>
-        <PipelineBar data={pipeline} />
-      </div>
-
-      {/* Recent Orders */}
-      <div
-        className="rise rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)] overflow-hidden"
-        style={{ animationDelay: '180ms' }}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--rim1)]">
-          <h2 className="text-sm font-semibold text-[var(--t1)]">آخر الطلبات</h2>
-          <Link
-            href={`/${locale}/orders`}
-            className="flex items-center gap-1 text-xs text-[var(--t3)] hover:text-[var(--gold)] transition-colors"
-          >
-            عرض الكل
-            <ArrowLeft size={12} />
-          </Link>
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] rise" style={{ animationDelay: "140ms" }}>
+        <div className="min-w-0 border border-[var(--rim1)] bg-[var(--card-bg)]">
+          <div className="flex items-center justify-between border-b border-[var(--rim1)] px-5 py-4"><div><p className="text-[10px] uppercase tracking-[0.2em] text-[var(--t3)]">FLOW</p><h2 className="mt-1 text-sm font-semibold text-[var(--t1)]">مسار الطلبات</h2></div><span className="text-[10px] text-[var(--t3)]">الحالة الحالية</span></div>
+          <div className="p-5"><PipelineBar data={pipeline}/></div>
         </div>
+        <aside className="border border-[var(--rim1)] bg-[var(--card-bg)]">
+          <div className="border-b border-[var(--rim1)] px-5 py-4"><p className="text-[10px] uppercase tracking-[0.2em] text-[var(--gold)]">ATTENTION</p><h2 className="mt-1 text-sm font-semibold text-[var(--t1)]">ما يحتاج قرارًا الآن</h2></div>
+          <div className="divide-y divide-[var(--rim1)]">
+            <Link href={`/${locale}/orders`} className="flex min-h-16 items-center gap-3 px-5 transition-colors hover:bg-[var(--raised)]"><AlertCircle size={15} className="text-[var(--gold)]"/><span className="flex-1 text-xs text-[var(--t2)]">طلبات تحتاج متابعة</span><strong className="tabular-nums text-sm text-[var(--t1)]">{attentionCount}</strong><ArrowUpLeft size={12} className="text-[var(--t3)]"/></Link>
+            <Link href={`/${locale}/inventory`} className="flex min-h-16 items-center gap-3 px-5 transition-colors hover:bg-[var(--raised)]"><Package size={15} className="text-[var(--t3)]"/><span className="flex-1 text-xs text-[var(--t2)]">مراجعة المخزون</span><ArrowUpLeft size={12} className="text-[var(--t3)]"/></Link>
+          </div>
+        </aside>
+      </section>
 
-        {recentOrders.length === 0 ? (
-          <EmptyState
-            icon={ShoppingCart}
-            title="لا توجد طلبات بعد"
-            hint="أول طلب يوصل هيظهر هنا مع حالته وإجماليه."
-            action={{ label: 'فتح صفحة الطلبات', href: `/${locale}/orders` }}
-          />
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--rim1)]">
-                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
-                  رقم الطلب
-                </th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
-                  الحالة
-                </th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
-                  الإجمالي
-                </th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
-                  التاريخ
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--rim1)]">
-              {recentOrders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="hover:bg-[var(--raised)] transition-colors group"
-                >
-                  <td className="px-5 py-3.5 font-mono text-xs text-[var(--gold)] font-medium">
-                    <Link
-                      href={`/${locale}/orders`}
-                      className="hover:underline underline-offset-2"
-                    >
-                      {order.orderNumber}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <StatusBadge status={order.status} domain="order" />
-                  </td>
-                  <td className="px-5 py-3.5 text-[var(--t1)] font-medium tabular-nums" dir="ltr">
-                    {formatMoney(fromMinor(order.totalAmountMinor))}
-                  </td>
-                  <td className="px-5 py-3.5 text-[var(--t3)] text-xs">
-                    {order.createdAt
-                      ? new Date(order.createdAt).toLocaleDateString("ar-EG", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <section className="overflow-hidden border border-[var(--rim1)] bg-[var(--card-bg)] rise" style={{ animationDelay: "210ms" }}>
+        <div className="flex items-center justify-between border-b border-[var(--rim1)] px-5 py-4"><div><p className="text-[10px] uppercase tracking-[0.2em] text-[var(--t3)]">RECENT</p><h2 className="mt-1 text-sm font-semibold text-[var(--t1)]">آخر الطلبات</h2></div><Link href={`/${locale}/orders`} className="flex min-h-10 items-center gap-1 text-xs text-[var(--t3)] hover:text-[var(--gold)]">عرض الكل<ArrowLeft size={12}/></Link></div>
+        {recentOrders.length === 0 ? <EmptyState icon={ShoppingCart} title="لا توجد طلبات بعد" hint="أول طلب سيظهر هنا مع حالته وإجماليه." action={{ label: "فتح صفحة الطلبات", href: `/${locale}/orders` }}/> : <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm"><thead><tr className="border-b border-[var(--rim1)]">{["رقم الطلب","الحالة","الإجمالي","التاريخ"].map((h)=><th key={h} className="px-5 py-3 text-start text-[10px] font-medium uppercase tracking-wider text-[var(--t3)]">{h}</th>)}</tr></thead><tbody className="divide-y divide-[var(--rim1)]">{recentOrders.map(order=><tr key={order.id} className="group transition-colors hover:bg-[var(--raised)]"><td className="px-5 py-4 font-mono text-xs text-[var(--gold)]"><Link href={`/${locale}/orders`} className="hover:underline underline-offset-2">{order.orderNumber}</Link></td><td className="px-5 py-4"><StatusBadge status={order.status} domain="order"/></td><td className="px-5 py-4 font-medium tabular-nums text-[var(--t1)]" dir="ltr">{formatMoney(fromMinor(order.totalAmountMinor))}</td><td className="px-5 py-4 text-xs text-[var(--t3)]">{order.createdAt ? new Date(order.createdAt).toLocaleDateString("ar-EG", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</td></tr>)}</tbody></table></div>}
+      </section>
     </div>
   );
 }
