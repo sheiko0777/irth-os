@@ -1,113 +1,66 @@
 @import 'tailwindcss';
 
-/* Design tokens registered with Tailwind v4.
-   This is what makes `bg-surface` / `text-t2` / `border-rim1` work instead of
-   the `bg-[var(--surface)]` arbitrary-value syntax used across the app. Values
-   live here once; the :root block below re-exports the same names for the
-   inline style={{}} call sites that still read var(--x) directly.
-   Changing a colour here changes it everywhere — that is the whole point. */
+/* IRTH OS Design System 2.1
+   Light is the product standard: warm ivory, sand and restrained gold.
+   Dark is an intentional alternate theme, not a second visual language. */
 @theme {
-  --color-void:#020406;   --color-ink:#060a10;    --color-surface:#0e1622;
-  --color-card:#131e2e;   --color-raised:#182436;
-  --color-rim1:#1a2840;   --color-rim2:#223050;   --color-rim3:#2c3e66;
-  /* t3 was #4e7090 — 3.9:1 on --ink and 3.3:1 on --card, under the 4.5:1
-     floor, and it carries 43 text call sites. #6d90b0 measures 5.9:1 / 5.0:1
-     while staying clearly dimmer than t2. t4 stays decorative-only. */
-  --color-t1:#f0f6ff;     --color-t2:#93b0d0;     --color-t3:#6d90b0;  --color-t4:#263a52;
-  --color-gold:#e09000;   --color-gold2:#f5a800;  --color-gold3:#ffc340;
-  --color-emerald:#00c478; --color-crimson:#e83838;
-  --color-azure:#2e8fff;  --color-amber:#f5a500;
-
-  /* shadcn's semantic names. Its components ship with `bg-primary`,
-     `border-input`, `ring-ring`, `text-muted-foreground` and friends baked
-     into their variants. Tailwind v4 resolves those against --color-*, so
-     until they were registered here every generated rule was empty: buttons
-     rendered transparent with body-coloured text, inputs lost their border,
-     focus rings never appeared. Values mirror the palette above. */
-  --color-background:#060a10;          --color-foreground:#f0f6ff;
-  --color-card-foreground:#f0f6ff;
-  --color-popover:#182436;             --color-popover-foreground:#f0f6ff;
-  --color-primary:#e09000;             --color-primary-foreground:#020406;
-  --color-secondary:#0e1622;           --color-secondary-foreground:#93b0d0;
-  --color-muted:#0e1622;               --color-muted-foreground:#6d90b0;
-  --color-accent:#182436;              --color-accent-foreground:#f0f6ff;
-  /* One rule for every accent fill: near-black on top. t1 on crimson is
-     3.8:1 and white on gold/emerald is ~2.3:1; void clears 4.5:1 on all four. */
-  --color-destructive:#e83838;         --color-destructive-foreground:#020406;
-  --color-border:#1a2840;              --color-input:#223050;
-  --color-ring:#e09000;
-
-  /* Point at the variables next/font puts on <html> rather than naming the
-     families literally. Same faces either way, but this picks up the
-     metric-matched '<name> Fallback' next/font generates, so swapping in the
-     real font no longer shifts layout. */
+  --color-void:#f3eee5; --color-ink:#f8f5ef; --color-surface:#fffdf8;
+  --color-card:#fffaf1; --color-raised:#f2ece1;
+  --color-rim1:#e3dbce; --color-rim2:#d4c8b8; --color-rim3:#c2b29e;
+  --color-t1:#171512; --color-t2:#665f55; --color-t3:#887f73; --color-t4:#b8ad9e;
+  --color-gold:#a86b18; --color-gold2:#c78a2d; --color-gold3:#e0b56a;
+  --color-emerald:#087a55; --color-crimson:#b42318; --color-azure:#1769aa; --color-amber:#a86400;
+  --color-background:#f8f5ef; --color-foreground:#171512; --color-card-foreground:#171512;
+  --color-popover:#fffdf8; --color-popover-foreground:#171512;
+  --color-primary:#a86b18; --color-primary-foreground:#fffaf1;
+  --color-secondary:#f2ece1; --color-secondary-foreground:#665f55;
+  --color-muted:#f2ece1; --color-muted-foreground:#665f55;
+  --color-accent:#eee6da; --color-accent-foreground:#171512;
+  --color-destructive:#b42318; --color-destructive-foreground:#fffdf8;
+  --color-border:#e3dbce; --color-input:#d4c8b8; --color-ring:#a86b18;
   --font-sans:var(--font-ibm-plex-sans-arabic), 'IBM Plex Sans Arabic', sans-serif;
   --font-display:var(--font-cairo), 'Cairo', sans-serif;
-
   --radius-token:8px;
 }
 
-/* Palette names for the inline style={{ color: 'var(--gold)' }} call sites.
-   The shadcn aliases are NOT duplicated here — nothing reads var(--primary)
-   directly, and a second copy would drift from @theme. */
 :root {
+  --void:#f3eee5; --ink:#f8f5ef; --surface:#fffdf8; --card-bg:#fffaf1; --raised:#f2ece1;
+  --rim1:#e3dbce; --rim2:#d4c8b8; --rim3:#c2b29e;
+  --t1:#171512; --t2:#665f55; --t3:#887f73; --t4:#b8ad9e;
+  --gold:#a86b18; --gold2:#c78a2d; --gold3:#e0b56a;
+  --gold-bg:rgba(168,107,24,.07); --gold-br:rgba(168,107,24,.22);
+  --emerald:#087a55; --crimson:#b42318; --azure:#1769aa; --amber:#a86400;
+  --header-bg:rgba(248,245,239,.90); --radius:8px;
+}
+
+/* Dark alternate: same semantic roles, deliberately not a color-for-color inversion. */
+html[data-theme='dark'] {
   --void:#020406; --ink:#060a10; --surface:#0e1622; --card-bg:#131e2e; --raised:#182436;
   --rim1:#1a2840; --rim2:#223050; --rim3:#2c3e66;
   --t1:#f0f6ff; --t2:#93b0d0; --t3:#6d90b0; --t4:#263a52;
   --gold:#e09000; --gold2:#f5a800; --gold3:#ffc340;
   --gold-bg:rgba(224,144,0,.06); --gold-br:rgba(224,144,0,.2);
   --emerald:#00c478; --crimson:#e83838; --azure:#2e8fff; --amber:#f5a500;
-  --radius:8px;
+  --header-bg:rgba(6,10,16,.92);
+  color-scheme:dark;
 }
-/* Direction comes from <html dir> in layout.tsx, which is locale-driven.
-   Hardcoding `direction: rtl` here overrode that attribute, so the English
-   locale still rendered right-to-left. */
+
+html:not([data-theme='dark']) { color-scheme:light; }
+html, body { min-height:100%; }
 body { background:var(--ink); color:var(--t2); font-family:var(--font-sans); line-height:1.75; -webkit-font-smoothing:antialiased; }
 h1,h2,h3,h4,h5,h6 { font-family:var(--font-display); color:var(--t1); font-weight:700; }
+
 ::-webkit-scrollbar { width:3px; height:3px; }
 ::-webkit-scrollbar-track { background:var(--void); }
 ::-webkit-scrollbar-thumb { background:var(--rim3); border-radius:2px; }
 
-/* ——— Signature motifs ——————————————————————————————————————————————— */
+.thread-gold { height:1px; border:none; background:linear-gradient(to left,var(--gold),color-mix(in srgb,var(--gold) 25%,transparent) 45%,transparent); }
 
-/* The heritage thread: إرث is inheritance, and the brand's one decorative
-   gesture is a single gold thread that fades as it runs — under the login
-   wordmark, under page titles. One motif, used sparingly, instead of many. */
-.thread-gold {
-  height: 1px;
-  border: none;
-  background: linear-gradient(to left, var(--gold), rgba(224,144,0,.25) 45%, transparent);
+@media (prefers-reduced-motion:no-preference) {
+  .rise { opacity:0; animation:rise .55s cubic-bezier(.16,1,.3,1) forwards; }
+  @keyframes rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
 }
 
-/* Entrance choreography. Gated on no-preference so a reduced-motion user gets
-   instant content — the class simply does nothing rather than degrading. Only
-   transform/opacity animate; stagger via inline animation-delay. */
-@media (prefers-reduced-motion: no-preference) {
-  .rise {
-    opacity: 0;
-    animation: rise .55s cubic-bezier(.16, 1, .3, 1) forwards;
-  }
-  @keyframes rise {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: none; }
-  }
-}
-
-/* The console had no reduced-motion handling at all, while `transition-*` and
-   `animate-*` are used across roughly every interactive surface. For a user who
-   has asked their OS to reduce motion — vestibular disorder, migraine trigger,
-   or simply a preference — that is the difference between a usable admin tool
-   and a hostile one.
-
-   Collapsing to 0.01ms rather than 0 keeps transitionend/animationend firing,
-   so any code that waits on those events still completes instead of hanging.
-   `scroll-behavior: auto` cancels smooth scrolling, which is the single most
-   common trigger of the lot. */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
+@media (prefers-reduced-motion:reduce) {
+  *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; }
 }
