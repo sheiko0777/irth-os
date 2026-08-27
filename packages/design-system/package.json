@@ -1,0 +1,11 @@
+{
+  "name": "@irth/design-system",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens": "./src/tokens.css",
+    "./tokens.json": "./src/tokens.json",
+    "./README": "./README.md"
+  }
+}
