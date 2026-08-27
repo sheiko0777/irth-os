@@ -1,0 +1,87 @@
+@layer theme {
+  :root {
+    /* IRTH OS — semantic color system */
+    --irth-color-obsidian-950: #0b0a09;
+    --irth-color-obsidian-900: #12110f;
+    --irth-color-obsidian-800: #1a1815;
+    --irth-color-obsidian-700: #25221e;
+    --irth-color-ivory-50: #f7f4ee;
+    --irth-color-ivory-100: #eee9df;
+    --irth-color-ivory-300: #d8d0c3;
+    --irth-color-ivory-500: #a69f93;
+    --irth-color-gold-400: #b89b63;
+    --irth-color-gold-500: #9f824e;
+    --irth-color-gold-600: #80683e;
+
+    --irth-color-success: #6f8a72;
+    --irth-color-warning: #b08b52;
+    --irth-color-danger: #a7685f;
+    --irth-color-info: #71889a;
+
+    --irth-surface-canvas: var(--irth-color-obsidian-950);
+    --irth-surface-panel: var(--irth-color-obsidian-900);
+    --irth-surface-elevated: var(--irth-color-obsidian-800);
+    --irth-surface-inverse: var(--irth-color-ivory-50);
+    --irth-text-primary: var(--irth-color-ivory-50);
+    --irth-text-secondary: var(--irth-color-ivory-300);
+    --irth-text-muted: var(--irth-color-ivory-500);
+    --irth-text-inverse: var(--irth-color-obsidian-950);
+    --irth-border-subtle: color-mix(in srgb, var(--irth-color-ivory-50) 10%, transparent);
+    --irth-border-strong: color-mix(in srgb, var(--irth-color-ivory-50) 18%, transparent);
+    --irth-accent: var(--irth-color-gold-400);
+    --irth-focus: var(--irth-color-gold-400);
+
+    /* 4px base rhythm, 8px operational rhythm */
+    --irth-space-1: 4px;
+    --irth-space-2: 8px;
+    --irth-space-3: 12px;
+    --irth-space-4: 16px;
+    --irth-space-5: 20px;
+    --irth-space-6: 24px;
+    --irth-space-8: 32px;
+    --irth-space-10: 40px;
+    --irth-space-12: 48px;
+    --irth-space-16: 64px;
+    --irth-space-20: 80px;
+
+    --irth-radius-sm: 6px;
+    --irth-radius-md: 10px;
+    --irth-radius-lg: 14px;
+    --irth-radius-xl: 20px;
+    --irth-radius-full: 999px;
+
+    --irth-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.18);
+    --irth-shadow-md: 0 8px 24px rgb(0 0 0 / 0.22);
+    --irth-shadow-lg: 0 20px 50px rgb(0 0 0 / 0.28);
+
+    --irth-motion-fast: 120ms;
+    --irth-motion-base: 180ms;
+    --irth-motion-slow: 280ms;
+    --irth-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+    --irth-content-max: 1440px;
+    --irth-sidebar-width: 248px;
+    --irth-touch-target: 44px;
+  }
+
+  :root[data-theme='light'] {
+    --irth-surface-canvas: #f3efe7;
+    --irth-surface-panel: #faf8f3;
+    --irth-surface-elevated: #ffffff;
+    --irth-surface-inverse: var(--irth-color-obsidian-950);
+    --irth-text-primary: var(--irth-color-obsidian-950);
+    --irth-text-secondary: #514c45;
+    --irth-text-muted: #777066;
+    --irth-text-inverse: var(--irth-color-ivory-50);
+    --irth-border-subtle: rgb(11 10 9 / 0.09);
+    --irth-border-strong: rgb(11 10 9 / 0.16);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --irth-motion-fast: 1ms;
+      --irth-motion-base: 1ms;
+      --irth-motion-slow: 1ms;
+    }
+  }
+}
