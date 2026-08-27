@@ -33,7 +33,7 @@
   --header-bg:rgba(248,245,239,.90); --radius:8px;
 }
 
-/* Dark alternate: same semantic roles, deliberately not a color-for-color inversion. */
+/* Semantic Tailwind/shadcn aliases follow the active theme as well. */
 html[data-theme='dark'] {
   --void:#020406; --ink:#060a10; --surface:#0e1622; --card-bg:#131e2e; --raised:#182436;
   --rim1:#1a2840; --rim2:#223050; --rim3:#2c3e66;
@@ -42,11 +42,19 @@ html[data-theme='dark'] {
   --gold-bg:rgba(224,144,0,.06); --gold-br:rgba(224,144,0,.2);
   --emerald:#00c478; --crimson:#e83838; --azure:#2e8fff; --amber:#f5a500;
   --header-bg:rgba(6,10,16,.92);
+  --color-background:#060a10; --color-foreground:#f0f6ff; --color-card-foreground:#f0f6ff;
+  --color-popover:#182436; --color-popover-foreground:#f0f6ff;
+  --color-primary:#e09000; --color-primary-foreground:#020406;
+  --color-secondary:#0e1622; --color-secondary-foreground:#93b0d0;
+  --color-muted:#0e1622; --color-muted-foreground:#6d90b0;
+  --color-accent:#182436; --color-accent-foreground:#f0f6ff;
+  --color-destructive:#e83838; --color-destructive-foreground:#020406;
+  --color-border:#1a2840; --color-input:#223050; --color-ring:#e09000;
   color-scheme:dark;
 }
 
 html:not([data-theme='dark']) { color-scheme:light; }
-html, body { min-height:100%; }
+html,body { min-height:100%; }
 body { background:var(--ink); color:var(--t2); font-family:var(--font-sans); line-height:1.75; -webkit-font-smoothing:antialiased; }
 h1,h2,h3,h4,h5,h6 { font-family:var(--font-display); color:var(--t1); font-weight:700; }
 
