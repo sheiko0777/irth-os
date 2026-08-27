@@ -1,0 +1,30 @@
+@layer irth.tokens {
+  :root {
+    --irth-obsidian-950:#0b0a09; --irth-obsidian-900:#12110f; --irth-obsidian-800:#1a1815; --irth-obsidian-700:#25221e;
+    --irth-ivory-50:#f7f4ee; --irth-ivory-100:#eee9df; --irth-ivory-300:#d8d0c3; --irth-ivory-500:#a69f93;
+    --irth-gold-400:#b89b63; --irth-gold-500:#9f824e; --irth-gold-600:#80683e;
+    --irth-success:#6f8a72; --irth-warning:#b08b52; --irth-danger:#a7685f; --irth-info:#71889a;
+
+    --irth-bg:var(--irth-obsidian-950); --irth-surface:var(--irth-obsidian-900); --irth-surface-raised:var(--irth-obsidian-800);
+    --irth-fg:var(--irth-ivory-50); --irth-fg-secondary:var(--irth-ivory-300); --irth-fg-muted:var(--irth-ivory-500);
+    --irth-accent:var(--irth-gold-400); --irth-focus:var(--irth-gold-400);
+    --irth-border:rgb(247 244 238 / .10); --irth-border-strong:rgb(247 244 238 / .18);
+    --irth-success-bg:rgb(111 138 114 / .14); --irth-warning-bg:rgb(176 139 82 / .14); --irth-danger-bg:rgb(167 104 95 / .14); --irth-info-bg:rgb(113 136 154 / .14);
+
+    --irth-font-ui:Inter,"IBM Plex Sans Arabic",system-ui,sans-serif;
+    --irth-font-ar:"IBM Plex Sans Arabic",Inter,system-ui,sans-serif;
+    --irth-font-display:Canela,Cormorant Garamond,Georgia,serif;
+    --irth-text-xs:.6875rem; --irth-text-sm:.8125rem; --irth-text-md:.9375rem; --irth-text-lg:1.125rem; --irth-text-xl:1.5rem; --irth-text-2xl:2rem; --irth-text-hero:clamp(2rem,4vw,4rem);
+    --irth-leading-tight:1.15; --irth-leading-body:1.55;
+
+    --irth-space-1:4px; --irth-space-2:8px; --irth-space-3:12px; --irth-space-4:16px; --irth-space-5:20px; --irth-space-6:24px; --irth-space-8:32px; --irth-space-10:40px; --irth-space-12:48px; --irth-space-16:64px; --irth-space-20:80px;
+    --irth-radius-sm:6px; --irth-radius-md:10px; --irth-radius-lg:14px; --irth-radius-xl:20px; --irth-radius-pill:999px;
+    --irth-shadow-sm:0 1px 2px rgb(0 0 0 / .18); --irth-shadow-md:0 8px 24px rgb(0 0 0 / .22); --irth-shadow-lg:0 20px 50px rgb(0 0 0 / .28);
+    --irth-motion-fast:120ms; --irth-motion-base:180ms; --irth-motion-slow:280ms; --irth-ease:cubic-bezier(.22,1,.36,1);
+    --irth-content-max:1440px; --irth-sidebar:248px; --irth-touch:44px;
+  }
+  :root[data-theme=light] { --irth-bg:#f3efe7; --irth-surface:#faf8f3; --irth-surface-raised:#fff; --irth-fg:var(--irth-obsidian-950); --irth-fg-secondary:#514c45; --irth-fg-muted:#777066; --irth-border:rgb(11 10 9 / .09); --irth-border-strong:rgb(11 10 9 / .16); }
+  :root[data-density=compact] { --irth-space-4:12px; --irth-space-6:20px; --irth-touch:40px; }
+  :root[data-density=comfortable] { --irth-space-4:20px; --irth-space-6:28px; }
+  @media (prefers-reduced-motion:reduce) { :root { --irth-motion-fast:1ms; --irth-motion-base:1ms; --irth-motion-slow:1ms; } }
+}
