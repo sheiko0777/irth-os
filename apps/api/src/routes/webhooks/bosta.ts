@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent } from '@irth/db';
+import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent, postOrderDeliveredEntry } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { verifyHmac } from '../../middlewares/verifyWebhook';
 
@@ -109,6 +109,21 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     if (newOrderStatus === 'delivered') {
       await emitOutboxEvent(tx, { orgId: order.orgId, eventType: 'eta.invoice.issue', payload: { orgId: order.orgId, orderId: order.id } });
     }
+
+    // Revenue, VAT and COGS — in the same transaction as the status change
+    // that earns them. This is the path that fires in real operations: a
+    // courier scans the parcel delivered. Until this call existed it queued
+    // the ETA e-invoice above and booked nothing, so the tax authority was
+    // told about a sale that never reached the ledger. createdBy is null
+    // because a webhook has no authenticated user, exactly as the audit row
+    // above already records.
+    await postOrderDeliveredEntry(tx, {
+      orgId: order.orgId,
+      order,
+      previousStatus: order.status,
+      newStatus: newOrderStatus,
+      createdBy: null,
+    });
 
     return row;
   });

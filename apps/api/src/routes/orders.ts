@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, getDb, withOrg } from '../db';
-import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS } from '@irth/db';
+import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postOrderDeliveredEntry } from '@irth/db';
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
@@ -340,6 +340,20 @@ ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c:
     if (status === 'delivered' && order.status !== status) {
       await emitOutboxEvent(tx, { orgId, eventType: 'eta.invoice.issue', payload: { orgId, orderId: res.id } });
     }
+
+    // Revenue, VAT and COGS. This route's own comment above claimed the
+    // transition "can post ledger entries (revenue, COGS)" while this
+    // transaction posted none — the entry was only ever written by the tRPC
+    // twin in apps/admin. An order delivered through this endpoint filed an
+    // ETA tax invoice for a sale the ledger never recorded. The guard lives
+    // inside postOrderDeliveredEntry, so the call is unconditional here.
+    await postOrderDeliveredEntry(tx, {
+      orgId,
+      order,
+      previousStatus: order.status,
+      newStatus: status,
+      createdBy: userId,
+    });
 
     return res;
   });
