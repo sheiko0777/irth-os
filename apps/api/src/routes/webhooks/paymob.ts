@@ -4,6 +4,7 @@ import { db } from '../../db';
 import { orders, auditLog } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
+import { z } from 'zod';
 import { envVar } from '../../utils/env';
 
 const paymobRoute = new Hono();
@@ -66,12 +67,25 @@ paymobRoute.post('/', async (c: Context) => {
     return c.json({ data: null, error: 'invalid_hmac', meta: null }, 401);
   }
 
-  const orderIdFromPaymob = obj.order?.merchant_order_id as string | undefined; 
+  const orderIdFromPaymob = obj.order?.merchant_order_id as string | undefined;
   if (!orderIdFromPaymob) {
     return c.json({ data: null, error: 'missing_order_id', meta: null }, 400);
   }
 
-  const [order] = await db.select().from(orders).where(eq(orders.orderNumber, orderIdFromPaymob));
+  // merchant_order_id MUST be orders.id (a globally-unique uuid), never
+  // orders.orderNumber. orderNumber is unique only PER ORG (uniqueIndex on
+  // (orgId, orderNumber), migration 0035) — two orgs can share
+  // "IRT-2026-0001". A lookup keyed on orderNumber alone cannot distinguish
+  // them and resolves to whichever org's row happens to match, confirming or
+  // failing payment for the WRONG tenant's order. Nothing in this repository
+  // currently creates a Paymob payment intention (i.e. nothing sets
+  // merchant_order_id) — whoever wires up Paymob checkout MUST pass
+  // `orders.id`, never `orders.orderNumber`, as merchant_order_id.
+  if (!z.string().uuid().safeParse(orderIdFromPaymob).success) {
+    return c.json({ data: null, error: 'invalid_order_id', meta: null }, 400);
+  }
+
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderIdFromPaymob));
   if (!order) {
     return c.json({ data: null, error: 'order_not_found', meta: null }, 404);
   }
