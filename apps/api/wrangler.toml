@@ -10,6 +10,11 @@ main = "src/index.ts"
 
 [vars]
 NODE_ENV = "production"
+# Base URL for the admin app's /join page — used to build the link in
+# invite emails (orgs.ts's POST /:id/invite). Not a secret, so it lives here
+# rather than behind `wrangler secret put`, mirroring apps/admin's own
+# NEXT_PUBLIC_APP_URL. Falls back to https://app.irth-house.com if unset.
+ADMIN_APP_URL = "https://app.irth-house.com"
 
 # Secrets managed via: wrangler secret put <KEY>
 # DATABASE_URL, BETTER_AUTH_SECRET, PAYMOB_API_KEY, PAYMOB_HMAC_SECRET,
@@ -49,13 +54,16 @@ bucket_name = "irth-assets"
 
 [env.production]
 name = "irth-api"
-vars = { NODE_ENV = "production" }
 # Repeated deliberately: a named environment does NOT inherit the top-level
-# [triggers], so omitting this ships production with no cron and a silently
-# undrained outbox — the exact bug this block exists to fix.
+# [vars]/[triggers]. ADMIN_APP_URL has a same-value code fallback (orgs.ts),
+# so omitting it here is harmless — set explicitly anyway so this block
+# stays the single place every var this deployment needs is visible.
+# Omitting the cron, on the other hand, ships with a silently undrained
+# outbox (the original bug this comment block exists to fix).
+vars = { NODE_ENV = "production", ADMIN_APP_URL = "https://app.irth-house.com" }
 triggers = { crons = ["* * * * *"] }
 
 [env.staging]
 name = "irth-api-staging"
-vars = { NODE_ENV = "staging" }
+vars = { NODE_ENV = "staging", ADMIN_APP_URL = "https://app.irth-house.com" }
 triggers = { crons = ["* * * * *"] }

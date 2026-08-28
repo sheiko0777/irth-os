@@ -1,5 +1,5 @@
 import { db } from '@irth/db';
-import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, type EtaInvoiceIssuePayload } from '@irth/db';
+import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, type EtaInvoiceIssuePayload, type OrgInvitePayload } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
@@ -201,6 +201,20 @@ export async function processOutbox(database: typeof db): Promise<number> {
                         // ceiling.
                         throw new Error(result.message);
                     }
+                    continue;
+                }
+
+                if (event.eventType === 'org.invite.sent') {
+                    const payload = JSON.parse(event.payload) as OrgInvitePayload;
+                    const roleLabel = payload.role === 'owner' ? 'مالك' : payload.role === 'admin' ? 'مدير' : 'عضو';
+                    await sendTransactionalEmail({
+                        to: payload.email,
+                        subject: `دعوة للانضمام إلى ${payload.orgName}`,
+                        html: `<h1>مرحباً</h1><p>تمت دعوتك للانضمام إلى <strong>${payload.orgName}</strong> بصفة ${roleLabel}.</p><p><a href="${payload.joinUrl}">اضغط هنا لقبول الدعوة</a></p><p>رمز التأكيد: <strong style="font-size:20px;letter-spacing:2px">${payload.otpCode}</strong></p><p>سيُطلب منك إدخال هذا الرمز عند قبول الدعوة. صالح لمدة ١٥ دقيقة.</p>`,
+                    });
+                    await database.update(outboxEvents)
+                        .set({ processed: true, processedAt: new Date() })
+                        .where(eq(outboxEvents.id, event.id));
                     continue;
                 }
 
