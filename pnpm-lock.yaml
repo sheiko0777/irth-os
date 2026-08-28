@@ -242,6 +242,12 @@ importers:
       '@hookform/resolvers':
         specifier: ^3.0.0
         version: 3.10.0(react-hook-form@7.76.0(react@18.3.1))
+      '@irth/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@irth/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.100.11(react@18.3.1)
@@ -358,10 +364,17 @@ importers:
         version: 5.9.3
 
   packages/types:
+    dependencies:
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@25.8.0)(lightningcss@1.32.0)(terser@5.47.1)
 
   packages/utils:
     devDependencies:

@@ -4,17 +4,11 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { OrderSchema } from '@irth/types';
+import { currency, formatMoney, fromMinor } from '@irth/domain';
 import { apiFetch } from '../../../lib/api';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
-
-type OrderDetails = {
-  id: string;
-  displayId: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  total: number;
-  date: string;
-};
 
 export default function OrderDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -22,7 +16,7 @@ export default function OrderDetailsScreen() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['order', id],
-    queryFn: () => apiFetch<OrderDetails>(`/api/orders/${id}`),
+    queryFn: () => apiFetch(`/api/orders/${id}`, OrderSchema),
   });
 
   if (isLoading) {
@@ -50,9 +44,11 @@ export default function OrderDetailsScreen() {
           <Badge status={data.status} label={t(`status.${data.status}`, data.status)} />
         </View>
         <View style={styles.details}>
-          <Text style={styles.label}>ID: <Text style={styles.value}>{data.displayId}</Text></Text>
-          <Text style={styles.label}>{t('orders.total')}: <Text style={styles.value}>{data.total}</Text></Text>
-          <Text style={styles.label}>Date: <Text style={styles.value}>{new Date(data.date).toLocaleDateString()}</Text></Text>
+          <Text style={styles.label}>ID: <Text style={styles.value}>{data.orderNumber}</Text></Text>
+          <Text style={styles.label}>
+            {t('orders.total')}: <Text style={styles.value}>{formatMoney(fromMinor(BigInt(data.totalAmountMinor), currency(data.currency)))}</Text>
+          </Text>
+          <Text style={styles.label}>Date: <Text style={styles.value}>{new Date(data.createdAt).toLocaleDateString()}</Text></Text>
         </View>
       </Card>
     </View>

@@ -3,8 +3,21 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 import { setSessionToken } from '../../lib/auth';
-import { apiFetch } from '../../lib/api';
+import { authFetch } from '../../lib/api';
+
+// Local to this screen, not @irth/types — Area C's remit is the orders/products
+// drift; better-auth's sign-in response is a separate concern. Fields are
+// optional to match the existing defensive `response.token || response.session
+// && response.session.token` fallback below: better-auth's shape varies by
+// configuration, and tightening this beyond what the code already handles
+// would risk rejecting a legitimate response shape we haven't observed.
+const AuthResponseSchema = z.object({
+  token: z.string().optional(),
+  user: z.any().optional(),
+  session: z.object({ token: z.string().optional() }).optional(),
+});
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -14,8 +27,10 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     try {
-      // API call to better-auth
-      const response = await apiFetch<{ token: string; user: any; session: any }>('/api/auth/sign-in/email', {
+      // API call to better-auth — authFetch, not apiFetch: Better Auth's
+      // handler returns its own response shape, not this app's
+      // {data,error,meta} REST envelope (see lib/api.ts's authFetch comment).
+      const response = await authFetch('/api/auth/sign-in/email', AuthResponseSchema, {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });

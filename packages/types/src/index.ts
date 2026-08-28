@@ -1,15 +1,11 @@
 import { z } from 'zod';
 
-// Order Status Enum
-export const OrderStatusSchema = z.enum([
-  'pending',
-  'confirmed',
-  'payment_failed',
-  'shipped',
-  'delivered',
-  'cancelled'
-]);
-export type OrderStatus = z.infer<typeof OrderStatusSchema>;
+// OrderStatusSchema lives in ./enums, not here — see the comment on that file
+// for why: order.ts needs it too, and this barrel needing order.ts (below)
+// would otherwise make a genuine circular ES module import, which throws
+// "Cannot access 'OrderStatusSchema' before initialization" the moment
+// anything imports this file (verified empirically; it is not a hypothetical).
+export * from './enums';
 
 // Shipping Provider Enum
 export const ShippingProviderSchema = z.enum([
@@ -38,3 +34,5 @@ export function createPaginatedSchema<ItemType extends z.ZodTypeAny>(itemSchema:
     meta: PaginationMetaSchema,
   });
 }
+
+export * from './order';

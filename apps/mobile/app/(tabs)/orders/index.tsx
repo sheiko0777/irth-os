@@ -6,17 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { z } from 'zod';
+import { OrderSchema, type Order } from '@irth/types';
+import { currency, formatMoney, fromMinor } from '@irth/domain';
 import { apiFetch } from '../../../lib/api';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
-
-type Order = {
-  id: string;
-  displayId: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  total: number;
-  createdAt: string;
-};
 
 export default function OrdersScreen() {
   const router = useRouter();
@@ -25,7 +20,7 @@ export default function OrdersScreen() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['orders'],
-    queryFn: () => apiFetch<Order[]>('/api/orders'),
+    queryFn: () => apiFetch('/api/orders', z.array(OrderSchema)),
   });
 
   const onRefresh = React.useCallback(() => {
@@ -55,14 +50,16 @@ export default function OrdersScreen() {
       <FlatList
         data={data || []}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
+        renderItem={({ item }: { item: Order }) => (
           <TouchableOpacity onPress={() => router.push(`/(tabs)/orders/${item.id}`)}>
             <Card style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.orderId}>{item.displayId}</Text>
+                <Text style={styles.orderId}>{item.orderNumber}</Text>
                 <Badge status={item.status} label={t(`status.${item.status}`, item.status)} />
               </View>
-              <Text style={styles.detailText}>{t('orders.total')}: {item.total}</Text>
+              <Text style={styles.detailText}>
+                {t('orders.total')}: {formatMoney(fromMinor(BigInt(item.totalAmountMinor), currency(item.currency)))}
+              </Text>
               {item.createdAt && (
                 <Text style={styles.detailText}>{t('orders.createdAt')}: {format(new Date(item.createdAt), 'PP', { locale: ar })}</Text>
               )}

@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.0.0",
+    "@irth/domain": "workspace:*",
+    "@irth/types": "workspace:*",
     "@tanstack/react-query": "^5.0.0",
     "date-fns": "^3.0.0",
     "expo": "~52.0.0",

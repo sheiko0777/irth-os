@@ -3,15 +3,11 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TextInput, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
+import { ProductSchema } from '@irth/types';
+import { formatMoney, fromMinor, EGP } from '@irth/domain';
 import { apiFetch } from '../../../lib/api';
 import { Card } from '../../../components/ui/Card';
-
-type Product = {
-  id: string;
-  name: string;
-  price: number;
-  stock: number;
-};
 
 export default function ProductsScreen() {
   const { t } = useTranslation();
@@ -20,7 +16,7 @@ export default function ProductsScreen() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['products'],
-    queryFn: () => apiFetch<Product[]>('/api/products'),
+    queryFn: () => apiFetch('/api/products', z.array(ProductSchema)),
   });
 
   const onRefresh = React.useCallback(() => {
@@ -66,7 +62,9 @@ export default function ProductsScreen() {
         renderItem={({ item }) => (
           <Card style={styles.card}>
             <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.detailText}>{t('products.price')}: {item.price}</Text>
+            <Text style={styles.detailText}>
+              {t('products.price')}: {formatMoney(fromMinor(BigInt(item.priceMinor), EGP))}
+            </Text>
             {item.stock !== undefined && (
               <Text style={styles.detailText}>{t('products.stock')}: {item.stock}</Text>
             )}
