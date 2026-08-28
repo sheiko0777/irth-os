@@ -43,6 +43,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROUTES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../routes');
 
+/** Every .ts file under src/routes, recursing into the webhooks/ subtree. */
 function routeFiles(dir: string = ROUTES): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const full = path.join(dir, entry);
