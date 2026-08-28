@@ -47,6 +47,41 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "inventory_discrepancies" TO "irth_app";
 -- Partial, so it constrains nothing else: reversing entries carry
 -- source_table = 'journal_entries' (see reverseJournalEntry), returns post
 -- their own journal_type, and every non-order source is untouched.
+-- Pre-flight. Without it a pre-existing double-post surfaces as a bare 23505
+-- from CREATE INDEX, which names a constraint and not the orders behind it,
+-- on a migration runner that aborts the whole file. This raises the same
+-- failure with the data needed to act on it.
+--
+-- It deliberately does NOT delete or merge the offending rows. CLAUDE.md
+-- rule 2: journal_lines carries no UPDATE or DELETE grant, and a wrong entry
+-- is corrected by posting a REVERSING entry, never by removing history. An
+-- automated "deterministic cleanup" here would destroy financial records
+-- without anyone reading them, which is worse than the migration stopping.
+DO $$
+DECLARE
+    dupes text;
+    n int;
+BEGIN
+    SELECT count(*), string_agg(format('org=%s order=%s (%s entries)', org_id, source_id, c), E'\n  ')
+      INTO n, dupes
+      FROM (
+        SELECT org_id, source_id, count(*) AS c
+          FROM journal_entries
+         WHERE source_table = 'orders'
+           AND journal_type = 'sales'
+           AND source_id IS NOT NULL
+         GROUP BY org_id, source_id
+        HAVING count(*) > 1
+      ) d;
+
+    IF n > 0 THEN
+        RAISE EXCEPTION USING
+            MESSAGE = format('%s order(s) already carry more than one sales entry; the uniqueness index cannot be created.', n),
+            DETAIL  = E'\n  ' || dupes,
+            HINT    = 'Post a reversing entry for the surplus entries (reverseJournalEntry in packages/db/src/ledger.ts), then re-run this migration. Do not DELETE journal rows — CLAUDE.md rule 2.';
+    END IF;
+END $$;--> statement-breakpoint
+
 CREATE UNIQUE INDEX "journal_entries_order_sale_once"
   ON "journal_entries" ("org_id", "source_id")
   WHERE "source_table" = 'orders' AND "journal_type" = 'sales';

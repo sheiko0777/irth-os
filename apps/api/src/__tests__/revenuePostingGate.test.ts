@@ -43,6 +43,28 @@ import { fileURLToPath } from 'node:url';
 
 const ROUTES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../routes');
 
+/**
+ * The tRPC delivery path. It lives in another workspace, so the predicate
+ * scan below cannot reach it — and would not match it if it could: this
+ * changeset moved the `'delivered'` comparison INTO postOrderDeliveredEntry,
+ * so the router no longer contains the literal the predicate keys on. It gets
+ * a direct assertion instead of being silently omitted from a test whose
+ * header claims to cover all three paths.
+ */
+const ADMIN_ORDERS_ROUTER = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../admin/src/server/routers/orders.ts',
+);
+
+/**
+ * Matches an INVOCATION, not a mention. `src.includes('postOrderDeliveredEntry')`
+ * was satisfied by the import statement alone — apps/api/src/routes/orders.ts
+ * contains the name three times: the import, a comment, and the actual call.
+ * Deleting only the call would have left this gate green, which is precisely
+ * the failure it exists to prevent.
+ */
+const INVOKES = /\bpostOrderDeliveredEntry\s*\(/;
+
 /** Every .ts file under src/routes, recursing into the webhooks/ subtree. */
 function routeFiles(dir: string = ROUTES): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -64,12 +86,22 @@ describe('revenue posting gate', () => {
     const offenders = files.filter((file) => {
       const src = readFileSync(file, 'utf8');
       const canDeliver = /\.update\(\s*orders\s*\)/.test(src) && /['"]delivered['"]/.test(src);
-      return canDeliver && !src.includes('postOrderDeliveredEntry');
+      return canDeliver && !INVOKES.test(src);
     });
 
     expect(
       offenders.map((f) => path.relative(ROUTES, f)),
       'these routes transition an order to delivered without posting revenue',
     ).toEqual([]);
+  });
+
+  it('the admin tRPC delivery path books the sale too', () => {
+    // Asserted directly rather than through the predicate above: this file is
+    // in another workspace, and since the transition guard moved into the
+    // helper it no longer carries the 'delivered' literal the predicate keys
+    // on. Without this the test's own header would name three delivery paths
+    // while checking two — the same kind of claim-without-substance this
+    // changeset exists to remove.
+    expect(INVOKES.test(readFileSync(ADMIN_ORDERS_ROUTER, 'utf8'))).toBe(true);
   });
 });
