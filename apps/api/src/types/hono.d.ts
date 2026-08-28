@@ -7,5 +7,8 @@ declare module 'hono' {
     userId: string;
     orgId: string;
     role: Role;
+    // Set by authContext alongside userId — needed by /invite/accept's
+    // email-match check (packages/db/src/invites.ts's acceptOrgInvite).
+    userEmail: string | undefined;
   }
 }
