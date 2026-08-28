@@ -70,7 +70,14 @@ app.get('/health', async (c) => {
   }
 })
 
-app.on(['POST', 'GET'], '/api/auth/**', (c) => {
+// '*' — not '**'. Hono's router has no '**' syntax; a literal two-star
+// segment can never match a real path like 'sign-in/email', so this route
+// silently matched NOTHING. Every /api/auth/* request — real or garbage —
+// fell through to app.notFound() below and got back {"error":"not_found"}.
+// Confirmed live: /api/auth/session, /api/auth, and /api/auth/ok all 404'd
+// identically before this fix. '/api/*' two lines up already proves '*' is
+// the right catch-all syntax in this same file.
+app.on(['POST', 'GET'], '/api/auth/*', (c) => {
   return auth.handler(c.req.raw)
 })
 
