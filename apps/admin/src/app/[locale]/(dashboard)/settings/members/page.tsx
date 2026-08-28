@@ -2,6 +2,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getTranslations } from "next-intl/server";
 import { InviteForm } from "./InviteForm";
 import { MemberRoleSelect } from "./MemberRoleSelect";
+import { RemoveMemberButton } from "./RemoveMemberButton";
+import { PendingInvitesList } from "./PendingInvitesList";
 import { PermissionGate } from "@/components/PermissionGate";
 import { serverCaller } from "@/server/caller";
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -50,7 +52,10 @@ export default async function MembersPage() {
                       )}
                     </div>
                   </div>
-                  <MemberRoleSelect memberId={member.id} role={member.role} />
+                  <div className="flex shrink-0 items-center gap-2">
+                    <MemberRoleSelect memberId={member.id} role={member.role} />
+                    <RemoveMemberButton memberId={member.id} role={member.role} />
+                  </div>
                 </div>
               ))}
               {members.length === 0 && (
@@ -74,6 +79,8 @@ export default async function MembersPage() {
             </CardContent>
           </Card>
         </PermissionGate>
+
+        <PendingInvitesList />
       </div>
     </div>
   );
