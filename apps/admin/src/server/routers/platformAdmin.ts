@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { platformAdminProcedure, router } from '../trpc';
-import { organizations, orgMembers, orgFeatureFlags, orgInvites } from '@irth/db';
+import { organizations, orgMembers, orgFeatureFlags, orgInvites, shippingZones, shippingRates, priceLists } from '@irth/db';
 import { eq, count, desc } from 'drizzle-orm';
+import { EGP, parseDecimal } from '@irth/domain';
+import { DEFAULT_SETTINGS, SETTING_KEYS } from '../../lib/settings';
 
 const orgPlanSchema = z.enum(['starter', 'growth', 'enterprise']);
 
@@ -91,28 +93,54 @@ export const platformAdminRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [org] = await ctx.db
-        .insert(organizations)
-        .values({ name: input.name, slug: input.slug, brand: 'irth' })
-        .returning();
-
-      await ctx.dbUnscoped.insert(orgFeatureFlags).values({
-        orgId: org.id,
-        plan: input.plan,
-        enabledScreens: input.enabledScreens,
-        disabledScreens: input.disabledScreens,
-        maxUsers: input.maxUsers,
-        notes: input.notes,
-      });
-
       const token = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await ctx.dbUnscoped.insert(orgInvites).values({
-        orgId: org.id,
-        email: input.ownerEmail,
-        token,
-        role: 'owner',
-        expiresAt,
+
+      const org = await ctx.dbUnscoped.transaction(async (tx) => {
+        const [org] = await tx.insert(organizations)
+          .values({ name: input.name, slug: input.slug, brand: 'irth' })
+          .returning();
+
+        await tx.insert(orgFeatureFlags).values({
+          orgId: org.id,
+          plan: input.plan,
+          enabledScreens: input.enabledScreens,
+          disabledScreens: input.disabledScreens,
+          maxUsers: input.maxUsers,
+          notes: input.notes,
+        });
+
+        await tx.insert(orgInvites).values({
+          orgId: org.id,
+          email: input.ownerEmail,
+          token,
+          role: 'owner',
+          expiresAt,
+        });
+
+        // UX hygiene, not a bug fix: order/checkout logic never reads these
+        // tables (order pricing comes from productVariants.priceMinor) and
+        // every list screen already handles zero rows. Values mirror the same
+        // DEFAULT_SETTINGS a new org would otherwise fall back to at read time
+        // in settingsRouter's getAll, so the seeded shipping rate matches what
+        // Settings already claims the flat rate to be. org_settings itself is
+        // NOT seeded here — getAll already merges DEFAULT_SETTINGS over
+        // whatever rows exist, so there is nothing for a missing row to break.
+        const [zone] = await tx.insert(shippingZones)
+          .values({ orgId: org.id, name: 'Default Zone', countries: ['EG'] })
+          .returning();
+
+        await tx.insert(shippingRates).values({
+          zoneId: zone.id,
+          orgId: org.id,
+          name: 'Standard',
+          rateType: 'flat',
+          priceMinor: parseDecimal(DEFAULT_SETTINGS[SETTING_KEYS.shipping.flat_rate], EGP).minor,
+        });
+
+        await tx.insert(priceLists).values({ orgId: org.id, name: 'Default Price List', isDefault: true });
+
+        return org;
       });
 
       return { data: { orgId: org.id, orgName: org.name, inviteToken: token }, error: null };

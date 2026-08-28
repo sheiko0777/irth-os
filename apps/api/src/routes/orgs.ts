@@ -2,65 +2,12 @@ import { handleError } from "../utils/errors";
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { db, getDb, withOrg } from '../db';
-import { organizations, orgMembers, orgInvites, withAudit, auditLog, jsonSafe, setActiveOrg, NotAMemberError } from '@irth/db';
+import { db, withOrg } from '../db';
+import { organizations, orgMembers, orgInvites, withAudit, jsonSafe, setActiveOrg, NotAMemberError } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
 
 export const orgsRouter = new Hono();
-
-const createOrgSchema = z.object({
-  name: z.string().min(1),
-  slug: z.string().min(1),
-});
-
-orgsRouter.post('/', async (c: Context) => {
-  try {
-    const body = await c.req.json();
-    const { name, slug } = createOrgSchema.parse(body);
-    // Identity comes from the verified session (authContext), never the client.
-    const userId = c.get('userId') as string | undefined;
-    if (!userId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
-
-    // Deliberately NOT withOrg: this creates the tenant, so there is no tenant
-    // to scope to yet and no org_id to put on the RLS session. It runs as the
-    // owning role, like platform administration in apps/admin.
-    //
-    // The audit row is written inside the transaction, keyed to the org just
-    // created. It used to pass the literal string 'system' as orgId — but
-    // audit_log.org_id is uuid, so Postgres rejected it with 22P02 (invalid
-    // input syntax for type uuid: "system"). Because none of the three writes
-    // shared a transaction, the organization and the owner membership had
-    // ALREADY COMMITTED by the time the audit insert threw: the caller got a
-    // 400 for a request that had in fact created their organization, and could
-    // not retry because the slug was now taken.
-    //
-    // insertedOrg.id is only known inside the callback — exactly what the old
-    // comment observed withAudit could not express — so the audit insert is
-    // written directly here rather than through it.
-    const org = await getDb().transaction(async (tx) => {
-      const [insertedOrg] = await tx.insert(organizations).values({ name, slug }).returning();
-      await tx.insert(orgMembers).values({
-        orgId: insertedOrg.id,
-        userId,
-        role: 'owner',
-      });
-      await tx.insert(auditLog).values({
-        orgId: insertedOrg.id,
-        userId,
-        action: 'CREATE_ORG',
-        tableName: 'organizations',
-        recordId: insertedOrg.id,
-        changes: { name, slug },
-      });
-      return insertedOrg;
-    });
-
-    return c.json({ data: jsonSafe(org), error: null, meta: null }, 201);
-  } catch (error: unknown) {
-    return c.json({ data: null, error: handleError(error), meta: null }, 400);
-  }
-});
 
 const switchOrgSchema = z.object({
   orgId: z.string().uuid(),
