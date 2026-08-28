@@ -58,7 +58,18 @@ describe('RLS coverage', () => {
       FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public'
-        AND c.relkind = 'r'
+        -- 'r' ordinary tables, 'p' partitioned parents. 0031's own loop
+        -- filters on 'r' alone, so a partitioned tenant table would be
+        -- skipped by the migration AND invisible here — and catching what
+        -- that loop misses is this gate's entire reason to exist. There are
+        -- no partitioned tables today, so this is preventative.
+        --
+        -- Partitions themselves are relkind 'r' with relispartition = true
+        -- and are therefore already included. Postgres applies the parent's
+        -- policies when a partitioned table is queried through the parent,
+        -- but a partition queried DIRECTLY uses its own; requiring RLS on
+        -- both is the strict reading, and the one that fails safe.
+        AND c.relkind IN ('r', 'p')
         AND EXISTS (
           SELECT 1 FROM information_schema.columns col
           WHERE col.table_schema = 'public'
