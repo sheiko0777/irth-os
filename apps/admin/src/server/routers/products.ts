@@ -1,4 +1,4 @@
-import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { products, productVariants, categories, brandEnum } from '@irth/db';
 import { eq, and, desc, sql, count, ilike } from 'drizzle-orm';
 import { z } from 'zod';
@@ -7,7 +7,7 @@ import { withAudit } from '@irth/db';
 import { EGP, parseDecimal } from '@irth/domain';
 
 export const productsRouter = router({
-    list: protectedProcedure
+    list: requirePermission('products', 'view')
         .input(z.object({
             page: z.number().default(1),
             pageSize: z.number().default(20),
@@ -62,7 +62,7 @@ export const productsRouter = router({
             };
         }),
 
-    getById: protectedProcedure
+    getById: requirePermission('products', 'view')
         .input(z.object({
             id: z.string().uuid()
         }))
@@ -90,7 +90,7 @@ export const productsRouter = router({
             };
         }),
 
-    create: adminProcedure
+    create: requirePermission('products', 'write')
         .input(z.object({
             name: z.string().min(1),
             nameAr: z.string().optional(),
@@ -141,7 +141,7 @@ export const productsRouter = router({
             return { data: result, error: null, meta: null };
         }),
 
-    update: adminProcedure
+    update: requirePermission('products', 'write')
         .input(z.object({
             id: z.string().uuid(),
             name: z.string().min(1).optional(),
@@ -197,7 +197,7 @@ export const productsRouter = router({
             return { data: result, error: null, meta: null };
         }),
 
-    deactivate: ownerProcedure
+    deactivate: requirePermission('products', 'delete')
         .input(z.object({
             id: z.string().uuid()
         }))

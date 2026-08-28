@@ -6,7 +6,7 @@ import { orders, orderItems, productVariants, products, nextDocumentNumber, form
 import { withAudit } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
-import { requireRole } from '../middlewares/requireRole';
+import { requirePermission } from '../middlewares/requirePermission';
 
 /** Thrown inside the order transaction so the whole thing rolls back. */
 class InsufficientStockError extends Error {
@@ -267,14 +267,15 @@ const updateStatusSchema = z.object({
   status: z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'])
 });
 
-// requireRole, not just the generic orgId/userId presence check every other
-// route here does: this transition can post ledger entries (revenue, COGS)
-// and fire a real ETA e-invoice submission on 'delivered' (see below), so it
-// needs the same admin/owner restriction as the identical mutation's
-// tRPC counterpart, apps/admin/src/server/routers/orders.ts's updateStatus
-// (adminProcedure). Found via the archaeology sweep: this route had no role
-// guard at all — any authenticated member could trigger both side effects.
-ordersRoute.patch('/:id/status', requireRole('owner', 'admin'), async (c: Context) => {
+// requirePermission, not just the generic orgId/userId presence check every
+// other route here does: this transition can post ledger entries (revenue,
+// COGS) and fire a real ETA e-invoice submission on 'delivered' (see below),
+// so it needs the same authorization as the identical mutation's tRPC
+// counterpart, apps/admin/src/server/routers/orders.ts's updateStatus
+// (requirePermission('orders', 'write')). Found via the archaeology sweep:
+// this route had no role guard at all — any authenticated member could
+// trigger both side effects.
+ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c: Context) => {
   const orgId = getOrgId(c);
   const userId = getUserId(c);
   if (!orgId || !userId) {

@@ -47,8 +47,14 @@ describe('members router', () => {
     expect(res).toEqual({ data: [], error: null, meta: { orgId: 'org-1' } });
   });
 
-  it('list: member caller rejects FORBIDDEN (adminProcedure)', async () => {
+  it('list: member caller rejects FORBIDDEN (requirePermission members.view)', async () => {
     await expectCode(memberCaller.list(), 'FORBIDDEN');
+  });
+
+  it('list: admin caller is allowed (requirePermission members.view)', async () => {
+    mockDb.select = vi.fn(() => chainOf([]));
+    const res = await adminCaller.list();
+    expect(res).toEqual({ data: [], error: null, meta: { orgId: 'org-1' } });
   });
 
   it('changeRole: missing member rejects NOT_FOUND', async () => {
@@ -66,11 +72,18 @@ describe('members router', () => {
     await expectCode(caller.changeRole({ memberId: UUID, role: 'member' }), 'FORBIDDEN');
   });
 
-  it('changeRole: admin caller rejects FORBIDDEN (ownerProcedure)', async () => {
+  it('changeRole: admin caller rejects FORBIDDEN (requirePermission members.changeRole)', async () => {
     await expectCode(adminCaller.changeRole({ memberId: UUID, role: 'admin' }), 'FORBIDDEN');
   });
 
-  it('invite: member caller rejects FORBIDDEN (adminProcedure)', async () => {
+  it('changeRole: owner caller is allowed (requirePermission members.changeRole)', async () => {
+    mockDb.select = vi.fn(() => chainOf([{ id: UUID, role: 'member', userId: 'user-2' }]));
+    mockDb.update = vi.fn(() => chainOf([{ id: UUID, role: 'admin' }]));
+    const res = await caller.changeRole({ memberId: UUID, role: 'admin' });
+    expect(res.data).toEqual({ id: UUID, role: 'admin' });
+  });
+
+  it('invite: member caller rejects FORBIDDEN (requirePermission members.invite)', async () => {
     await expectCode(memberCaller.invite({ email: 'a@test.com', role: 'member' }), 'FORBIDDEN');
   });
 

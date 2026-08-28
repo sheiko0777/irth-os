@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
 import { getTableName } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
 import { outboxEvents } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { ordersRouter } from '@/server/routers/orders';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
+
+async function expectCode(p: Promise<unknown>, code: TRPCError['code']) {
+  await expect(p).rejects.toSatisfy((e: unknown) => e instanceof TRPCError && e.code === code);
+}
 
 // Input schemas mirrored from orders router — validate without DB
 const listInputSchema = z.object({
@@ -63,7 +68,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
 
 function chainOf(value: unknown) {
   const chain: Record<string, unknown> = {};
-  for (const m of ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'groupBy']) {
+  for (const m of ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'groupBy', 'update', 'set', 'insert', 'values', 'returning']) {
     chain[m] = vi.fn(() => chain);
   }
   chain.then = (resolve: (v: unknown) => void) => Promise.resolve(value).then(resolve);
@@ -295,5 +300,32 @@ describe('orders.updateStatus — outbox producer', () => {
     expect(mockDb.insert.mock.invocationCallOrder[outboxCall]).toBeGreaterThan(
       mockDb.update.mock.invocationCallOrder[0],
     );
+  });
+});
+
+// requirePermission('orders', 'view'|'write') replaced
+// protectedProcedure/adminProcedure on list/getById/updateStatus.
+// orders.view is granted to every role, so list/getById have no wrong-role
+// case — only write (owner, admin) narrows who passes.
+describe('orders router — authorization', () => {
+  it('updateStatus: member caller rejects FORBIDDEN (requirePermission orders.write)', async () => {
+    const caller = ordersRouter.createCaller(ctx('member'));
+    await expectCode(
+      caller.updateStatus({ id: ORDER_UUID, status: 'confirmed' }),
+      'FORBIDDEN',
+    );
+  });
+
+  it('updateStatus: admin caller is allowed (requirePermission orders.write)', async () => {
+    // Same status in and out so the outbox/notification machinery (already
+    // covered above) stays out of scope for this authorization check.
+    stubOrder({ id: ORDER_UUID, orderNumber: 'IRT-2026-0010', status: 'confirmed', customerId: null });
+    queueSelects([[]]);
+    mockDb.update = vi.fn(() => chainOf([{ id: ORDER_UUID, status: 'confirmed' }]));
+
+    const caller = ordersRouter.createCaller(ctx('admin'));
+    const res = await caller.updateStatus({ id: ORDER_UUID, status: 'confirmed' });
+
+    expect(res.data).toEqual({ id: ORDER_UUID, status: 'confirmed' });
   });
 });

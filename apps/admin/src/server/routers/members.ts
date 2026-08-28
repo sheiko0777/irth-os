@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { adminProcedure, ownerProcedure, router } from '../trpc';
+import { requirePermission, router } from '../trpc';
 import { eq, and } from 'drizzle-orm';
 import { orgMembers, orgInvites, user, withAudit } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 
 export const membersRouter = router({
   // List members of the active org (owner/admin only — matrix: members.view).
-  list: adminProcedure.query(async ({ ctx }) => {
+  list: requirePermission('members', 'view').query(async ({ ctx }) => {
     // Joined to `user` because org_members only stores the id. Returning the
     // bare row made the members table render a 32-character auth id where the
     // person's name belongs, which is unreadable and unsearchable.
@@ -41,7 +41,7 @@ export const membersRouter = router({
   // across origins. Same-origin tRPC, reusing the request's own session
   // (already verified by `protectedProcedure`/`adminProcedure`), is the actual
   // fix — not a CORS tweak.
-  invite: adminProcedure
+  invite: requirePermission('members', 'invite')
     .input(z.object({
       email: z.string().email(),
       role: z.enum(['owner', 'admin', 'member']).default('member'),
@@ -79,7 +79,7 @@ export const membersRouter = router({
     }),
 
   // Change a member's role (owner only — matrix: members.changeRole).
-  changeRole: ownerProcedure
+  changeRole: requirePermission('members', 'changeRole')
     .input(z.object({
       memberId: z.string().uuid(),
       role: z.enum(['admin', 'member']),

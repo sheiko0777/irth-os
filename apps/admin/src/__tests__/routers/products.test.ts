@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import type { Context } from '@/server/trpc';
+import { productsRouter } from '@/server/routers/products';
+import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 const createProductSchema = z.object({
   name: z.string().min(1).max(200),
@@ -66,5 +70,83 @@ describe('products router — input validation', () => {
 
   it('list: rejects invalid categoryId format', () => {
     expect(() => listInputSchema.parse({ categoryId: 'not-uuid' })).toThrow();
+  });
+});
+
+const PRODUCT_UUID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+
+function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
+  return {
+    db: mockDb,
+    withOrg: withOrgMock,
+    idempotent: idempotentMock,
+    session: { user: { id: 'user-1', email: 'u@test.com' }, session: { activeOrganizationId: 'org-1' } },
+    orgId: 'org-1',
+    userId: 'user-1',
+    role,
+  } as unknown as Context;
+}
+
+async function expectCode(p: Promise<unknown>, code: TRPCError['code']) {
+  await expect(p).rejects.toSatisfy((e: unknown) => e instanceof TRPCError && e.code === code);
+}
+
+function chainOf(value: unknown) {
+  const chain: Record<string, unknown> = {};
+  for (const m of ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'returning', 'values', 'set', 'leftJoin']) {
+    chain[m] = vi.fn(() => chain);
+  }
+  chain.then = (resolve: (v: unknown) => void) => Promise.resolve(value).then(resolve);
+  return chain;
+}
+
+/** list fires two queries in Promise.all: rows, then the total count. */
+function queueSelects(results: unknown[]) {
+  let i = 0;
+  mockDb.select = vi.fn(() => chainOf(results[i++] ?? []));
+}
+
+beforeEach(() => {
+  mockDb._reset();
+});
+
+// requirePermission('products', 'view'|'write'|'delete') replaced
+// protectedProcedure/adminProcedure/ownerProcedure on these five procedures.
+// products.view is granted to every role, so list/getById have no wrong-role
+// case to test — only write (owner, admin) and delete (owner only) narrow
+// the set of roles that pass.
+describe('products router — authorization', () => {
+  it('list: member caller is allowed (products.view is open to every role)', async () => {
+    queueSelects([[], [{ count: 0 }]]);
+    const caller = productsRouter.createCaller(ctx('member'));
+    const res = await caller.list({ page: 1, pageSize: 20 });
+    expect(res.data).toEqual([]);
+  });
+
+  it('create: member caller rejects FORBIDDEN (requirePermission products.write)', async () => {
+    const caller = productsRouter.createCaller(ctx('member'));
+    await expectCode(
+      caller.create({ name: 'Product', sku: 'P-001', price: 100, stock: 5 }),
+      'FORBIDDEN',
+    );
+  });
+
+  it('create: admin caller is allowed (requirePermission products.write)', async () => {
+    mockDb.insert = vi.fn(() => chainOf([{ id: PRODUCT_UUID, name: 'Product', sku: 'P-001' }]));
+    const caller = productsRouter.createCaller(ctx('admin'));
+    const res = await caller.create({ name: 'Product', sku: 'P-001', price: 100, stock: 5 });
+    expect(res.data).toEqual({ id: PRODUCT_UUID, name: 'Product', sku: 'P-001' });
+  });
+
+  it('deactivate: admin caller rejects FORBIDDEN (requirePermission products.delete)', async () => {
+    const caller = productsRouter.createCaller(ctx('admin'));
+    await expectCode(caller.deactivate({ id: PRODUCT_UUID }), 'FORBIDDEN');
+  });
+
+  it('deactivate: owner caller is allowed (requirePermission products.delete)', async () => {
+    mockDb.update = vi.fn(() => chainOf([{ id: PRODUCT_UUID, status: 'archived' }]));
+    const caller = productsRouter.createCaller(ctx('owner'));
+    const res = await caller.deactivate({ id: PRODUCT_UUID });
+    expect(res.data).toEqual({ id: PRODUCT_UUID, status: 'archived' });
   });
 });

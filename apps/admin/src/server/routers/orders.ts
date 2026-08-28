@@ -1,4 +1,4 @@
-import { router, protectedProcedure, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum, notifications, customers, orgSettings } from '@irth/db';
 import { eq, and, desc, sql, count, ilike, gte, lte, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -39,7 +39,7 @@ const statusEnum = z.enum(orderStatusEnum.enumValues);
  * change and its audit row still happen either way.
  */
 export const ordersRouter = router({
-    list: protectedProcedure
+    list: requirePermission('orders', 'view')
         .input(z.object({
             page: z.number().default(1),
             pageSize: z.number().default(20),
@@ -103,7 +103,7 @@ export const ordersRouter = router({
             };
         }),
 
-    getById: protectedProcedure
+    getById: requirePermission('orders', 'view')
         .input(z.object({
             id: z.string().uuid()
         }))
@@ -149,7 +149,7 @@ export const ordersRouter = router({
             };
         }),
 
-    updateStatus: adminProcedure
+    updateStatus: requirePermission('orders', 'write')
         .input(z.object({
             id: z.string().uuid(),
             status: statusEnum

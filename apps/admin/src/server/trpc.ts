@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, resolveActiveOrgMembership, withOrgContext, withIdempotency, IdempotencyError } from '@irth/db';
+import { db, resolveActiveOrgMembership, withOrgContext, withIdempotency, IdempotencyError, can, type ActionFor, type Resource } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
@@ -164,6 +164,21 @@ export const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
     }
     return next({ ctx });
 });
+// Requires the caller's role to have the given resource.action permission,
+// per the shared matrix in packages/db/src/permissions.ts — the server-side
+// mirror of PermissionGate.tsx's client-side check. Additive to
+// adminProcedure/ownerProcedure, not a replacement: this is for the routers
+// migrated to per-action authorization (see products.ts, orders.ts,
+// members.ts), while other routers keep the coarser tier gates.
+export function requirePermission<R extends Resource>(resource: R, action: ActionFor<R>) {
+    return protectedProcedure.use(({ ctx, next }) => {
+        if (!can(ctx.role, resource, action)) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: `Missing permission: ${String(resource)}.${String(action)}` });
+        }
+        return next({ ctx });
+    });
+}
+
 // Requires PLATFORM_ADMIN_EMAIL env var to match the caller's email.
 export const platformAdminProcedure = t.procedure.use(({ ctx, next }) => {
     if (!ctx.session?.user) {

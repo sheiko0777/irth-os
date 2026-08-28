@@ -63,7 +63,24 @@ export const PERMISSIONS = {
   },
 } as const;
 
-export function can(role: Role, resource: keyof typeof PERMISSIONS, action: string): boolean {
-  const allowed = (PERMISSIONS[resource] as Record<string, Role[]>)[action];
+export type Resource = keyof typeof PERMISSIONS;
+
+// The actions actually declared for a given resource. Exported so every
+// consumer — PermissionGate.tsx (client), requirePermission (server, both
+// apps/admin and apps/api) — shares ONE definition instead of each
+// redefining it. PermissionGate.tsx used to keep its own private copy of
+// this exact type after an untyped `action` string silently denied every
+// role for `categories` — moving it here means a new caller gets the same
+// compile-time guard for free instead of reintroducing the bug's shape.
+export type ActionFor<R extends Resource> = keyof (typeof PERMISSIONS)[R];
+
+export function can<R extends Resource>(role: Role, resource: R, action: ActionFor<R>): boolean {
+  // Optional-chained on PERMISSIONS[resource] deliberately: the generic
+  // signature only guarantees a valid resource/action at compile time. A
+  // value computed at runtime (e.g. a dynamic string cast past the type
+  // system) can still name a resource PERMISSIONS has no entry for, and
+  // indexing straight into `undefined` would throw instead of denying —
+  // "fails closed" has to mean returns false, not crashes.
+  const allowed = (PERMISSIONS[resource] as Record<string, Role[]> | undefined)?.[action as string];
   return allowed ? allowed.includes(role) : false;
 }
