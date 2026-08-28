@@ -5,8 +5,28 @@ import { redirect } from 'next/navigation';
 import { IBM_Plex_Sans_Arabic, Cairo } from 'next/font/google';
 import { ReactNode } from 'react';
 import { Toaster } from 'sonner';
+import type { Metadata, Viewport } from 'next';
 import { TrpcProvider } from '@/components/providers/TrpcProvider';
 import './globals.css';
+
+// icon.png / apple-icon.png / favicon.ico / manifest.ts (all in src/app/) are
+// picked up by Next's file-convention metadata automatically — no <link>
+// tags needed here. appleWebApp is the piece iOS actually reads for "Add to
+// Home Screen": without `capable: true` Safari treats the shortcut as a
+// bookmark (browser chrome, generic icon) instead of a standalone app icon.
+export const metadata: Metadata = {
+  title: 'إرث | IRTH',
+  description: 'نظام إدارة الأعمال لإرث',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'إرث',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#060a10',
+};
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
   subsets: ['arabic'],

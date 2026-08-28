@@ -1,19 +1,39 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { signOut, useSession } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { AlertPanel } from '@/components/layout/AlertPanel';
 import { OrgSwitcher } from '@/components/layout/OrgSwitcher';
-import { LogOut, Shield } from 'lucide-react';
+import { LogOut, Shield, X } from 'lucide-react';
 import { buildNavGroups } from '@/lib/navigation';
 
 export function Sidebar({ locale }: { locale: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
+  // Below `lg` this is an off-canvas drawer; at `lg`+ CSS pins it open and
+  // static (see the className below), so `open` only matters on mobile.
+  const [open, setOpen] = useState(false);
+
+  // Decoupled from Header's trigger the same way CommandPalette is (see its
+  // own 'irth:palette' event) — keeps Sidebar and Header as plain siblings
+  // under DashboardLayout with no shared state/context to wire up.
+  useEffect(() => {
+    const toggle = () => setOpen((o) => !o);
+    window.addEventListener('irth:sidebar-toggle', toggle);
+    return () => window.removeEventListener('irth:sidebar-toggle', toggle);
+  }, []);
+
+  // Tapping a nav link should close the drawer, not leave it covering the
+  // page it just navigated to.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   // Single source shared with the command palette — see lib/navigation.ts.
   const groups = buildNavGroups(locale);
@@ -25,14 +45,42 @@ export function Sidebar({ locale }: { locale: string }) {
   };
 
   return (
-    <aside className="flex h-screen w-[240px] flex-col border-e border-[var(--rim1)] bg-[var(--surface)] text-[var(--t2)] shrink-0 z-20">
-      {/* Logo */}
-      <div className="flex h-14 items-center px-4 border-b border-[var(--rim1)] gap-2 shrink-0">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--gold-bg)] border border-[var(--gold-br)]">
-          <span className="text-[var(--gold)] font-bold text-lg leading-none">إ</span>
+    <>
+      {/* Scrim — mobile only, only while the drawer is open */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+          onClick={() => setOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={cn(
+          // `end-0` (not `right-0`) so the drawer sits at the same edge the
+          // static desktop sidebar already occupies in both locales — `border-e`
+          // below confirms that edge is the logical trailing one, not a
+          // hardcoded side.
+          'fixed inset-y-0 end-0 z-40 flex h-screen w-[240px] flex-col border-e border-[var(--rim1)] bg-[var(--surface)] text-[var(--t2)] shrink-0',
+          'transition-transform duration-200 ease-out',
+          'lg:static lg:translate-x-0',
+          open ? 'translate-x-0' : 'translate-x-full rtl:-translate-x-full'
+        )}
+      >
+        {/* Logo */}
+        <div className="flex h-14 items-center px-4 border-b border-[var(--rim1)] gap-2 shrink-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--gold-bg)] border border-[var(--gold-br)] shrink-0">
+            <Image src="/logo-mark.png" alt="إرث" width={22} height={22} className="object-contain" priority />
+          </div>
+          <span className="font-bold text-[var(--t1)] text-sm">نظام إرث</span>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="ms-auto lg:hidden rounded-md p-1.5 text-[var(--t3)] transition-colors hover:bg-[var(--rim1)] hover:text-[var(--t1)]"
+            aria-label="إغلاق القائمة"
+          >
+            <X size={16} />
+          </button>
         </div>
-        <span className="font-bold text-[var(--t1)] text-sm">نظام إرث</span>
-      </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
@@ -118,6 +166,7 @@ export function Sidebar({ locale }: { locale: string }) {
           تسجيل الخروج
         </Button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
