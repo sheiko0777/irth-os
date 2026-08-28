@@ -15,6 +15,9 @@ export const PERMISSIONS = {
     view: ['owner', 'admin'] as Role[],
     invite: ['owner', 'admin'] as Role[],
     changeRole: ['owner'] as Role[],
+    // Owner-only, matching changeRole's bar — removing someone permanently is
+    // at least as sensitive as changing their role.
+    remove: ['owner'] as Role[],
   },
   orders: {
     view: ['owner', 'admin', 'member'] as Role[],

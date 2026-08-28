@@ -44,6 +44,11 @@ export const orgInvites = pgTable("org_invites", {
   token: text("token").notNull().unique(),
   role: text("role").notNull().default("member"),
   expiresAt: timestamp("expires_at").notNull(),
+  // NULL = pre-OTP invite (migration 0046 added these nullable, no backfill —
+  // see acceptOrgInvite in packages/db/src/invites.ts for how NULL is treated).
+  otpCode: text("otp_code"),
+  otpExpiresAt: timestamp("otp_expires_at"),
+  otpAttempts: integer("otp_attempts").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

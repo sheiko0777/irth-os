@@ -22,7 +22,27 @@ import { orgSettings } from './schema/orgSettings';
  */
 const TRACKING_URL_TEMPLATE_KEY = 'shipping.tracking_url_template';
 
-export type OutboxEventType = 'order.confirmed' | 'order.shipped' | 'eta.invoice.issue';
+export type OutboxEventType = 'order.confirmed' | 'order.shipped' | 'eta.invoice.issue' | 'org.invite.sent';
+
+/**
+ * One event type covers the initial invite send and every resend alike —
+ * same shape, a fresh token/OTP each time. Carries the OTP code itself
+ * (unlike EtaInvoiceIssuePayload's ids-only pattern) because the worker has
+ * no other way to reach it: the code lives on `org_invites`, which the
+ * worker would otherwise need a second read to fetch, and by drain time
+ * (up to a minute later) a resend could have already replaced it — passing
+ * the exact code that was current when this event was queued is what keeps
+ * the emailed code and the queued send in sync.
+ */
+export interface OrgInvitePayload {
+    orgId: string;
+    inviteId: string;
+    email: string;
+    orgName: string;
+    role: string;
+    otpCode: string;
+    joinUrl: string;
+}
 
 /**
  * Carries just the ids, not a snapshot of the order — by the time this
@@ -114,7 +134,7 @@ type OutboxWriter = Pick<DbTx, 'insert' | 'rollback'>;
  */
 export async function emitOutboxEvent(
     tx: OutboxWriter,
-    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload },
+    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload },
 ): Promise<void> {
     await tx.insert(outboxEvents).values({
         orgId: event.orgId,
