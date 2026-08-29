@@ -90,6 +90,23 @@ vi.mock('../db', () => ({
   getEnv: () => ({}),
 }));
 
+// `shopifyConnections`/`shopifyWebhookDeliveries` still need to be the real
+// exported table objects — `where(and(eq(shopifyConnections.shopDomain, …)))`
+// in resolveWebhookOrg evaluates them for real before the mocked `where()`
+// above ever runs, and the mocked `getDb` above ignores its own arguments
+// entirely regardless. Every other test file in this directory that touches
+// `../routes/webhooks/shopify` mocks `@irth/db` explicitly too
+// (orgsInviteAccept.test.ts, shopifyInventoryGuard.test.ts) — this file used
+// to rely on the plain unmocked import instead and passed every local run,
+// but failed in CI with `TypeError: Cannot read properties of undefined
+// (reading 'id')` at `shopifyConnections.id` — consistent with Vitest's
+// worker-pool module registry resolving `@irth/db` inconsistently for a file
+// that doesn't explicitly claim its own mock the way its neighbors do.
+vi.mock('@irth/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@irth/db')>();
+  return { ...actual };
+});
+
 import { shopifyWebhookRoute } from '../routes/webhooks/shopify';
 
 function buildApp() {
