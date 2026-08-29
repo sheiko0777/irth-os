@@ -90,22 +90,36 @@ vi.mock('../db', () => ({
   getEnv: () => ({}),
 }));
 
-// `shopifyConnections`/`shopifyWebhookDeliveries` still need to be the real
-// exported table objects — `where(and(eq(shopifyConnections.shopDomain, …)))`
-// in resolveWebhookOrg evaluates them for real before the mocked `where()`
-// above ever runs, and the mocked `getDb` above ignores its own arguments
-// entirely regardless. Every other test file in this directory that touches
-// `../routes/webhooks/shopify` mocks `@irth/db` explicitly too
-// (orgsInviteAccept.test.ts, shopifyInventoryGuard.test.ts) — this file used
-// to rely on the plain unmocked import instead and passed every local run,
-// but failed in CI with `TypeError: Cannot read properties of undefined
-// (reading 'id')` at `shopifyConnections.id` — consistent with Vitest's
-// worker-pool module registry resolving `@irth/db` inconsistently for a file
-// that doesn't explicitly claim its own mock the way its neighbors do.
-vi.mock('@irth/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@irth/db')>();
-  return { ...actual };
-});
+// `shopifyConnections`/`shopifyWebhookDeliveries` need to exist as SOME
+// truthy object — `where(and(eq(shopifyConnections.shopDomain, …)))` in
+// resolveWebhookOrg evaluates them for real before the mocked `where()`
+// above ever runs — but NOT the real Drizzle table object. `eq()`/`and()`
+// (real, unmocked, from drizzle-orm) just build an AST node referencing
+// whatever `column` they're handed; they never validate its shape, and the
+// mocked `getDb` above ignores its own arguments entirely regardless. Real
+// SQL never actually runs here, so a plain hand-built stand-in is enough —
+// deliberately NOT spread from `importOriginal()`.
+//
+// Two earlier versions of this file went through `@irth/db`'s real module
+// (once unmocked, once via `{...await importOriginal()}`) and both passed on
+// every local run but failed in CI with `shopifyConnections` resolving
+// undefined — `TypeError: Cannot read properties of undefined (reading
+// 'id')` unmocked, then Vitest's own "No 'shopifyConnections' export is
+// defined on the '@irth/db' mock" guard once spread-mocked. Same underlying
+// symptom both times, so this isn't a mock-shape mistake — importing the
+// real `@irth/db` module resolves inconsistently in CI's environment for
+// this file specifically (module-graph timing this file never needed to
+// depend on in the first place). Sidestepping it entirely, rather than
+// continuing to chase why, is the robust fix.
+vi.mock('@irth/db', () => ({
+  shopifyConnections: { id: 'id', orgId: 'orgId', shopDomain: 'shopDomain', status: 'status' },
+  shopifyWebhookDeliveries: { orgId: 'orgId', connectionId: 'connectionId', webhookId: 'webhookId', topic: 'topic', payload: 'payload' },
+  // Referenced by the /inventory-levels-update handler's variant lookup
+  // (`eq(productVariants.orgId, ...)`) even though the mocked `where()`
+  // above always makes that lookup miss — the reference is still evaluated
+  // to build the (discarded) query expression before `where()` short-circuits.
+  productVariants: { orgId: 'orgId', shopifyInventoryItemId: 'shopifyInventoryItemId' },
+}));
 
 import { shopifyWebhookRoute } from '../routes/webhooks/shopify';
 
