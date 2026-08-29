@@ -18,14 +18,14 @@ export function Header({ locale }: { locale: string }) {
       style={{ background: 'rgba(6,10,16,.92)', backdropFilter: 'blur(16px)' }}
     >
       <div className="flex items-center gap-3 min-w-0">
-        {/* Opens Sidebar's off-canvas drawer below `lg` — see the matching
-            listener there, same decoupled-event pattern as the palette
-            trigger below. */}
+        {/* Expands/collapses Sidebar between its icon-only rail and full
+            width, at every breakpoint — see the matching listener there,
+            same decoupled-event pattern as the palette trigger below. */}
         <button
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('irth:sidebar-toggle'))}
-          className="lg:hidden flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--t2)] transition-colors hover:bg-[var(--rim1)] hover:text-[var(--t1)]"
-          aria-label="فتح القائمة"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--t2)] transition-colors hover:bg-[var(--rim1)] hover:text-[var(--t1)]"
+          aria-label="توسيع/طي القائمة"
         >
           <Menu size={18} />
         </button>
