@@ -22,7 +22,23 @@ import { orgSettings } from './schema/orgSettings';
  */
 const TRACKING_URL_TEMPLATE_KEY = 'shipping.tracking_url_template';
 
-export type OutboxEventType = 'order.confirmed' | 'order.shipped' | 'eta.invoice.issue' | 'org.invite.sent';
+export type OutboxEventType = 'order.confirmed' | 'order.shipped' | 'eta.invoice.issue' | 'org.invite.sent' | 'shopify.product.push';
+
+/**
+ * Emitted by products.ts on create/update/delete/variant-create. Carries the
+ * org + product id rather than a full snapshot: by the time this drains (up
+ * to a minute later, per the cron interval), the row may have changed again,
+ * and re-reading it fresh in the worker is cheaper than reasoning about
+ * whether a stale payload is still accurate.
+ *
+ * Previously inserted as a raw untyped string by all four `products.ts` call
+ * sites, bypassing `emitOutboxEvent`'s type check entirely — the same class
+ * of silent-typo risk this union exists to prevent for every other event.
+ */
+export interface ShopifyProductPushPayload {
+    orgId: string;
+    productId: string;
+}
 
 /**
  * One event type covers the initial invite send and every resend alike —
@@ -134,7 +150,7 @@ type OutboxWriter = Pick<DbTx, 'insert' | 'rollback'>;
  */
 export async function emitOutboxEvent(
     tx: OutboxWriter,
-    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload },
+    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload | ShopifyProductPushPayload },
 ): Promise<void> {
     await tx.insert(outboxEvents).values({
         orgId: event.orgId,

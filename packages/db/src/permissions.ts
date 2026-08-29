@@ -64,6 +64,17 @@ export const PERMISSIONS = {
     write: ['owner', 'admin'] as Role[],
     delete: ['owner'] as Role[],
   },
+  // External connections (Shopify today). `view` covers status/location
+  // listing — read-only, no reason to keep from a member. `connect` gates
+  // starting/redoing the OAuth flow itself and `manage` gates changing an
+  // already-connected shop's config (e.g. inventory location) — split from
+  // `connect` since re-pointing an active integration's settings is a step
+  // riskier than the initial connect a trusted admin would normally do.
+  integrations: {
+    view: ['owner', 'admin', 'member'] as Role[],
+    connect: ['owner', 'admin'] as Role[],
+    manage: ['owner'] as Role[],
+  },
 } as const;
 
 export type Resource = keyof typeof PERMISSIONS;

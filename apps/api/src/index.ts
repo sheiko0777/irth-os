@@ -6,6 +6,8 @@ import { shippingRoute } from './routes/shipping'
 import { paymobRoute } from './routes/webhooks/paymob'
 import { bostaRoute } from './routes/webhooks/bosta'
 import { shopifyWebhookRoute } from './routes/webhooks/shopify'
+import { shopifyRoute } from './routes/shopify'
+import { shopifyPixelRoute } from './routes/shopifyPixel'
 import { webhooksRouter } from './routes/webhooks'
 import { orgsRouter } from './routes/orgs'
 import { notificationsRouter } from './routes/notifications'
@@ -19,6 +21,7 @@ import { handleError } from './utils/errors'
 import { dbContext, getDb, captureEnv } from './db'
 import { envVar } from './utils/env'
 import { processOutbox, OUTBOX_BATCH_SIZE } from './workers/outboxWorker'
+import { rollupStorefrontMetrics } from './workers/storefrontRollup'
 
 const app = new Hono()
 
@@ -102,6 +105,8 @@ app.route('/api/shipping', shippingRoute)
 app.route('/api/webhooks/paymob', paymobRoute)
 app.route('/api/webhooks/bosta', bostaRoute)
 app.route('/api/webhooks/shopify', shopifyWebhookRoute)
+app.route('/api/shopify', shopifyRoute)
+app.route('/api/shopify/pixel', shopifyPixelRoute)
 app.route('/webhooks', webhooksRouter)
 app.route('/api/orgs', orgsRouter)
 app.route('/api/notifications', notificationsRouter)
@@ -152,5 +157,18 @@ export default {
         if (handled < OUTBOX_BATCH_SIZE) break
       }
     })())
+
+    // Storefront analytics rollup — piggybacks on this same every-minute
+    // trigger rather than adding a second cron entry, gated to one real
+    // execution a day. Runs in the first-minute window (00:00-00:04 UTC) so
+    // a transient miss on the exact 00:00 tick still catches it within a few
+    // minutes rather than waiting a full day; `onConflictDoUpdate` in
+    // rollupStorefrontMetrics makes re-running within that window (or on any
+    // other day, for that matter) harmless, not just tolerated.
+    const now = new Date()
+    if (now.getUTCHours() === 0 && now.getUTCMinutes() < 5) {
+      const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1))
+      ctx.waitUntil(rollupStorefrontMetrics(db, yesterday))
+    }
   },
 }

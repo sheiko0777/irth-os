@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, withOrg } from '../db';
-import { products, productVariants, withAudit, jsonSafe, outboxEvents } from '@irth/db';
+import { products, productVariants, withAudit, jsonSafe, emitOutboxEvent } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
 
@@ -93,11 +93,7 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
       // variant push re-queues the same event (see the variant-create route
       // below), so this is queued for completeness, not because it will
       // succeed on its own.
-      await tx.insert(outboxEvents).values({
-        orgId,
-        eventType: 'shopify.product.push',
-        payload: JSON.stringify({ orgId, productId: inserted.id }),
-      });
+      await emitOutboxEvent(tx, { orgId, eventType: 'shopify.product.push', payload: { orgId, productId: inserted.id } });
       return inserted;
     }, {
       orgId,
@@ -192,11 +188,7 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
         .where(and(eq(products.id, id), eq(products.orgId, orgId)))
         .returning();
       if (updated) {
-        await tx.insert(outboxEvents).values({
-          orgId,
-          eventType: 'shopify.product.push',
-          payload: JSON.stringify({ orgId, productId: updated.id }),
-        });
+        await emitOutboxEvent(tx, { orgId, eventType: 'shopify.product.push', payload: { orgId, productId: updated.id } });
       }
       return updated;
     }, {
@@ -230,11 +222,7 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
         .where(and(eq(products.id, id), eq(products.orgId, orgId)))
         .returning();
       if (updated) {
-        await tx.insert(outboxEvents).values({
-          orgId,
-          eventType: 'shopify.product.push',
-          payload: JSON.stringify({ orgId, productId: updated.id }),
-        });
+        await emitOutboxEvent(tx, { orgId, eventType: 'shopify.product.push', payload: { orgId, productId: updated.id } });
       }
       return updated;
     }, {
@@ -321,11 +309,7 @@ productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Co
       // A new variant changes what the parent product's Shopify push should
       // contain — re-queue the product, not the variant alone, since
       // productSet always pushes the full variant set together.
-      await tx.insert(outboxEvents).values({
-        orgId,
-        eventType: 'shopify.product.push',
-        payload: JSON.stringify({ orgId, productId: id }),
-      });
+      await emitOutboxEvent(tx, { orgId, eventType: 'shopify.product.push', payload: { orgId, productId: id } });
       return inserted;
     }, {
       orgId,

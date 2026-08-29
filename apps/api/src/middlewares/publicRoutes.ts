@@ -12,7 +12,12 @@
 // Routes that authenticate by other means (Better Auth itself, signature-verified
 // webhooks) or need no auth (health) are skipped. Everything else under /api/*
 // must carry a valid session.
-export const PUBLIC_PREFIXES = ['/api/auth', '/api/webhooks', '/webhooks', '/health'];
+// '/api/shopify/pixel' specifically, NOT '/api/shopify' as a whole — the
+// storefront pixel has no session to carry, but '/api/shopify/connect' etc.
+// (the OAuth/status/location routes, same '/api/shopify' mount) still need a
+// real admin session and must stay gated. The pixel's own access control is
+// the unguessable ingestionKey in its path, checked inside the route itself.
+export const PUBLIC_PREFIXES = ['/api/auth', '/api/webhooks', '/webhooks', '/health', '/api/shopify/pixel'];
 
 export function isPublic(path: string): boolean {
   // Non-/api routes (health, webhooks, root) are not session-gated here.

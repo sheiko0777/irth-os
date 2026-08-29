@@ -3,6 +3,7 @@ import { serverCaller } from '@/server/caller';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { ShopifyConnectionCard } from './ShopifyConnectionCard';
 
 interface OutboxEvent {
     id: string;
@@ -11,7 +12,12 @@ interface OutboxEvent {
     createdAt: Date;
 }
 
-export default async function IntegrationsPage() {
+export default async function IntegrationsPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ shopify?: string }>;
+}) {
+    const { shopify } = await searchParams;
     const t = await getTranslations('integrations');
     const trpc = await serverCaller();
     const response = await trpc.integrations.outboxList({ showProcessed: false });
@@ -20,7 +26,9 @@ export default async function IntegrationsPage() {
     return (
         <div className="flex flex-col gap-6 p-6">
             <h1 className="text-3xl font-bold text-[var(--gold)]">{t('title')}</h1>
-            
+
+            <ShopifyConnectionCard callbackStatus={shopify} />
+
             <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
                 <CardHeader>
                     <CardTitle className="text-xl text-[var(--gold)]">{t('outbox')}</CardTitle>
