@@ -23,15 +23,11 @@ ADMIN_APP_URL = "https://app.irth-house.com"
 # ever missing in a deployed environment, every OAuth callback silently
 # points at localhost. Was previously undocumented here despite being read.
 #
-# PLACEHOLDER — not verified against the real deployment. A CORS comment in
-# apps/admin/src/server/routers/members.ts references
-# "irth-api.*.workers.dev" as this Worker's origin, not a custom domain; if
-# that's still accurate, replace the value below with the real
-# irth-api.<account-subdomain>.workers.dev URL (or the real custom domain if
-# one's since been attached) before this integration is used for a real
-# OAuth connect — a wrong value here breaks every callback silently, not at
-# deploy time.
-SHOPIFY_APP_URL = "https://irth-api.workers.dev"
+# Verified against the real deployment — read from Deploy All run
+# 33234368901's own logs ("Uploaded irth-api... https://irth-api.irth-os-api.workers.dev"),
+# confirmed live via GET .../health -> {"status":"ok","db":"up"}. No custom
+# domain attached as of that run.
+SHOPIFY_APP_URL = "https://irth-api.irth-os-api.workers.dev"
 
 # Secrets managed via: wrangler secret put <KEY>
 # DATABASE_URL, BETTER_AUTH_SECRET, PAYMOB_API_KEY, PAYMOB_HMAC_SECRET,
@@ -84,10 +80,15 @@ name = "irth-api"
 # stays the single place every var this deployment needs is visible.
 # Omitting the cron, on the other hand, ships with a silently undrained
 # outbox (the original bug this comment block exists to fix).
-vars = { NODE_ENV = "production", ADMIN_APP_URL = "https://app.irth-house.com", SHOPIFY_APP_URL = "https://irth-api.workers.dev" }
+vars = { NODE_ENV = "production", ADMIN_APP_URL = "https://app.irth-house.com", SHOPIFY_APP_URL = "https://irth-api.irth-os-api.workers.dev" }
 triggers = { crons = ["* * * * *"] }
 
 [env.staging]
 name = "irth-api-staging"
-vars = { NODE_ENV = "staging", ADMIN_APP_URL = "https://app.irth-house.com", SHOPIFY_APP_URL = "https://irth-api-staging.workers.dev" }
+# Not independently verified like the production value above — same
+# irth-os-api.workers.dev account subdomain, unconfirmed whether Cloudflare's
+# naming for a *named environment* worker matches this pattern exactly.
+# Check `wrangler deployments list --name irth-api-staging` (or the staging
+# deploy's own logs) before relying on this for a real OAuth connect.
+vars = { NODE_ENV = "staging", ADMIN_APP_URL = "https://app.irth-house.com", SHOPIFY_APP_URL = "https://irth-api-staging.irth-os-api.workers.dev" }
 triggers = { crons = ["* * * * *"] }
