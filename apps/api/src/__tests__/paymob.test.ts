@@ -16,7 +16,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import crypto from 'node:crypto';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { orders } from '@irth/db';
 
 // Populated per-test, consumed/inspected in call order by the mocked `db`
@@ -27,6 +27,44 @@ let selectWhereArgs: unknown[] = [];
 let updateWhereArgs: unknown[] = [];
 let updateSetArgs: unknown[] = [];
 let insertValuesArgs: unknown[] = [];
+
+type IdempotencyArgs = {
+  orgId: string;
+  operation: string;
+  key: string | undefined;
+  request: unknown;
+};
+
+let idempotencyCalls: IdempotencyArgs[] = [];
+let idempotencyCache = new Map<string, { request: string; response: unknown }>();
+let orgContextOrgIds: string[] = [];
+
+vi.mock('@irth/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@irth/db')>();
+  return {
+    ...actual,
+    withIdempotency: vi.fn(async (_db: unknown, args: IdempotencyArgs, operation: () => Promise<unknown>) => {
+      idempotencyCalls.push(args);
+      if (args.key === undefined) return operation();
+
+      const cacheKey = [args.orgId, args.operation, args.key].join(':');
+      const request = JSON.stringify(args.request);
+      const cached = idempotencyCache.get(cacheKey);
+      if (cached) {
+        if (cached.request !== request) throw new actual.IdempotencyError('different request', 'BAD_REQUEST');
+        return cached.response;
+      }
+
+      const response = await operation();
+      idempotencyCache.set(cacheKey, { request, response });
+      return response;
+    }),
+    withOrgContext: vi.fn(async (dbInstance: unknown, orgId: string, operation: (tx: unknown) => Promise<unknown>) => {
+      orgContextOrgIds.push(orgId);
+      return operation(dbInstance);
+    }),
+  };
+});
 
 vi.mock('../db', () => ({
   db: {
@@ -137,6 +175,9 @@ beforeEach(() => {
   updateWhereArgs = [];
   updateSetArgs = [];
   insertValuesArgs = [];
+  idempotencyCalls = [];
+  idempotencyCache = new Map<string, { request: string; response: unknown }>();
+  orgContextOrgIds = [];
   delete process.env.PAYMOB_HMAC_SECRET;
 });
 
@@ -256,7 +297,11 @@ describe('paymob webhook — cross-tenant regression', () => {
 
     // The update and the audit insert must reference org B's id/orgId —
     // never org A's, even though both orders share an orderNumber.
-    expect(updateWhereArgs[0]).toEqual(and(eq(orders.id, ORDER_B_ID), eq(orders.orgId, ORG_B)));
+    expect(updateWhereArgs[0]).toEqual(and(
+      eq(orders.id, ORDER_B_ID),
+      eq(orders.orgId, ORG_B),
+      inArray(orders.status, ['pending', 'payment_failed']),
+    ));
     expect(updateWhereArgs[0]).not.toEqual(and(eq(orders.id, ORDER_A_ID), eq(orders.orgId, ORG_A)));
 
     expect(insertValuesArgs[0]).toMatchObject({ orgId: ORG_B, recordId: ORDER_B_ID });
@@ -305,4 +350,80 @@ describe('paymob webhook — status transitions', () => {
       changes: expect.objectContaining({ newStatus: 'payment_failed' }),
     });
   });
+
+  it('uses Paymob transaction id as the idempotency key and does not reapply a redelivery', async () => {
+    process.env.PAYMOB_HMAC_SECRET = SECRET;
+    const order = { id: ORDER_ID, orgId: ORG_ID, orderNumber: 'IRT-2026-0004', status: 'pending' };
+    selectQueue = [[order], [order]];
+    updateQueue = [[{ ...order, status: 'confirmed' }]];
+
+    const obj = buildObj(ORDER_ID, true);
+    const hmac = computeHmac(obj, SECRET);
+
+    const first = await postWebhook({ obj }, { hmac });
+    const second = await postWebhook({ obj }, { hmac });
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(updateSetArgs).toHaveLength(1);
+    expect(insertValuesArgs).toHaveLength(1);
+    expect(orgContextOrgIds).toEqual([ORG_ID]);
+    expect(idempotencyCalls).toHaveLength(2);
+    expect(idempotencyCalls[0]).toMatchObject({
+      orgId: ORG_ID,
+      operation: 'paymob.webhook',
+      key: '123456',
+      request: obj,
+    });
+  });
+
+  it.each(['shipped', 'delivered', 'cancelled'] as const)(
+    'does not regress a %s order to confirmed on a stale success callback',
+    async (status) => {
+      process.env.PAYMOB_HMAC_SECRET = SECRET;
+      const order = { id: ORDER_ID, orgId: ORG_ID, orderNumber: 'IRT-2026-0005', status };
+      selectQueue = [[order]];
+      updateQueue = [[]];
+
+      const obj = buildObj(ORDER_ID, true);
+      const hmac = computeHmac(obj, SECRET);
+
+      const res = await postWebhook({ obj }, { hmac });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ data: { success: true }, error: null, meta: null });
+
+      expect(updateSetArgs[0]).toMatchObject({ status: 'confirmed' });
+      expect(updateWhereArgs[0]).toEqual(and(
+        eq(orders.id, ORDER_ID),
+        eq(orders.orgId, ORG_ID),
+        inArray(orders.status, ['pending', 'payment_failed']),
+      ));
+      expect(insertValuesArgs).toHaveLength(0);
+    },
+  );
+
+  it.each(['shipped', 'delivered', 'cancelled'] as const)(
+    'does not regress a %s order to payment_failed on a stale failure callback',
+    async (status) => {
+      process.env.PAYMOB_HMAC_SECRET = SECRET;
+      const order = { id: ORDER_ID, orgId: ORG_ID, orderNumber: 'IRT-2026-0006', status };
+      selectQueue = [[order]];
+      updateQueue = [[]];
+
+      const obj = buildObj(ORDER_ID, false);
+      const hmac = computeHmac(obj, SECRET);
+
+      const res = await postWebhook({ obj }, { hmac });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ data: { success: true }, error: null, meta: null });
+
+      expect(updateSetArgs[0]).toMatchObject({ status: 'payment_failed' });
+      expect(updateWhereArgs[0]).toEqual(and(
+        eq(orders.id, ORDER_ID),
+        eq(orders.orgId, ORG_ID),
+        inArray(orders.status, ['pending']),
+      ));
+      expect(insertValuesArgs).toHaveLength(0);
+    },
+  );
 });

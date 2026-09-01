@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db } from '../../db';
-import { orders, auditLog } from '@irth/db';
-import { eq, and } from 'drizzle-orm';
+import { orders, auditLog, withIdempotency, withOrgContext, IdempotencyError } from '@irth/db';
+import { eq, and, inArray } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { envVar } from '../../utils/env';
@@ -92,20 +92,47 @@ paymobRoute.post('/', async (c: Context) => {
 
   const isSuccess = obj.success === true;
   const newStatus = isSuccess ? 'confirmed' : 'payment_failed';
+  const allowedCurrentStatuses = isSuccess ? (['pending', 'payment_failed'] as const) : (['pending'] as const);
 
-  const [updatedOrder] = await db.update(orders)
-    .set({ status: newStatus, updatedAt: new Date() })
-    .where(and(eq(orders.id, order.id), eq(orders.orgId, order.orgId)))
-    .returning();
+  try {
+    await withIdempotency(
+      db,
+      { orgId: order.orgId, operation: 'paymob.webhook', key: String(obj.id), request: obj },
+      () => withOrgContext(db, order.orgId, async (tx) => {
+        const [updatedOrder] = await tx.update(orders)
+          .set({ status: newStatus, updatedAt: new Date() })
+          .where(and(
+            eq(orders.id, order.id),
+            eq(orders.orgId, order.orgId),
+            inArray(orders.status, allowedCurrentStatuses),
+          ))
+          .returning();
 
-  await db.insert(auditLog).values({
-    orgId: order.orgId,
-    userId: null,
-    action: 'PAYMOB_WEBHOOK',
-    tableName: 'orders',
-    recordId: order.id,
-    changes: { oldStatus: order.status, newStatus, paymobPayload: obj }
-  });
+        if (!updatedOrder) {
+          return { success: true };
+        }
+
+        await tx.insert(auditLog).values({
+          orgId: order.orgId,
+          userId: null,
+          action: 'PAYMOB_WEBHOOK',
+          tableName: 'orders',
+          recordId: order.id,
+          changes: { oldStatus: order.status, newStatus, paymobPayload: obj }
+        });
+
+        return { success: true };
+      }),
+    );
+  } catch (err) {
+    if (err instanceof IdempotencyError) {
+      return c.json(
+        { data: null, error: err.message, meta: null },
+        err.code === 'CONFLICT' ? 409 : 400,
+      );
+    }
+    throw err;
+  }
 
   return c.json({ data: { success: true }, error: null, meta: null });
 });
