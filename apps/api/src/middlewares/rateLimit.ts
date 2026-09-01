@@ -1,19 +1,72 @@
 import { MiddlewareHandler } from 'hono';
+import { getEnv } from '../db';
+import {
+  applySlidingWindowRateLimit,
+  chooseRateLimitEvictionKeys,
+  type RateLimitDecision,
+  type RateLimitEntry,
+} from './rateLimitLogic';
 
-// Simple sliding window — resets per Worker instance.
-// KNOWN LIMIT (interim): this is per-isolate, so the effective limit is
-// `max` per window PER ISOLATE, not globally — requests scattered across
-// isolates/colos each get their own budget. Replacing this with a
-// KV/Durable-Object-backed limiter is tracked as follow-up work; until then
-// this still bounds runaway loops within an isolate and keeps the 429 shape
-// clients must handle.
-//
 // Stale keys are evicted lazily: without eviction the Map grows without bound
 // (one key per unique IP), which is itself a memory-pressure DoS vector. The
 // sweep runs only when the cap is reached, so steady-state traffic pays
-// nothing.
-const hits = new Map<string, { count: number; resetAt: number }>();
-const MAX_TRACKED_KEYS = 10_000;
+// nothing. This cap only applies to the local fallback; Durable Objects keep
+// one persisted entry per key.
+const hits = new Map<string, RateLimitEntry>();
+export const MAX_TRACKED_KEYS = 10_000;
+
+function recordLocalHit(key: string, now: number, max: number, windowMs: number): RateLimitDecision {
+  const currentEntry = hits.get(key);
+  const startsNewWindow = !currentEntry || now > currentEntry.resetAt;
+
+  if (startsNewWindow && hits.size >= MAX_TRACKED_KEYS) {
+    for (const keyToEvict of chooseRateLimitEvictionKeys(hits, now, MAX_TRACKED_KEYS)) {
+      hits.delete(keyToEvict);
+    }
+  }
+
+  const decision = applySlidingWindowRateLimit(currentEntry, now, max, windowMs);
+  hits.set(key, decision.entry);
+  return decision;
+}
+
+function isRateLimitDecision(value: unknown): value is RateLimitDecision {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<string, unknown>;
+  const entry = record.entry;
+  if (typeof entry !== 'object' || entry === null) return false;
+  const entryRecord = entry as Record<string, unknown>;
+  return (
+    typeof entryRecord.count === 'number' &&
+    typeof entryRecord.resetAt === 'number' &&
+    typeof record.allowed === 'boolean' &&
+    typeof record.remaining === 'number'
+  );
+}
+
+async function recordDurableObjectHit(
+  namespace: DurableObjectNamespace,
+  key: string,
+  max: number,
+  windowMs: number,
+): Promise<RateLimitDecision> {
+  const id = namespace.idFromName(key);
+  const stub = namespace.get(id);
+  const url = new URL('https://rate-limit.local/');
+  url.searchParams.set('max', String(max));
+  url.searchParams.set('windowMs', String(windowMs));
+
+  const response = await stub.fetch(url);
+  if (!response.ok) {
+    throw new Error(`RateLimiterDO returned ${response.status}`);
+  }
+
+  const payload: unknown = await response.json();
+  if (!isRateLimitDecision(payload)) {
+    throw new Error('RateLimiterDO returned an invalid payload');
+  }
+  return payload;
+}
 
 /**
  * `trustedProxiesCount` may be given directly (Node/tests) or as a getter —
@@ -48,35 +101,18 @@ export function rateLimit(
       }
       if (!key) key = 'unknown';
     }
-    const now = Date.now();
-    const entry = hits.get(key);
 
-    if (!entry || now > entry.resetAt) {
-      if (hits.size >= MAX_TRACKED_KEYS) {
-        // Evict everything already expired; then, if still full, drop the
-        // soonest-to-expire key to make room. Worst case is one O(n) sweep
-        // per new key while saturated — acceptable for an interim limiter.
-        let oldestKey: string | null = null;
-        let oldestResetAt = Infinity;
-        for (const [k, v] of hits) {
-          if (now > v.resetAt) hits.delete(k);
-          else if (v.resetAt < oldestResetAt) {
-            oldestResetAt = v.resetAt;
-            oldestKey = k;
-          }
-        }
-        if (hits.size >= MAX_TRACKED_KEYS && oldestKey) hits.delete(oldestKey);
-      }
-      hits.set(key, { count: 1, resetAt: now + windowMs });
-    } else {
-      entry.count++;
-      if (entry.count > max) {
-        return c.json({ data: null, error: 'Too Many Requests', meta: null }, 429);
-      }
+    const namespace = getEnv()?.RATE_LIMITER as DurableObjectNamespace | undefined;
+    const decision = namespace
+      ? await recordDurableObjectHit(namespace, key, max, windowMs)
+      : recordLocalHit(key, Date.now(), max, windowMs);
+
+    if (!decision.allowed) {
+      return c.json({ data: null, error: 'Too Many Requests', meta: null }, 429);
     }
 
     c.header('X-RateLimit-Limit', String(max));
-    c.header('X-RateLimit-Remaining', String(max - (hits.get(key)?.count ?? 1)));
+    c.header('X-RateLimit-Remaining', String(decision.remaining));
     await next();
   };
 }

@@ -8,6 +8,14 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 main = "src/index.ts"
 
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RateLimiterDO"]
+
 [vars]
 NODE_ENV = "production"
 # Base URL for the admin app's /join page — used to build the link in
@@ -83,6 +91,10 @@ name = "irth-api"
 vars = { NODE_ENV = "production", ADMIN_APP_URL = "https://app.irth-house.com", SHOPIFY_APP_URL = "https://irth-api.irth-os-api.workers.dev" }
 triggers = { crons = ["* * * * *"] }
 
+[[env.production.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDO"
+
 [env.staging]
 name = "irth-api-staging"
 # Not independently verified like the production value above — same
@@ -92,3 +104,7 @@ name = "irth-api-staging"
 # deploy's own logs) before relying on this for a real OAuth connect.
 vars = { NODE_ENV = "staging", ADMIN_APP_URL = "https://app.irth-house.com", SHOPIFY_APP_URL = "https://irth-api-staging.irth-os-api.workers.dev" }
 triggers = { crons = ["* * * * *"] }
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiterDO"
