@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure } from '../trpc';
-import { etaInvoices, orders, buildEtaOrderInput } from '@irth/db';
+import { etaInvoices, orders, buildEtaOrderInput, withAudit } from '@irth/db';
 import { eq, and, desc, isNull, or } from 'drizzle-orm';
 import { issueInvoice, getInvoiceStatus, cancelInvoice, buildEtaConfig } from '@irth/domain';
 
@@ -51,37 +51,37 @@ export const etaRouter = router({
                 // retryable/nextRetryAt bookkeeping the outbox worker uses —
                 // an admin can just click again. Still record what happened,
                 // consistent with every other write to this row.
-                await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
-                    orgId: ctx.orgId,
-                    orderId: input.orderId,
-                    status: 'error',
-                    errorMessage: result.message,
-                    retryCount: (existing?.retryCount ?? 0) + 1,
-                }).onConflictDoUpdate({
-                    target: etaInvoices.orderId,
-                    set: {
+                await ctx.withOrg((tx) => withAudit(tx, async () => {
+                    const [row] = await tx.insert(etaInvoices).values({
+                        orgId: ctx.orgId,
+                        orderId: input.orderId,
                         status: 'error',
                         errorMessage: result.message,
                         retryCount: (existing?.retryCount ?? 0) + 1,
-                        updatedAt: new Date(),
-                    },
+                    }).onConflictDoUpdate({
+                        target: etaInvoices.orderId,
+                        set: {
+                            status: 'error',
+                            errorMessage: result.message,
+                            retryCount: (existing?.retryCount ?? 0) + 1,
+                            updatedAt: new Date(),
+                        },
+                    }).returning({ id: etaInvoices.id });
+                    return row;
+                }, {
+                    orgId: ctx.orgId,
+                    userId: ctx.userId,
+                    action: 'record_eta_invoice_error',
+                    tableName: 'eta_invoices',
+                    changes: { orderId: input.orderId, status: 'error', errorMessage: result.message },
                 }));
                 return { data: null, error: result.message, meta: null };
             }
 
-            const [row] = await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
-                orgId: ctx.orgId,
-                orderId: input.orderId,
-                etaUuid: result.uuid,
-                longId: result.longId ?? null,
-                qrCodeData: result.qrCodeData ?? null,
-                status: 'submitted',
-                submittedAt: new Date(),
-                retryCount: 0,
-                nextRetryAt: null,
-            }).onConflictDoUpdate({
-                target: etaInvoices.orderId,
-                set: {
+            const row = await ctx.withOrg((tx) => withAudit(tx, async () => {
+                const [row] = await tx.insert(etaInvoices).values({
+                    orgId: ctx.orgId,
+                    orderId: input.orderId,
                     etaUuid: result.uuid,
                     longId: result.longId ?? null,
                     qrCodeData: result.qrCodeData ?? null,
@@ -89,10 +89,28 @@ export const etaRouter = router({
                     submittedAt: new Date(),
                     retryCount: 0,
                     nextRetryAt: null,
-                    errorMessage: null,
-                    updatedAt: new Date(),
-                },
-            }).returning());
+                }).onConflictDoUpdate({
+                    target: etaInvoices.orderId,
+                    set: {
+                        etaUuid: result.uuid,
+                        longId: result.longId ?? null,
+                        qrCodeData: result.qrCodeData ?? null,
+                        status: 'submitted',
+                        submittedAt: new Date(),
+                        retryCount: 0,
+                        nextRetryAt: null,
+                        errorMessage: null,
+                        updatedAt: new Date(),
+                    },
+                }).returning();
+                return row;
+            }, {
+                orgId: ctx.orgId,
+                userId: ctx.userId,
+                action: 'submit_eta_invoice',
+                tableName: 'eta_invoices',
+                changes: { orderId: input.orderId, etaUuid: result.uuid, longId: result.longId ?? null },
+            }));
 
             return { data: row, error: null, meta: null };
         }),
@@ -108,14 +126,24 @@ export const etaRouter = router({
             if (!invoice?.etaUuid) return { data: null, error: 'No ETA invoice found', meta: null };
 
             const statusResult = await getInvoiceStatus(invoice.etaUuid, etaConfig());
-            await ctx.withOrg(async (tx) => tx
-                .update(etaInvoices)
-                .set({
-                    status: statusResult.status.toLowerCase(),
-                    qrCodeData: statusResult.qrCodeData ?? invoice.qrCodeData,
-                    longId: statusResult.longId ?? invoice.longId,
-                })
-                .where(eq(etaInvoices.id, invoice.id)));
+            await ctx.withOrg((tx) => withAudit(tx, async () => {
+                const [row] = await tx
+                    .update(etaInvoices)
+                    .set({
+                        status: statusResult.status.toLowerCase(),
+                        qrCodeData: statusResult.qrCodeData ?? invoice.qrCodeData,
+                        longId: statusResult.longId ?? invoice.longId,
+                    })
+                    .where(and(eq(etaInvoices.id, invoice.id), eq(etaInvoices.orgId, ctx.orgId)))
+                    .returning({ id: etaInvoices.id });
+                return row ?? { id: invoice.id };
+            }, {
+                orgId: ctx.orgId,
+                userId: ctx.userId,
+                action: 'update_eta_invoice_status',
+                tableName: 'eta_invoices',
+                changes: { orderId: input.orderId, status: statusResult.status.toLowerCase() },
+            }));
 
             return { data: { ...invoice, status: statusResult.status }, error: null, meta: null };
         }),
@@ -135,10 +163,20 @@ export const etaRouter = router({
             // why an unknown window refuses rather than assumes "no limit".
             const result = await cancelInvoice(invoice.etaUuid, input.reason, invoice.submittedAt, etaConfig());
             if (result.ok) {
-                await ctx.withOrg(async (tx) => tx
-                    .update(etaInvoices)
-                    .set({ status: 'cancelled' })
-                    .where(eq(etaInvoices.id, invoice.id)));
+                await ctx.withOrg((tx) => withAudit(tx, async () => {
+                    const [row] = await tx
+                        .update(etaInvoices)
+                        .set({ status: 'cancelled' })
+                        .where(and(eq(etaInvoices.id, invoice.id), eq(etaInvoices.orgId, ctx.orgId)))
+                        .returning({ id: etaInvoices.id });
+                    return row ?? { id: invoice.id };
+                }, {
+                    orgId: ctx.orgId,
+                    userId: ctx.userId,
+                    action: 'cancel_eta_invoice',
+                    tableName: 'eta_invoices',
+                    changes: input,
+                }));
             }
             return { data: { cancelled: result.ok }, error: result.ok ? null : (result.error ?? 'Cancel failed'), meta: null };
         }),
@@ -162,21 +200,30 @@ export const etaRouter = router({
 
                 const result = await issueInvoice(etaInput, etaConfig());
                 if (result.ok) {
-                    await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
+                    await ctx.withOrg((tx) => withAudit(tx, async () => {
+                        const [row] = await tx.insert(etaInvoices).values({
+                            orgId: ctx.orgId,
+                            orderId,
+                            etaUuid: result.uuid,
+                            longId: result.longId ?? null,
+                            status: 'submitted',
+                            submittedAt: new Date(),
+                            retryCount: 0,
+                            nextRetryAt: null,
+                        }).onConflictDoUpdate({
+                            target: etaInvoices.orderId,
+                            set: {
+                                etaUuid: result.uuid, status: 'submitted', submittedAt: new Date(),
+                                retryCount: 0, nextRetryAt: null, errorMessage: null, updatedAt: new Date(),
+                            },
+                        }).returning({ id: etaInvoices.id });
+                        return row;
+                    }, {
                         orgId: ctx.orgId,
-                        orderId,
-                        etaUuid: result.uuid,
-                        longId: result.longId ?? null,
-                        status: 'submitted',
-                        submittedAt: new Date(),
-                        retryCount: 0,
-                        nextRetryAt: null,
-                    }).onConflictDoUpdate({
-                        target: etaInvoices.orderId,
-                        set: {
-                            etaUuid: result.uuid, status: 'submitted', submittedAt: new Date(),
-                            retryCount: 0, nextRetryAt: null, errorMessage: null, updatedAt: new Date(),
-                        },
+                        userId: ctx.userId,
+                        action: 'submit_eta_invoice',
+                        tableName: 'eta_invoices',
+                        changes: { orderId, etaUuid: result.uuid, longId: result.longId ?? null },
                     }));
                     submitted++;
                 } else {
@@ -185,11 +232,20 @@ export const etaRouter = router({
                     // silent (no row written at all for an order with no
                     // prior invoice, and an untouched errorMessage for one
                     // that already had an error row).
-                    await ctx.withOrg(async (tx) => tx.insert(etaInvoices).values({
-                        orgId: ctx.orgId, orderId, status: 'error', errorMessage: result.message,
-                    }).onConflictDoUpdate({
-                        target: etaInvoices.orderId,
-                        set: { status: 'error', errorMessage: result.message, updatedAt: new Date() },
+                    await ctx.withOrg((tx) => withAudit(tx, async () => {
+                        const [row] = await tx.insert(etaInvoices).values({
+                            orgId: ctx.orgId, orderId, status: 'error', errorMessage: result.message,
+                        }).onConflictDoUpdate({
+                            target: etaInvoices.orderId,
+                            set: { status: 'error', errorMessage: result.message, updatedAt: new Date() },
+                        }).returning({ id: etaInvoices.id });
+                        return row;
+                    }, {
+                        orgId: ctx.orgId,
+                        userId: ctx.userId,
+                        action: 'record_eta_invoice_error',
+                        tableName: 'eta_invoices',
+                        changes: { orderId, status: 'error', errorMessage: result.message },
                     }));
                 }
             }

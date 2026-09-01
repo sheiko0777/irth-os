@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { platformAdminProcedure, router } from '../trpc';
-import { organizations, orgMembers, orgFeatureFlags, orgInvites, shippingZones, shippingRates, priceLists } from '@irth/db';
+import { organizations, orgMembers, orgFeatureFlags, orgInvites, shippingZones, shippingRates, priceLists, withAudit } from '@irth/db';
 import { eq, count, desc } from 'drizzle-orm';
 import { EGP, parseDecimal } from '@irth/domain';
 import { DEFAULT_SETTINGS, SETTING_KEYS } from '../../lib/settings';
@@ -59,21 +59,42 @@ export const platformAdminRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { orgId, ...fields } = input;
-      const [result] = await ctx.db
-        .insert(orgFeatureFlags)
-        .values({ orgId, ...fields })
-        .onConflictDoUpdate({
-          target: orgFeatureFlags.orgId,
-          set: { ...fields, updatedAt: new Date() },
-        })
-        .returning();
+      const result = await ctx.dbUnscoped.transaction((tx) => withAudit(tx, async () => {
+        const [result] = await tx
+          .insert(orgFeatureFlags)
+          .values({ orgId, ...fields })
+          .onConflictDoUpdate({
+            target: orgFeatureFlags.orgId,
+            set: { ...fields, updatedAt: new Date() },
+          })
+          .returning();
+        return result;
+      }, {
+        orgId,
+        userId: ctx.userId,
+        action: 'set_org_config',
+        tableName: 'org_feature_flags',
+        changes: input,
+      }));
       return { data: result, error: null };
     }),
 
   resetConfig: platformAdminProcedure
     .input(z.object({ orgId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.dbUnscoped.delete(orgFeatureFlags).where(eq(orgFeatureFlags.orgId, input.orgId));
+      await ctx.dbUnscoped.transaction((tx) => withAudit(tx, async () => {
+        const [row] = await tx
+          .delete(orgFeatureFlags)
+          .where(eq(orgFeatureFlags.orgId, input.orgId))
+          .returning({ id: orgFeatureFlags.id });
+        return row ?? { id: input.orgId };
+      }, {
+        orgId: input.orgId,
+        userId: ctx.userId,
+        action: 'reset_org_config',
+        tableName: 'org_feature_flags',
+        changes: { orgId: input.orgId },
+      }));
       return { data: { reset: true }, error: null };
     }),
 
@@ -101,44 +122,54 @@ export const platformAdminRouter = router({
           .values({ name: input.name, slug: input.slug, brand: 'irth' })
           .returning();
 
-        await tx.insert(orgFeatureFlags).values({
+        await withAudit(tx, async () => {
+          await tx.insert(orgFeatureFlags).values({
+            orgId: org.id,
+            plan: input.plan,
+            enabledScreens: input.enabledScreens,
+            disabledScreens: input.disabledScreens,
+            maxUsers: input.maxUsers,
+            notes: input.notes,
+          });
+
+          await tx.insert(orgInvites).values({
+            orgId: org.id,
+            email: input.ownerEmail,
+            token,
+            role: 'owner',
+            expiresAt,
+          });
+
+          // UX hygiene, not a bug fix: order/checkout logic never reads these
+          // tables (order pricing comes from productVariants.priceMinor) and
+          // every list screen already handles zero rows. Values mirror the same
+          // DEFAULT_SETTINGS a new org would otherwise fall back to at read time
+          // in settingsRouter's getAll, so the seeded shipping rate matches what
+          // Settings already claims the flat rate to be. org_settings itself is
+          // NOT seeded here — getAll already merges DEFAULT_SETTINGS over
+          // whatever rows exist, so there is nothing for a missing row to break.
+          const [zone] = await tx.insert(shippingZones)
+            .values({ orgId: org.id, name: 'Default Zone', countries: ['EG'] })
+            .returning();
+
+          await tx.insert(shippingRates).values({
+            zoneId: zone.id,
+            orgId: org.id,
+            name: 'Standard',
+            rateType: 'flat',
+            priceMinor: parseDecimal(DEFAULT_SETTINGS[SETTING_KEYS.shipping.flat_rate], EGP).minor,
+          });
+
+          await tx.insert(priceLists).values({ orgId: org.id, name: 'Default Price List', isDefault: true });
+
+          return { id: org.id };
+        }, {
           orgId: org.id,
-          plan: input.plan,
-          enabledScreens: input.enabledScreens,
-          disabledScreens: input.disabledScreens,
-          maxUsers: input.maxUsers,
-          notes: input.notes,
+          userId: ctx.userId,
+          action: 'platform_create_org',
+          tableName: 'organizations',
+          changes: { name: input.name, slug: input.slug, plan: input.plan },
         });
-
-        await tx.insert(orgInvites).values({
-          orgId: org.id,
-          email: input.ownerEmail,
-          token,
-          role: 'owner',
-          expiresAt,
-        });
-
-        // UX hygiene, not a bug fix: order/checkout logic never reads these
-        // tables (order pricing comes from productVariants.priceMinor) and
-        // every list screen already handles zero rows. Values mirror the same
-        // DEFAULT_SETTINGS a new org would otherwise fall back to at read time
-        // in settingsRouter's getAll, so the seeded shipping rate matches what
-        // Settings already claims the flat rate to be. org_settings itself is
-        // NOT seeded here — getAll already merges DEFAULT_SETTINGS over
-        // whatever rows exist, so there is nothing for a missing row to break.
-        const [zone] = await tx.insert(shippingZones)
-          .values({ orgId: org.id, name: 'Default Zone', countries: ['EG'] })
-          .returning();
-
-        await tx.insert(shippingRates).values({
-          zoneId: zone.id,
-          orgId: org.id,
-          name: 'Standard',
-          rateType: 'flat',
-          priceMinor: parseDecimal(DEFAULT_SETTINGS[SETTING_KEYS.shipping.flat_rate], EGP).minor,
-        });
-
-        await tx.insert(priceLists).values({ orgId: org.id, name: 'Default Price List', isDefault: true });
 
         return org;
       });
@@ -160,7 +191,29 @@ export const platformAdminRouter = router({
   revokeInvite: platformAdminProcedure
     .input(z.object({ inviteId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.dbUnscoped.delete(orgInvites).where(eq(orgInvites.id, input.inviteId));
+      await ctx.dbUnscoped.transaction(async (tx) => {
+        const [invite] = await tx
+          .select({ orgId: orgInvites.orgId })
+          .from(orgInvites)
+          .where(eq(orgInvites.id, input.inviteId))
+          .limit(1);
+
+        if (!invite) return;
+
+        await withAudit(tx, async () => {
+          const [row] = await tx
+            .delete(orgInvites)
+            .where(eq(orgInvites.id, input.inviteId))
+            .returning({ id: orgInvites.id });
+          return row ?? { id: input.inviteId };
+        }, {
+          orgId: invite.orgId,
+          userId: ctx.userId,
+          action: 'revoke_org_invite',
+          tableName: 'org_invites',
+          changes: { inviteId: input.inviteId },
+        });
+      });
       return { data: { revoked: true }, error: null };
     }),
 });

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
-import { priceLists, priceListItems } from '@irth/db';
+import { priceLists, priceListItems, withAudit } from '@irth/db';
 import { eq, and, desc, count } from 'drizzle-orm';
 
 export const pricelistsRouter = router({
@@ -45,30 +45,49 @@ export const pricelistsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [pl] = await ctx.withOrg(async (tx) => tx
-        .insert(priceLists)
-        .values({
-          orgId: ctx.orgId,
-          name: input.name,
-          description: input.description ?? null,
-          currency: input.currency,
-          // Percent in, basis points stored. Math.round is safe here: the input
-          // is a rate bounded to 0..100, not money, and bp is the integer
-          // representation the CHECK constraint enforces.
-          discountBp: input.discountPercent === undefined ? null : Math.round(input.discountPercent * 100),
-          startDate: input.startDate ?? null,
-          endDate: input.endDate ?? null,
-        })
-        .returning());
+      const pl = await ctx.withOrg((tx) => withAudit(tx, async () => {
+        const [pl] = await tx
+          .insert(priceLists)
+          .values({
+            orgId: ctx.orgId,
+            name: input.name,
+            description: input.description ?? null,
+            currency: input.currency,
+            // Percent in, basis points stored. Math.round is safe here: the input
+            // is a rate bounded to 0..100, not money, and bp is the integer
+            // representation the CHECK constraint enforces.
+            discountBp: input.discountPercent === undefined ? null : Math.round(input.discountPercent * 100),
+            startDate: input.startDate ?? null,
+            endDate: input.endDate ?? null,
+          })
+          .returning();
+        return pl;
+      }, {
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        action: 'create_price_list',
+        tableName: 'price_lists',
+        changes: input,
+      }));
       return pl;
     }),
 
   delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.withOrg(async (tx) => tx
-        .delete(priceLists)
-        .where(and(eq(priceLists.id, input.id), eq(priceLists.orgId, ctx.orgId))));
+      await ctx.withOrg((tx) => withAudit(tx, async () => {
+        const [deleted] = await tx
+          .delete(priceLists)
+          .where(and(eq(priceLists.id, input.id), eq(priceLists.orgId, ctx.orgId)))
+          .returning({ id: priceLists.id });
+        return deleted ?? { id: input.id };
+      }, {
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        action: 'delete_price_list',
+        tableName: 'price_lists',
+        changes: { id: input.id },
+      }));
       return { success: true };
     }),
 
