@@ -49,6 +49,24 @@ export const integrationsRouter = router({
             return { data: events, error: null, meta: null };
         }),
 
+    retryOutboxEvent: requirePermission('integrations', 'connect')
+        .input(z.object({ eventId: z.string().uuid() }))
+        .mutation(async ({ ctx, input }) => {
+            const updated = await ctx.withOrg((tx) => tx
+                .update(outboxEvents)
+                .set({ attempts: 0, lastError: null })
+                .where(and(
+                    eq(outboxEvents.id, input.eventId),
+                    eq(outboxEvents.orgId, ctx.orgId)
+                ))
+                .returning({ id: outboxEvents.id }));
+
+            if (updated.length === 0) {
+                throw new TRPCError({ code: 'NOT_FOUND', message: 'لم يتم العثور على حدث صندوق الإرسال' });
+            }
+
+            return { data: { eventId: updated[0].id }, error: null, meta: null };
+        }),
     shopifyStatus: protectedProcedure.query(async ({ ctx }) => {
         const [connection] = await ctx.db
             .select({
