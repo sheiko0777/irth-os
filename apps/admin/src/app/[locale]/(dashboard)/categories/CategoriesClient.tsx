@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PermissionGate } from '@/components/PermissionGate';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { FormDialog } from '@/components/ui/FormDialog';
 import { toast } from 'sonner';
 
 export interface Category {
@@ -132,73 +133,62 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                 </Table>
             </div>
 
-            {isModalOpen && (
-                <div 
-                    className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
-                    onClick={(e) => {
-                        if (e.target === e.currentTarget) setIsModalOpen(false);
-                    }}
-                >
-                    <div className="bg-[var(--surface)] p-6 rounded-lg shadow-lg w-full max-w-md">
-                        <h2 className="text-xl font-bold mb-4 text-[var(--t1)]">إضافة فئة جديدة</h2>
-                        
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <Label htmlFor="name" className="text-[var(--t1)]">الاسم</Label>
-                                <Input
-                                    id="name"
-                                    value={name}
-                                    onChange={handleNameChange}
-                                    required
-                                    className="mt-1"
-                                />
-                            </div>
-
-                            <div>
-                                <Label htmlFor="slug" className="text-[var(--t1)]">الرابط (Slug)</Label>
-                                <Input
-                                    id="slug"
-                                    value={slug}
-                                    onChange={(e) => setSlug(e.target.value)}
-                                    required
-                                    className="mt-1"
-                                />
-                            </div>
-
-                            <div>
-                                <Label htmlFor="parentId" className="text-[var(--t1)]">الفئة الأب (اختياري)</Label>
-                                <select
-                                    id="parentId"
-                                    value={parentId}
-                                    onChange={(e) => setParentId(e.target.value)}
-                                    className="w-full mt-1 p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
-                                >
-                                    <option value="">لا يوجد</option>
-                                    {categories.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="flex justify-end gap-2 mt-6">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setIsModalOpen(false)}
-                                >
-                                    إلغاء
-                                </Button>
-                                <Button 
-                                    type="submit"
-                                    disabled={createMutation.isPending}
-                                >
-                                    {createMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
-                                </Button>
-                            </div>
-                        </form>
+            <FormDialog open={isModalOpen} onClose={() => setIsModalOpen(false)} title="إضافة فئة جديدة" width="448px">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <Label htmlFor="name" className="text-[var(--t1)]">الاسم</Label>
+                        <Input
+                            id="name"
+                            value={name}
+                            onChange={handleNameChange}
+                            required
+                            className="mt-1"
+                        />
                     </div>
-                </div>
-            )}
+
+                    <div>
+                        <Label htmlFor="slug" className="text-[var(--t1)]">الرابط (Slug)</Label>
+                        <Input
+                            id="slug"
+                            value={slug}
+                            onChange={(e) => setSlug(e.target.value)}
+                            required
+                            className="mt-1"
+                        />
+                    </div>
+
+                    <div>
+                        <Label htmlFor="parentId" className="text-[var(--t1)]">الفئة الأب (اختياري)</Label>
+                        <select
+                            id="parentId"
+                            value={parentId}
+                            onChange={(e) => setParentId(e.target.value)}
+                            className="w-full mt-1 p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
+                        >
+                            <option value="">لا يوجد</option>
+                            {categories.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex justify-end gap-2 mt-6">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsModalOpen(false)}
+                        >
+                            إلغاء
+                        </Button>
+                        <Button 
+                            type="submit"
+                            disabled={createMutation.isPending}
+                        >
+                            {createMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
+                        </Button>
+                    </div>
+                </form>
+            </FormDialog>
         </div>
     );
 }

@@ -4,6 +4,7 @@ import { currency, formatMoney, fromMinor, type Money } from '@irth/domain';
 import { useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { trpc } from '@/lib/trpc';
+import { FormDialog } from '@/components/ui/FormDialog';
 
 export type GiftCard = {
   id: string;
@@ -198,87 +199,82 @@ export default function GiftCardsClient({
       </div>
 
       {/* Create Modal */}
-      {showCreate && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center' style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className='rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-6 w-full max-w-md shadow-2xl'>
-            <h2 className='text-lg font-bold text-[var(--t1)] mb-4'>إصدار بطاقة هدية جديدة</h2>
-            <form onSubmit={handleCreate} className='space-y-4'>
-              <div>
-                <label className='block text-sm text-[var(--t2)] mb-1'>المبلغ (جنيه مصري) *</label>
-                <input
-                  type='number'
-                  min='1'
-                  step='0.01'
-                  value={amount}
-                  onChange={(e: { target: { value: string } }) => setAmount(e.target.value)}
-                  className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
-                  placeholder='مثال: 500'
-                  required
-                />
-              </div>
-              <div>
-                <label className='block text-sm text-[var(--t2)] mb-1'>اسم المستلم</label>
-                <input
-                  type='text'
-                  value={recipientName}
-                  onChange={(e: { target: { value: string } }) => setRecipientName(e.target.value)}
-                  className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
-                  placeholder='اختياري'
-                />
-              </div>
-              <div>
-                <label className='block text-sm text-[var(--t2)] mb-1'>البريد الإلكتروني للمستلم</label>
-                <input
-                  type='email'
-                  value={recipientEmail}
-                  onChange={(e: { target: { value: string } }) => setRecipientEmail(e.target.value)}
-                  className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
-                  placeholder='اختياري'
-                  dir='ltr'
-                />
-              </div>
-              <div>
-                <label className='block text-sm text-[var(--t2)] mb-1'>رسالة هدية</label>
-                <textarea
-                  value={message}
-                  onChange={(e: { target: { value: string } }) => setMessage(e.target.value)}
-                  className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)] resize-none'
-                  rows={2}
-                  placeholder='رسالة مع البطاقة (اختياري)'
-                />
-              </div>
-              <div>
-                <label className='block text-sm text-[var(--t2)] mb-1'>تاريخ انتهاء الصلاحية</label>
-                <input
-                  type='date'
-                  value={expiresAt}
-                  onChange={(e: { target: { value: string } }) => setExpiresAt(e.target.value)}
-                  className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
-                  dir='ltr'
-                />
-              </div>
-              {createErr && <p className='text-sm' style={{ color: 'var(--crimson)' }}>{createErr}</p>}
-              <div className='flex gap-3 pt-2'>
-                <button
-                  type='submit'
-                  disabled={createMutation.isPending}
-                  className='flex-1 rounded-lg py-2 text-sm font-medium text-void disabled:opacity-50'
-                  style={{ background: 'var(--gold)' }}
-                >
-                  {createMutation.isPending ? 'جارٍ الإصدار…' : 'إصدار البطاقة'}
-                </button>
-                <button
-                  type='button'
-                  onClick={() => { setShowCreate(false); setCreateErr(''); }}
-                  className='flex-1 rounded-lg border border-[var(--rim2)] py-2 text-sm text-[var(--t2)] hover:text-[var(--t1)] transition-colors'
-                >
-                  إلغاء
-                </button>
-              </div>
-            </form>
+      <FormDialog open={showCreate} onClose={() => { setShowCreate(false); setCreateErr(''); }} title="إصدار بطاقة هدية جديدة" width="448px">
+        <form onSubmit={handleCreate} className='space-y-4'>
+          <div>
+            <label className='block text-sm text-[var(--t2)] mb-1'>المبلغ (جنيه مصري) *</label>
+            <input
+              type='number'
+              min='1'
+              step='0.01'
+              value={amount}
+              onChange={(e: { target: { value: string } }) => setAmount(e.target.value)}
+              className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
+              placeholder='مثال: 500'
+              required
+            />
           </div>
-        </div>
-      )}
+          <div>
+            <label className='block text-sm text-[var(--t2)] mb-1'>اسم المستلم</label>
+            <input
+              type='text'
+              value={recipientName}
+              onChange={(e: { target: { value: string } }) => setRecipientName(e.target.value)}
+              className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
+              placeholder='اختياري'
+            />
+          </div>
+          <div>
+            <label className='block text-sm text-[var(--t2)] mb-1'>البريد الإلكتروني للمستلم</label>
+            <input
+              type='email'
+              value={recipientEmail}
+              onChange={(e: { target: { value: string } }) => setRecipientEmail(e.target.value)}
+              className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
+              placeholder='اختياري'
+              dir='ltr'
+            />
+          </div>
+          <div>
+            <label className='block text-sm text-[var(--t2)] mb-1'>رسالة هدية</label>
+            <textarea
+              value={message}
+              onChange={(e: { target: { value: string } }) => setMessage(e.target.value)}
+              className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)] resize-none'
+              rows={2}
+              placeholder='رسالة مع البطاقة (اختياري)'
+            />
+          </div>
+          <div>
+            <label className='block text-sm text-[var(--t2)] mb-1'>تاريخ انتهاء الصلاحية</label>
+            <input
+              type='date'
+              value={expiresAt}
+              onChange={(e: { target: { value: string } }) => setExpiresAt(e.target.value)}
+              className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
+              dir='ltr'
+            />
+          </div>
+          {createErr && <p className='text-sm' style={{ color: 'var(--crimson)' }}>{createErr}</p>}
+          <div className='flex gap-3 pt-2'>
+            <button
+              type='submit'
+              disabled={createMutation.isPending}
+              className='flex-1 rounded-lg py-2 text-sm font-medium text-void disabled:opacity-50'
+              style={{ background: 'var(--gold)' }}
+            >
+              {createMutation.isPending ? 'جارٍ الإصدار…' : 'إصدار البطاقة'}
+            </button>
+            <button
+              type='button'
+              onClick={() => { setShowCreate(false); setCreateErr(''); }}
+              className='flex-1 rounded-lg border border-[var(--rim2)] py-2 text-sm text-[var(--t2)] hover:text-[var(--t1)] transition-colors'
+            >
+              إلغاء
+            </button>
+          </div>
+        </form>
+      </FormDialog>
     </div>
   );
 }

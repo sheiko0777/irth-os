@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FormDialog } from '@/components/ui/FormDialog';
 import { ClipboardList } from 'lucide-react';
 
 
@@ -114,48 +115,42 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
           </TableBody>
         </Table>
       </div>
-      {detailSession && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={(e: { target: unknown; currentTarget: unknown }) => { if (e.target === e.currentTarget) setDetailSession(null); }}>
-          <div className="bg-[var(--surface)] p-6 rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-[var(--t1)]">تفاصيل الجرد</h2>
-              <button onClick={() => setDetailSession(null)} className="text-[var(--t2)] text-xl px-2">x</button>
-            </div>
-            {getItemsQuery.isLoading ? <p className="text-center text-[var(--t2)] py-8">جاري التحميل...</p> : (
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead className="text-start">المنتج</TableHead>
-                  <TableHead className="text-start">SKU</TableHead>
-                  <TableHead className="text-start">الكمية المتوقعة</TableHead>
-                  <TableHead className="text-start">الكمية المحسوبة</TableHead>
-                  <TableHead className="text-start">الفرق</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {items.length === 0
-                    ? <TableRow><TableCell colSpan={5} className="text-center text-[var(--t2)] py-6">لا توجد اصناف</TableCell></TableRow>
-                    : items.map((item, i) => {
-                        const variance = item.expectedQty - item.countedQty;
-                        return (
-                          <TableRow key={i} className="border-b border-[var(--rim1)]">
-                            <TableCell className="font-medium text-[var(--t1)]">{item.productName}</TableCell>
-                            <TableCell className="text-[var(--t2)]" dir="ltr">{item.sku}</TableCell>
-                            <TableCell className="text-[var(--t1)]">{item.expectedQty}</TableCell>
-                            <TableCell className="text-[var(--t1)]">{item.countedQty}</TableCell>
-                            <TableCell>
-                              <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ color: variance === 0 ? 'var(--emerald)' : 'var(--crimson)' }}>
-                                {variance > 0 ? '+' + variance : variance}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                  }
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        </div>
-      )}
+      <FormDialog open={!!detailSession} onClose={() => setDetailSession(null)} title="تفاصيل الجرد" width="672px">
+        {detailSession && (
+          getItemsQuery.isLoading ? <p className="text-center text-[var(--t2)] py-8">جاري التحميل...</p> : (
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead className="text-start">المنتج</TableHead>
+                <TableHead className="text-start">SKU</TableHead>
+                <TableHead className="text-start">الكمية المتوقعة</TableHead>
+                <TableHead className="text-start">الكمية المحسوبة</TableHead>
+                <TableHead className="text-start">الفرق</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {items.length === 0
+                  ? <TableRow><TableCell colSpan={5} className="text-center text-[var(--t2)] py-6">لا توجد اصناف</TableCell></TableRow>
+                  : items.map((item, i) => {
+                      const variance = item.expectedQty - item.countedQty;
+                      return (
+                        <TableRow key={i} className="border-b border-[var(--rim1)]">
+                          <TableCell className="font-medium text-[var(--t1)]">{item.productName}</TableCell>
+                          <TableCell className="text-[var(--t2)]" dir="ltr">{item.sku}</TableCell>
+                          <TableCell className="text-[var(--t1)]">{item.expectedQty}</TableCell>
+                          <TableCell className="text-[var(--t1)]">{item.countedQty}</TableCell>
+                          <TableCell>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ color: variance === 0 ? 'var(--emerald)' : 'var(--crimson)' }}>
+                              {variance > 0 ? '+' + variance : variance}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                }
+              </TableBody>
+            </Table>
+          )
+        )}
+      </FormDialog>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { FormDialog } from '@/components/ui/FormDialog';
 
 export type Campaign = {
   id: string;
@@ -197,105 +198,104 @@ export default function CampaignsClient({
       </div>
 
       {/* Create Modal */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <form onSubmit={handleCreate} className="rounded-xl p-6 w-full max-w-lg border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
-            <h2 className="text-lg font-bold mb-5">حملة جديدة</h2>
-            <div className="space-y-4">
+      <FormDialog open={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="حملة جديدة" width="512px">
+        <form onSubmit={handleCreate}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>اسم الحملة</label>
+              <input value={form.name}
+                onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, name: e.target.value }))}
+                required className="w-full px-3 py-2 rounded-lg border text-sm"
+                style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}
+                placeholder="مثال: عروض رمضان 2026" />
+            </div>
+            <div>
+              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>نص الرسالة</label>
+              <textarea value={form.message}
+                onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, message: e.target.value }))}
+                required rows={4} className="w-full px-3 py-2 rounded-lg border text-sm resize-none"
+                style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}
+                placeholder="نص الرسالة التي سيتلقاها العملاء..." />
+              <p className="text-xs mt-1" style={{ color: 'var(--t2)' }}>{form.message.length}/1024 حرف</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>اسم الحملة</label>
-                <input value={form.name}
-                  onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  required className="w-full px-3 py-2 rounded-lg border text-sm"
-                  style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}
-                  placeholder="مثال: عروض رمضان 2026" />
-              </div>
-              <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>نص الرسالة</label>
-                <textarea value={form.message}
-                  onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, message: e.target.value }))}
-                  required rows={4} className="w-full px-3 py-2 rounded-lg border text-sm resize-none"
-                  style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}
-                  placeholder="نص الرسالة التي سيتلقاها العملاء..." />
-                <p className="text-xs mt-1" style={{ color: 'var(--t2)' }}>{form.message.length}/1024 حرف</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>القناة</label>
-                  <select value={form.channel}
-                    onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, channel: e.target.value as Campaign['channel'] }))}
-                    className="w-full px-3 py-2 rounded-lg border text-sm"
-                    style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}>
-                    <option value="whatsapp">واتساب</option>
-                    <option value="sms">رسالة نصية</option>
-                    <option value="email">بريد إلكتروني</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>الشريحة المستهدفة</label>
-                  <select value={form.targetSegment}
-                    onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, targetSegment: e.target.value as Campaign['targetSegment'] }))}
-                    className="w-full px-3 py-2 rounded-lg border text-sm"
-                    style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}>
-                    <option value="all">جميع العملاء</option>
-                    <option value="vip">عملاء VIP</option>
-                    <option value="inactive">غير نشطين</option>
-                    <option value="new">عملاء جدد</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>جدولة (اختياري)</label>
-                <input type="datetime-local" value={form.scheduledAt}
-                  onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>القناة</label>
+                <select value={form.channel}
+                  onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, channel: e.target.value as Campaign['channel'] }))}
                   className="w-full px-3 py-2 rounded-lg border text-sm"
-                  style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }} />
+                  style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}>
+                  <option value="whatsapp">واتساب</option>
+                  <option value="sms">رسالة نصية</option>
+                  <option value="email">بريد إلكتروني</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>الشريحة المستهدفة</label>
+                <select value={form.targetSegment}
+                  onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, targetSegment: e.target.value as Campaign['targetSegment'] }))}
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}>
+                  <option value="all">جميع العملاء</option>
+                  <option value="vip">عملاء VIP</option>
+                  <option value="inactive">غير نشطين</option>
+                  <option value="new">عملاء جدد</option>
+                </select>
               </div>
             </div>
-            <div className="flex gap-3 mt-6 justify-end">
-              <button type="button" onClick={() => setIsCreateOpen(false)}
-                className="px-4 py-2 rounded-lg text-sm" style={{ color: 'var(--t2)' }}>إلغاء</button>
-              <button type="submit" disabled={createMutation.isPending}
-                className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: 'var(--gold)', color: 'var(--void)' }}>
-                {createMutation.isPending ? 'جاري الحفظ...' : 'إنشاء الحملة'}
-              </button>
+            <div>
+              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>جدولة (اختياري)</label>
+              <input type="datetime-local" value={form.scheduledAt}
+                onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border text-sm"
+                style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }} />
             </div>
-          </form>
-        </div>
-      )}
+          </div>
+          <div className="flex gap-3 mt-6 justify-end">
+            <button type="button" onClick={() => setIsCreateOpen(false)}
+              className="px-4 py-2 rounded-lg text-sm" style={{ color: 'var(--t2)' }}>إلغاء</button>
+            <button type="submit" disabled={createMutation.isPending}
+              className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: 'var(--gold)', color: 'var(--void)' }}>
+              {createMutation.isPending ? 'جاري الحفظ...' : 'إنشاء الحملة'}
+            </button>
+          </div>
+        </form>
+      </FormDialog>
 
       {/* Preview Modal */}
-      {previewCampaign && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className="rounded-xl p-6 w-full max-w-md border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
-            <h2 className="text-lg font-bold mb-4">{previewCampaign.name}</h2>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span style={{ color: 'var(--t2)' }}>القناة:</span>
-                <span>{statusLabel('campaignChannel', previewCampaign.channel)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: 'var(--t2)' }}>الشريحة:</span>
-                <span>{statusLabel('campaignSegment', previewCampaign.targetSegment)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: 'var(--t2)' }}>الحالة:</span>
-                <StatusBadge status={previewCampaign.status} domain="campaign" />
-              </div>
-              <hr style={{ borderColor: 'var(--rim1)' }} />
-              <div>
-                <p className="mb-2" style={{ color: 'var(--t2)' }}>نص الرسالة:</p>
-                <div className="p-3 rounded-lg text-sm whitespace-pre-wrap" style={{ background: 'var(--rim1)' }}>
-                  {previewCampaign.message}
-                </div>
+      <FormDialog
+        open={!!previewCampaign}
+        onClose={() => setPreviewCampaign(null)}
+        title={previewCampaign?.name ?? ''}
+        width="448px"
+      >
+        {previewCampaign && (
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--t2)' }}>القناة:</span>
+              <span>{statusLabel('campaignChannel', previewCampaign.channel)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--t2)' }}>الشريحة:</span>
+              <span>{statusLabel('campaignSegment', previewCampaign.targetSegment)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span style={{ color: 'var(--t2)' }}>الحالة:</span>
+              <StatusBadge status={previewCampaign.status} domain="campaign" />
+            </div>
+            <hr style={{ borderColor: 'var(--rim1)' }} />
+            <div>
+              <p className="mb-2" style={{ color: 'var(--t2)' }}>نص الرسالة:</p>
+              <div className="p-3 rounded-lg text-sm whitespace-pre-wrap" style={{ background: 'var(--rim1)' }}>
+                {previewCampaign.message}
               </div>
             </div>
             <button onClick={() => setPreviewCampaign(null)}
               className="mt-5 w-full py-2 rounded-lg text-sm"
               style={{ background: 'var(--rim1)', color: 'var(--t1)' }}>إغلاق</button>
           </div>
-        </div>
-      )}
+        )}
+      </FormDialog>
     </div>
   );
 }
