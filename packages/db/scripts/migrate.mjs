@@ -44,7 +44,21 @@ if (!url) {
 // prepared statements). postgres-js prepares by default, so without this the
 // runner works against a direct endpoint and fails against a pooled one — a
 // difference nobody notices until a deploy uses the other URL.
-const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+//
+// search_path is pinned because every migration in drizzle/ writes unqualified
+// names, and several build DDL dynamically with format('ALTER TABLE %I', …).
+// Without a pinned path the schema those resolve to is whatever the connecting
+// role's default happens to be, so a migration can verify a table in `public`
+// and then alter a same-named table in another schema — reported as applied.
+// Measured on 0050: with a `shadow` schema ahead of `public`, RLS landed on
+// shadow.shopify_connections and left public.shopify_connections exposed.
+// Sent as a startup parameter rather than a `SET` so it survives a reconnect.
+const sql = postgres(url, {
+  max: 1,
+  prepare: false,
+  onnotice: () => {},
+  connection: { search_path: 'public' },
+});
 
 async function main() {
   await sql`
