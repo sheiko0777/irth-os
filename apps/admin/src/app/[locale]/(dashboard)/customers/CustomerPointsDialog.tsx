@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 
 interface CustomerPointsDialogProps {
   customerId: string;
@@ -13,6 +14,7 @@ interface CustomerPointsDialogProps {
 }
 
 export default function CustomerPointsDialog({ customerId, customerName, currentPoints }: CustomerPointsDialogProps) {
+  const t = useTranslations('customers');
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -23,27 +25,27 @@ export default function CustomerPointsDialog({ customerId, customerName, current
 
   const addPointsMutation = trpc.customers.addPoints.useMutation({
     onSuccess: () => {
-      toast.success('تم إضافة النقاط بنجاح');
+      toast.success(t('toasts.pointsAdded'));
       router.refresh();
       setIsOpen(false);
       setPoints('');
       setPointsNote('');
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'حدث خطأ');
+      toast.error(err instanceof Error ? err.message : t('errors.pointsAction'));
     },
   });
 
   const redeemPointsMutation = trpc.customers.redeemPoints.useMutation({
     onSuccess: () => {
-      toast.success('تم استخدام النقاط بنجاح');
+      toast.success(t('toasts.pointsRedeemed'));
       router.refresh();
       setIsOpen(false);
       setPoints('');
       setPointsNote('');
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'حدث خطأ');
+      toast.error(err instanceof Error ? err.message : t('errors.pointsAction'));
     },
   });
 
@@ -51,7 +53,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
     e.preventDefault();
     const pts = parseInt(points, 10);
     if (!customerId || isNaN(pts) || pts <= 0) {
-      toast.error('يرجى إدخال عدد نقاط صحيح');
+      toast.error(t('validation.validPoints'));
       return;
     }
     if (pointsAction === 'add') {
@@ -65,13 +67,13 @@ export default function CustomerPointsDialog({ customerId, customerName, current
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setIsOpen(true)}>نقاط</Button>
+      <Button variant="outline" size="sm" onClick={() => setIsOpen(true)}>{t('actions.points')}</Button>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsOpen(false)}>
           <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold mb-1">إدارة نقاط الولاء</h2>
+            <h2 className="text-lg font-bold mb-1">{t('pointsDialog.title')}</h2>
             <p className="text-sm text-[var(--t2)] mb-4">
-              {customerName} — الرصيد الحالي: <span className="text-[var(--gold)] font-bold">{currentPoints ?? 0}</span>
+              {t('pointsDialog.currentBalancePrefix', { name: customerName ?? t('fields.customer') })} <span className="text-[var(--gold)] font-bold">{t('pointsDialog.pointsValue', { points: currentPoints ?? 0 })}</span>
             </p>
             <form onSubmit={handlePointsSubmit} className="space-y-3">
               <div className="flex gap-2">
@@ -84,7 +86,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
                       : 'border-[var(--rim1)] text-[var(--t2)]'
                   }`}
                 >
-                  إضافة
+                  {t('pointsDialog.add')}
                 </button>
                 <button
                   type="button"
@@ -95,11 +97,11 @@ export default function CustomerPointsDialog({ customerId, customerName, current
                       : 'border-[var(--rim1)] text-[var(--t2)]'
                   }`}
                 >
-                  استخدام
+                  {t('pointsDialog.redeem')}
                 </button>
               </div>
               <div>
-                <label className="block text-sm text-[var(--t2)] mb-1">عدد النقاط</label>
+                <label className="block text-sm text-[var(--t2)] mb-1">{t('form.points')}</label>
                 <input
                   type="number"
                   min={1}
@@ -110,7 +112,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
                 />
               </div>
               <div>
-                <label className="block text-sm text-[var(--t2)] mb-1">ملاحظة</label>
+                <label className="block text-sm text-[var(--t2)] mb-1">{t('form.note')}</label>
                 <input
                   value={pointsNote}
                   onChange={(e) => setPointsNote(e.target.value)}
@@ -123,14 +125,14 @@ export default function CustomerPointsDialog({ customerId, customerName, current
                   disabled={isPending}
                   className="flex-1 bg-[var(--t1)] text-[var(--surface)] font-bold py-2 px-4 rounded-md hover:opacity-90 disabled:opacity-50"
                 >
-                  {isPending ? 'جاري الحفظ...' : 'تأكيد'}
+                  {isPending ? t('form.saving') : t('form.confirm')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
                   className="flex-1 border border-[var(--rim1)] text-[var(--t2)] py-2 px-4 rounded-md hover:bg-[var(--rim1)]"
                 >
-                  إلغاء
+                  {t('form.cancel')}
                 </button>
               </div>
             </form>

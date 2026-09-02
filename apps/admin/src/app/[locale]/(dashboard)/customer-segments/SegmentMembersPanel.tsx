@@ -1,6 +1,7 @@
 'use client';
 
 import { type CustomerSegment, type SegmentMember } from './CustomerSegmentsClient';
+import { useTranslations } from 'next-intl';
 
 type SegmentMembersPanelProps = {
   activeSegment: CustomerSegment;
@@ -33,6 +34,8 @@ export function SegmentMembersPanel({
   membersQueryIsLoading,
   onRemoveMember,
 }: SegmentMembersPanelProps) {
+  const t = useTranslations('customerSegments');
+
   return (
     <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-xl p-5">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -45,7 +48,7 @@ export function SegmentMembersPanel({
             className="bg-transparent text-[var(--t2)] border border-[var(--rim1)] rounded-lg px-4 py-2 text-[13px] cursor-pointer"
             onClick={() => setShowAddMembers(!showAddMembers)}
           >
-            + إضافة عملاء
+            {t('members.addCustomers')}
           </button>
           <button
             className="bg-transparent text-[var(--t2)] border border-[var(--rim1)] rounded-lg px-4 py-2 text-[12px] cursor-pointer"
@@ -59,9 +62,9 @@ export function SegmentMembersPanel({
       {/* Add members panel */}
       {showAddMembers && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--rim1)', borderRadius: '8px', padding: '14px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: 'var(--t2)' }}>اختر عملاء للإضافة</div>
+          <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '10px', color: 'var(--t2)' }}>{t('members.chooseCustomers')}</div>
           <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {availableQueryIsLoading && <div style={{ color: 'var(--t2)', fontSize: '12px' }}>جاري التحميل...</div>}
+            {availableQueryIsLoading && <div style={{ color: 'var(--t2)', fontSize: '12px' }}>{t('members.loading')}</div>}
             {availableCustomers.map((c) => (
               <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
                 <input
@@ -74,7 +77,7 @@ export function SegmentMembersPanel({
               </label>
             ))}
             {!availableQueryIsLoading && availableCustomers.length === 0 && (
-              <div style={{ color: 'var(--t2)', fontSize: '12px' }}>جميع العملاء مضافون بالفعل</div>
+              <div style={{ color: 'var(--t2)', fontSize: '12px' }}>{t('members.allCustomersAdded')}</div>
             )}
           </div>
           {selectedToAdd.length > 0 && (
@@ -83,7 +86,7 @@ export function SegmentMembersPanel({
               onClick={onAddMembers}
               disabled={addMembersPending}
             >
-              {addMembersPending ? 'جاري الإضافة...' : `إضافة ${selectedToAdd.length} عميل`}
+              {addMembersPending ? t('members.adding') : t('members.addSelected', { count: selectedToAdd.length })}
             </button>
           )}
         </div>
@@ -91,17 +94,17 @@ export function SegmentMembersPanel({
 
       {/* Members table */}
       <div style={{ overflowX: 'auto' }}>
-        {membersQueryIsLoading && <div style={{ color: 'var(--t2)', fontSize: '13px', padding: '20px', textAlign: 'center' }}>جاري التحميل...</div>}
+        {membersQueryIsLoading && <div style={{ color: 'var(--t2)', fontSize: '13px', padding: '20px', textAlign: 'center' }}>{t('members.loading')}</div>}
         {!membersQueryIsLoading && members.length === 0 && (
-          <div style={{ color: 'var(--t2)', fontSize: '13px', padding: '30px', textAlign: 'center' }}>لا يوجد عملاء في هذه الشريحة</div>
+          <div style={{ color: 'var(--t2)', fontSize: '13px', padding: '30px', textAlign: 'center' }}>{t('members.empty')}</div>
         )}
         {members.length > 0 && (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--rim1)' }}>
-                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>الاسم</th>
-                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>البريد</th>
-                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>الهاتف</th>
+                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>{t('members.table.name')}</th>
+                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>{t('members.table.email')}</th>
+                <th style={{ textAlign: 'start', padding: '8px 10px', color: 'var(--t2)', fontWeight: '600' }}>{t('members.table.phone')}</th>
                 <th style={{ padding: '8px 10px' }} />
               </tr>
             </thead>
@@ -116,7 +119,7 @@ export function SegmentMembersPanel({
                       onClick={() => onRemoveMember(m.memberId)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--crimson)', fontSize: '12px' }}
                     >
-                      إزالة
+                      {t('actions.remove')}
                     </button>
                   </td>
                 </tr>

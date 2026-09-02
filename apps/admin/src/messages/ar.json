@@ -397,5 +397,152 @@
     "empty": "لا توجد إشعارات",
     "markAllRead": "تحديد الكل كمقروء",
     "viewAll": "عرض جميع الإشعارات"
+  },
+  "customers": {
+    "title": "العملاء",
+    "fields": {
+      "customer": "العميل"
+    },
+    "summary": {
+      "totalCustomers": "إجمالي العملاء",
+      "totalLoyaltyPoints": "نقاط الولاء المتراكمة",
+      "loyaltyPoints": "نقاط الولاء",
+      "totalOrders": "إجمالي الطلبات",
+      "totalSpent": "إجمالي الإنفاق"
+    },
+    "table": {
+      "name": "الاسم",
+      "email": "البريد الإلكتروني",
+      "phone": "الهاتف",
+      "loyaltyPoints": "نقاط الولاء",
+      "orders": "الطلبات",
+      "total": "الإجمالي",
+      "actions": "الإجراءات"
+    },
+    "actions": {
+      "create": "إضافة عميل",
+      "export": "تصدير العملاء",
+      "points": "نقاط"
+    },
+    "empty": {
+      "title": "لا يوجد عملاء",
+      "hint": "العميل بيتسجّل تلقائياً مع أول طلب، أو ضيفه يدوي."
+    },
+    "createDialog": {
+      "title": "إضافة عميل جديد"
+    },
+    "pointsDialog": {
+      "title": "إدارة نقاط الولاء",
+      "add": "إضافة",
+      "redeem": "استخدام",
+      "currentBalancePrefix": "{name} — الرصيد الحالي:",
+      "pointsValue": "{points}"
+    },
+    "form": {
+      "nameRequired": "الاسم *",
+      "email": "البريد الإلكتروني",
+      "phone": "الهاتف",
+      "address": "العنوان",
+      "notes": "ملاحظات",
+      "points": "عدد النقاط",
+      "note": "ملاحظة",
+      "saving": "جاري الحفظ...",
+      "save": "حفظ",
+      "confirm": "تأكيد",
+      "cancel": "إلغاء"
+    },
+    "detail": {
+      "backToCustomers": "← العملاء",
+      "contact": {
+        "title": "معلومات التواصل",
+        "email": "البريد الإلكتروني",
+        "phone": "الهاتف",
+        "address": "العنوان",
+        "notes": "ملاحظات"
+      },
+      "loyaltyHistory": "سجل نقاط الولاء",
+      "transactionTypes": {
+        "earn": "مكتسبة",
+        "redeem": "مستخدمة",
+        "adjust": "تعديل"
+      },
+      "transactionsTable": {
+        "type": "النوع",
+        "points": "النقاط",
+        "balanceAfter": "الرصيد بعد",
+        "note": "ملاحظة",
+        "date": "التاريخ"
+      },
+      "transactionsEmpty": {
+        "title": "لا توجد معاملات",
+        "hint": "معاملات نقاط الولاء بتظهر هنا بعد أول طلب أو تعديل يدوي للرصيد."
+      }
+    },
+    "toasts": {
+      "created": "تم إضافة العميل بنجاح",
+      "pointsAdded": "تم إضافة النقاط بنجاح",
+      "pointsRedeemed": "تم استخدام النقاط بنجاح"
+    },
+    "errors": {
+      "loadCustomers": "تعذّر تحميل قائمة العملاء.",
+      "createCustomer": "حدث خطأ أثناء إضافة العميل",
+      "pointsAction": "حدث خطأ"
+    },
+    "validation": {
+      "validPoints": "يرجى إدخال عدد نقاط صحيح"
+    }
+  },
+  "customerSegments": {
+    "metadata": {
+      "title": "شرائح العملاء | IRTH"
+    },
+    "title": "شرائح العملاء",
+    "subtitle": "تجميع العملاء في مجموعات للحملات والتسويق المستهدف",
+    "actions": {
+      "new": "+ شريحة جديدة",
+      "cancel": "إلغاء",
+      "saving": "جاري الحفظ...",
+      "delete": "حذف",
+      "remove": "إزالة"
+    },
+    "createModal": {
+      "title": "شريحة جديدة",
+      "nameRequired": "اسم الشريحة *",
+      "namePlaceholder": "مثال: عملاء VIP",
+      "descriptionOptional": "وصف (اختياري)",
+      "descriptionPlaceholder": "وصف مختصر للشريحة",
+      "color": "اللون",
+      "submit": "إنشاء الشريحة"
+    },
+    "empty": {
+      "title": "لا توجد شرائح بعد",
+      "hint": "الشريحة بتجمّع عملاء بمعيار مشترك عشان تستهدفهم بحملة."
+    },
+    "list": {
+      "memberCount": "{count} عميل"
+    },
+    "members": {
+      "addCustomers": "+ إضافة عملاء",
+      "chooseCustomers": "اختر عملاء للإضافة",
+      "loading": "جاري التحميل...",
+      "allCustomersAdded": "جميع العملاء مضافون بالفعل",
+      "adding": "جاري الإضافة...",
+      "addSelected": "إضافة {count} عميل",
+      "empty": "لا يوجد عملاء في هذه الشريحة",
+      "table": {
+        "name": "الاسم",
+        "email": "البريد",
+        "phone": "الهاتف"
+      }
+    },
+    "confirm": {
+      "delete": "حذف الشريحة؟"
+    },
+    "errors": {
+      "loadSegments": "حدث خطأ في تحميل شرائح العملاء"
+    },
+    "validation": {
+      "nameRequired": "اسم الشريحة مطلوب"
+    }
   }
 }

@@ -377,5 +377,152 @@
       "addCategory": "An error occurred while adding the category",
       "deleteCategory": "An error occurred while deleting"
     }
+  },
+  "customers": {
+    "title": "Customers",
+    "fields": {
+      "customer": "Customer"
+    },
+    "summary": {
+      "totalCustomers": "Total customers",
+      "totalLoyaltyPoints": "Accumulated loyalty points",
+      "loyaltyPoints": "Loyalty points",
+      "totalOrders": "Total orders",
+      "totalSpent": "Total spent"
+    },
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "loyaltyPoints": "Loyalty points",
+      "orders": "Orders",
+      "total": "Total",
+      "actions": "Actions"
+    },
+    "actions": {
+      "create": "Add customer",
+      "export": "Export customers",
+      "points": "Points"
+    },
+    "empty": {
+      "title": "No customers",
+      "hint": "The customer is registered automatically with the first order, or you can add them manually."
+    },
+    "createDialog": {
+      "title": "Add new customer"
+    },
+    "pointsDialog": {
+      "title": "Manage loyalty points",
+      "add": "Add",
+      "redeem": "Redeem",
+      "currentBalancePrefix": "{name} — current balance:",
+      "pointsValue": "{points}"
+    },
+    "form": {
+      "nameRequired": "Name *",
+      "email": "Email",
+      "phone": "Phone",
+      "address": "Address",
+      "notes": "Notes",
+      "points": "Number of points",
+      "note": "Note",
+      "saving": "Saving...",
+      "save": "Save",
+      "confirm": "Confirm",
+      "cancel": "Cancel"
+    },
+    "detail": {
+      "backToCustomers": "← Customers",
+      "contact": {
+        "title": "Contact information",
+        "email": "Email",
+        "phone": "Phone",
+        "address": "Address",
+        "notes": "Notes"
+      },
+      "loyaltyHistory": "Loyalty points history",
+      "transactionTypes": {
+        "earn": "Earned",
+        "redeem": "Redeemed",
+        "adjust": "Adjustment"
+      },
+      "transactionsTable": {
+        "type": "Type",
+        "points": "Points",
+        "balanceAfter": "Balance after",
+        "note": "Note",
+        "date": "Date"
+      },
+      "transactionsEmpty": {
+        "title": "No transactions",
+        "hint": "Loyalty point transactions appear here after the first order or a manual balance adjustment."
+      }
+    },
+    "toasts": {
+      "created": "Customer added successfully",
+      "pointsAdded": "Points added successfully",
+      "pointsRedeemed": "Points redeemed successfully"
+    },
+    "errors": {
+      "loadCustomers": "Could not load the customer list.",
+      "createCustomer": "An error occurred while adding the customer",
+      "pointsAction": "An error occurred"
+    },
+    "validation": {
+      "validPoints": "Please enter a valid number of points"
+    }
+  },
+  "customerSegments": {
+    "metadata": {
+      "title": "Customer segments | IRTH"
+    },
+    "title": "Customer segments",
+    "subtitle": "Group customers for campaigns and targeted marketing",
+    "actions": {
+      "new": "+ New segment",
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "delete": "Delete",
+      "remove": "Remove"
+    },
+    "createModal": {
+      "title": "New segment",
+      "nameRequired": "Segment name *",
+      "namePlaceholder": "Example: VIP customers",
+      "descriptionOptional": "Description (optional)",
+      "descriptionPlaceholder": "Short description for the segment",
+      "color": "Color",
+      "submit": "Create segment"
+    },
+    "empty": {
+      "title": "No segments yet",
+      "hint": "A segment groups customers by a shared trait so you can target them with a campaign."
+    },
+    "list": {
+      "memberCount": "{count} customer"
+    },
+    "members": {
+      "addCustomers": "+ Add customers",
+      "chooseCustomers": "Choose customers to add",
+      "loading": "Loading...",
+      "allCustomersAdded": "All customers have already been added",
+      "adding": "Adding...",
+      "addSelected": "Add {count} customer",
+      "empty": "No customers in this segment",
+      "table": {
+        "name": "Name",
+        "email": "Email",
+        "phone": "Phone"
+      }
+    },
+    "confirm": {
+      "delete": "Delete segment?"
+    },
+    "errors": {
+      "loadSegments": "An error occurred while loading customer segments"
+    },
+    "validation": {
+      "nameRequired": "Segment name is required"
+    }
   }
 }
