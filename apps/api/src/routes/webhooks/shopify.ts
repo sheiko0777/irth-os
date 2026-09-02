@@ -242,7 +242,30 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       movementId: string | null;
     }> = [];
 
-    for (const line of payload.line_items) {
+    // Deterministic lock order across concurrent deliveries.
+    //
+    // Every iteration below takes a row lock on inventory_items — the guarded
+    // UPDATE takes one, and the FOR UPDATE on the shortfall path holds one for
+    // longer. Shopify decides the order of `line_items`, so two orders sharing
+    // variants X and Y can arrive as [X,Y] and [Y,X]; one transaction then
+    // holds X waiting for Y while the other holds Y waiting for X, and
+    // Postgres kills one with a deadlock. Sorting by a key that is stable
+    // ACROSS requests — Shopify's own variant id, falling back to sku — makes
+    // every transaction acquire the same rows in the same sequence, which is
+    // the standard and complete answer to that class of deadlock.
+    //
+    // Sorted before the loop rather than after resolution because the lock
+    // order is what matters, and our variant id is not known until the lookup
+    // inside the loop has already run. resolvedItems and unmatchedSkus are
+    // order-insensitive (a set of rows and a set of labels), so nothing else
+    // changes.
+    const orderedLines = [...payload.line_items].sort((a, b) => {
+      const ka = String(a.variant_id ?? a.sku ?? '');
+      const kb = String(b.variant_id ?? b.sku ?? '');
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+
+    for (const line of orderedLines) {
       const shopifyVariantId = line.variant_id ? shopifyGid('ProductVariant', line.variant_id) : null;
       const [variant] = shopifyVariantId
         ? await tx.select().from(productVariants)
