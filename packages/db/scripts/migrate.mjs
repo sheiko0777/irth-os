@@ -45,31 +45,42 @@ if (!url) {
 // runner works against a direct endpoint and fails against a pooled one — a
 // difference nobody notices until a deploy uses the other URL.
 //
-// search_path is pinned because every migration in drizzle/ writes unqualified
-// names, and several build DDL dynamically with format('ALTER TABLE %I', …).
-// Without a pinned path the schema those resolve to is whatever the connecting
-// role's default happens to be, so a migration can verify a table in `public`
-// and then alter a same-named table in another schema — reported as applied.
-// Measured on 0050: with a `shadow` schema ahead of `public`, RLS landed on
-// shadow.shopify_connections and left public.shopify_connections exposed.
-// Sent as a startup parameter rather than a `SET` so it survives a reconnect.
-const sql = postgres(url, {
-  max: 1,
-  prepare: false,
-  onnotice: () => {},
-  connection: { search_path: 'public' },
-});
+const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+
+// Every migration in drizzle/ writes unqualified names, and several build DDL
+// dynamically with format('ALTER TABLE %I', …). The schema those resolve to is
+// whatever the connecting role's default search_path happens to be, so a
+// migration can verify a table in `public` and then alter a same-named table in
+// another schema — and report success. Measured on 0050: with a `shadow` schema
+// ahead of `public`, RLS landed on shadow.shopify_connections and left
+// public.shopify_connections exposed.
+//
+// Pinned as a SET LOCAL inside each migration's own transaction, NOT as a
+// startup parameter: the note above says this URL may be Neon's `-pooler` host,
+// which is PgBouncer in transaction mode, and PgBouncer rejects startup
+// parameters outside the small set it tracks — `search_path` is not one of
+// them, so a startup parameter would fail to connect against exactly the
+// endpoint that comment is warning about.
+//
+// SET LOCAL is also the form CLAUDE.md rule 3 requires of every GUC here: it
+// reverts on COMMIT and on ROLLBACK, so it cannot leak to whatever uses this
+// pooled connection next.
+const SCOPE_SEARCH_PATH = 'SET LOCAL search_path TO public, pg_catalog';
 
 async function main() {
+  // Written schema-qualified rather than relying on search_path: these two run
+  // outside any transaction, so the SET LOCAL above cannot cover them, and the
+  // ledger deciding which migrations are pending is the last thing that should
+  // resolve to a schema nobody chose.
   await sql`
-    CREATE TABLE IF NOT EXISTS _migrations (
+    CREATE TABLE IF NOT EXISTS public._migrations (
       filename   text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     )
   `;
 
   const applied = new Set(
-    (await sql`SELECT filename FROM _migrations`).map((r) => r.filename),
+    (await sql`SELECT filename FROM public._migrations`).map((r) => r.filename),
   );
 
   const files = (await readdir(MIGRATIONS_DIR))
@@ -95,10 +106,11 @@ async function main() {
 
     try {
       await sql.begin(async (tx) => {
+        await tx.unsafe(SCOPE_SEARCH_PATH);
         for (const statement of statements) {
           await tx.unsafe(statement);
         }
-        await tx`INSERT INTO _migrations (filename) VALUES (${file})`;
+        await tx`INSERT INTO public._migrations (filename) VALUES (${file})`;
       });
       console.log(`  applied  ${file}`);
     } catch (err) {
