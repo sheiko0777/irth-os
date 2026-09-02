@@ -69,6 +69,13 @@ type ApiResponse = {
   error?: string | null;
 };
 
+type StreamEvent =
+  | { event: 'ready'; data: { provider: string; model: string } }
+  | { event: 'delta'; data: { content: string } }
+  | { event: 'cards'; data: { cards: Card[] } }
+  | { event: 'done'; data: { provider: string; model: string } }
+  | { event: 'error'; data: { error: string } };
+
 function formatMinor(minor: string, currency: string, locale: Locale) {
   const amount = Number(minor) / 100;
   return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-US', {
@@ -160,6 +167,23 @@ function ResultCard({ card, locale, labels }: { card: Card; locale: Locale; labe
   );
 }
 
+function parseStreamEvent(raw: string): StreamEvent | null {
+  const event = raw
+    .split('\n')
+    .find((line) => line.startsWith('event: '))
+    ?.slice('event: '.length)
+    .trim();
+  const data = raw
+    .split('\n')
+    .filter((line) => line.startsWith('data: '))
+    .map((line) => line.slice('data: '.length))
+    .join('\n');
+
+  if (!event || !data) return null;
+
+  return { event, data: JSON.parse(data) } as StreamEvent;
+}
+
 export function IntelligenceClient({ locale, copy }: { locale: Locale; copy: IntelligenceCopy }) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -172,11 +196,16 @@ export function IntelligenceClient({ locale, copy }: { locale: Locale; copy: Int
     if (!trimmed || loading) return;
 
     const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content: trimmed };
+    const assistantId = crypto.randomUUID();
     const history = [...messages, userMessage]
       .slice(-8)
       .map((item) => ({ role: item.role, content: item.content }));
 
-    setMessages((current) => [...current, userMessage]);
+    setMessages((current) => [
+      ...current,
+      userMessage,
+      { id: assistantId, role: 'assistant', content: '' },
+    ]);
     setInput('');
     setLoading(true);
     setError(null);
@@ -186,24 +215,68 @@ export function IntelligenceClient({ locale, copy }: { locale: Locale; copy: Int
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, locale, history }),
+        body: JSON.stringify({ message: trimmed, locale, history, stream: true }),
       });
+
+      if (res.body && res.headers.get('content-type')?.includes('text/event-stream')) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() ?? '';
+
+          for (const chunk of chunks) {
+            const parsed = parseStreamEvent(chunk);
+            if (!parsed) continue;
+
+            if (parsed.event === 'delta') {
+              setMessages((current) => current.map((item) => (
+                item.id === assistantId
+                  ? { ...item, content: item.content + parsed.data.content }
+                  : item
+              )));
+            }
+
+            if (parsed.event === 'cards') {
+              setMessages((current) => current.map((item) => (
+                item.id === assistantId ? { ...item, cards: parsed.data.cards } : item
+              )));
+            }
+
+            if (parsed.event === 'error') {
+              throw new Error(parsed.data.error);
+            }
+          }
+        }
+
+        return;
+      }
+
       const body = await res.json() as ApiResponse;
       if (!res.ok || body.error || !body.data?.message) {
         throw new Error(body.error ?? copy.error);
       }
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: body.data!.message!.content,
-          cards: body.data!.message!.cards,
-        },
-      ]);
+      setMessages((current) => current.map((item) => (
+        item.id === assistantId
+          ? {
+              ...item,
+              content: body.data!.message!.content,
+              cards: body.data!.message!.cards,
+            }
+          : item
+      )));
     } catch (err) {
       setError(err instanceof Error ? err.message : copy.error);
+      setMessages((current) => current.filter((item) => (
+        item.id !== assistantId || item.content.trim() || (item.cards?.length ?? 0) > 0
+      )));
     } finally {
       setLoading(false);
     }

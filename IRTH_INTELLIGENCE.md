@@ -2,6 +2,7 @@
 
 IRTH Intelligence is a read-only operational assistant for the admin console.
 It answers questions about orders, products, inventory, and sales through the Hono API.
+The admin UI uses streaming responses so users see the assistant answer unfold while structured cards attach at the end.
 
 ## Setup
 
@@ -23,6 +24,7 @@ The admin app calls the API through `NEXT_PUBLIC_API_URL`, which should point at
 
 - `GROQ_API_KEY` is read only on the server and is never exposed to the admin client.
 - `/api/ai/chat` uses the trusted Hono context populated by Better Auth: `userId`, `orgId`, and `role`.
+- `/api/ai/chat` supports `stream: true` and returns Server-Sent Events: `ready`, `delta`, `cards`, `done`, and `error`.
 - Tool calls never accept `orgId` or `userId` from the model, user prompt, or client payload.
 - Every tool is checked against the shared role permission matrix before execution.
 - v1 tools are read-only. No create, update, delete, fulfillment, invoice, or inventory adjustment actions are exposed.

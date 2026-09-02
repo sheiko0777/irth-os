@@ -47,6 +47,11 @@ export type AiCompletion = {
   usage?: unknown;
 };
 
+export type AiTextDelta = {
+  content: string;
+  model: string;
+};
+
 export type AiToolDefinition = {
   name: string;
   description: string;
@@ -57,6 +62,7 @@ export type AiProvider = {
   name: string;
   model: string;
   complete(input: { messages: AiMessage[]; tools: AiToolDefinition[] }): Promise<AiCompletion>;
+  streamText(input: { messages: AiMessage[] }): AsyncIterable<AiTextDelta>;
 };
 
 export type AiRequestContext = {
