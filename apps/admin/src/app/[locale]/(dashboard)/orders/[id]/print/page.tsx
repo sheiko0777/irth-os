@@ -1,4 +1,5 @@
 import { formatMoney, fromMinor, multiply } from "@irth/domain";
+import { getTranslations } from "next-intl/server";
 import { serverCaller } from '@/server/caller';
 import { notFound } from 'next/navigation';
 import { PrintButton } from './PrintButton';
@@ -9,6 +10,7 @@ export default async function PrintPage({
     params: Promise<{ id: string; locale: string }>;
 }) {
     const { id } = await params;
+    const t = await getTranslations("orders");
     const caller = await serverCaller();
 
     const response = await caller.orders.getById({ id });
@@ -39,13 +41,13 @@ export default async function PrintPage({
                 {/* Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
                     <div>
-                        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>نظام إرث</h1>
-                        <p style={{ color: '#666', margin: '4px 0 0' }}>فاتورة / إيصال</p>
+                        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>{t("print.brand")}</h1>
+                        <p style={{ color: '#666', margin: '4px 0 0' }}>{t("print.documentTitle")}</p>
                     </div>
                     <div style={{ textAlign: 'end' }}>
-                        <p style={{ fontWeight: 600, margin: 0 }}>رقم الفاتورة: {order.orderNumber}</p>
+                        <p style={{ fontWeight: 600, margin: 0 }}>{t("print.invoiceNumber", { orderNumber: order.orderNumber })}</p>
                         <p style={{ color: '#666', margin: '4px 0 0' }}>
-                            التاريخ:{' '}
+                            {t("print.dateLabel")} {' '}
                             {order.createdAt
                                 ? new Date(order.createdAt).toLocaleDateString('ar-EG')
                                 : '—'}
@@ -59,10 +61,10 @@ export default async function PrintPage({
                 <table>
                     <thead>
                         <tr>
-                            <th>المنتج</th>
-                            <th style={{ width: 80 }}>الكمية</th>
-                            <th style={{ width: 120 }}>سعر الوحدة</th>
-                            <th style={{ width: 120 }}>الإجمالي</th>
+                            <th>{t("print.columns.product")}</th>
+                            <th style={{ width: 80 }}>{t("print.columns.quantity")}</th>
+                            <th style={{ width: 120 }}>{t("print.columns.unitPrice")}</th>
+                            <th style={{ width: 120 }}>{t("print.columns.total")}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -86,9 +88,9 @@ export default async function PrintPage({
                         })}
                         <tr>
                             <td colSpan={3} style={{ fontWeight: 700, textAlign: 'start' }}>
-                                الإجمالي
+                                {t("print.total")}
                             </td>
-                            <td style={{ fontWeight: 700 }}>{total} ج.م</td>
+                            <td style={{ fontWeight: 700 }}>{t("print.totalValue", { total })}</td>
                         </tr>
                     </tbody>
                 </table>

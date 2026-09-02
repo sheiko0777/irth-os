@@ -1,8 +1,8 @@
 import { orderStatusEnum } from '@irth/db';
+import { getTranslations } from 'next-intl/server';
 import { serverCaller } from '@/server/caller';
 import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs';
 import { SearchField } from '@/components/ui/SearchField';
-import { orderStatusMap } from '@/lib/statusMaps';
 import { OrdersClient, type OrderRow } from './OrdersClient';
 
 const PAGE_SIZE = 50;
@@ -45,6 +45,7 @@ export default async function OrdersPage({
     const { locale } = await params;
     const { page: pageStr, status: statusParam, q } = await searchParams;
     const page = Math.max(1, parseInt(pageStr ?? '1', 10));
+    const t = await getTranslations('orders');
 
     // An unknown ?status= is dropped rather than passed through — the router
     // would reject it and the whole page would error on a hand-edited URL.
@@ -61,13 +62,13 @@ export default async function OrdersPage({
     const allCount = [...counts.values()].reduce((sum, n) => sum + n, 0);
 
     const tabs: FilterTab[] = [
-        { label: 'الكل', count: allCount },
+        { label: t('allStatuses'), count: allCount },
         // A status with nothing in it is noise in the strip, so it is dropped —
         // except the one currently selected, which has to stay reachable or the
         // active tab would vanish from under the user.
         ...TAB_ORDER.filter((s) => (counts.get(s) ?? 0) > 0 || s === status).map((s) => ({
             value: s,
-            label: orderStatusMap[s]?.label ?? s,
+            label: t(`status.${s}`),
             count: counts.get(s) ?? 0,
         })),
     ];
@@ -85,8 +86,8 @@ export default async function OrdersPage({
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-2xl font-bold text-[var(--t1)]">الطلبات</h1>
-                <SearchField param="q" placeholder="ابحث برقم الطلب" />
+                <h1 className="text-2xl font-bold text-[var(--t1)]">{t('title')}</h1>
+                <SearchField param="q" placeholder={t('search')} />
             </div>
 
             <FilterTabs param="status" tabs={tabs} />

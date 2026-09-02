@@ -23,9 +23,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <div className="rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)]">
                 <EmptyState
                     icon={PackageSearch}
-                    title="الطلب غير موجود"
-                    hint="يمكن يكون اتحذف، أو الرابط مش مظبوط."
-                    action={{ label: "الرجوع للطلبات", href: `/${locale}/orders` }}
+                    title={t("detail.notFound.title")}
+                    hint={t("detail.notFound.hint")}
+                    action={{ label: t("detail.notFound.action"), href: `/${locale}/orders` }}
                 />
             </div>
         );
@@ -48,7 +48,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     className="inline-flex items-center gap-1.5 text-xs text-[var(--t3)] transition-colors hover:text-[var(--gold)]"
                 >
                     <ArrowRight size={13} />
-                    الطلبات
+                    {t("title")}
                 </Link>
                 <div className="flex flex-wrap items-center gap-3">
                     <h1 className="text-3xl font-bold tracking-tight text-[var(--t1)]">
@@ -57,7 +57,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     {/* The order number is data, not prose — forced LTR so the
                         hash and digits do not reorder inside the RTL heading. */}
                     <span className="font-mono text-xl text-[var(--gold)] tabular-nums" dir="ltr">
-                        #{order.orderNumber}
+                        {t("detail.orderNumber", { orderNumber: order.orderNumber })}
                     </span>
                     {/* Current state belongs in the header. Previously the only
                         way to see it was to open the status dropdown. */}
@@ -83,9 +83,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>SKU</TableHead>
-                                    <TableHead>الكمية</TableHead>
-                                    <TableHead className="text-end">السعر</TableHead>
+                                    <TableHead>{t("detail.itemsTable.sku")}</TableHead>
+                                    <TableHead>{t("detail.itemsTable.quantity")}</TableHead>
+                                    <TableHead className="text-end">{t("detail.itemsTable.price")}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -107,7 +107,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                             themselves, on a screen that is about money. */}
                         {items.length > 0 && (
                             <div className="mt-3 flex items-center justify-between border-t border-[var(--rim1)] pt-3">
-                                <span className="text-xs text-[var(--t3)]">إجمالي الأصناف</span>
+                                <span className="text-xs text-[var(--t3)]">{t("detail.itemsTable.total")}</span>
                                 <span className="text-lg font-bold text-[var(--t1)] tabular-nums" dir="ltr">
                                     {formatMoney(itemsTotal)}
                                 </span>
@@ -122,15 +122,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     </CardHeader>
                     <CardContent>
                         {history.length === 0 ? (
-                            <EmptyState title="لا يوجد سجل تتبع" hint="التتبع بيبدأ لما الطلب يتسلّم لشركة الشحن." />
+                            <EmptyState title={t("detail.historyEmpty.title")} hint={t("detail.historyEmpty.hint")} />
                         ) : (
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>الشركة</TableHead>
-                                        <TableHead>رقم التتبع</TableHead>
-                                        <TableHead>الحالة</TableHead>
-                                        <TableHead>التاريخ</TableHead>
+                                        <TableHead>{t("detail.historyTable.provider")}</TableHead>
+                                        <TableHead>{t("detail.historyTable.trackingNumber")}</TableHead>
+                                        <TableHead>{t("detail.historyTable.status")}</TableHead>
+                                        <TableHead>{t("detail.historyTable.date")}</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>

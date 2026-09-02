@@ -3,6 +3,7 @@ import { formatMoney, fromMinor } from '@irth/domain';
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { BulkOrderActions } from '@/components/BulkOrderActions';
 import { ExportButton } from '@/components/ExportButton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function OrdersClient({ orders, locale, page, pageSize, total, filtered }: Props) {
+    const t = useTranslations('orders');
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [key, setKey] = useState(0);
 
@@ -54,7 +56,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
             {/* The heading and search live in the server page now, above the
                 filter tabs; only the export action belongs to the table. */}
             <div className="flex items-center justify-end mb-3">
-                <ExportButton type="orders" label="تصدير الطلبات" />
+                <ExportButton type="orders" label={t('actions.export')} />
             </div>
 
             {/* Table */}
@@ -69,14 +71,14 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                         checked={allSelected}
                                         onChange={toggleAll}
                                         className="cursor-pointer"
-                                        aria-label="تحديد الكل"
+                                        aria-label={t('table.selectAll')}
                                     />
                                 </th>
-                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">رقم الطلب</th>
-                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">الحالة</th>
-                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">الإجمالي</th>
-                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">التاريخ</th>
-                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">إجراءات</th>
+                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.orderNumber')}</th>
+                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.status')}</th>
+                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.totalAmount')}</th>
+                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.date')}</th>
+                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--rim1)]">
@@ -88,11 +90,11 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                             different next steps. */}
                                         <EmptyState
                                             icon={ShoppingCart}
-                                            title={filtered ? 'لا نتائج مطابقة' : 'لا توجد طلبات بعد'}
+                                            title={filtered ? t('empty.filteredTitle') : t('empty.title')}
                                             hint={
                                                 filtered
-                                                    ? 'جرّب تشيل الفلتر أو تغيّر كلمة البحث.'
-                                                    : 'أول طلب هيظهر هنا فور وصوله من المتجر.'
+                                                    ? t('empty.filteredHint')
+                                                    : t('empty.hint')
                                             }
                                         />
                                     </td>
@@ -106,7 +108,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                                 checked={selectedIds.includes(order.id)}
                                                 onChange={() => toggleOne(order.id)}
                                                 className="cursor-pointer"
-                                                aria-label={`تحديد ${order.orderNumber}`}
+                                                aria-label={t('table.selectOrder', { orderNumber: order.orderNumber })}
                                             />
                                         </td>
                                         <td className="px-4 py-3 text-sm font-mono text-[var(--t1)]" dir="ltr">
@@ -129,7 +131,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                                     href={`/${locale}/orders/${order.id}`}
                                                     className="text-[var(--gold)] hover:underline cursor-pointer"
                                                 >
-                                                    عرض
+                                                    {t('actions.view')}
                                                 </Link>
                                                 <Link
                                                     href={`/${locale}/orders/${order.id}/print`}
@@ -137,7 +139,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                                     rel="noopener noreferrer"
                                                     className="text-[var(--t2)] hover:underline cursor-pointer"
                                                 >
-                                                    طباعة
+                                                    {t('actions.print')}
                                                 </Link>
                                             </div>
                                         </td>

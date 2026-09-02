@@ -1,5 +1,5 @@
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
+import { getMessages, getTranslations } from 'next-intl/server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { IBM_Plex_Sans_Arabic, Cairo } from 'next/font/google';
@@ -14,15 +14,24 @@ import './globals.css';
 // tags needed here. appleWebApp is the piece iOS actually reads for "Add to
 // Home Screen": without `capable: true` Safari treats the shortcut as a
 // bookmark (browser chrome, generic icon) instead of a standalone app icon.
-export const metadata: Metadata = {
-  title: 'إرث | IRTH',
-  description: 'نظام إدارة الأعمال لإرث',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'إرث',
-  },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'common.metadata' });
+
+  return {
+    title: t('title'),
+    description: t('description'),
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'black-translucent',
+      title: t('appleTitle'),
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: '#060a10',

@@ -104,18 +104,74 @@
     "search": "Search by order number...",
     "statusFilter": "Filter by status",
     "allStatuses": "All statuses",
+    "actions": {
+      "export": "Export orders",
+      "view": "View",
+      "print": "Print"
+    },
+    "empty": {
+      "title": "No orders yet",
+      "hint": "The first order will appear here as soon as it arrives from the store.",
+      "filteredTitle": "No matching results",
+      "filteredHint": "Try removing the filter or changing the search term."
+    },
     "table": {
       "orderNumber": "Order Number",
       "status": "Status",
       "totalAmount": "Total",
       "createdAt": "Created",
-      "actions": "Actions"
+      "date": "Date",
+      "actions": "Actions",
+      "selectAll": "Select all",
+      "selectOrder": "Select {orderNumber}"
     },
     "detail": {
       "title": "Order Details",
       "items": "Items",
       "history": "Status History",
-      "updateStatus": "Update Status"
+      "updateStatus": "Update Status",
+      "orderNumber": "#{orderNumber}",
+      "notFound": {
+        "title": "Order not found",
+        "hint": "It may have been deleted, or the link may be incorrect.",
+        "action": "Back to orders"
+      },
+      "itemsTable": {
+        "sku": "SKU",
+        "quantity": "Quantity",
+        "price": "Price",
+        "total": "Items total"
+      },
+      "historyEmpty": {
+        "title": "No tracking history",
+        "hint": "Tracking starts when the order is handed to the shipping carrier."
+      },
+      "historyTable": {
+        "provider": "Carrier",
+        "trackingNumber": "Tracking number",
+        "status": "Status",
+        "date": "Date"
+      },
+      "statusUpdater": {
+        "placeholder": "Status",
+        "success": "Order status updated successfully",
+        "error": "An error occurred while updating the status",
+        "loading": "Updating..."
+      }
+    },
+    "print": {
+      "brand": "IRTH System",
+      "documentTitle": "Invoice / Receipt",
+      "invoiceNumber": "Invoice number: {orderNumber}",
+      "dateLabel": "Date:",
+      "columns": {
+        "product": "Product",
+        "quantity": "Quantity",
+        "unitPrice": "Unit price",
+        "total": "Total"
+      },
+      "total": "Total",
+      "totalValue": "{total} EGP"
     },
     "status": {
       "pending": "Pending",
@@ -159,7 +215,12 @@
     "view": "View",
     "edit": "Edit",
     "delete": "Delete",
-    "currency": "EGP"
+    "currency": "EGP",
+    "metadata": {
+      "title": "IRTH | IRTH",
+      "description": "Business management system for IRTH",
+      "appleTitle": "IRTH"
+    }
   },
   "shipping": {
     "error": {

@@ -127,18 +127,74 @@
     "search": "البحث برقم الطلب...",
     "statusFilter": "تصفية بالحالة",
     "allStatuses": "جميع الحالات",
+    "actions": {
+      "export": "تصدير الطلبات",
+      "view": "عرض",
+      "print": "طباعة"
+    },
+    "empty": {
+      "title": "لا توجد طلبات بعد",
+      "hint": "أول طلب هيظهر هنا فور وصوله من المتجر.",
+      "filteredTitle": "لا نتائج مطابقة",
+      "filteredHint": "جرّب تشيل الفلتر أو تغيّر كلمة البحث."
+    },
     "table": {
       "orderNumber": "رقم الطلب",
       "status": "الحالة",
       "totalAmount": "الإجمالي",
       "createdAt": "تاريخ الإنشاء",
-      "actions": "إجراءات"
+      "date": "التاريخ",
+      "actions": "إجراءات",
+      "selectAll": "تحديد الكل",
+      "selectOrder": "تحديد {orderNumber}"
     },
     "detail": {
       "title": "تفاصيل الطلب",
       "items": "العناصر",
       "history": "سجل الحالة",
-      "updateStatus": "تحديث الحالة"
+      "updateStatus": "تحديث الحالة",
+      "orderNumber": "#{orderNumber}",
+      "notFound": {
+        "title": "الطلب غير موجود",
+        "hint": "يمكن يكون اتحذف، أو الرابط مش مظبوط.",
+        "action": "الرجوع للطلبات"
+      },
+      "itemsTable": {
+        "sku": "SKU",
+        "quantity": "الكمية",
+        "price": "السعر",
+        "total": "إجمالي الأصناف"
+      },
+      "historyEmpty": {
+        "title": "لا يوجد سجل تتبع",
+        "hint": "التتبع بيبدأ لما الطلب يتسلّم لشركة الشحن."
+      },
+      "historyTable": {
+        "provider": "الشركة",
+        "trackingNumber": "رقم التتبع",
+        "status": "الحالة",
+        "date": "التاريخ"
+      },
+      "statusUpdater": {
+        "placeholder": "الحالة",
+        "success": "تم تحديث حالة الطلب بنجاح",
+        "error": "حدث خطأ أثناء تحديث الحالة",
+        "loading": "جاري التحديث..."
+      }
+    },
+    "print": {
+      "brand": "نظام إرث",
+      "documentTitle": "فاتورة / إيصال",
+      "invoiceNumber": "رقم الفاتورة: {orderNumber}",
+      "dateLabel": "التاريخ:",
+      "columns": {
+        "product": "المنتج",
+        "quantity": "الكمية",
+        "unitPrice": "سعر الوحدة",
+        "total": "الإجمالي"
+      },
+      "total": "الإجمالي",
+      "totalValue": "{total} ج.م"
     },
     "status": {
       "pending": "قيد الانتظار",
@@ -182,7 +238,12 @@
     "view": "عرض",
     "edit": "تعديل",
     "delete": "حذف",
-    "currency": "ج.م"
+    "currency": "ج.م",
+    "metadata": {
+      "title": "إرث | IRTH",
+      "description": "نظام إدارة الأعمال لإرث",
+      "appleTitle": "إرث"
+    }
   },
   "shipping": {
     "error": {
