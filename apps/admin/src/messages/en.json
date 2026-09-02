@@ -217,11 +217,18 @@
       "brand": "Brand",
       "variants": "Variants",
       "status": "Status",
-      "actions": "Actions"
+      "actions": "Actions",
+      "sku": "SKU",
+      "price": "Price",
+      "stock": "Stock",
+      "category": "Category",
+      "noCategory": "-"
     },
     "status": {
       "active": "Active",
-      "inactive": "Inactive"
+      "inactive": "Inactive",
+      "draft": "Draft",
+      "archived": "Archived"
     },
     "form": {
       "name": "Product Name",
@@ -234,7 +241,58 @@
       "addVariant": "Add Variant",
       "sku": "SKU",
       "price": "Price",
-      "stock": "Stock"
+      "stock": "Stock",
+      "basicInfo": "Basic Product Information",
+      "nameAr": "Name (Arabic)",
+      "descriptionAr": "Description (Arabic)",
+      "saving": "Saving...",
+      "categoryId": "Category",
+      "categoryPlaceholder": "Select Category",
+      "noCategory": "No category",
+      "currency": "Currency",
+      "status": "Status"
+    },
+    "actions": {
+      "new": "New Product",
+      "edit": "Edit",
+      "deactivate": "Deactivate"
+    },
+    "filters": {
+      "all": "All"
+    },
+    "search": {
+      "placeholder": "Search products..."
+    },
+    "empty": {
+      "title": "No products",
+      "hint": "Add your first product and it will appear here with its variants and price."
+    },
+    "confirm": {
+      "deactivateTitle": "Deactivate Product",
+      "deactivateDescription": "The product “{name}” will be deactivated. It will no longer appear for sale."
+    },
+    "toasts": {
+      "created": "Product created successfully",
+      "added": "Product added successfully",
+      "updated": "Product updated successfully",
+      "deactivated": "Product deactivated"
+    },
+    "errors": {
+      "loadProducts": "Could not load products.",
+      "loadCategories": "Could not load categories.",
+      "createProduct": "An error occurred while creating the product",
+      "addProduct": "An error occurred while adding the product",
+      "updateProduct": "An error occurred while updating the product",
+      "deactivateProduct": "An error occurred while deactivating",
+      "createProductWithMessage": "Error creating product: {error}",
+      "updateProductWithMessage": "Error updating product: {error}"
+    },
+    "validation": {
+      "nameRequired": "Product name is required",
+      "skuRequired": "SKU is required",
+      "priceRequired": "Price is required",
+      "priceMin": "Price must be 0 or more",
+      "stockMin": "Stock must be 0 or more"
     }
   },
   "common": {
@@ -279,5 +337,45 @@
     "empty": "No notifications",
     "markAllRead": "Mark all as read",
     "viewAll": "View all notifications"
+  },
+  "categories": {
+    "title": "Categories",
+    "table": {
+      "name": "Name",
+      "slug": "Slug",
+      "parent": "Parent Category",
+      "actions": "Actions",
+      "noParent": "-"
+    },
+    "actions": {
+      "add": "Add Category",
+      "delete": "Delete",
+      "cancel": "Cancel"
+    },
+    "form": {
+      "title": "Add New Category",
+      "name": "Name",
+      "slug": "Slug",
+      "parentOptional": "Parent Category (optional)",
+      "noParent": "None",
+      "adding": "Adding..."
+    },
+    "empty": {
+      "title": "No categories",
+      "hint": "Categories organize products and appear to customers as store sections."
+    },
+    "confirm": {
+      "deleteTitle": "Delete Category",
+      "deleteDescription": "Are you sure you want to delete the category “{name}”?"
+    },
+    "toasts": {
+      "added": "Category added successfully",
+      "deleted": "Category deleted"
+    },
+    "errors": {
+      "loadCategories": "Could not load categories.",
+      "addCategory": "An error occurred while adding the category",
+      "deleteCategory": "An error occurred while deleting"
+    }
   }
 }

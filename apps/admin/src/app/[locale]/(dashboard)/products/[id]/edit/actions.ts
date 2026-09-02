@@ -1,5 +1,6 @@
 "use server";
 
+import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { revalidatePath } from "next/cache";
 
@@ -16,6 +17,7 @@ export async function updateProductAction(data: {
         revalidatePath(`/ar/products`);
         return { success: true };
     } catch (e: unknown) {
-        return { error: (e instanceof Error ? e.message : String(e)) || "Failed to update product" };
+        const t = await getTranslations("products");
+        return { error: (e instanceof Error ? e.message : String(e)) || t("errors.updateProduct") };
     }
 }

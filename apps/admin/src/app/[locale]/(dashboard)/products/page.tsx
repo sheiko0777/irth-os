@@ -1,8 +1,10 @@
+import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { ProductsClient } from "./ProductsClient";
 import { ErrorState } from "@/components/ui/ErrorState";
 
 export default async function ProductsPage() {
+    const t = await getTranslations("products");
     const caller = await serverCaller();
 
     const [productsResponse, categoriesResponse] = await Promise.all([
@@ -11,11 +13,11 @@ export default async function ProductsPage() {
     ]);
 
     if (productsResponse.error) {
-        return <ErrorState message="تعذّر تحميل المنتجات." />;
+        return <ErrorState message={t("errors.loadProducts")} />;
     }
 
     if (categoriesResponse.error) {
-        return <ErrorState message="تعذّر تحميل الفئات." />;
+        return <ErrorState message={t("errors.loadCategories")} />;
     }
 
     return (

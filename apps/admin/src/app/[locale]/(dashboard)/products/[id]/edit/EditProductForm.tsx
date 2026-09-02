@@ -11,21 +11,22 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
-const formSchema = z.object({
+const createFormSchema = (t: ReturnType<typeof useTranslations<"products">>) => z.object({
   id: z.string().uuid(),
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, t("validation.nameRequired")),
   description: z.string().optional(),
   isActive: z.boolean()
 });
 
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = z.infer<ReturnType<typeof createFormSchema>>;
 
-type FormDefaultValues = z.input<typeof formSchema>;
+type FormDefaultValues = z.input<ReturnType<typeof createFormSchema>>;
 
 interface Product { id: string; name: string; description?: string | null; isActive: boolean; }
 
 export function EditProductForm({ product }: { product: Product }) {
-    const t = useTranslations("products.form");
+    const t = useTranslations("products");
+    const formSchema = createFormSchema(t);
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
 
@@ -43,7 +44,7 @@ export function EditProductForm({ product }: { product: Product }) {
         startTransition(async () => {
             const res = await updateProductAction(data);
             if (res?.error) {
-                alert("Error updating product: " + res.error);
+                alert(t("errors.updateProductWithMessage", { error: res.error }));
             } else {
                 router.push("/ar/products");
                 router.refresh();
@@ -55,26 +56,26 @@ export function EditProductForm({ product }: { product: Product }) {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
             <Card>
                 <CardHeader>
-                    <CardTitle>تعديل المنتج</CardTitle>
+                    <CardTitle>{t("edit")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">{t("name")}</label>
+                        <label className="text-sm font-medium">{t("form.name")}</label>
                         <Input {...register("name")} />
                         {errors.name && <span className="text-sm text-crimson">{errors.name.message}</span>}
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">{t("description")}</label>
+                        <label className="text-sm font-medium">{t("form.description")}</label>
                         <Input {...register("description")} />
                     </div>
                     <div className="flex items-center space-x-2">
                         <input type="checkbox" id="isActive" {...register("isActive")} className="w-4 h-4 rounded-md border-rim1" />
-                        <label htmlFor="isActive" className="text-sm font-medium leading-none">{t("isActive")}</label>
+                        <label htmlFor="isActive" className="text-sm font-medium leading-none">{t("form.isActive")}</label>
                     </div>
                 </CardContent>
                 <CardFooter className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => router.back()} disabled={isPending}>{t("cancel")}</Button>
-                    <Button type="submit" disabled={isPending}>{isPending ? "..." : t("submit")}</Button>
+                    <Button type="button" variant="outline" onClick={() => router.back()} disabled={isPending}>{t("form.cancel")}</Button>
+                    <Button type="submit" disabled={isPending}>{isPending ? t("form.saving") : t("form.submit")}</Button>
                 </CardFooter>
             </Card>
         </form>

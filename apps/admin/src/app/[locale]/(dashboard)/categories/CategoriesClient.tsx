@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ interface CategoriesClientProps {
 }
 
 export function CategoriesClient({ categories }: CategoriesClientProps) {
+    const t = useTranslations('categories');
     const utils = trpc.useUtils();
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -34,7 +36,7 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
 
     const createMutation = trpc.categories.create.useMutation({
         onSuccess: () => {
-            toast.success('تم إضافة الفئة بنجاح');
+            toast.success(t('toasts.added'));
             utils.categories.list.invalidate();
             setIsModalOpen(false);
             setName('');
@@ -42,17 +44,17 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
             setParentId('');
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء إضافة الفئة');
+            toast.error(err instanceof Error ? err.message : t('errors.addCategory'));
         }
     });
 
     const deleteMutation = trpc.categories.delete.useMutation({
         onSuccess: () => {
-            toast.success('تم حذف الفئة');
+            toast.success(t('toasts.deleted'));
             utils.categories.list.invalidate();
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الحذف');
+            toast.error(err instanceof Error ? err.message : t('errors.deleteCategory'));
         }
     });
 
@@ -72,16 +74,16 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
     };
 
     const getParentName = (parentId: string | null) => {
-        if (!parentId) return '-';
+        if (!parentId) return t('table.noParent');
         const parent = categories.find(c => c.id === parentId);
-        return parent ? parent.name : '-';
+        return parent ? parent.name : t('table.noParent');
     };
 
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
                 <PermissionGate resource="categories" action="write">
-                    <Button onClick={() => setIsModalOpen(true)}>إضافة فئة</Button>
+                    <Button onClick={() => setIsModalOpen(true)}>{t('actions.add')}</Button>
                 </PermissionGate>
             </div>
 
@@ -89,16 +91,16 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="text-start">الاسم</TableHead>
-                            <TableHead className="text-start">الرابط (Slug)</TableHead>
-                            <TableHead className="text-start">الفئة الأب</TableHead>
-                            <TableHead className="text-start">الإجراءات</TableHead>
+                            <TableHead className="text-start">{t('table.name')}</TableHead>
+                            <TableHead className="text-start">{t('table.slug')}</TableHead>
+                            <TableHead className="text-start">{t('table.parent')}</TableHead>
+                            <TableHead className="text-start">{t('table.actions')}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {categories.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="p-0"><EmptyState title="لا توجد فئات" hint="الفئات بتنظّم المنتجات وبتظهر للعميل كتصنيفات في المتجر." /></TableCell>
+                                <TableCell colSpan={4} className="p-0"><EmptyState title={t('empty.title')} hint={t('empty.hint')} /></TableCell>
                             </TableRow>
                         ) : (
                             categories.map(category => (
@@ -109,9 +111,9 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                                     <TableCell>
                                         <PermissionGate resource="categories" action="delete">
                                             <ConfirmDialog
-                                                title="حذف الفئة"
-                                                description={`هل أنت متأكد من حذف الفئة «${category.name}»؟`}
-                                                confirmLabel="حذف"
+                                                title={t('confirm.deleteTitle')}
+                                                description={t('confirm.deleteDescription', { name: category.name })}
+                                                confirmLabel={t('actions.delete')}
                                                 pending={deleteMutation.isPending}
                                                 onConfirm={() => deleteMutation.mutate({ id: category.id })}
                                             >
@@ -121,7 +123,7 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                                                     className="text-[var(--crimson)] hover:text-[var(--crimson)]"
                                                     disabled={deleteMutation.isPending}
                                                 >
-                                                    حذف
+                                                    {t('actions.delete')}
                                                 </Button>
                                             </ConfirmDialog>
                                         </PermissionGate>
@@ -133,10 +135,10 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                 </Table>
             </div>
 
-            <FormDialog open={isModalOpen} onClose={() => setIsModalOpen(false)} title="إضافة فئة جديدة" width="448px">
+            <FormDialog open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t('form.title')} width="448px">
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <Label htmlFor="name" className="text-[var(--t1)]">الاسم</Label>
+                        <Label htmlFor="name" className="text-[var(--t1)]">{t('form.name')}</Label>
                         <Input
                             id="name"
                             value={name}
@@ -147,7 +149,7 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                     </div>
 
                     <div>
-                        <Label htmlFor="slug" className="text-[var(--t1)]">الرابط (Slug)</Label>
+                        <Label htmlFor="slug" className="text-[var(--t1)]">{t('form.slug')}</Label>
                         <Input
                             id="slug"
                             value={slug}
@@ -158,14 +160,14 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                     </div>
 
                     <div>
-                        <Label htmlFor="parentId" className="text-[var(--t1)]">الفئة الأب (اختياري)</Label>
+                        <Label htmlFor="parentId" className="text-[var(--t1)]">{t('form.parentOptional')}</Label>
                         <select
                             id="parentId"
                             value={parentId}
                             onChange={(e) => setParentId(e.target.value)}
                             className="w-full mt-1 p-2 border rounded-md border-[var(--rim1)] bg-[var(--surface)] text-[var(--t1)]"
                         >
-                            <option value="">لا يوجد</option>
+                            <option value="">{t('form.noParent')}</option>
                             {categories.map(c => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
@@ -178,13 +180,13 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                             variant="outline"
                             onClick={() => setIsModalOpen(false)}
                         >
-                            إلغاء
+                            {t('actions.cancel')}
                         </Button>
                         <Button 
                             type="submit"
                             disabled={createMutation.isPending}
                         >
-                            {createMutation.isPending ? 'جاري الإضافة...' : 'إضافة'}
+                            {createMutation.isPending ? t('form.adding') : t('actions.add')}
                         </Button>
                     </div>
                 </form>

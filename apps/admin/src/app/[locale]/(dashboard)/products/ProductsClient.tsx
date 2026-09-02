@@ -2,6 +2,7 @@
 import { formatMoney, fromMinor, toDecimalString } from '@irth/domain';
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { trpc } from "@/lib/trpc";
 
@@ -51,6 +52,7 @@ export interface Category {
 }
 
 export function ProductsClient({ products: initialProducts, categories }: { products: Product[], categories: Category[] }) {
+    const t = useTranslations("products");
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [page, setPage] = useState(1);
@@ -80,35 +82,35 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
     // Mutations
     const createMutation = trpc.products.create.useMutation({
         onSuccess: () => {
-            toast.success("تم إنشاء المنتج بنجاح");
+            toast.success(t("toasts.created"));
             utils.products.list.invalidate();
             setIsModalOpen(false);
             resetForm();
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء إنشاء المنتج");
+            toast.error(err instanceof Error ? err.message : t("errors.createProduct"));
         }
     });
 
     const updateMutation = trpc.products.update.useMutation({
         onSuccess: () => {
-            toast.success("تم تحديث المنتج بنجاح");
+            toast.success(t("toasts.updated"));
             utils.products.list.invalidate();
             setIsModalOpen(false);
             resetForm();
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء تحديث المنتج");
+            toast.error(err instanceof Error ? err.message : t("errors.updateProduct"));
         }
     });
 
     const deactivateMutation = trpc.products.deactivate.useMutation({
         onSuccess: () => {
-            toast.success("تم تعطيل المنتج");
+            toast.success(t("toasts.deactivated"));
             utils.products.list.invalidate();
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء التعطيل");
+            toast.error(err instanceof Error ? err.message : t("errors.deactivateProduct"));
         }
     });
 
@@ -166,11 +168,11 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'active':
-                return <Badge style={{ backgroundColor: 'var(--emerald)' }}>نشط</Badge>;
+                return <Badge style={{ backgroundColor: 'var(--emerald)' }}>{t("status.active")}</Badge>;
             case 'draft':
-                return <Badge style={{ backgroundColor: 'var(--gold)' }}>مسودة</Badge>;
+                return <Badge style={{ backgroundColor: 'var(--gold)' }}>{t("status.draft")}</Badge>;
             case 'archived':
-                return <Badge style={{ backgroundColor: 'var(--rim1)' }}>مؤرشف</Badge>;
+                return <Badge style={{ backgroundColor: 'var(--rim1)' }}>{t("status.archived")}</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
@@ -179,57 +181,57 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
     return (
         <div className="space-y-6" style={{ backgroundColor: 'var(--surface)' }}>
             <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--t1)' }}>إدارة المنتجات</h1>
+                <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--t1)' }}>{t("title")}</h1>
                 <PermissionGate resource="products" action="write">
                     <Dialog open={isModalOpen} onOpenChange={(open) => {
                         setIsModalOpen(open);
                         if (!open) resetForm();
                     }}>
                         <DialogTrigger asChild>
-                            <Button style={{ backgroundColor: 'var(--t1)', color: 'var(--surface)' }}>منتج جديد</Button>
+                            <Button style={{ backgroundColor: 'var(--t1)', color: 'var(--surface)' }}>{t("actions.new")}</Button>
                         </DialogTrigger>
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>{editingId ? "تعديل منتج" : "منتج جديد"}</DialogTitle>
+                                <DialogTitle>{editingId ? t("edit") : t("actions.new")}</DialogTitle>
                             </DialogHeader>
                             <div className="space-y-4 py-4">
                                 <div className="space-y-2">
-                                    <Label>الاسم</Label>
+                                    <Label>{t("table.name")}</Label>
                                     <Input value={formName} onChange={(e: { target: { value: string } }) => setFormName(e.target.value)} />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>الاسم (بالعربية)</Label>
+                                    <Label>{t("form.nameAr")}</Label>
                                     <Input value={formNameAr} onChange={(e: { target: { value: string } }) => setFormNameAr(e.target.value)} />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>SKU</Label>
+                                    <Label>{t("form.sku")}</Label>
                                     <Input value={formSku} onChange={(e: { target: { value: string } }) => setFormSku(e.target.value)} />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>السعر</Label>
+                                    <Label>{t("form.price")}</Label>
                                     <Input type="number" step="0.01" value={formPrice} onChange={(e: { target: { value: string } }) => setFormPrice(e.target.value)} />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>الحالة</Label>
+                                    <Label>{t("form.status")}</Label>
                                     <Select value={formStatus} onValueChange={setFormStatus}>
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="active">نشط</SelectItem>
-                                            <SelectItem value="draft">مسودة</SelectItem>
-                                            <SelectItem value="archived">مؤرشف</SelectItem>
+                                            <SelectItem value="active">{t("status.active")}</SelectItem>
+                                            <SelectItem value="draft">{t("status.draft")}</SelectItem>
+                                            <SelectItem value="archived">{t("status.archived")}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>القسم</Label>
+                                    <Label>{t("table.category")}</Label>
                                     <Select value={formCategoryId} onValueChange={setFormCategoryId}>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="اختر القسم" />
+                                            <SelectValue placeholder={t("form.categoryPlaceholder")} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">لا يوجد قسم</SelectItem>
+                                            <SelectItem value="">{t("form.noCategory")}</SelectItem>
                                             {categories.map(c => (
                                                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                                             ))}
@@ -237,7 +239,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                     </Select>
                                 </div>
                                 <Button onClick={handleSave} disabled={createMutation.isPending || updateMutation.isPending} className="w-full">
-                                    حفظ
+                                    {t("form.submit")}
                                 </Button>
                             </div>
                         </DialogContent>
@@ -247,7 +249,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
 
             <div className="flex gap-4 mb-4">
                 <Input 
-                    placeholder="بحث في المنتجات..." 
+                    placeholder={t("search.placeholder")}
                     value={searchQuery}
                     onChange={(e: { target: { value: string } }) => setSearchQuery(e.target.value)}
                     className="max-w-xs"
@@ -257,22 +259,22 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                         variant={statusFilter === "all" ? "default" : "ghost"} 
                         size="sm" 
                         onClick={() => setStatusFilter("all")}
-                    >الكل</Button>
+                    >{t("filters.all")}</Button>
                     <Button 
                         variant={statusFilter === "active" ? "default" : "ghost"} 
                         size="sm" 
                         onClick={() => setStatusFilter("active")}
-                    >نشط</Button>
+                    >{t("status.active")}</Button>
                     <Button 
                         variant={statusFilter === "draft" ? "default" : "ghost"} 
                         size="sm" 
                         onClick={() => setStatusFilter("draft")}
-                    >مسودة</Button>
+                    >{t("status.draft")}</Button>
                     <Button 
                         variant={statusFilter === "archived" ? "default" : "ghost"} 
                         size="sm" 
                         onClick={() => setStatusFilter("archived")}
-                    >مؤرشف</Button>
+                    >{t("status.archived")}</Button>
                 </div>
             </div>
 
@@ -280,13 +282,13 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="text-start">الاسم</TableHead>
-                            <TableHead className="text-start">SKU</TableHead>
-                            <TableHead className="text-start">السعر</TableHead>
-                            <TableHead className="text-start">المخزون</TableHead>
-                            <TableHead className="text-start">الحالة</TableHead>
-                            <TableHead className="text-start">القسم</TableHead>
-                            <TableHead className="text-end">الإجراءات</TableHead>
+                            <TableHead className="text-start">{t("table.name")}</TableHead>
+                            <TableHead className="text-start">{t("table.sku")}</TableHead>
+                            <TableHead className="text-start">{t("table.price")}</TableHead>
+                            <TableHead className="text-start">{t("table.stock")}</TableHead>
+                            <TableHead className="text-start">{t("table.status")}</TableHead>
+                            <TableHead className="text-start">{t("table.category")}</TableHead>
+                            <TableHead className="text-end">{t("table.actions")}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -305,7 +307,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                         ) : products.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="p-0">
-                                    <EmptyState icon={Box} title="لا توجد منتجات" hint="ابدأ بإضافة أول منتج، وهيظهر هنا بمتغيّراته وسعره." />
+                                    <EmptyState icon={Box} title={t("empty.title")} hint={t("empty.hint")} />
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -316,18 +318,18 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                     <TableCell>{formatMoney(fromMinor(p.priceMinor))}</TableCell>
                                     <TableCell>{p.stock}</TableCell>
                                     <TableCell>{getStatusBadge(p.status)}</TableCell>
-                                    <TableCell>{p.category || '-'}</TableCell>
+                                    <TableCell>{p.category || t("table.noCategory")}</TableCell>
                                     <TableCell className="text-end">
                                         <PermissionGate resource="products" action="write">
                                             <div className="flex justify-end gap-2">
                                                 <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)}>
-                                                    تعديل
+                                                    {t("actions.edit")}
                                                 </Button>
                                                 {p.status === 'active' && (
                                                     <ConfirmDialog
-                                                        title="تعطيل المنتج"
-                                                        description={`سيتم تعطيل المنتج «${p.name}». لن يظهر للبيع بعد ذلك.`}
-                                                        confirmLabel="تعطيل"
+                                                        title={t("confirm.deactivateTitle")}
+                                                        description={t("confirm.deactivateDescription", { name: p.name })}
+                                                        confirmLabel={t("actions.deactivate")}
                                                         pending={deactivateMutation.isPending}
                                                         onConfirm={() => deactivateMutation.mutate({ id: p.id })}
                                                     >
@@ -337,7 +339,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                                             style={{ color: 'var(--crimson)' }}
                                                             disabled={deactivateMutation.isPending}
                                                         >
-                                                            تعطيل
+                                                            {t("actions.deactivate")}
                                                         </Button>
                                                     </ConfirmDialog>
                                                 )}
