@@ -6,7 +6,7 @@
  * behaviour, not application logic.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   IdempotencyError,
   fingerprint,
@@ -319,5 +319,88 @@ describe('stock guard — Shopify shortfall (applies available instead of reject
     const shortfallCallers = results.filter((r) => r.shortfall > 0).length;
     expect(discrepancyRows).toHaveLength(shortfallCallers);
     expect(discrepancyRows.reduce((sum, d) => sum + d.shortfallQuantity, 0)).toBe(totalShortfall);
+  });
+});
+
+/**
+ * Two multi-line Shopify orders that share variants, arriving with the line
+ * items in OPPOSITE order — the shape that deadlocks.
+ *
+ * Every line taken by the shortfall path holds a row lock on inventory_items
+ * from its FOR UPDATE through its UPDATE. Shopify chooses the order of
+ * `line_items`, so orders [X,Y] and [Y,X] make one transaction hold X waiting
+ * for Y while the other holds Y waiting for X, and Postgres aborts one of
+ * them. That abort is not merely a retry: recordDelivery commits its dedup row
+ * BEFORE the work transaction, so Shopify's redelivery answers
+ * alreadyProcessed and the order is never created at all.
+ *
+ * apps/api/src/routes/webhooks/shopify.ts answers this by sorting line items
+ * on a key stable across requests before the loop, so every transaction takes
+ * the same rows in the same sequence. This test mirrors that ordering rule and
+ * fails without it — measured on the un-sorted form, 12/12 trials deadlocked.
+ *
+ * The companion check that PRODUCTION still sorts (rather than only this
+ * helper) is apps/api/src/__tests__/shopifyLockOrderGate.test.ts.
+ */
+describe('stock guard — concurrent orders with inverse line-item order', () => {
+  const variants: string[] = [];
+
+  beforeAll(async () => {
+    const [product] = await testDb.insert(products).values({
+      orgId: orgA, name: 'Deadlock Widget', sku: `DL-SKU-${Date.now()}`, priceMinor: 1000n, currency: 'EGP',
+    }).returning();
+    for (const label of ['A', 'B']) {
+      const [variant] = await testDb.insert(productVariants).values({
+        orgId: orgA, productId: product.id, name: label, sku: `DL-V-${label}-${Date.now()}`, priceMinor: 1000n,
+      }).returning();
+      variants.push(variant.id);
+      // 1 on hand against 2 requested, so BOTH callers are forced down the
+      // shortfall path — the one that holds a lock across a read and a write.
+      await testDb.insert(inventoryItems).values({ orgId: orgA, variantId: variant.id, quantity: 1 });
+    }
+  });
+
+  /** The production ordering rule: a key stable across requests, applied before any lock is taken. */
+  const takeAll = (lines: string[]) =>
+    withOrgContext(testDb, orgA, async (tx) => {
+      for (const variantId of [...lines].sort()) {
+        const guarded = await tx.update(inventoryItems)
+          .set({ quantity: sql`${inventoryItems.quantity} - 2` })
+          .where(and(
+            eq(inventoryItems.orgId, orgA),
+            eq(inventoryItems.variantId, variantId),
+            sql`${inventoryItems.quantity} >= 2`,
+          ))
+          .returning({ id: inventoryItems.id });
+        if (guarded.length > 0) continue;
+
+        const [item] = await tx.select({ quantity: inventoryItems.quantity }).from(inventoryItems)
+          .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, variantId)))
+          .for('update');
+        const applied = item ? Math.max(0, Math.min(item.quantity, 2)) : 0;
+        if (applied > 0) {
+          await tx.update(inventoryItems)
+            .set({ quantity: sql`${inventoryItems.quantity} - ${applied}` })
+            .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, variantId)));
+        }
+      }
+    });
+
+  it('neither delivery is aborted, and no stock goes negative', async () => {
+    const [first, second] = variants;
+    const results = await Promise.allSettled([takeAll([first, second]), takeAll([second, first])]);
+
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(
+      rejected.map((r) => String((r as PromiseRejectedResult).reason?.message)),
+      'a rejected delivery here is a dropped Shopify order, not a retry',
+    ).toEqual([]);
+
+    const rows = await testDb.select({ quantity: inventoryItems.quantity }).from(inventoryItems)
+      .where(and(eq(inventoryItems.orgId, orgA), inArray(inventoryItems.variantId, variants)));
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect(row.quantity).toBeGreaterThanOrEqual(0);
+    // 1 on hand each, 2 requested by each of two callers — all of it consumed.
+    expect(rows.map((r) => r.quantity).sort()).toEqual([0, 0]);
   });
 });
