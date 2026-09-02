@@ -13,6 +13,7 @@ import { orgsRouter } from './routes/orgs'
 import { notificationsRouter } from './routes/notifications'
 import { productsRouter } from './routes/products'
 import { categoriesRouter } from './routes/categories'
+import { aiChatRouter } from './ai/route'
 import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
@@ -112,6 +113,7 @@ app.route('/api/orgs', orgsRouter)
 app.route('/api/notifications', notificationsRouter)
 app.route('/api/products', productsRouter)
 app.route('/api/categories', categoriesRouter)
+app.route('/api/ai', aiChatRouter)
 
 /**
  * How many batches one cron tick will drain before yielding.

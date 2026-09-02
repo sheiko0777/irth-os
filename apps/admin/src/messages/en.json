@@ -24,6 +24,32 @@
     "vat": "VAT Report (14%)",
     "ai": "AI Sales Query"
   },
+  "intelligence": {
+    "title": "IRTH Intelligence",
+    "subtitle": "Ask read-only questions about orders, products, inventory, and sales. Answers use your current organization scope and role permissions.",
+    "placeholder": "Ask about orders, stock, products, or sales...",
+    "send": "Send",
+    "thinking": "Reading the right data...",
+    "error": "IRTH Intelligence is unavailable right now.",
+    "emptyTitle": "Ask an operational question",
+    "emptyHint": "The assistant can summarize data and return dashboard cards without changing anything.",
+    "examples": {
+      "inventory": "Which products are low on stock?",
+      "orders": "Show me the latest pending orders.",
+      "sales": "Summarize sales for the last 30 days."
+    },
+    "labels": {
+      "sku": "SKU",
+      "status": "Status",
+      "total": "Total",
+      "quantity": "Qty",
+      "reorderPoint": "Reorder",
+      "state": "State",
+      "out": "Out",
+      "low": "Low",
+      "ok": "OK"
+    }
+  },
   "inventory": {
     "title": "Inventory Management",
     "alerts_banner": "Alert: {count} products have reached their reorder point",
