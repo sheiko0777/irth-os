@@ -13,3 +13,5 @@ export * from './campaigns';
 export * from './giftCards';
 export * from './customerSegments';
 export * from './orgFeatureFlags';
+export * from './access';
+export * from './warehouses';

@@ -1,11 +1,20 @@
 import { z } from 'zod';
-import { protectedProcedure, router, adminProcedure } from '../trpc';
+import { requirePermission, router } from '../trpc';
 import { inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
 import { eq, and, desc, asc, lte, gt, sql, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
+// Historical inventory rows predate warehouse attribution. A scoped employee
+// must not see that whole-org aggregate just because an old row has no
+// warehouse_id; they use the lot ledger introduced with warehouse scopes.
+function rejectUnattributedInventoryScope(ctx: { role: string; accessPolicy: unknown; assignedWarehouseIds: string[] }) {
+  if (ctx.role !== 'owner' && ctx.accessPolicy && ctx.assignedWarehouseIds.length > 0) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Use warehouse lots for scoped inventory access.' });
+  }
+}
+
 export const inventoryRouter = router({
-  list: protectedProcedure
+  list: requirePermission('inventory', 'view')
     .input(z.object({
       /**
        * `out` is stock at or below zero — unsellable right now.
@@ -16,6 +25,7 @@ export const inventoryRouter = router({
       stock: z.enum(['out', 'low', 'ok']).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
+      rejectUnattributedInventoryScope(ctx);
       const scope = eq(inventoryItems.orgId, ctx.orgId);
 
       const stockFilter =
@@ -63,8 +73,9 @@ export const inventoryRouter = router({
       };
     }),
 
-  alerts: protectedProcedure
+  alerts: requirePermission('inventory', 'view')
     .query(async ({ ctx }) => {
+      rejectUnattributedInventoryScope(ctx);
       const items = await ctx.db
         .select({
           item: inventoryItems,
@@ -85,11 +96,12 @@ export const inventoryRouter = router({
       return { data: items, error: null, meta: null };
     }),
 
-  movements: protectedProcedure
+  movements: requirePermission('inventory', 'view')
     .input(z.object({
       itemId: z.string().uuid(),
     }))
     .query(async ({ ctx, input }) => {
+      rejectUnattributedInventoryScope(ctx);
       const parsedInput = z.object({ itemId: z.string().uuid() }).parse(input);
       const movements = await ctx.db
         .select()
@@ -106,7 +118,7 @@ export const inventoryRouter = router({
       return { data: movements, error: null, meta: null };
     }),
 
-  adjust: adminProcedure
+  adjust: requirePermission('inventory', 'write')
     .input(z.object({
       itemId: z.string().uuid(),
       type: z.enum(['in', 'out', 'adjustment']),
@@ -114,6 +126,7 @@ export const inventoryRouter = router({
       note: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      rejectUnattributedInventoryScope(ctx);
       const parsedInput = z.object({
         itemId: z.string().uuid(),
         type: z.enum(['in', 'out', 'adjustment']),

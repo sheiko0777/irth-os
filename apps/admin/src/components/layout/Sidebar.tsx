@@ -11,6 +11,7 @@ import { AlertPanel } from '@/components/layout/AlertPanel';
 import { OrgSwitcher } from '@/components/layout/OrgSwitcher';
 import { LogOut, Shield, X } from 'lucide-react';
 import { buildNavGroups } from '@/lib/navigation';
+import { canSeeScreen, useAccess } from '@/lib/permissions';
 
 /** Collapsed-rail width. Wide enough for a centered 15px icon with breathing room. */
 const RAIL = 'w-16';
@@ -21,6 +22,7 @@ export function Sidebar({ locale }: { locale: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
+  const { accessPolicy, permissionOverrides, assignedWarehouseIds } = useAccess();
   // Never fully hidden on any breakpoint: collapsed = icon-only rail (always
   // visible, reserves its own gutter — see the `me-16` on DashboardLayout's
   // content wrapper), expanded = the original full-width sidebar, overlaid
@@ -45,7 +47,22 @@ export function Sidebar({ locale }: { locale: string }) {
   }, [pathname]);
 
   // Single source shared with the command palette — see lib/navigation.ts.
-  const groups = buildNavGroups(locale);
+  const hasWarehouseScope = Boolean(accessPolicy && assignedWarehouseIds.length > 0);
+  const groups = buildNavGroups(locale)
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => !(hasWarehouseScope && item.href.endsWith('/inventory/lots')))
+        .map((item) => hasWarehouseScope && item.href.endsWith('/inventory')
+          ? { ...item, href: `/${locale}/inventory/lots`, label: locale === 'ar' ? 'مخزوني' : 'My warehouse' }
+          : item)
+        .filter((item) => {
+        const segments = item.href.split('/').filter(Boolean);
+        const screen = segments.at(-1) === 'lots' ? 'inventory' : segments.at(-1);
+        return !screen || canSeeScreen(screen, accessPolicy, permissionOverrides);
+        }),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const handleLogout = async () => {
     await signOut();

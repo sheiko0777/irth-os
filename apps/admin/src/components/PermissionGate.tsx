@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { can, useRole, PERMISSIONS, type ActionFor } from '../lib/permissions';
+import { canWithPolicy, useAccess, PERMISSIONS, type ActionFor } from '../lib/permissions';
 
 type Resource = keyof typeof PERMISSIONS;
 
@@ -16,9 +16,9 @@ export function PermissionGate<R extends Resource>({
   action,
   children,
 }: PermissionGateProps<R>) {
-  const role = useRole();
+  const { role, accessPolicy, permissionOverrides } = useAccess();
 
-  if (!role || !can(role, resource, action)) {
+  if (!role || !canWithPolicy(role, resource, action, accessPolicy, permissionOverrides)) {
     return null;
   }
 

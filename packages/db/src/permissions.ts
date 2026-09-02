@@ -98,3 +98,47 @@ export function can<R extends Resource>(role: Role, resource: R, action: ActionF
   const allowed = (PERMISSIONS[resource] as Record<string, Role[]> | undefined)?.[action as string];
   return allowed ? allowed.includes(role) : false;
 }
+
+export type AccessPolicy = {
+  allow?: string[];
+  deny?: string[];
+  screens?: string[];
+};
+
+function isAccessPolicy(value: unknown): value is AccessPolicy {
+  if (!value || typeof value !== 'object') return false;
+  const policy = value as Record<string, unknown>;
+  return ['allow', 'deny', 'screens'].every((key) =>
+    policy[key] === undefined || (Array.isArray(policy[key]) && policy[key].every((item) => typeof item === 'string')),
+  );
+}
+
+/**
+ * Resolves a member's profile and individual override. Profiles are allow
+ * lists, so assigning one cannot accidentally preserve broad member access.
+ */
+export function canWithPolicy<R extends Resource>(
+  role: Role,
+  resource: R,
+  action: ActionFor<R>,
+  profile: unknown,
+  overrides: unknown,
+): boolean {
+  const key = `${String(resource)}.${String(action)}`;
+  const profilePolicy = isAccessPolicy(profile) ? profile : undefined;
+  const overridePolicy = isAccessPolicy(overrides) ? overrides : undefined;
+
+  if (overridePolicy?.deny?.includes(key) || profilePolicy?.deny?.includes(key)) return false;
+  if (overridePolicy?.allow?.includes(key)) return true;
+  if (profilePolicy) return profilePolicy.allow?.includes(key) ?? false;
+  return can(role, resource, action);
+}
+
+/** UI-only companion to canWithPolicy. Server authorization remains required. */
+export function canSeeScreen(screen: string, profile: unknown, overrides: unknown): boolean {
+  const profilePolicy = isAccessPolicy(profile) ? profile : undefined;
+  const overridePolicy = isAccessPolicy(overrides) ? overrides : undefined;
+  if (overridePolicy?.deny?.includes(`screen.${screen}`) || profilePolicy?.deny?.includes(`screen.${screen}`)) return false;
+  if (overridePolicy?.allow?.includes(`screen.${screen}`)) return true;
+  return profilePolicy ? (profilePolicy.screens?.includes(screen) ?? false) : true;
+}

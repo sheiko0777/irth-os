@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, resolveActiveOrgMembership, withOrgContext, withIdempotency, IdempotencyError, can, type ActionFor, type Resource } from '@irth/db';
+import { db, resolveActiveOrgMembership, withOrgContext, withIdempotency, IdempotencyError, canWithPolicy, type ActionFor, type Resource } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
@@ -33,6 +33,10 @@ export const createContext = async () => {
         orgId,
         userId,
         role: membership.role,
+        accessPolicy: membership.accessPolicy,
+        permissionOverrides: membership.permissionOverrides,
+        assignedWarehouseIds: membership.assignedWarehouseIds,
+        jobTitle: membership.jobTitle,
 
         /**
          * Runs `fn` in a transaction the database will only let touch this
@@ -172,7 +176,7 @@ export const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
 // members.ts), while other routers keep the coarser tier gates.
 export function requirePermission<R extends Resource>(resource: R, action: ActionFor<R>) {
     return protectedProcedure.use(({ ctx, next }) => {
-        if (!can(ctx.role, resource, action)) {
+        if (!canWithPolicy(ctx.role, resource, action, ctx.accessPolicy, ctx.permissionOverrides)) {
             throw new TRPCError({ code: 'FORBIDDEN', message: `Missing permission: ${String(resource)}.${String(action)}` });
         }
         return next({ ctx });

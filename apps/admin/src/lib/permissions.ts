@@ -5,8 +5,8 @@
 // never evaluate. permissions.ts itself has no imports and no side effects,
 // so reaching past the barrel straight to it is safe; going through '@irth/db'
 // is not.
-export { can, PERMISSIONS } from '@irth/db/src/permissions';
-export type { ActionFor, Resource } from '@irth/db/src/permissions';
+export { can, canSeeScreen, canWithPolicy, PERMISSIONS } from '@irth/db/src/permissions';
+export type { AccessPolicy, ActionFor, Resource } from '@irth/db/src/permissions';
 import type { Role } from '@irth/db/src/permissions';
 import { trpc } from './trpc';
 
@@ -36,4 +36,19 @@ export function useRole(): Role | null {
   });
 
   return (data?.data.role as Role | undefined) ?? null;
+}
+
+/** The active member's effective policy, used for UI affordances only. */
+export function useAccess() {
+  const { data } = trpc.me.get.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  return {
+    role: (data?.data.role as Role | undefined) ?? null,
+    accessPolicy: (data?.data.accessPolicy as import('@irth/db/src/permissions').AccessPolicy | null | undefined) ?? null,
+    permissionOverrides: (data?.data.permissionOverrides as import('@irth/db/src/permissions').AccessPolicy | null | undefined) ?? null,
+    assignedWarehouseIds: (data?.data.assignedWarehouseIds as string[] | undefined) ?? [],
+  };
 }

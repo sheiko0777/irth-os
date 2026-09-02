@@ -19,18 +19,42 @@ function ctx(role: Role, db: unknown = {}): Parameters<typeof executeAiTool>[2] 
     orgId: ORG_ID,
     userId: 'user-1',
     role,
+    accessPolicy: null,
+    permissionOverrides: null,
+    assignedWarehouseIds: [],
     locale: 'en',
   };
 }
 
 describe('IRTH Intelligence tools', () => {
   it('does not expose finance-only sales summaries to members', () => {
-    const names = allowedAiToolDefinitions('member').map((tool) => tool.name);
+    const names = allowedAiToolDefinitions({ ...ctx('member'), locale: 'en' }).map((tool) => tool.name);
 
     expect(names).toContain('orders_list');
     expect(names).toContain('products_search');
     expect(names).toContain('inventory_snapshot');
     expect(names).not.toContain('sales_summary');
+  });
+
+  it('applies a member access profile before exposing AI tools', () => {
+    const names = allowedAiToolDefinitions({
+      ...ctx('admin'),
+      accessPolicy: { allow: ['orders.view'] },
+      locale: 'en',
+    }).map((tool) => tool.name);
+
+    expect(names).toEqual(['orders_list']);
+  });
+
+  it('does not expose legacy organization-wide inventory to a warehouse-scoped profile', () => {
+    const names = allowedAiToolDefinitions({
+      ...ctx('member'),
+      accessPolicy: { allow: ['inventory.view'] },
+      assignedWarehouseIds: ['warehouse-1'],
+      locale: 'en',
+    }).map((tool) => tool.name);
+
+    expect(names).not.toContain('inventory_snapshot');
   });
 
   it('rejects a forbidden tool before touching the database', async () => {

@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { aiConversationLogs, jsonSafe, type Role } from '@irth/db';
+import { aiConversationLogs, jsonSafe, type AccessPolicy, type Role } from '@irth/db';
 import { getDb, withOrg } from '../db';
 import { rateLimit } from '../middlewares/rateLimit';
 import { envVar } from '../utils/env';
 import { handleError } from '../utils/errors';
 import { createGroqProvider } from './providers/groq';
 import { allowedAiToolDefinitions, executeAiTool } from './tools';
-import type { AiLocale, AiMessage, AiProvider, AiToolCard, AiToolDefinition } from './types';
+import type { AiLocale, AiMessage, AiProvider, AiRequestContext, AiToolCard, AiToolDefinition } from './types';
 
 const MAX_HISTORY = 10;
 const MAX_TOOL_ITERATIONS = 3;
@@ -29,12 +29,15 @@ export const aiChatRouter = new Hono();
 const trustedProxyCount = () => parseInt(envVar('TRUSTED_PROXY_COUNT') || '0', 10);
 aiChatRouter.use('/chat', rateLimit(20, 60_000, trustedProxyCount));
 
-function getAuth(c: Context): { orgId: string; userId: string; role: Role } | null {
+function getAuth(c: Context): Omit<AiRequestContext, 'locale'> | null {
   const orgId = c.get('orgId') as string | undefined;
   const userId = c.get('userId') as string | undefined;
   const role = c.get('role') as Role | undefined;
+  const accessPolicy = c.get('accessPolicy') as AccessPolicy | null | undefined;
+  const permissionOverrides = c.get('permissionOverrides') as AccessPolicy | null | undefined;
+  const assignedWarehouseIds = c.get('assignedWarehouseIds') as string[] | undefined;
   if (!orgId || !userId || !role) return null;
-  return { orgId, userId, role };
+  return { orgId, userId, role, accessPolicy: accessPolicy ?? null, permissionOverrides: permissionOverrides ?? null, assignedWarehouseIds: assignedWarehouseIds ?? [] };
 }
 
 function systemPrompt(locale: AiLocale): string {
@@ -110,7 +113,7 @@ function buildMessages(input: z.infer<typeof chatSchema>): AiMessage[] {
 
 async function runToolPlanning(input: {
   c: Context;
-  auth: { orgId: string; userId: string; role: Role };
+  auth: Omit<AiRequestContext, 'locale'>;
   parsed: z.infer<typeof chatSchema>;
   provider: AiProvider;
   tools: AiToolDefinition[];
@@ -145,6 +148,9 @@ async function runToolPlanning(input: {
           orgId: input.auth.orgId,
           userId: input.auth.userId,
           role: input.auth.role,
+          accessPolicy: input.auth.accessPolicy,
+          permissionOverrides: input.auth.permissionOverrides,
+          assignedWarehouseIds: input.auth.assignedWarehouseIds,
           locale: input.parsed.locale,
         }));
         cards.push(...result.cards);
@@ -184,7 +190,7 @@ function sse(event: string, data: unknown): Uint8Array {
 
 function streamChat(input: {
   c: Context;
-  auth: { orgId: string; userId: string; role: Role };
+  auth: Omit<AiRequestContext, 'locale'>;
   parsed: z.infer<typeof chatSchema>;
   provider: AiProvider;
   tools: AiToolDefinition[];
@@ -281,7 +287,7 @@ aiChatRouter.post('/chat', async (c) => {
   }
 
   const provider = createGroqProvider();
-  const tools = allowedAiToolDefinitions(auth.role);
+  const tools = allowedAiToolDefinitions({ ...auth, locale: parsed.locale });
 
   if (parsed.stream) {
     return streamChat({ c, auth, parsed, provider, tools });

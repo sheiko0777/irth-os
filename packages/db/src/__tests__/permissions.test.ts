@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { can, PERMISSIONS, type Resource } from '../permissions';
+import { can, canSeeScreen, canWithPolicy, PERMISSIONS, type Resource } from '../permissions';
 
 describe('can', () => {
   it('matches the matrix for every declared resource and action', () => {
@@ -33,5 +33,18 @@ describe('can', () => {
     // @ts-expect-error 'bogus' is not a key of PERMISSIONS.products — can()'s
     // generic signature must reject it rather than widening to `string`.
     can('owner', 'products', 'bogus');
+  });
+
+  it('uses a profile as an allow list and lets a per-member deny win', () => {
+    const profile = { allow: ['inventory.view', 'inventory.write'], screens: ['inventory'] };
+    expect(canWithPolicy('member', 'inventory', 'view', profile, {})).toBe(true);
+    expect(canWithPolicy('member', 'orders', 'view', profile, {})).toBe(false);
+    expect(canWithPolicy('member', 'inventory', 'write', profile, { deny: ['inventory.write'] })).toBe(false);
+  });
+
+  it('uses the same deny-first rule for visibility of a screen', () => {
+    const profile = { screens: ['inventory'], deny: [] };
+    expect(canSeeScreen('inventory', profile, {})).toBe(true);
+    expect(canSeeScreen('inventory', profile, { deny: ['screen.inventory'] })).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { and, asc, count, desc, eq, gte, ilike, lte, sum } from 'drizzle-orm';
 import {
-  can,
+  canWithPolicy,
   inventoryItems,
   orders,
   products,
@@ -9,7 +9,6 @@ import {
   type ActionFor,
   type DbTx,
   type Resource,
-  type Role,
 } from '@irth/db';
 import type { AiRequestContext, AiToolDefinition, AiToolResult } from './types';
 
@@ -257,9 +256,19 @@ export const AI_TOOLS: AiTool[] = [
   },
 ];
 
-export function allowedAiToolDefinitions(role: Role): AiToolDefinition[] {
+// Legacy inventory_items are organization-wide and predate warehouse
+// attribution. Do not let a warehouse-scoped profile obtain that aggregate
+// through a conversational path while it is intentionally blocked in the UI.
+function isAvailableToContext(tool: AiTool, ctx: AiRequestContext): boolean {
+  if (tool.definition.name === 'inventory_snapshot' && ctx.accessPolicy && ctx.assignedWarehouseIds.length > 0) {
+    return false;
+  }
+  return canWithPolicy(ctx.role, tool.permission.resource, tool.permission.action, ctx.accessPolicy, ctx.permissionOverrides);
+}
+
+export function allowedAiToolDefinitions(ctx: AiRequestContext): AiToolDefinition[] {
   return AI_TOOLS
-    .filter((tool) => can(role, tool.permission.resource, tool.permission.action))
+    .filter((tool) => isAvailableToContext(tool, ctx))
     .map((tool) => tool.definition);
 }
 
@@ -269,7 +278,7 @@ export async function executeAiTool(name: string, args: unknown, ctx: ToolExecut
     throw new Error(`Unknown AI tool: ${name}`);
   }
 
-  if (!can(ctx.role, tool.permission.resource, tool.permission.action)) {
+  if (!isAvailableToContext(tool, ctx)) {
     throw new Error(`Forbidden AI tool: ${name}`);
   }
 

@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { FilterTabs, type FilterTab } from "@/components/ui/FilterTabs";
 import { Warehouse } from "lucide-react";
+import Link from "next/link";
 
 /**
  * Three stock states, not two. "Out" cannot be sold today; "low" can, but needs
@@ -32,11 +33,14 @@ function stateOf(quantity: number, reorderPoint: number): StockState {
 
 export default async function InventoryPage({
   searchParams,
+  params,
 }: {
   searchParams: Promise<{ stock?: string }>;
+  params: Promise<{ locale: string }>;
 }) {
   const t = await getTranslations();
   const { stock: stockParam } = await searchParams;
+  const { locale } = await params;
   const stock = isStockState(stockParam) ? stockParam : undefined;
 
   const caller = await serverCaller();
@@ -60,7 +64,10 @@ export default async function InventoryPage({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-[var(--t1)]">{t("inventory.title")}</h1>
-        <ExportButton type="inventory" label="تصدير المخزون" />
+        <div className="flex items-center gap-2">
+          <Link href={`/${locale}/inventory/lots`} className="text-sm font-medium text-[var(--gold)] hover:underline">المخازن والتشغيلات</Link>
+          <ExportButton type="inventory" label="تصدير المخزون" />
+        </div>
       </div>
 
       {/* The banner is gone: the tab strip carries the same warning as a live,

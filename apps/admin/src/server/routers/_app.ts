@@ -25,9 +25,13 @@ import { giftCardsRouter } from './giftCards';
 import { customerSegmentsRouter } from './customerSegments';
 import { platformAdminRouter } from './platformAdmin';
 import { meRouter } from './me';
+import { accessProfilesRouter } from './accessProfiles';
+import { warehousesRouter } from './warehouses';
 
 export const appRouter = router({
     me: meRouter,
+    accessProfiles: accessProfilesRouter,
+    warehouses: warehousesRouter,
     dashboard: dashboardRouter,
     orders: ordersRouter,
     products: productsRouter,

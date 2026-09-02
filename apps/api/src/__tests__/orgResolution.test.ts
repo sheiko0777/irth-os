@@ -37,7 +37,14 @@ describe('authContext', () => {
 
   it('sets userId/orgId/role from the shared resolver when a membership exists', async () => {
     vi.mocked(auth.api.getSession).mockResolvedValue({ user: { id: 'user-1' } } as never);
-    vi.mocked(resolveActiveOrgMembership).mockResolvedValue({ orgId: 'org-1', role: 'admin' });
+    vi.mocked(resolveActiveOrgMembership).mockResolvedValue({
+      orgId: 'org-1',
+      role: 'admin',
+      accessPolicy: { allow: ['orders.view'] },
+      permissionOverrides: { deny: ['finance.view'] },
+      assignedWarehouseIds: ['warehouse-1'],
+      jobTitle: null,
+    });
 
     const res = await buildApp().request('/api/whoami');
 

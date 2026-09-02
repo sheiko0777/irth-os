@@ -3,6 +3,7 @@ import { requirePermission, router } from '../trpc';
 import { eq, and, desc } from 'drizzle-orm';
 import { orgMembers, orgInvites, organizations, user, withAudit, emitOutboxEvent, generateInviteOtp } from '@irth/db';
 import { TRPCError } from '@trpc/server';
+import { accessProfiles } from '@irth/db';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -34,12 +35,17 @@ export const membersRouter = router({
         id: orgMembers.id,
         userId: orgMembers.userId,
         role: orgMembers.role,
+        accessProfileId: orgMembers.accessProfileId,
+        jobTitle: orgMembers.jobTitle,
+        assignedWarehouseIds: orgMembers.assignedWarehouseIds,
+        profileName: accessProfiles.name,
         createdAt: orgMembers.createdAt,
         name: user.name,
         email: user.email,
       })
       .from(orgMembers)
       .leftJoin(user, eq(user.id, orgMembers.userId))
+      .leftJoin(accessProfiles, eq(accessProfiles.id, orgMembers.accessProfileId))
       .where(eq(orgMembers.orgId, ctx.orgId));
 
     return { data: members, error: null, meta: { orgId: ctx.orgId } };

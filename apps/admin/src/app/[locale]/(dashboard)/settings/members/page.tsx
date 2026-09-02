@@ -8,6 +8,8 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { serverCaller } from "@/server/caller";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Users } from 'lucide-react';
+import { MemberAccessEditor } from './MemberAccessEditor';
+import { AccessProfileTemplates } from './AccessProfileTemplates';
 
 export default async function MembersPage() {
   const t = await getTranslations("settings");
@@ -21,6 +23,12 @@ export default async function MembersPage() {
       <h1 className="text-3xl font-bold tracking-tight">{t("members")}</h1>
 
       <div className="grid gap-6 md:grid-cols-2">
+        <PermissionGate resource="members" action="changeRole">
+          <Card className="md:col-span-2">
+            <CardHeader><CardTitle>قوالب فرق العمل</CardTitle></CardHeader>
+            <CardContent><AccessProfileTemplates /></CardContent>
+          </Card>
+        </PermissionGate>
         <Card>
           <CardHeader>
             <CardTitle>الأعضاء الحاليين</CardTitle>
@@ -30,7 +38,7 @@ export default async function MembersPage() {
               {members.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between gap-3 border-b border-[var(--rim1)] pb-2"
+                  className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--rim1)] pb-2"
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span
@@ -56,6 +64,18 @@ export default async function MembersPage() {
                     <MemberRoleSelect memberId={member.id} role={member.role} />
                     <RemoveMemberButton memberId={member.id} role={member.role} />
                   </div>
+                  <PermissionGate resource="members" action="changeRole">
+                    {member.role !== 'owner' && (
+                      <div className="basis-full">
+                        <MemberAccessEditor
+                          memberId={member.id}
+                          profileId={member.accessProfileId}
+                          jobTitle={member.jobTitle}
+                          warehouseIds={member.assignedWarehouseIds}
+                        />
+                      </div>
+                    )}
+                  </PermissionGate>
                 </div>
               ))}
               {members.length === 0 && (

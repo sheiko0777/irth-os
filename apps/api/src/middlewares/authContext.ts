@@ -41,6 +41,9 @@ export const authContext = (): MiddlewareHandler => async (c, next) => {
   if (membership) {
     c.set('orgId', membership.orgId);
     c.set('role', membership.role);
+    c.set('accessPolicy', membership.accessPolicy);
+    c.set('permissionOverrides', membership.permissionOverrides);
+    c.set('assignedWarehouseIds', membership.assignedWarehouseIds);
   }
 
   await next();

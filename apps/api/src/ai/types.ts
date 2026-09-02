@@ -1,4 +1,4 @@
-import type { Role } from '@irth/db';
+import type { AccessPolicy, Role } from '@irth/db';
 
 export type AiLocale = 'ar' | 'en';
 
@@ -69,5 +69,8 @@ export type AiRequestContext = {
   orgId: string;
   userId: string;
   role: Role;
+  accessPolicy: AccessPolicy | null;
+  permissionOverrides: AccessPolicy | null;
+  assignedWarehouseIds: string[];
   locale: AiLocale;
 };

@@ -29,6 +29,13 @@ export const orgMembers = pgTable("org_members", {
   orgId: uuid("org_id").notNull().references(() => organizations.id),
   userId: text("user_id").notNull(),
   role: text("role").notNull().default("member"),
+  // A profile narrows or extends the legacy role with named, auditable work
+  // permissions. It deliberately remains nullable so every existing member
+  // retains the legacy matrix until an owner assigns a profile.
+  accessProfileId: uuid("access_profile_id"),
+  permissionOverrides: jsonb("permission_overrides").notNull().default({}),
+  assignedWarehouseIds: uuid("assigned_warehouse_ids").array().notNull().default([]),
+  jobTitle: text("job_title"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   // The exact column both org-context resolvers filter on (packages/db/src/

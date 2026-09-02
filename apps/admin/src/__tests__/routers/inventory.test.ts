@@ -98,4 +98,17 @@ describe('inventory.list', () => {
       expect(res.error).toBeNull();
     }
   });
+
+  it('does not expose legacy organization-wide inventory to a warehouse-scoped member', async () => {
+    const scopedContext = {
+      ...ctx('member'),
+      accessPolicy: { allow: ['inventory.view'] },
+      permissionOverrides: null,
+      assignedWarehouseIds: ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'],
+    } as Context;
+    const scopedCaller = inventoryRouter.createCaller(scopedContext);
+
+    await expect(scopedCaller.list(undefined)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
 });

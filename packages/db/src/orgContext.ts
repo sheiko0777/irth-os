@@ -1,6 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { organizations, orgMembers } from './schema';
 import { user } from './schema/auth';
+import { accessProfiles } from './schema/access';
 import type { Role } from './permissions';
 import type { DbInstance } from './index';
 
@@ -20,6 +21,34 @@ import type { DbInstance } from './index';
 export interface ActiveOrgMembership {
   orgId: string;
   role: Role;
+  accessPolicy: unknown;
+  permissionOverrides: unknown;
+  assignedWarehouseIds: string[];
+  jobTitle: string | null;
+}
+
+type MembershipRow = {
+  orgId: string;
+  role: string;
+  accessProfileId: string | null;
+  permissionOverrides: unknown;
+  assignedWarehouseIds: string[];
+  jobTitle: string | null;
+};
+
+async function withPolicy(db: Pick<DbInstance, 'select'>, membership: MembershipRow): Promise<ActiveOrgMembership> {
+  const [profile] = membership.accessProfileId
+    ? await db.select({ permissions: accessProfiles.permissions }).from(accessProfiles)
+      .where(and(eq(accessProfiles.id, membership.accessProfileId), eq(accessProfiles.orgId, membership.orgId))).limit(1)
+    : [];
+  return {
+    orgId: membership.orgId,
+    role: membership.role as Role,
+    accessPolicy: profile?.permissions ?? null,
+    permissionOverrides: membership.permissionOverrides,
+    assignedWarehouseIds: membership.assignedWarehouseIds ?? [],
+    jobTitle: membership.jobTitle,
+  };
 }
 
 export interface OrgMembershipSummary {
@@ -63,24 +92,24 @@ export async function resolveActiveOrgMembership(
 
   if (pinned?.lastActiveOrgId) {
     const [membership] = await db
-      .select({ orgId: orgMembers.orgId, role: orgMembers.role })
+      .select({ orgId: orgMembers.orgId, role: orgMembers.role, accessProfileId: orgMembers.accessProfileId, permissionOverrides: orgMembers.permissionOverrides, assignedWarehouseIds: orgMembers.assignedWarehouseIds, jobTitle: orgMembers.jobTitle })
       .from(orgMembers)
       .where(and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, pinned.lastActiveOrgId)))
       .limit(1);
 
-    if (membership) return { orgId: membership.orgId, role: membership.role as Role };
+    if (membership) return withPolicy(db, membership);
     // Pin points at a membership that no longer exists (revoked) — fall
     // through to the deterministic default below rather than dead-ending.
   }
 
   const [oldest] = await db
-    .select({ orgId: orgMembers.orgId, role: orgMembers.role })
+    .select({ orgId: orgMembers.orgId, role: orgMembers.role, accessProfileId: orgMembers.accessProfileId, permissionOverrides: orgMembers.permissionOverrides, assignedWarehouseIds: orgMembers.assignedWarehouseIds, jobTitle: orgMembers.jobTitle })
     .from(orgMembers)
     .where(eq(orgMembers.userId, userId))
     .orderBy(asc(orgMembers.createdAt))
     .limit(1);
 
-  return oldest ? { orgId: oldest.orgId, role: oldest.role as Role } : null;
+  return oldest ? withPolicy(db, oldest) : null;
 }
 
 /**
@@ -93,7 +122,7 @@ export async function setActiveOrg(
   orgId: string,
 ): Promise<ActiveOrgMembership> {
   const [membership] = await db
-    .select({ orgId: orgMembers.orgId, role: orgMembers.role })
+    .select({ orgId: orgMembers.orgId, role: orgMembers.role, accessProfileId: orgMembers.accessProfileId, permissionOverrides: orgMembers.permissionOverrides, assignedWarehouseIds: orgMembers.assignedWarehouseIds, jobTitle: orgMembers.jobTitle })
     .from(orgMembers)
     .where(and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, orgId)))
     .limit(1);
@@ -102,7 +131,7 @@ export async function setActiveOrg(
 
   await db.update(user).set({ lastActiveOrgId: orgId }).where(eq(user.id, userId));
 
-  return { orgId: membership.orgId, role: membership.role as Role };
+  return withPolicy(db, membership);
 }
 
 /** Every org a user belongs to, for a switcher UI. */

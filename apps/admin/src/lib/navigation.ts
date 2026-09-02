@@ -42,6 +42,7 @@ export function buildNavGroups(locale: string): NavGroup[] {
         { href: `/${locale}/products`, label: 'المنتجات', icon: Box, keywords: 'products' },
         { href: `/${locale}/categories`, label: 'التصنيفات', icon: FolderOpen, keywords: 'categories' },
         { href: `/${locale}/inventory`, label: 'المخزون', icon: Warehouse, keywords: 'inventory stock' },
+        { href: `/${locale}/inventory/lots`, label: 'المخازن والتشغيلات', icon: Warehouse, keywords: 'warehouses lots expiry batches' },
         { href: `/${locale}/stocktaking`, label: 'جرد المخزون', icon: ClipboardList, keywords: 'stocktaking count' },
         { href: `/${locale}/purchasing`, label: 'المشتريات', icon: ShoppingBag, keywords: 'purchasing po suppliers' },
         { href: `/${locale}/returns`, label: 'المرتجعات', icon: RotateCcw, keywords: 'returns rma' },
