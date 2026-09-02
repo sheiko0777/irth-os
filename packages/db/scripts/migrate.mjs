@@ -65,7 +65,14 @@ const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
 // SET LOCAL is also the form CLAUDE.md rule 3 requires of every GUC here: it
 // reverts on COMMIT and on ROLLBACK, so it cannot leak to whatever uses this
 // pooled connection next.
-const SCOPE_SEARCH_PATH = 'SET LOCAL search_path TO public, pg_catalog';
+// `public` alone, with pg_catalog NOT named. pg_catalog is searched implicitly
+// before every user schema, but naming it explicitly moves it to the position
+// given — so `public, pg_catalog` would DEMOTE the system catalogue below
+// public and make every built-in shadowable, the opposite of the intent.
+// Measured with a public.current_setting(text, boolean) planted:
+//   search_path = public, pg_catalog  ->  SHADOWED
+//   search_path = public              ->  correct value
+const SCOPE_SEARCH_PATH = 'SET LOCAL search_path TO public';
 
 async function main() {
   // Written schema-qualified rather than relying on search_path: these two run

@@ -49,9 +49,33 @@
 -- rather than trusting that the statement above did what it reads as doing —
 -- which is the actual lesson of defect 2.
 
--- Belt to the schema-qualification braces below. SET LOCAL reverts on commit,
--- and the runner wraps each file in one transaction.
-SET LOCAL search_path TO public, pg_catalog;--> statement-breakpoint
+-- `public` ONLY -- pg_catalog is deliberately NOT listed.
+--
+-- The first draft of this file (0051, never merged) wrote
+-- `public, pg_catalog`, which is worse than writing nothing. pg_catalog is
+-- searched implicitly BEFORE every user schema, but naming it explicitly moves
+-- it to the position given -- so that draft demoted the system catalogue below
+-- `public` and made every built-in shadowable by anything able to create there.
+-- Measured, with a public.current_setting(text, boolean) planted:
+--
+--   search_path = public, pg_catalog   ->  SHADOWED
+--   search_path = public               ->  correct value
+--   pg_catalog.current_setting(...)    ->  correct value
+--
+-- The built-ins this file calls are pg_catalog-qualified as well, so the
+-- result does not rest on search_path being right.
+--
+-- The POLICY bodies below deliberately call current_setting UNQUALIFIED, in
+-- the same form as all 53 tenant policies 0031/0032/0048/0050 created. Only
+-- pg_database_owner holds CREATE on public here (irth_app does not), and that
+-- role has BYPASSRLS -- so RLS is not a boundary against the one principal who
+-- could plant a shadowing overload. Qualifying 7 of 53 policy bodies would buy
+-- nothing real and leave the set inconsistent; rewriting all 53 to chase it
+-- would put live tenant isolation at risk for no gain.
+--
+-- SET LOCAL reverts on COMMIT and ROLLBACK, and the runner wraps each file in
+-- one transaction.
+SET LOCAL search_path TO public;--> statement-breakpoint
 
 -- ---------------------------------------------------------------------------
 -- 1. Re-assert RLS on the seven tables, schema-qualified, then verify
@@ -81,20 +105,20 @@ BEGIN
     END IF;
 
     -- %I.%I throughout: the table, and the policy's target.
-    EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', 'public', t);
-    EXECUTE format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', 'public', t);
-    EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', t || '_tenant_isolation', 'public', t);
-    EXECUTE format(
+    EXECUTE pg_catalog.format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', 'public', t);
+    EXECUTE pg_catalog.format('ALTER TABLE %I.%I FORCE ROW LEVEL SECURITY', 'public', t);
+    EXECUTE pg_catalog.format('DROP POLICY IF EXISTS %I ON %I.%I', t || '_tenant_isolation', 'public', t);
+    EXECUTE pg_catalog.format(
       'CREATE POLICY %I ON %I.%I '
       'USING (org_id = NULLIF((SELECT current_setting(''app.org_id'', true)), '''')::uuid) '
       'WITH CHECK (org_id = NULLIF((SELECT current_setting(''app.org_id'', true)), '''')::uuid)',
       t || '_tenant_isolation', 'public', t
     );
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I.%I TO irth_app', 'public', t);
+    EXECUTE pg_catalog.format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I.%I TO irth_app', 'public', t);
   END LOOP;
 
   -- Verify, rather than assume the loop above did what it reads as doing.
-  SELECT string_agg(format('%s (rls=%s forced=%s policies=%s)',
+  SELECT string_agg(pg_catalog.format('%s (rls=%s forced=%s policies=%s)',
                            c.relname, c.relrowsecurity, c.relforcerowsecurity,
                            (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid)),
                     E'\n  ')
@@ -132,11 +156,11 @@ BEGIN
 
   IF nulls > 0 THEN
     RAISE EXCEPTION USING
-      MESSAGE = format('%s order sales entr(y/ies) have a NULL source_id; the CHECK below cannot be added.', nulls),
+      MESSAGE = pg_catalog.format('%s order sales entr(y/ies) have a NULL source_id; the CHECK below cannot be added.', nulls),
       HINT    = 'These entries cannot be tied back to an order. Reverse them (reverseJournalEntry in packages/db/src/ledger.ts) and re-post with sourceId set. Do not DELETE journal rows — CLAUDE.md rule 2.';
   END IF;
 
-  SELECT count(*), string_agg(format('org=%s order=%s (%s entries)', org_id, source_id, c), E'\n  ')
+  SELECT count(*), string_agg(pg_catalog.format('org=%s order=%s (%s entries)', org_id, source_id, c), E'\n  ')
     INTO n, dupes
     FROM (
       SELECT org_id, source_id, count(*) AS c
@@ -148,7 +172,7 @@ BEGIN
 
   IF n > 0 THEN
     RAISE EXCEPTION USING
-      MESSAGE = format('%s order(s) carry more than one sales entry; the uniqueness index cannot be created.', n),
+      MESSAGE = pg_catalog.format('%s order(s) carry more than one sales entry; the uniqueness index cannot be created.', n),
       DETAIL  = E'\n  ' || dupes,
       HINT    = 'Post a reversing entry for the surplus entries (reverseJournalEntry in packages/db/src/ledger.ts), then re-run. Do not DELETE journal rows — CLAUDE.md rule 2.';
   END IF;
