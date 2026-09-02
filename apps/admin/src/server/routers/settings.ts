@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
-import { orgSettings, withAudit } from '@irth/db';
+import { orgFeatureFlags, orgSettings, withAudit } from '@irth/db';
 import { DEFAULT_SETTINGS, SENSITIVE_KEYS } from '../../lib/settings';
 
 const MASK_STRING = '••••••••';
@@ -24,6 +24,36 @@ export const settingsRouter = router({
     }
 
     return { data: settingsMap, error: null, meta: null };
+  }),
+
+  myScreens: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.db
+      .select({
+        enabledScreens: orgFeatureFlags.enabledScreens,
+        disabledScreens: orgFeatureFlags.disabledScreens,
+      })
+      .from(orgFeatureFlags)
+      .where(eq(orgFeatureFlags.orgId, ctx.orgId))
+      .limit(1);
+
+    const config = rows[0];
+    if (!config) {
+      return {
+        data: { unrestricted: true, enabledScreens: null, disabledScreens: null },
+        error: null,
+        meta: null,
+      };
+    }
+
+    return {
+      data: {
+        unrestricted: false,
+        enabledScreens: config.enabledScreens,
+        disabledScreens: config.disabledScreens,
+      },
+      error: null,
+      meta: null,
+    };
   }),
 
   set: adminProcedure

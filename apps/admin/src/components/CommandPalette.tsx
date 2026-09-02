@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Search } from 'lucide-react';
-import { buildNavGroups } from '@/lib/navigation';
+import { buildNavGroups, filterNavGroupsByScreens } from '@/lib/navigation';
 import { signOut } from '@/lib/auth-client';
+import { trpc } from '@/lib/trpc';
 
 /**
  * The console's command palette (Ctrl+K / ⌘K).
@@ -50,9 +51,10 @@ export function CommandPalette({ locale }: { locale: string }) {
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const screensQuery = trpc.settings.myScreens.useQuery();
 
   const commands = useMemo<Command[]>(() => {
-    const nav = buildNavGroups(locale).flatMap((g) =>
+    const nav = filterNavGroupsByScreens(buildNavGroups(locale), screensQuery.data?.data).flatMap((g) =>
       g.items.map((item) => ({
         id: item.href,
         label: item.label,
@@ -78,7 +80,7 @@ export function CommandPalette({ locale }: { locale: string }) {
         },
       },
     ];
-  }, [locale, router]);
+  }, [locale, router, screensQuery.data?.data]);
 
   const results = useMemo(() => {
     const q = normalize(query);
