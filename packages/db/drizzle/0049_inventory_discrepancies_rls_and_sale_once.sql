@@ -18,9 +18,20 @@
 ALTER TABLE "inventory_discrepancies" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "inventory_discrepancies" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
+-- DROP ... IF EXISTS first, matching 0031/0032/0037/0048. The migration ledger
+-- in scripts/migrate.mjs is keyed by FILENAME, and the integration job runs
+-- against one long-lived Neon branch shared by every PR
+-- (concurrency: shared-neon-integration-branch in ci.yml). This file was
+-- applied to that branch as 0046_… before main took 0046 and it was renumbered
+-- here; under its new name the runner correctly saw it as pending and re-ran
+-- it, and a bare CREATE POLICY then aborted the whole integration job with
+-- "policy already exists". Every statement below is written to be safe to
+-- re-apply, so a renumbering cannot take CI down again.
+--
 -- NULLIF, matching 0032: current_setting(name, true) yields '' rather than NULL
 -- once anything has set it on that backend, and ''::uuid raises 22P02 on every
 -- query.
+DROP POLICY IF EXISTS "inventory_discrepancies_tenant_isolation" ON "inventory_discrepancies";--> statement-breakpoint
 CREATE POLICY "inventory_discrepancies_tenant_isolation" ON "inventory_discrepancies"
   USING (org_id = NULLIF((SELECT current_setting('app.org_id', true)), '')::uuid)
   WITH CHECK (org_id = NULLIF((SELECT current_setting('app.org_id', true)), '')::uuid);--> statement-breakpoint
@@ -82,6 +93,7 @@ BEGIN
     END IF;
 END $$;--> statement-breakpoint
 
-CREATE UNIQUE INDEX "journal_entries_order_sale_once"
+-- IF NOT EXISTS for the same re-application reason as the policy above.
+CREATE UNIQUE INDEX IF NOT EXISTS "journal_entries_order_sale_once"
   ON "journal_entries" ("org_id", "source_id")
   WHERE "source_table" = 'orders' AND "journal_type" = 'sales';
