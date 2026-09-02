@@ -15,6 +15,17 @@
  * nothing anywhere noticed, because `grep -rn "relrowsecurity\|pg_policy"` over
  * this repository returned zero hits before this file.
  *
+ * Three occurrences was not the end of it. While this file was in review, 0047
+ * landed on main and did it a FOURTH time, to six tables at once —
+ * shopify_connections, shopify_oauth_states, shopify_webhook_deliveries,
+ * storefront_sessions, storefront_events, storefront_daily_metrics — two of
+ * them holding credentials. This gate is what turned that from invisible into
+ * a red build, and 0050 is the fix it forced. That is the argument for the
+ * gate existing, written down at the moment it paid for itself: the mistake is
+ * not one careless migration, it is a trap the schema sets for every migration,
+ * and the only durable answer is a check that runs every time rather than a
+ * loop that ran once.
+ *
  * The membership rule is taken from 0031's own loop so the gate and the
  * migration cannot disagree about what a tenant table is: a base table in
  * `public` with an `org_id` column.
