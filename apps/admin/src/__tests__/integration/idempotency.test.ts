@@ -273,8 +273,16 @@ describe('stock guard — Shopify shortfall (applies available instead of reject
         .returning({ quantity: inventoryItems.quantity });
       if (guarded.length > 0) return { applied: qty, shortfall: 0 };
 
+      // FOR UPDATE, mirroring the production path this helper stands in for
+      // (apps/api/src/routes/webhooks/shopify.ts). Without it this is a read,
+      // a decision, then a write, and the UPDATE below cannot carry a
+      // `quantity >=` guard because it deliberately takes less than was asked
+      // for — so two callers both read the same quantity and both subtract it.
+      // This assertion had been passing by luck; on a contended database it
+      // ended at -1, which is what surfaced the same bug in production.
       const [item] = await tx.select({ quantity: inventoryItems.quantity }).from(inventoryItems)
-        .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, shortfallVariantId)));
+        .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, shortfallVariantId)))
+        .for('update');
       const applied = item ? Math.max(0, Math.min(item.quantity, qty)) : 0;
       if (applied > 0) {
         await tx.update(inventoryItems)

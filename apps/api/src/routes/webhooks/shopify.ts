@@ -292,9 +292,27 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       // is on hand. Read the real current quantity (0 if no row at all) and
       // apply the most this sale can take without going negative; the rest
       // is a genuine shortfall, recorded below rather than hidden.
+      //
+      // FOR UPDATE is what makes the sentence above true. The guarded UPDATE
+      // that failed through to here is atomic, but this path is a read, a
+      // decision in JavaScript, and then a write — CLAUDE.md rule 5's "if
+      // above the query", and the UPDATE below cannot carry a `quantity >=`
+      // guard because the whole point is to take LESS than was asked for.
+      // Two concurrent orders/create deliveries for one variant therefore both
+      // read the same quantity and both subtract it. Measured against real
+      // Postgres, five concurrent takes of 2 against 5 on hand:
+      //
+      //   without FOR UPDATE   2/40 runs ended negative, as low as -2
+      //   with FOR UPDATE      0/40, always exactly 0
+      //
+      // Locking the row serialises the read-modify-write, so the second caller
+      // re-reads what the first left behind and floors correctly. Found when
+      // this repository's own idempotency integration test caught it on a
+      // contended database (-1 on hand) after passing by luck until then.
       const [item] = await tx.select({ id: inventoryItems.id, quantity: inventoryItems.quantity })
         .from(inventoryItems)
-        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)));
+        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)))
+        .for('update');
 
       const appliedQuantity = item ? Math.max(0, Math.min(item.quantity, line.quantity)) : 0;
       let movementId: string | null = null;
