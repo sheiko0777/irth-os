@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent } from '@irth/db';
+import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent, postOrderDeliveredEntry } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { verifyHmac } from '../../middlewares/verifyWebhook';
 
@@ -46,11 +46,44 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     return c.json({ data: null, error: 'missing_tracking_number', meta: null }, 400);
   }
 
-  // A webhook carries no session — the tenant comes from the shipment row
-  // itself, found by an unscoped lookup on the tracking number (which is
-  // globally unique, not per-org). Every write that follows is then scoped
-  // to THAT shipment's own org, via withOrgContext.
-  const [shipment] = await db.select().from(shipmentTracking).where(eq(shipmentTracking.trackingNumber, trackingNumber));
+  // A webhook carries no session, so the tenant is derived from the shipment
+  // row this lookup resolves to. That makes the lookup a TENANT-SELECTION
+  // decision, and everything downstream — status, audit, the ETA e-invoice,
+  // and now the revenue posting — is written against whichever org it picks.
+  //
+  // The comment that used to sit here asserted the tracking number was
+  // "globally unique, not per-org". It is not, and nothing makes it so:
+  // shipment_tracking.tracking_number is a NULLABLE varchar(255) with no
+  // unique constraint in any of the 46 migrations. It was an assertion, not
+  // an invariant — the same defect class as the ledger comment this
+  // changeset fixes, where a file claimed behaviour its code did not have.
+  //
+  // Two narrowings, because a wrong pick now moves money:
+  //
+  //   provider — this is the BOSTA endpoint, so it may only ever resolve a
+  //   Bosta shipment. Without it a Bosta-signed event could match a Mylerz
+  //   row that happens to share a waybill number.
+  //
+  //   ambiguity — take two rows and refuse if both come back. Couriers reuse
+  //   and recycle waybill numbers, so a collision across tenants is ordinary,
+  //   not exotic. `[shipment]` alone silently picked whichever row the
+  //   planner returned first, which on a collision is an arbitrary tenant.
+  //   Failing loudly is the only safe reading: there is no correct way to
+  //   choose, and guessing books revenue into someone else's ledger.
+  const matches = await db
+    .select()
+    .from(shipmentTracking)
+    .where(and(
+      eq(shipmentTracking.trackingNumber, trackingNumber),
+      eq(shipmentTracking.provider, 'bosta'),
+    ))
+    .limit(2);
+
+  if (matches.length > 1) {
+    return c.json({ data: null, error: 'ambiguous_tracking_number', meta: null }, 409);
+  }
+
+  const [shipment] = matches;
 
   if (!shipment) {
     return c.json({ data: null, error: 'shipment_not_found', meta: null }, 404);
@@ -109,6 +142,21 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     if (newOrderStatus === 'delivered') {
       await emitOutboxEvent(tx, { orgId: order.orgId, eventType: 'eta.invoice.issue', payload: { orgId: order.orgId, orderId: order.id } });
     }
+
+    // Revenue, VAT and COGS — in the same transaction as the status change
+    // that earns them. This is the path that fires in real operations: a
+    // courier scans the parcel delivered. Until this call existed it queued
+    // the ETA e-invoice above and booked nothing, so the tax authority was
+    // told about a sale that never reached the ledger. createdBy is null
+    // because a webhook has no authenticated user, exactly as the audit row
+    // above already records.
+    await postOrderDeliveredEntry(tx, {
+      orgId: order.orgId,
+      order,
+      previousStatus: order.status,
+      newStatus: newOrderStatus,
+      createdBy: null,
+    });
 
     return row;
   });

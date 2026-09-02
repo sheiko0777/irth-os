@@ -3,7 +3,7 @@ import {
   Box, FolderOpen, Warehouse, ClipboardList, ShoppingBag, RotateCcw,
   DollarSign, PieChart, Tag, List, Megaphone, Gift,
   Truck, MapPin, FileText, Plug2,
-  Settings, UserCog,
+  Settings, UserCog, BrainCircuit,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -61,6 +61,10 @@ export function buildNavGroups(locale: string): NavGroup[] {
         { href: `/${locale}/customers`, label: 'العملاء', icon: Users, screen: 'customers', keywords: 'customers' },
         { href: `/${locale}/customer-segments`, label: 'شرائح العملاء', icon: UsersRound, screen: 'customer-segments', keywords: 'segments' },
         { href: `/${locale}/notifications`, label: 'الإشعارات', icon: Bell, screen: 'notifications', keywords: 'notifications' },
+        // No `screen` — not yet in platformPlans.ts's ALL_SCREENS, so it's
+        // unrestricted by the feature-flag gating (task 7) until someone
+        // adds an 'intelligence' plan slug.
+        { href: `/${locale}/intelligence`, label: locale === 'ar' ? 'ذكاء إرث' : 'IRTH Intelligence', icon: BrainCircuit, keywords: 'ai assistant intelligence chatbot' },
       ],
     },
     {

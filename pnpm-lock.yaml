@@ -310,6 +310,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@irth/domain':
+        specifier: workspace:*
+        version: link:../domain
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260517.1)(kysely@0.28.17)(postgres@3.4.9)
