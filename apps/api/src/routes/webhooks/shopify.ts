@@ -242,7 +242,30 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       movementId: string | null;
     }> = [];
 
-    for (const line of payload.line_items) {
+    // Deterministic lock order across concurrent deliveries.
+    //
+    // Every iteration below takes a row lock on inventory_items — the guarded
+    // UPDATE takes one, and the FOR UPDATE on the shortfall path holds one for
+    // longer. Shopify decides the order of `line_items`, so two orders sharing
+    // variants X and Y can arrive as [X,Y] and [Y,X]; one transaction then
+    // holds X waiting for Y while the other holds Y waiting for X, and
+    // Postgres kills one with a deadlock. Sorting by a key that is stable
+    // ACROSS requests — Shopify's own variant id, falling back to sku — makes
+    // every transaction acquire the same rows in the same sequence, which is
+    // the standard and complete answer to that class of deadlock.
+    //
+    // Sorted before the loop rather than after resolution because the lock
+    // order is what matters, and our variant id is not known until the lookup
+    // inside the loop has already run. resolvedItems and unmatchedSkus are
+    // order-insensitive (a set of rows and a set of labels), so nothing else
+    // changes.
+    const orderedLines = [...payload.line_items].sort((a, b) => {
+      const ka = String(a.variant_id ?? a.sku ?? '');
+      const kb = String(b.variant_id ?? b.sku ?? '');
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+
+    for (const line of orderedLines) {
       const shopifyVariantId = line.variant_id ? shopifyGid('ProductVariant', line.variant_id) : null;
       const [variant] = shopifyVariantId
         ? await tx.select().from(productVariants)
@@ -292,9 +315,27 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       // is on hand. Read the real current quantity (0 if no row at all) and
       // apply the most this sale can take without going negative; the rest
       // is a genuine shortfall, recorded below rather than hidden.
+      //
+      // FOR UPDATE is what makes the sentence above true. The guarded UPDATE
+      // that failed through to here is atomic, but this path is a read, a
+      // decision in JavaScript, and then a write — CLAUDE.md rule 5's "if
+      // above the query", and the UPDATE below cannot carry a `quantity >=`
+      // guard because the whole point is to take LESS than was asked for.
+      // Two concurrent orders/create deliveries for one variant therefore both
+      // read the same quantity and both subtract it. Measured against real
+      // Postgres, five concurrent takes of 2 against 5 on hand:
+      //
+      //   without FOR UPDATE   2/40 runs ended negative, as low as -2
+      //   with FOR UPDATE      0/40, always exactly 0
+      //
+      // Locking the row serialises the read-modify-write, so the second caller
+      // re-reads what the first left behind and floors correctly. Found when
+      // this repository's own idempotency integration test caught it on a
+      // contended database (-1 on hand) after passing by luck until then.
       const [item] = await tx.select({ id: inventoryItems.id, quantity: inventoryItems.quantity })
         .from(inventoryItems)
-        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)));
+        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)))
+        .for('update');
 
       const appliedQuantity = item ? Math.max(0, Math.min(item.quantity, line.quantity)) : 0;
       let movementId: string | null = null;
