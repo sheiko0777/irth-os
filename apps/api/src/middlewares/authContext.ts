@@ -24,6 +24,10 @@ export const authContext = (): MiddlewareHandler => async (c, next) => {
 
   const userId = session.user.id;
   c.set('userId', userId);
+  // Needed by /invite/accept's email-match check (packages/db/src/invites.ts
+  // acceptOrgInvite) — org-scoped routes never need this, but onboarding
+  // routes that run before a membership exists do.
+  c.set('userEmail', session.user.email);
 
   // Resolve tenant + role from membership. Onboarding routes (e.g. invite
   // accept) only need userId, so a missing membership is not fatal here —

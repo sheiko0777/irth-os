@@ -132,6 +132,25 @@ plant the defect, watch CI go red, then revert the plant.
   `.env` files.
 - Never touch `pnpm-lock.yaml` or `tsconfig.tsbuildinfo` by hand.
 - Keep files under 500 lines.
+
+- ---
+
+## Branch & Merge Workflow (Claude Code as Senior AI)
+
+Claude Code is the **senior AI** on this repo. Its PRs have elevated trust and can be auto-merged by the owner.
+
+### Rules
+- `main` is protected — never push directly to it
+- - Always work on a feature branch: `claude/task-name`
+  - - Open a Pull Request when work is ready
+    - - The owner applies the `claude-code` label to auto-merge trusted PRs
+      - - PRs without that label wait for manual review
+       
+        - ### How auto-merge works
+        - A GitHub Action (`.github/workflows/claude-code-automerge.yml`) watches for the `claude-code` label and squash-merges the PR into `main` automatically. That label means: **"I trust this — ship it."**
+
+        ### Other AI tools
+        Other tools (Codex, Cursor, Windsurf, etc.) also open PRs. Do not touch their branches. Focus only on `claude/*` branches.
 - Conventional commits. Do **not** add a `Co-Authored-By` trailer.
 - Validate input at system boundaries with zod; bound free-text with `.max()`.
 - User-facing strings are Arabic; currency renders as `ج.م`, not `EGP`.

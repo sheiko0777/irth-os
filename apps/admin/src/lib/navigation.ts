@@ -3,7 +3,7 @@ import {
   Box, FolderOpen, Warehouse, ClipboardList, ShoppingBag, RotateCcw,
   DollarSign, PieChart, Tag, List, Megaphone, Gift,
   Truck, MapPin, FileText, Plug2,
-  Settings, UserCog,
+  Settings, UserCog, BrainCircuit,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -33,6 +33,7 @@ export function buildNavGroups(locale: string): NavGroup[] {
         { href: `/${locale}/customers`, label: 'العملاء', icon: Users, keywords: 'customers' },
         { href: `/${locale}/customer-segments`, label: 'شرائح العملاء', icon: UsersRound, keywords: 'segments' },
         { href: `/${locale}/notifications`, label: 'الإشعارات', icon: Bell, keywords: 'notifications' },
+        { href: `/${locale}/intelligence`, label: locale === 'ar' ? 'ذكاء إرث' : 'IRTH Intelligence', icon: BrainCircuit, keywords: 'ai assistant intelligence chatbot' },
       ],
     },
     {

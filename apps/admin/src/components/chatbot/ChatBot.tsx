@@ -112,7 +112,7 @@ export function ChatBot({ locale }: ChatBotProps) {
         onClick={() => setOpen(o => !o)}
         style={{
           position: 'fixed',
-          bottom: '24px',
+          bottom: 'calc(24px + env(safe-area-inset-bottom))',
           insetInlineEnd: '24px',
           width: '52px',
           height: '52px',

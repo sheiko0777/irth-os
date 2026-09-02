@@ -10,14 +10,39 @@ main = "src/index.ts"
 
 [vars]
 NODE_ENV = "production"
+# Base URL for the admin app's /join page — used to build the link in
+# invite emails (orgs.ts's POST /:id/invite). Not a secret, so it lives here
+# rather than behind `wrangler secret put`, mirroring apps/admin's own
+# NEXT_PUBLIC_APP_URL. Falls back to https://app.irth-house.com if unset.
+ADMIN_APP_URL = "https://app.irth-house.com"
+# This Worker's own public base URL — used to build the multi-tenant OAuth
+# callback (routes/shopify.ts) and per-org webhook registration URLs
+# (services/shopifyConnection.ts). Not a secret, same reasoning as
+# ADMIN_APP_URL above. `apiBaseUrl()` falls back to http://localhost:3001 if
+# this is unset — that fallback is fine for local dev, but if this var is
+# ever missing in a deployed environment, every OAuth callback silently
+# points at localhost. Was previously undocumented here despite being read.
+#
+# Verified against the real deployment — read from Deploy All run
+# 33234368901's own logs ("Uploaded irth-api... https://irth-api.irth-os-api.workers.dev"),
+# confirmed live via GET .../health -> {"status":"ok","db":"up"}. No custom
+# domain attached as of that run.
+SHOPIFY_APP_URL = "https://irth-api.irth-os-api.workers.dev"
 
 # Secrets managed via: wrangler secret put <KEY>
 # DATABASE_URL, BETTER_AUTH_SECRET, PAYMOB_API_KEY, PAYMOB_HMAC_SECRET,
 # BOSTA_API_KEY, BOSTA_ACCOUNT_ID, ETA_CLIENT_ID, ETA_CLIENT_SECRET,
 # ETA_ISSUER_EIN, RESEND_API_KEY, ARCJET_KEY,
 # SHOPIFY_APP_CLIENT_ID, SHOPIFY_APP_CLIENT_SECRET, SHOPIFY_SHOP_DOMAIN,
-# SHOPIFY_ORG_ID (which org the Shopify webhooks write into — see
-# apps/api/src/routes/webhooks/shopify.ts)
+# SHOPIFY_ORG_ID (which org the legacy single-tenant Shopify webhooks write
+# into when no shopify_connections row matches the incoming shop domain —
+# see apps/api/src/routes/webhooks/shopify.ts),
+# SHOPIFY_TOKEN_ENCRYPTION_KEY (base64-encoded 32-byte AES-256-GCM key,
+# encrypts every per-org shopify_connections.access_token_ciphertext — see
+# apps/api/src/services/shopifyConnection.ts. Was read by that file but
+# never listed here; verify it's actually set with
+# `wrangler secret list --name irth-api` before relying on the connect flow —
+# missing it throws at first use, not at deploy time)
 
 # Fires the `scheduled` handler in src/index.ts, which drains the outbox.
 #
@@ -49,13 +74,21 @@ bucket_name = "irth-assets"
 
 [env.production]
 name = "irth-api"
-vars = { NODE_ENV = "production" }
 # Repeated deliberately: a named environment does NOT inherit the top-level
-# [triggers], so omitting this ships production with no cron and a silently
-# undrained outbox — the exact bug this block exists to fix.
+# [vars]/[triggers]. ADMIN_APP_URL has a same-value code fallback (orgs.ts),
+# so omitting it here is harmless — set explicitly anyway so this block
+# stays the single place every var this deployment needs is visible.
+# Omitting the cron, on the other hand, ships with a silently undrained
+# outbox (the original bug this comment block exists to fix).
+vars = { NODE_ENV = "production", ADMIN_APP_URL = "https://app.irth-house.com", SHOPIFY_APP_URL = "https://irth-api.irth-os-api.workers.dev" }
 triggers = { crons = ["* * * * *"] }
 
 [env.staging]
 name = "irth-api-staging"
-vars = { NODE_ENV = "staging" }
+# Not independently verified like the production value above — same
+# irth-os-api.workers.dev account subdomain, unconfirmed whether Cloudflare's
+# naming for a *named environment* worker matches this pattern exactly.
+# Check `wrangler deployments list --name irth-api-staging` (or the staging
+# deploy's own logs) before relying on this for a real OAuth connect.
+vars = { NODE_ENV = "staging", ADMIN_APP_URL = "https://app.irth-house.com", SHOPIFY_APP_URL = "https://irth-api-staging.irth-os-api.workers.dev" }
 triggers = { crons = ["* * * * *"] }

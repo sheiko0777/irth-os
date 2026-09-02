@@ -1,9 +1,10 @@
 import { db } from '@irth/db';
-import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, type EtaInvoiceIssuePayload } from '@irth/db';
+import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
+import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
 import { envVar } from '../utils/env';
 
 interface OrderPayload {
@@ -12,18 +13,6 @@ interface OrderPayload {
     orderNumber: string;
     customerName?: string;
     trackingUrl?: string;
-}
-
-/**
- * Emitted by products.ts on create/update. Carries the org + product id
- * rather than the full product body: by the time this drains (up to a
- * minute later, per the cron interval), the row may have changed again, and
- * re-reading it fresh is cheaper than reasoning about whether a stale
- * payload is still accurate.
- */
-interface ShopifyProductPushPayload {
-    orgId: string;
-    productId: string;
 }
 
 /**
@@ -85,7 +74,17 @@ export async function processOutbox(database: typeof db): Promise<number> {
                         continue;
                     }
 
-                    const result = await upsertShopifyProduct({
+                    // Prefer the org's own per-org connection (real, encrypted,
+                    // multi-tenant token) over the legacy global client — that
+                    // client only ever authenticates as the one shop named by
+                    // SHOPIFY_SHOP_DOMAIN, so it's only ever correct for the one
+                    // org SHOPIFY_ORG_ID names. Every other connected org falling
+                    // through to it would silently push products into the wrong
+                    // shop (or fail entirely once that shop isn't the pusher's).
+                    const [connection] = await database.select().from(shopifyConnections)
+                        .where(and(eq(shopifyConnections.orgId, orgId), eq(shopifyConnections.status, 'active')));
+
+                    const productInput = {
                         shopifyProductId: product.shopifyProductId,
                         title: product.name,
                         descriptionHtml: product.description ?? undefined,
@@ -99,7 +98,11 @@ export async function processOutbox(database: typeof db): Promise<number> {
                             priceMinor: v.priceMinor ?? product.priceMinor,
                             currency: product.currency,
                         })),
-                    });
+                    };
+
+                    const result = connection
+                        ? await upsertShopifyProductForConnection(connection, productInput)
+                        : await upsertShopifyProduct(productInput);
 
                     // Two separate updates rather than one join-shaped write: Drizzle
                     // has no portable "update N rows with N different values" batch
@@ -201,6 +204,20 @@ export async function processOutbox(database: typeof db): Promise<number> {
                         // ceiling.
                         throw new Error(result.message);
                     }
+                    continue;
+                }
+
+                if (event.eventType === 'org.invite.sent') {
+                    const payload = JSON.parse(event.payload) as OrgInvitePayload;
+                    const roleLabel = payload.role === 'owner' ? 'مالك' : payload.role === 'admin' ? 'مدير' : 'عضو';
+                    await sendTransactionalEmail({
+                        to: payload.email,
+                        subject: `دعوة للانضمام إلى ${payload.orgName}`,
+                        html: `<h1>مرحباً</h1><p>تمت دعوتك للانضمام إلى <strong>${payload.orgName}</strong> بصفة ${roleLabel}.</p><p><a href="${payload.joinUrl}">اضغط هنا لقبول الدعوة</a></p><p>رمز التأكيد: <strong style="font-size:20px;letter-spacing:2px">${payload.otpCode}</strong></p><p>سيُطلب منك إدخال هذا الرمز عند قبول الدعوة. صالح لمدة ١٥ دقيقة.</p>`,
+                    });
+                    await database.update(outboxEvents)
+                        .set({ processed: true, processedAt: new Date() })
+                        .where(eq(outboxEvents.id, event.id));
                     continue;
                 }
 

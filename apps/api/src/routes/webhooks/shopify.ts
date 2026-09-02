@@ -4,6 +4,7 @@ import { getDb, getEnv } from '../../db';
 import {
   orders, orderItems, customers, productVariants, inventoryItems, inventoryMovements,
   inventoryDiscrepancies, orgMembers, notifications,
+  shopifyConnections, shopifyWebhookDeliveries,
   withOrgContext, withAudit, jsonSafe,
   nextDocumentNumber, formatDocumentNumber,
   emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
@@ -13,25 +14,94 @@ import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
 
 /**
  * Inbound half of the Shopify sync (the dashboard-owns-catalog outbound half
- * lives in the outbox worker). A webhook carries no session, so every write
- * here is scoped through `withOrgContext` to the single org this integration
- * is wired to — see SHOPIFY_ORG_ID below — the same "no authenticated caller,
- * scope comes from context instead" shape as the Bosta webhook route.
+ * lives in the outbox worker). A webhook carries no session, so org
+ * resolution has to come from the request itself — see `resolveWebhookOrg`
+ * below — the same "no authenticated caller, scope comes from context
+ * instead" shape as the Bosta webhook route.
  *
- * Registered event topics (see scripts/registerShopifyWebhooks.mjs for the
- * one-time Shopify-side subscription): orders/create, orders/updated,
- * orders/cancelled, customers/create, customers/update,
- * inventory_levels/update.
+ * Registered event topics: orders/create, orders/updated, orders/cancelled,
+ * customers/create, customers/update, inventory_levels/update,
+ * app/uninstalled. Two registration paths point at these same routes —
+ * `scripts/registerShopifyWebhooks.mjs` (one-time, single-tenant legacy
+ * setup) and `services/shopifyConnection.ts`'s `registerShopifyWebhooks()`
+ * (automatic, per-org, run from the OAuth callback) — both use the same
+ * explicit topic→route map so a shop registered through either path lands
+ * on a route that actually exists here.
  */
 
 const shopifyWebhookRoute = new Hono();
 
+/**
+ * Legacy single-tenant fallback. The org every webhook wrote into before
+ * per-org connections existed — `resolveWebhookOrg` only reaches for this
+ * when the request's shop domain doesn't match any `shopify_connections`
+ * row, so an org that has genuinely connected is never at the mercy of this
+ * env var.
+ */
 function getSyncOrgId(): string | undefined {
-  // process.env is empty on Workers even inside a handler — see db.ts's
-  // file-header comment. process.env stays as the fallback for Node
-  // contexts (this route has no test suite yet that relies on it, but the
-  // convention is consistent across every secret read in this app).
   return (getEnv()?.SHOPIFY_ORG_ID as string | undefined) ?? process.env.SHOPIFY_ORG_ID;
+}
+
+interface ResolvedWebhookOrg {
+  orgId: string;
+  /** `null` on the legacy fallback path — nothing to record a delivery against. */
+  connectionId: string | null;
+}
+
+/**
+ * Resolves which org a webhook belongs to from the request itself, not from
+ * a single global env var. Shopify sends `X-Shopify-Shop-Domain` on every
+ * webhook delivery — this is the ONLY place in the multi-tenant flow that
+ * decides tenancy, so getting it right here is what makes every downstream
+ * `withOrgContext(db, orgId, ...)` call actually safe. Falls back to the
+ * legacy single-tenant org only when no connection matches the shop domain
+ * (or the header is missing, which only the pre-existing legacy integration
+ * would ever trigger — a connection-based webhook always carries the header).
+ */
+async function resolveWebhookOrg(c: Context, db: ReturnType<typeof getDb>): Promise<ResolvedWebhookOrg | null> {
+  const shopDomain = c.req.header('x-shopify-shop-domain')?.toLowerCase().trim();
+  if (shopDomain) {
+    const [connection] = await db.select({ id: shopifyConnections.id, orgId: shopifyConnections.orgId })
+      .from(shopifyConnections)
+      .where(and(eq(shopifyConnections.shopDomain, shopDomain), eq(shopifyConnections.status, 'active')));
+    if (connection) return { orgId: connection.orgId, connectionId: connection.id };
+  }
+  const legacyOrgId = getSyncOrgId();
+  return legacyOrgId ? { orgId: legacyOrgId, connectionId: null } : null;
+}
+
+/**
+ * Idempotency + audit trail for the multi-tenant path, keyed on
+ * `(connectionId, webhookId)` — Shopify's own recommended dedup key
+ * (`X-Shopify-Webhook-Id`), redelivered on retry. Insert-first: if the
+ * unique index rejects it, this is a redelivery — the caller should treat it
+ * as already-processed rather than re-running the handler. Returns `true` if
+ * this delivery is new (caller should proceed), `false` if it's a repeat.
+ * No-ops (returns `true`) on the legacy fallback path, which has no
+ * connection row to record against and keeps its own existing per-handler
+ * idempotency checks.
+ */
+async function recordDelivery(
+  db: ReturnType<typeof getDb>,
+  resolved: ResolvedWebhookOrg,
+  c: Context,
+  topic: string,
+  payload: unknown,
+): Promise<boolean> {
+  if (!resolved.connectionId) return true;
+  const webhookId = c.req.header('x-shopify-webhook-id');
+  if (!webhookId) return true; // Nothing to dedup against — proceed, handler-level checks still apply.
+  try {
+    await db.insert(shopifyWebhookDeliveries).values({
+      orgId: resolved.orgId, connectionId: resolved.connectionId, webhookId, topic,
+      payload: payload as object,
+    });
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505') return false; // Redelivery, already recorded.
+    throw err;
+  }
+  await db.update(shopifyConnections).set({ lastWebhookAt: new Date() }).where(eq(shopifyConnections.id, resolved.connectionId));
+  return true;
 }
 
 interface ShopifyLineItem {
@@ -127,15 +197,18 @@ function mapFinancialStatusToOrderStatus(financialStatus: string | null, cancell
 }
 
 shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Context) => {
-  const orgId = getSyncOrgId();
-  if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
+  const db = getDb();
+  const resolved = await resolveWebhookOrg(c, db);
+  if (!resolved) return c.json({ data: null, error: 'no_matching_connection', meta: null }, 404);
+  const { orgId } = resolved;
 
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<ShopifyOrderPayload>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+  if (!(await recordDelivery(db, resolved, c, 'orders/create', payload))) {
+    return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
+  }
   const shopifyOrderId = shopifyGid('Order', payload.id);
-
-  const db = getDb();
 
   // Idempotent by design, not just by intent: Shopify redelivers webhooks it
   // did not get a 200 for, and this topic in particular is documented as
@@ -350,14 +423,18 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
 });
 
 shopifyWebhookRoute.post('/orders-updated', verifyShopifyWebhook(), async (c: Context) => {
-  const orgId = getSyncOrgId();
-  if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
+  const db = getDb();
+  const resolved = await resolveWebhookOrg(c, db);
+  if (!resolved) return c.json({ data: null, error: 'no_matching_connection', meta: null }, 404);
+  const { orgId } = resolved;
 
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<ShopifyOrderPayload>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+  if (!(await recordDelivery(db, resolved, c, 'orders/updated', payload))) {
+    return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
+  }
   const shopifyOrderId = shopifyGid('Order', payload.id);
-  const db = getDb();
 
   const [existing] = await db.select().from(orders)
     .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
@@ -390,14 +467,18 @@ shopifyWebhookRoute.post('/orders-updated', verifyShopifyWebhook(), async (c: Co
 });
 
 shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: Context) => {
-  const orgId = getSyncOrgId();
-  if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
+  const db = getDb();
+  const resolved = await resolveWebhookOrg(c, db);
+  if (!resolved) return c.json({ data: null, error: 'no_matching_connection', meta: null }, 404);
+  const { orgId } = resolved;
 
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<{ id: number | string }>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+  if (!(await recordDelivery(db, resolved, c, 'orders/cancelled', payload))) {
+    return c.json({ data: { unchanged: true }, error: null, meta: null });
+  }
   const shopifyOrderId = shopifyGid('Order', payload.id);
-  const db = getDb();
 
   const [existing] = await db.select().from(orders)
     .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
@@ -460,13 +541,21 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
 });
 
 shopifyWebhookRoute.post('/customers-upsert', verifyShopifyWebhook(), async (c: Context) => {
-  const orgId = getSyncOrgId();
-  if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
+  const db = getDb();
+  const resolved = await resolveWebhookOrg(c, db);
+  if (!resolved) return c.json({ data: null, error: 'no_matching_connection', meta: null }, 404);
+  const { orgId } = resolved;
 
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<ShopifyCustomerPayload>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
-  const db = getDb();
+  // Same route serves CUSTOMERS_CREATE and CUSTOMERS_UPDATE (see the module
+  // header comment) — the delivery-id dedup key already disambiguates
+  // retries of the same event, so recording under one shared topic name here
+  // is fine; `findOrCreateCustomer` is idempotent regardless.
+  if (!(await recordDelivery(db, resolved, c, 'customers/upsert', payload))) {
+    return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
+  }
 
   const customerId = await withOrgContext(db, orgId, (tx) => findOrCreateCustomer(tx, orgId, payload));
 
@@ -474,14 +563,18 @@ shopifyWebhookRoute.post('/customers-upsert', verifyShopifyWebhook(), async (c: 
 });
 
 shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), async (c: Context) => {
-  const orgId = getSyncOrgId();
-  if (!orgId) return c.json({ data: null, error: 'SHOPIFY_ORG_ID not configured', meta: null }, 500);
+  const db = getDb();
+  const resolved = await resolveWebhookOrg(c, db);
+  if (!resolved) return c.json({ data: null, error: 'no_matching_connection', meta: null }, 404);
+  const { orgId } = resolved;
 
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<{ inventory_item_id: number | string; available: number }>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+  if (!(await recordDelivery(db, resolved, c, 'inventory_levels/update', payload))) {
+    return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
+  }
   const shopifyInventoryItemId = shopifyGid('InventoryItem', payload.inventory_item_id);
-  const db = getDb();
 
   const [variant] = await db.select().from(productVariants)
     .where(and(eq(productVariants.orgId, orgId), eq(productVariants.shopifyInventoryItemId, shopifyInventoryItemId)));
@@ -514,6 +607,28 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
   });
 
   return c.json({ data: { synced: true }, error: null, meta: null });
+});
+
+/**
+ * A merchant uninstalling the app from the Shopify side — the store keeps
+ * running, it just stops talking to this integration. The connection row is
+ * marked, not deleted: reconnecting later (via OAuth again) should find and
+ * reuse the same `shopify_connections.org_id` unique slot rather than
+ * fighting a leftover row, and keeping history (installed_at, past
+ * lastSyncAt/lastWebhookAt) is useful for support.
+ */
+shopifyWebhookRoute.post('/app-uninstalled', verifyShopifyWebhook(), async (c: Context) => {
+  const db = getDb();
+  const resolved = await resolveWebhookOrg(c, db);
+  // No connection to mark — either already uninstalled/never connected, or
+  // the legacy single-tenant path (which has no concept of "uninstall").
+  if (!resolved?.connectionId) return c.json({ data: { skipped: 'no_connection' }, error: null, meta: null });
+
+  await db.update(shopifyConnections)
+    .set({ status: 'uninstalled', uninstalledAt: new Date(), updatedAt: new Date() })
+    .where(eq(shopifyConnections.id, resolved.connectionId));
+
+  return c.json({ data: { uninstalled: true }, error: null, meta: null });
 });
 
 export { shopifyWebhookRoute };

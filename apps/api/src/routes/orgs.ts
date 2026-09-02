@@ -3,9 +3,13 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, withOrg } from '../db';
-import { organizations, orgMembers, orgInvites, withAudit, jsonSafe, setActiveOrg, NotAMemberError } from '@irth/db';
+import {
+  organizations, orgMembers, orgInvites, withAudit, jsonSafe, setActiveOrg, NotAMemberError,
+  emitOutboxEvent, generateInviteOtp, acceptOrgInvite,
+} from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
+import { envVar } from '../utils/env';
 
 export const orgsRouter = new Hono();
 
@@ -78,16 +82,25 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
     const token = crypto.randomUUID();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+    const { code: otpCode, expiresAt: otpExpiresAt } = generateInviteOtp();
 
-    const [invite] = await db.insert(orgInvites).values({
-      orgId,
-      email,
-      token,
-      role,
-      expiresAt,
-    }).returning();
-
-    // Invite email delivery is not wired up yet.
+    // Wrapped in withOrg, matching PATCH /members/:memberId/role below — the
+    // insert and the outbox emit must commit together or not at all, same
+    // reasoning as apps/admin's members.ts invite mutation.
+    const userId = c.get('userId') as string;
+    const invite = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [row] = await tx.insert(orgInvites).values({
+        orgId, email, token, role, expiresAt, otpCode, otpExpiresAt,
+      }).returning();
+      const joinUrl = `${envVar('ADMIN_APP_URL') ?? 'https://app.irth-house.com'}/ar/join?token=${token}`;
+      await emitOutboxEvent(tx, {
+        orgId, eventType: 'org.invite.sent',
+        payload: { orgId, inviteId: row.id, email, orgName: org.name, role, otpCode, joinUrl },
+      });
+      return row;
+    }, {
+      orgId, userId, action: 'INVITE_MEMBER', tableName: 'org_invites', changes: { email, role },
+    }));
 
     return c.json({ data: jsonSafe(invite), error: null, meta: null }, 201);
   } catch (error: unknown) {
@@ -97,6 +110,7 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
 
 const acceptInviteSchema = z.object({
   token: z.string(),
+  otpCode: z.string().optional(),
 });
 
 orgsRouter.post('/invite/accept', async (c: Context) => {
@@ -105,28 +119,28 @@ orgsRouter.post('/invite/accept', async (c: Context) => {
     // userId supplied in the request body.
     const userId = c.get('userId') as string | undefined;
     if (!userId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const userEmail = c.get('userEmail') as string | undefined;
 
     const body = await c.req.json();
-    const { token } = acceptInviteSchema.parse(body);
+    const { token, otpCode } = acceptInviteSchema.parse(body);
 
-    const [invite] = await db.select().from(orgInvites).where(eq(orgInvites.token, token));
-    if (!invite) {
-      return c.json({ data: null, error: 'Invalid token', meta: null }, 400);
+    const result = await acceptOrgInvite(db, { token, otpCode, userId, userEmail });
+
+    // Reason -> HTTP status, matching apps/admin's app/api/join/route.ts
+    // exactly (both call the same acceptOrgInvite — packages/db/src/invites.ts).
+    if (!result.ok) {
+      switch (result.reason) {
+        case 'invalid_token': return c.json({ data: null, error: result.reason, meta: null }, 404);
+        case 'expired': return c.json({ data: null, error: result.reason, meta: null }, 410);
+        case 'email_mismatch': return c.json({ data: null, error: result.reason, meta: null }, 403);
+        case 'otp_required': return c.json({ data: null, error: result.reason, meta: null }, 400);
+        case 'otp_invalid': return c.json({ data: null, error: result.reason, meta: null }, 400);
+        case 'otp_expired': return c.json({ data: null, error: result.reason, meta: null }, 410);
+        case 'otp_locked': return c.json({ data: null, error: result.reason, meta: null }, 429);
+      }
     }
 
-    if (new Date() > invite.expiresAt) {
-      return c.json({ data: null, error: 'Token expired', meta: null }, 400);
-    }
-
-    const [member] = await db.insert(orgMembers).values({
-      orgId: invite.orgId,
-      userId,
-      role: invite.role,
-    }).returning();
-
-    await db.delete(orgInvites).where(eq(orgInvites.id, invite.id));
-
-    return c.json({ data: jsonSafe(member), error: null, meta: null }, 201);
+    return c.json({ data: jsonSafe({ orgId: result.orgId, role: result.role }), error: null, meta: null }, 201);
   } catch (error: unknown) {
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }

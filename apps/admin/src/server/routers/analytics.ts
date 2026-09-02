@@ -203,5 +203,100 @@ export const analyticsRouter = router({
       meta: null,
     };
   }),
+
+  /**
+   * Storefront visitor analytics — the first reader of the
+   * storefront_sessions/storefront_events/storefront_daily_metrics tables
+   * (packages/db/src/schema/shopify.ts, migration 0047), which existed since
+   * that migration but had nothing querying them until now. Distinct from
+   * `revenue`/`kpiSummary` above: this is visitor BEHAVIOR (sessions, page/
+   * product views, funnel), not booked orders — deliberately kept in its own
+   * procedures rather than merged into kpiSummary, matching PLAN.md's own
+   * "clear separation between documented order numbers and visitor
+   * behaviour" requirement. Returns empty series (not an error) for an org
+   * with no Shopify connection or no traffic yet — this is a normal,
+   * expected state for most orgs today, not a failure.
+   */
+  storefrontOverview: protectedProcedure
+    .input(z.object({ days: z.number().min(7).max(90).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const since = new Date();
+      since.setUTCDate(since.getUTCDate() - input.days);
+      since.setUTCHours(0, 0, 0, 0);
+      const sinceIso = since.toISOString();
+
+      // Daily rollup, not the raw event table — this is meant to be cheap
+      // enough for a dashboard card even on an org with millions of raw
+      // events, matching PLAN.md's "13 months detail, daily aggregates after
+      // that" retention shape.
+      const rows = await ctx.db.execute(sql`
+        SELECT metric_date::date AS day, metric, value
+        FROM storefront_daily_metrics
+        WHERE org_id = ${ctx.orgId} AND metric_date >= ${sinceIso}
+        ORDER BY metric_date ASC
+      `);
+
+      type Row = { day: string; metric: string; value: number };
+      const byDay = new Map<string, { day: string; sessions: number; events: number }>();
+      for (const r of rows as unknown as Row[]) {
+        const entry = byDay.get(r.day) ?? { day: r.day, sessions: 0, events: 0 };
+        if (r.metric === 'sessions') entry.sessions = Number(r.value);
+        else if (r.metric.startsWith('events:')) entry.events += Number(r.value);
+        byDay.set(r.day, entry);
+      }
+
+      return { data: [...byDay.values()], error: null, meta: null };
+    }),
+
+  /**
+   * Landing pages and traffic sources for the period — read from the raw
+   * event/session tables (not the daily rollup, which doesn't break these
+   * dimensions out) so it stays useful even on the rollup's very first day.
+   */
+  storefrontSources: protectedProcedure
+    .input(z.object({ days: z.number().min(7).max(90).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const since = new Date();
+      since.setUTCDate(since.getUTCDate() - input.days);
+      const sinceIso = since.toISOString();
+
+      const rows = await ctx.db.execute(sql`
+        SELECT
+          COALESCE(source, 'direct')  AS source,
+          COALESCE(medium, '(none)')  AS medium,
+          COUNT(*)::int               AS sessions
+        FROM storefront_sessions
+        WHERE org_id = ${ctx.orgId} AND first_seen_at >= ${sinceIso}
+        GROUP BY 1, 2
+        ORDER BY sessions DESC
+        LIMIT 15
+      `);
+
+      type Row = { source: string; medium: string; sessions: number };
+      const data = (rows as unknown as Row[]).map((r) => ({ ...r, sessions: Number(r.sessions) }));
+      return { data, error: null, meta: null };
+    }),
+
+  storefrontTopPages: protectedProcedure
+    .input(z.object({ days: z.number().min(7).max(90).default(30), limit: z.number().min(5).max(30).default(10) }))
+    .query(async ({ ctx, input }) => {
+      const since = new Date();
+      since.setUTCDate(since.getUTCDate() - input.days);
+      const sinceIso = since.toISOString();
+
+      const rows = await ctx.db.execute(sql`
+        SELECT path, COUNT(*)::int AS views
+        FROM storefront_events
+        WHERE org_id = ${ctx.orgId} AND occurred_at >= ${sinceIso}
+          AND event_name = 'page_viewed' AND path IS NOT NULL
+        GROUP BY path
+        ORDER BY views DESC
+        LIMIT ${input.limit}
+      `);
+
+      type Row = { path: string; views: number };
+      const data = (rows as unknown as Row[]).map((r) => ({ path: r.path, views: Number(r.views) }));
+      return { data, error: null, meta: null };
+    }),
 });
 
