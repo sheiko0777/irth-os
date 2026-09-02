@@ -169,7 +169,7 @@ describe('order delivered → revenue posting', () => {
     // race the application guard cannot close: the courier webhook and a manual
     // PATCH each READ the order before either UPDATE lands, so both observe
     // 'shipped' and both believe they are the genuine transition. The partial
-    // unique index from 0046 is what actually stops the second one.
+    // unique index from 0049 is what actually stops the second one.
     await withOrgContext(testDb, orgId, (tx) =>
       postOrderDeliveredEntry(tx, {
         orgId, order, previousStatus: 'shipped', newStatus: 'delivered', createdBy: null,

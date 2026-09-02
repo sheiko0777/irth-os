@@ -1,4 +1,4 @@
--- 0046: two fixes that share one migration because both close holes opened by
+-- 0049: two fixes that share one migration because both close holes opened by
 -- the same blind spot — nothing in CI asserted RLS coverage, and nothing
 -- asserted that a delivered order books its sale exactly once.
 
