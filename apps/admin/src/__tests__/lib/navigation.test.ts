@@ -33,6 +33,9 @@ describe('filterNavGroupsByScreens', () => {
     expect(hrefs(filtered)).toEqual([
       '/ar',
       '/ar/orders',
+      // No `screen` tag (not yet in platformPlans.ts's ALL_SCREENS) — always
+      // visible regardless of enabledScreens, same as home.
+      '/ar/intelligence',
       '/ar/settings',
       '/ar/settings/members',
     ]);
@@ -45,7 +48,7 @@ describe('filterNavGroupsByScreens', () => {
       disabledScreens: ['orders'],
     });
 
-    expect(hrefs(filtered)).toEqual(['/ar', '/ar/settings', '/ar/settings/members']);
+    expect(hrefs(filtered)).toEqual(['/ar', '/ar/intelligence', '/ar/settings', '/ar/settings/members']);
   });
 
   it('drops groups with no visible items', () => {
