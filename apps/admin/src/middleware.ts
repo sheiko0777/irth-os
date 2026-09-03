@@ -79,5 +79,15 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next|_vercel|.*\..*).*)"],
+  // The matcher pattern is a JS string that Next.js compiles into a regex:
+  // "\\." here is what produces a literal "\." in that regex (an escaped,
+  // literal dot). A single "\." in the JS source is not a recognized escape
+  // sequence, so JS silently drops the backslash, leaving "..*" — two
+  // "any character" wildcards instead of "a literal dot" — which made the
+  // negative lookahead reject ordinary paths like /en and /en/login, so
+  // middleware (session-redirect, locale detection) silently never ran on
+  // them; only the bare "/" happened to still match. Caught by CodeRabbit's
+  // review of #219, verified independently with a plain node script before
+  // fixing (see PR description).
+  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
 };
