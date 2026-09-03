@@ -544,5 +544,238 @@
     "validation": {
       "nameRequired": "اسم الشريحة مطلوب"
     }
+  },
+  "campaigns": {
+    "metadata": {
+      "title": "الحملات التسويقية | IRTH"
+    },
+    "title": "مدير الحملات التسويقية",
+    "subtitle": "إرسال رسائل واتساب وSMS للعملاء",
+    "actions": {
+      "new": "+ حملة جديدة",
+      "send": "إرسال",
+      "delete": "حذف",
+      "cancel": "إلغاء",
+      "saving": "جاري الحفظ...",
+      "create": "إنشاء الحملة",
+      "close": "إغلاق"
+    },
+    "summary": {
+      "total": "إجمالي الحملات",
+      "sent": "تم الإرسال",
+      "inProgress": "قيد التنفيذ",
+      "totalDelivered": "رسائل مُسلَّمة"
+    },
+    "table": {
+      "name": "اسم الحملة",
+      "channel": "القناة",
+      "segment": "الشريحة",
+      "status": "الحالة",
+      "recipients": "المستلمون",
+      "sentAt": "الإرسال",
+      "actions": "إجراءات"
+    },
+    "empty": {
+      "title": "لا توجد حملات بعد",
+      "hint": "الحملة بتبعت رسالة لشريحة عملاء عبر واتساب أو البريد."
+    },
+    "confirm": {
+      "sendTitle": "إرسال الحملة",
+      "sendDescription": "سيتم إرسال الحملة «{name}» الآن إلى جميع المستلمين المستهدفين.",
+      "deleteTitle": "حذف الحملة",
+      "deleteDescription": "هل أنت متأكد من حذف الحملة «{name}»؟"
+    },
+    "createModal": {
+      "title": "حملة جديدة"
+    },
+    "form": {
+      "name": "اسم الحملة",
+      "namePlaceholder": "مثال: عروض رمضان 2026",
+      "message": "نص الرسالة",
+      "messagePlaceholder": "نص الرسالة التي سيتلقاها العملاء...",
+      "messageLength": "{count}/1024 حرف",
+      "channel": "القناة",
+      "targetSegment": "الشريحة المستهدفة",
+      "scheduledAt": "جدولة (اختياري)"
+    },
+    "channels": {
+      "whatsapp": "واتساب",
+      "sms": "رسالة نصية",
+      "email": "بريد إلكتروني"
+    },
+    "segments": {
+      "all": "جميع العملاء",
+      "vip": "عملاء VIP",
+      "inactive": "غير نشطين",
+      "new": "عملاء جدد"
+    },
+    "preview": {
+      "channel": "القناة:",
+      "segment": "الشريحة:",
+      "status": "الحالة:",
+      "message": "نص الرسالة:"
+    },
+    "toasts": {
+      "created": "تم إنشاء الحملة بنجاح",
+      "sent": "تم إرسال الحملة",
+      "deleted": "تم حذف الحملة"
+    },
+    "errors": {
+      "loadCampaigns": "حدث خطأ في تحميل الحملات",
+      "createCampaign": "حدث خطأ أثناء إنشاء الحملة",
+      "sendCampaign": "حدث خطأ أثناء الإرسال",
+      "deleteCampaign": "حدث خطأ أثناء الحذف"
+    }
+  },
+  "coupons": {
+    "title": "الكوبونات والخصومات",
+    "actions": {
+      "new": "إضافة كوبون جديد",
+      "saving": "جاري الحفظ...",
+      "save": "حفظ",
+      "pending": "...",
+      "disable": "تعطيل",
+      "enable": "تفعيل",
+      "delete": "حذف"
+    },
+    "summary": {
+      "active": "الكوبونات النشطة",
+      "totalUses": "إجمالي الاستخدامات"
+    },
+    "table": {
+      "code": "الكود",
+      "type": "النوع",
+      "value": "القيمة",
+      "uses": "الاستخدامات",
+      "limit": "الحد",
+      "expiresAt": "الانتهاء",
+      "status": "الحالة",
+      "actions": "إجراءات"
+    },
+    "empty": {
+      "title": "لا توجد كوبونات",
+      "hint": "الكوبون بيدّي خصم بنسبة أو مبلغ ثابت، وممكن تحدّد له مدة وحد أقصى للاستخدام."
+    },
+    "types": {
+      "percentage": "خصم نسبة مئوية",
+      "fixed": "خصم ثابت",
+      "freeShipping": "شحن مجاني"
+    },
+    "values": {
+      "percentage": "{value}%"
+    },
+    "status": {
+      "active": "نشط",
+      "disabled": "معطل"
+    },
+    "createDialog": {
+      "title": "إضافة كوبون جديد"
+    },
+    "form": {
+      "code": "كود الكوبون",
+      "codePlaceholder": "مثال: SUMMER20",
+      "type": "نوع الخصم",
+      "typePlaceholder": "اختر النوع",
+      "value": "القيمة",
+      "minOrderAmount": "الحد الأدنى للطلب (اختياري)",
+      "maxUses": "الحد الأقصى للاستخدامات (اختياري)",
+      "expiresAt": "تاريخ الانتهاء (اختياري)",
+      "description": "الوصف (اختياري)"
+    },
+    "toasts": {
+      "created": "تم إنشاء الكوبون بنجاح",
+      "statusChanged": "تم تغيير حالة الكوبون",
+      "deleted": "تم حذف الكوبون"
+    },
+    "errors": {
+      "createCoupon": "حدث خطأ أثناء إنشاء الكوبون",
+      "generic": "حدث خطأ"
+    },
+    "confirm": {
+      "deleteTitle": "حذف الكوبون",
+      "deleteDescription": "هل أنت متأكد من حذف هذا الكوبون؟ لا يمكن التراجع عن هذا الإجراء."
+    },
+    "validator": {
+      "title": "اختبار الكوبون",
+      "codePlaceholder": "الكود المراد اختباره",
+      "orderAmount": "قيمة الطلب",
+      "orderAmountPlaceholder": "قيمة الطلب الإجمالية",
+      "checking": "جاري التحقق...",
+      "submit": "التحقق من الكوبون",
+      "errors": {
+        "withMessage": "حدث خطأ أثناء التحقق: {message}"
+      },
+      "result": {
+        "valid": "الكوبون صالح!",
+        "discountValue": "قيمة الخصم: {amount}",
+        "discountType": "نوع الخصم: {type}",
+        "invalid": "الكوبون غير صالح",
+        "reason": "السبب: {reason}"
+      },
+      "discountTypes": {
+        "percentage": "نسبة مئوية"
+      },
+      "invalidReasons": {
+        "invalidCode": "الكود غير صحيح",
+        "inactive": "الكوبون غير مفعل",
+        "expired": "الكوبون منتهي الصلاحية",
+        "maxUsesReached": "تم الوصول للحد الأقصى للاستخدام",
+        "minAmountNotMet": "لم يتم الوصول للحد الأدنى للطلب",
+        "unknown": "خطأ غير معروف"
+      }
+    }
+  },
+  "giftCards": {
+    "metadata": {
+      "title": "بطاقات الهدايا | IRTH"
+    },
+    "title": "بطاقات الهدايا والرصيد",
+    "subtitle": "إصدار وإدارة بطاقات الهدايا",
+    "actions": {
+      "issue": "+ إصدار بطاقة هدية",
+      "copied": "تم النسخ",
+      "copy": "نسخ",
+      "cancel": "إلغاء",
+      "issuing": "جارٍ الإصدار…",
+      "issueCard": "إصدار البطاقة"
+    },
+    "summary": {
+      "total": "إجمالي البطاقات",
+      "active": "البطاقات النشطة",
+      "totalIssued": "إجمالي المُصدر",
+      "activeBalance": "الرصيد النشط"
+    },
+    "table": {
+      "code": "الكود",
+      "balance": "الرصيد",
+      "initialAmount": "المبلغ الأصلي",
+      "recipient": "المستلم",
+      "status": "الحالة",
+      "issuedAt": "تاريخ الإصدار",
+      "actions": "إجراءات"
+    },
+    "empty": {
+      "title": "لا توجد بطاقات هدايا",
+      "hint": "البطاقة برصيد مدفوع مقدماً، العميل يستخدمها في الدفع."
+    },
+    "createModal": {
+      "title": "إصدار بطاقة هدية جديدة"
+    },
+    "form": {
+      "amount": "المبلغ (ج.م) *",
+      "amountPlaceholder": "مثال: 500",
+      "recipientName": "اسم المستلم",
+      "optional": "اختياري",
+      "recipientEmail": "البريد الإلكتروني للمستلم",
+      "message": "رسالة هدية",
+      "messagePlaceholder": "رسالة مع البطاقة (اختياري)",
+      "expiresAt": "تاريخ انتهاء الصلاحية"
+    },
+    "validation": {
+      "amountPositive": "المبلغ يجب أن يكون أكبر من صفر"
+    },
+    "errors": {
+      "loadGiftCards": "حدث خطأ في تحميل بطاقات الهدايا"
+    }
   }
 }

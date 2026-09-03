@@ -7,6 +7,9 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FormDialog } from '@/components/ui/FormDialog';
+import { useTranslations } from 'next-intl';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { statusLabel } from '@/lib/statusMaps';
 
 export type Campaign = {
   id: string;
@@ -31,9 +34,6 @@ export type CampaignSummary = {
   totalDelivered: number;
 };
 
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { statusLabel } from '@/lib/statusMaps';
-
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl p-5 border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
@@ -50,6 +50,7 @@ export default function CampaignsClient({
   initialData: Campaign[];
   summary: CampaignSummary;
 }) {
+  const t = useTranslations('campaigns');
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialData);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -64,35 +65,35 @@ export default function CampaignsClient({
 
   const createMutation = trpc.campaigns.create.useMutation({
     onSuccess: (res) => {
-      toast.success('تم إنشاء الحملة بنجاح');
+      toast.success(t('toasts.created'));
       if (res.data) setCampaigns((prev) => [res.data as unknown as Campaign, ...prev]);
       setIsCreateOpen(false);
       setForm({ name: '', message: '', channel: 'whatsapp', targetSegment: 'all', scheduledAt: '' });
       router.refresh();
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء الحملة');
+      toast.error(err instanceof Error ? err.message : t('errors.createCampaign'));
     },
   });
 
   const sendMutation = trpc.campaigns.send.useMutation({
     onSuccess: (res) => {
-      toast.success('تم إرسال الحملة');
+      toast.success(t('toasts.sent'));
       if (res.data) setCampaigns((prev) => prev.map((c) => (c.id === res.data?.id ? (res.data as unknown as Campaign) : c)));
       router.refresh();
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الإرسال');
+      toast.error(err instanceof Error ? err.message : t('errors.sendCampaign'));
     },
   });
 
   const deleteMutation = trpc.campaigns.delete.useMutation({
     onSuccess: (_: unknown, vars: { id: string }) => {
-      toast.success('تم حذف الحملة');
+      toast.success(t('toasts.deleted'));
       setCampaigns((prev) => prev.filter((c) => c.id !== vars.id));
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء الحذف');
+      toast.error(err instanceof Error ? err.message : t('errors.deleteCampaign'));
     },
   });
 
@@ -107,29 +108,39 @@ export default function CampaignsClient({
     });
   };
 
+  const tableHeaders = [
+    t('table.name'),
+    t('table.channel'),
+    t('table.segment'),
+    t('table.status'),
+    t('table.recipients'),
+    t('table.sentAt'),
+    t('table.actions'),
+  ];
+
   return (
     <div className="p-6" style={{ color: 'var(--t1)' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">مدير الحملات التسويقية</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--t2)' }}>إرسال رسائل واتساب وSMS للعملاء</p>
+          <h1 className="text-2xl font-bold">{t('title')}</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--t2)' }}>{t('subtitle')}</p>
         </div>
         <button
           onClick={() => setIsCreateOpen(true)}
           className="px-4 py-2 rounded-lg font-semibold text-sm"
           style={{ background: 'var(--gold)', color: 'var(--void)' }}
         >
-          + حملة جديدة
+          {t('actions.new')}
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard label="إجمالي الحملات" value={summary.total} />
-        <StatCard label="تم الإرسال" value={summary.sent} />
-        <StatCard label="قيد التنفيذ" value={summary.inProgress} />
-        <StatCard label="رسائل مُسلَّمة" value={summary.totalDelivered} />
+        <StatCard label={t('summary.total')} value={summary.total} />
+        <StatCard label={t('summary.sent')} value={summary.sent} />
+        <StatCard label={t('summary.inProgress')} value={summary.inProgress} />
+        <StatCard label={t('summary.totalDelivered')} value={summary.totalDelivered} />
       </div>
 
       {/* Campaigns Table */}
@@ -137,14 +148,14 @@ export default function CampaignsClient({
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--rim1)' }}>
-              {['اسم الحملة', 'القناة', 'الشريحة', 'الحالة', 'المستلمون', 'الإرسال', 'إجراءات'].map((h) => (
+              {tableHeaders.map((h) => (
                 <th key={h} className="px-4 py-3 text-start font-semibold" style={{ color: 'var(--t2)' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {campaigns.length === 0 && (
-              <tr><td colSpan={7} className="p-0"><EmptyState title="لا توجد حملات بعد" hint="الحملة بتبعت رسالة لشريحة عملاء عبر واتساب أو البريد." /></td></tr>
+              <tr><td colSpan={7} className="p-0"><EmptyState title={t('empty.title')} hint={t('empty.hint')} /></td></tr>
             )}
             {campaigns.map((c) => (
               <tr key={c.id} className="border-t" style={{ borderColor: 'var(--rim1)' }}>
@@ -162,30 +173,30 @@ export default function CampaignsClient({
                   <div className="flex gap-2 justify-end">
                     {(c.status === 'draft' || c.status === 'scheduled') && (
                       <ConfirmDialog
-                        title="إرسال الحملة"
-                        description={`سيتم إرسال الحملة «${c.name}» الآن إلى جميع المستلمين المستهدفين.`}
-                        confirmLabel="إرسال"
+                        title={t('confirm.sendTitle')}
+                        description={t('confirm.sendDescription', { name: c.name })}
+                        confirmLabel={t('actions.send')}
                         destructive={false}
                         pending={sendMutation.isPending}
                         onConfirm={() => sendMutation.mutate({ id: c.id })}>
                         <button
                           className="px-3 py-1 rounded-md text-xs font-semibold"
                           style={{ background: 'var(--emerald)', color: 'var(--void)' }}>
-                          إرسال
+                          {t('actions.send')}
                         </button>
                       </ConfirmDialog>
                     )}
                     {c.status !== 'sending' && (
                       <ConfirmDialog
-                        title="حذف الحملة"
-                        description={`هل أنت متأكد من حذف الحملة «${c.name}»؟`}
-                        confirmLabel="حذف"
+                        title={t('confirm.deleteTitle')}
+                        description={t('confirm.deleteDescription', { name: c.name })}
+                        confirmLabel={t('actions.delete')}
                         pending={deleteMutation.isPending}
                         onConfirm={() => deleteMutation.mutate({ id: c.id })}>
                         <button
                           className="px-3 py-1 rounded-md text-xs"
                           style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--crimson)' }}>
-                          حذف
+                          {t('actions.delete')}
                         </button>
                       </ConfirmDialog>
                     )}
@@ -198,53 +209,53 @@ export default function CampaignsClient({
       </div>
 
       {/* Create Modal */}
-      <FormDialog open={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="حملة جديدة" width="512px">
+      <FormDialog open={isCreateOpen} onClose={() => setIsCreateOpen(false)} title={t('createModal.title')} width="512px">
         <form onSubmit={handleCreate}>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>اسم الحملة</label>
+              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>{t('form.name')}</label>
               <input value={form.name}
                 onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, name: e.target.value }))}
                 required className="w-full px-3 py-2 rounded-lg border text-sm"
                 style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}
-                placeholder="مثال: عروض رمضان 2026" />
+                placeholder={t('form.namePlaceholder')} />
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>نص الرسالة</label>
+              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>{t('form.message')}</label>
               <textarea value={form.message}
                 onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, message: e.target.value }))}
                 required rows={4} className="w-full px-3 py-2 rounded-lg border text-sm resize-none"
                 style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}
-                placeholder="نص الرسالة التي سيتلقاها العملاء..." />
-              <p className="text-xs mt-1" style={{ color: 'var(--t2)' }}>{form.message.length}/1024 حرف</p>
+                placeholder={t('form.messagePlaceholder')} />
+              <p className="text-xs mt-1" style={{ color: 'var(--t2)' }}>{t('form.messageLength', { count: form.message.length })}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>القناة</label>
+                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>{t('form.channel')}</label>
                 <select value={form.channel}
                   onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, channel: e.target.value as Campaign['channel'] }))}
                   className="w-full px-3 py-2 rounded-lg border text-sm"
                   style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}>
-                  <option value="whatsapp">واتساب</option>
-                  <option value="sms">رسالة نصية</option>
-                  <option value="email">بريد إلكتروني</option>
+                  <option value="whatsapp">{t('channels.whatsapp')}</option>
+                  <option value="sms">{t('channels.sms')}</option>
+                  <option value="email">{t('channels.email')}</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>الشريحة المستهدفة</label>
+                <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>{t('form.targetSegment')}</label>
                 <select value={form.targetSegment}
                   onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, targetSegment: e.target.value as Campaign['targetSegment'] }))}
                   className="w-full px-3 py-2 rounded-lg border text-sm"
                   style={{ background: 'var(--surface)', borderColor: 'var(--rim1)', color: 'var(--t1)' }}>
-                  <option value="all">جميع العملاء</option>
-                  <option value="vip">عملاء VIP</option>
-                  <option value="inactive">غير نشطين</option>
-                  <option value="new">عملاء جدد</option>
+                  <option value="all">{t('segments.all')}</option>
+                  <option value="vip">{t('segments.vip')}</option>
+                  <option value="inactive">{t('segments.inactive')}</option>
+                  <option value="new">{t('segments.new')}</option>
                 </select>
               </div>
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>جدولة (اختياري)</label>
+              <label className="block text-sm mb-1" style={{ color: 'var(--t2)' }}>{t('form.scheduledAt')}</label>
               <input type="datetime-local" value={form.scheduledAt}
                 onChange={(e: { target: { value: string } }) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
                 className="w-full px-3 py-2 rounded-lg border text-sm"
@@ -253,10 +264,10 @@ export default function CampaignsClient({
           </div>
           <div className="flex gap-3 mt-6 justify-end">
             <button type="button" onClick={() => setIsCreateOpen(false)}
-              className="px-4 py-2 rounded-lg text-sm" style={{ color: 'var(--t2)' }}>إلغاء</button>
+              className="px-4 py-2 rounded-lg text-sm" style={{ color: 'var(--t2)' }}>{t('actions.cancel')}</button>
             <button type="submit" disabled={createMutation.isPending}
               className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: 'var(--gold)', color: 'var(--void)' }}>
-              {createMutation.isPending ? 'جاري الحفظ...' : 'إنشاء الحملة'}
+              {createMutation.isPending ? t('actions.saving') : t('actions.create')}
             </button>
           </div>
         </form>
@@ -272,27 +283,27 @@ export default function CampaignsClient({
         {previewCampaign && (
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span style={{ color: 'var(--t2)' }}>القناة:</span>
+              <span style={{ color: 'var(--t2)' }}>{t('preview.channel')}</span>
               <span>{statusLabel('campaignChannel', previewCampaign.channel)}</span>
             </div>
             <div className="flex justify-between">
-              <span style={{ color: 'var(--t2)' }}>الشريحة:</span>
+              <span style={{ color: 'var(--t2)' }}>{t('preview.segment')}</span>
               <span>{statusLabel('campaignSegment', previewCampaign.targetSegment)}</span>
             </div>
             <div className="flex justify-between">
-              <span style={{ color: 'var(--t2)' }}>الحالة:</span>
+              <span style={{ color: 'var(--t2)' }}>{t('preview.status')}</span>
               <StatusBadge status={previewCampaign.status} domain="campaign" />
             </div>
             <hr style={{ borderColor: 'var(--rim1)' }} />
             <div>
-              <p className="mb-2" style={{ color: 'var(--t2)' }}>نص الرسالة:</p>
+              <p className="mb-2" style={{ color: 'var(--t2)' }}>{t('preview.message')}</p>
               <div className="p-3 rounded-lg text-sm whitespace-pre-wrap" style={{ background: 'var(--rim1)' }}>
                 {previewCampaign.message}
               </div>
             </div>
             <button onClick={() => setPreviewCampaign(null)}
               className="mt-5 w-full py-2 rounded-lg text-sm"
-              style={{ background: 'var(--rim1)', color: 'var(--t1)' }}>إغلاق</button>
+              style={{ background: 'var(--rim1)', color: 'var(--t1)' }}>{t('actions.close')}</button>
           </div>
         )}
       </FormDialog>

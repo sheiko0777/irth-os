@@ -2,9 +2,11 @@
 import { currency, formatMoney, fromMinor, type Money } from '@irth/domain';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { trpc } from '@/lib/trpc';
 import { FormDialog } from '@/components/ui/FormDialog';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 export type GiftCard = {
   id: string;
@@ -27,8 +29,6 @@ export type GiftCardSummary = {
   activeBalance: Money;
 };
 
-import { StatusBadge } from '@/components/ui/StatusBadge';
-
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className='rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-5'>
@@ -38,7 +38,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-// Was a local parseFloat formatter. The shared one renders ج.م rather than the
+// Was a local parseFloat formatter. The shared one renders the localized currency symbol rather than the
 // raw currency code and groups the digits the same way every other screen does.
 function formatAmount(amount: Money) {
   return formatMoney(amount);
@@ -51,6 +51,7 @@ export default function GiftCardsClient({
   initialData: GiftCard[];
   summary: GiftCardSummary;
 }) {
+  const t = useTranslations('giftCards');
   const [cards, setCards] = useState<GiftCard[]>(initialData);
   const [sum, setSum] = useState<GiftCardSummary>(summary);
   const [showCreate, setShowCreate] = useState(false);
@@ -88,7 +89,7 @@ export default function GiftCardsClient({
   const handleCreate = (e: { preventDefault: () => void }) => {
     e.preventDefault();
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0) { setCreateErr('المبلغ يجب أن يكون أكبر من صفر'); return; }
+    if (!amt || amt <= 0) { setCreateErr(t('validation.amountPositive')); return; }
     createMutation.mutate({
       initialAmount: amt,
       recipientName: recipientName || undefined,
@@ -110,24 +111,24 @@ export default function GiftCardsClient({
       {/* Header */}
       <div className='flex items-center justify-between mb-6'>
         <div>
-          <h1 className='text-2xl font-bold text-[var(--t1)]'>بطاقات الهدايا والرصيد</h1>
-          <p className='text-sm text-[var(--t2)] mt-1'>إصدار وإدارة بطاقات الهدايا</p>
+          <h1 className='text-2xl font-bold text-[var(--t1)]'>{t('title')}</h1>
+          <p className='text-sm text-[var(--t2)] mt-1'>{t('subtitle')}</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
           className='rounded-lg px-4 py-2 text-sm font-medium text-void'
           style={{ background: 'var(--gold)' }}
         >
-          + إصدار بطاقة هدية
+          {t('actions.issue')}
         </button>
       </div>
 
       {/* Stats */}
       <div className='grid grid-cols-2 gap-4 md:grid-cols-4 mb-6'>
-        <StatCard label='إجمالي البطاقات' value={sum.total} />
-        <StatCard label='البطاقات النشطة' value={sum.active} />
-        <StatCard label='إجمالي المُصدر' value={formatAmount(sum.totalIssued)} />
-        <StatCard label='الرصيد النشط' value={formatAmount(sum.activeBalance)} />
+        <StatCard label={t('summary.total')} value={sum.total} />
+        <StatCard label={t('summary.active')} value={sum.active} />
+        <StatCard label={t('summary.totalIssued')} value={formatAmount(sum.totalIssued)} />
+        <StatCard label={t('summary.activeBalance')} value={formatAmount(sum.activeBalance)} />
       </div>
 
       {/* Table */}
@@ -136,19 +137,19 @@ export default function GiftCardsClient({
           <table className='w-full text-sm'>
             <thead>
               <tr className='border-b border-[var(--rim1)] text-[var(--t2)]'>
-                <th className='px-4 py-3 text-start font-medium'>الكود</th>
-                <th className='px-4 py-3 text-start font-medium'>الرصيد</th>
-                <th className='px-4 py-3 text-start font-medium'>المبلغ الأصلي</th>
-                <th className='px-4 py-3 text-start font-medium'>المستلم</th>
-                <th className='px-4 py-3 text-start font-medium'>الحالة</th>
-                <th className='px-4 py-3 text-start font-medium'>تاريخ الإصدار</th>
-                <th className='px-4 py-3 text-start font-medium'>إجراءات</th>
+                <th className='px-4 py-3 text-start font-medium'>{t('table.code')}</th>
+                <th className='px-4 py-3 text-start font-medium'>{t('table.balance')}</th>
+                <th className='px-4 py-3 text-start font-medium'>{t('table.initialAmount')}</th>
+                <th className='px-4 py-3 text-start font-medium'>{t('table.recipient')}</th>
+                <th className='px-4 py-3 text-start font-medium'>{t('table.status')}</th>
+                <th className='px-4 py-3 text-start font-medium'>{t('table.issuedAt')}</th>
+                <th className='px-4 py-3 text-start font-medium'>{t('table.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {cards.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-0"><EmptyState title="لا توجد بطاقات هدايا" hint="البطاقة برصيد مدفوع مقدماً، العميل يستخدمها في الدفع." /></td>
+                  <td colSpan={7} className="p-0"><EmptyState title={t('empty.title')} hint={t('empty.hint')} /></td>
                 </tr>
               )}
               {cards.map((card) => (
@@ -162,7 +163,7 @@ export default function GiftCardsClient({
                         onClick={() => copyCode(card.code)}
                         className='text-xs px-2 py-0.5 rounded-md border border-[var(--rim2)] text-[var(--t2)] hover:text-[var(--t1)] transition-colors'
                       >
-                        {copiedCode === card.code ? 'تم النسخ' : 'نسخ'}
+                        {copiedCode === card.code ? t('actions.copied') : t('actions.copy')}
                       </button>
                     </div>
                   </td>
@@ -187,7 +188,7 @@ export default function GiftCardsClient({
                         onClick={() => cancelMutation.mutate({ id: card.id })}
                         className='text-xs text-[var(--crimson)] hover:underline'
                       >
-                        إلغاء
+                        {t('actions.cancel')}
                       </button>
                     )}
                   </td>
@@ -199,10 +200,10 @@ export default function GiftCardsClient({
       </div>
 
       {/* Create Modal */}
-      <FormDialog open={showCreate} onClose={() => { setShowCreate(false); setCreateErr(''); }} title="إصدار بطاقة هدية جديدة" width="448px">
+      <FormDialog open={showCreate} onClose={() => { setShowCreate(false); setCreateErr(''); }} title={t('createModal.title')} width="448px">
         <form onSubmit={handleCreate} className='space-y-4'>
           <div>
-            <label className='block text-sm text-[var(--t2)] mb-1'>المبلغ (جنيه مصري) *</label>
+            <label className='block text-sm text-[var(--t2)] mb-1'>{t('form.amount')}</label>
             <input
               type='number'
               min='1'
@@ -210,43 +211,43 @@ export default function GiftCardsClient({
               value={amount}
               onChange={(e: { target: { value: string } }) => setAmount(e.target.value)}
               className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
-              placeholder='مثال: 500'
+              placeholder={t('form.amountPlaceholder')}
               required
             />
           </div>
           <div>
-            <label className='block text-sm text-[var(--t2)] mb-1'>اسم المستلم</label>
+            <label className='block text-sm text-[var(--t2)] mb-1'>{t('form.recipientName')}</label>
             <input
               type='text'
               value={recipientName}
               onChange={(e: { target: { value: string } }) => setRecipientName(e.target.value)}
               className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
-              placeholder='اختياري'
+              placeholder={t('form.optional')}
             />
           </div>
           <div>
-            <label className='block text-sm text-[var(--t2)] mb-1'>البريد الإلكتروني للمستلم</label>
+            <label className='block text-sm text-[var(--t2)] mb-1'>{t('form.recipientEmail')}</label>
             <input
               type='email'
               value={recipientEmail}
               onChange={(e: { target: { value: string } }) => setRecipientEmail(e.target.value)}
               className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)]'
-              placeholder='اختياري'
+              placeholder={t('form.optional')}
               dir='ltr'
             />
           </div>
           <div>
-            <label className='block text-sm text-[var(--t2)] mb-1'>رسالة هدية</label>
+            <label className='block text-sm text-[var(--t2)] mb-1'>{t('form.message')}</label>
             <textarea
               value={message}
               onChange={(e: { target: { value: string } }) => setMessage(e.target.value)}
               className='w-full rounded-lg border border-[var(--rim2)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--t1)] focus:outline-none focus:ring-1 focus:ring-[var(--gold)] resize-none'
               rows={2}
-              placeholder='رسالة مع البطاقة (اختياري)'
+              placeholder={t('form.messagePlaceholder')}
             />
           </div>
           <div>
-            <label className='block text-sm text-[var(--t2)] mb-1'>تاريخ انتهاء الصلاحية</label>
+            <label className='block text-sm text-[var(--t2)] mb-1'>{t('form.expiresAt')}</label>
             <input
               type='date'
               value={expiresAt}
@@ -263,14 +264,14 @@ export default function GiftCardsClient({
               className='flex-1 rounded-lg py-2 text-sm font-medium text-void disabled:opacity-50'
               style={{ background: 'var(--gold)' }}
             >
-              {createMutation.isPending ? 'جارٍ الإصدار…' : 'إصدار البطاقة'}
+              {createMutation.isPending ? t('actions.issuing') : t('actions.issueCard')}
             </button>
             <button
               type='button'
               onClick={() => { setShowCreate(false); setCreateErr(''); }}
               className='flex-1 rounded-lg border border-[var(--rim2)] py-2 text-sm text-[var(--t2)] hover:text-[var(--t1)] transition-colors'
             >
-              إلغاء
+              {t('actions.cancel')}
             </button>
           </div>
         </form>

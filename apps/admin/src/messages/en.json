@@ -524,5 +524,238 @@
     "validation": {
       "nameRequired": "Segment name is required"
     }
+  },
+  "campaigns": {
+    "metadata": {
+      "title": "Marketing campaigns | IRTH"
+    },
+    "title": "Marketing Campaign Manager",
+    "subtitle": "Send WhatsApp and SMS messages to customers",
+    "actions": {
+      "new": "+ New campaign",
+      "send": "Send",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "create": "Create campaign",
+      "close": "Close"
+    },
+    "summary": {
+      "total": "Total campaigns",
+      "sent": "Sent",
+      "inProgress": "In progress",
+      "totalDelivered": "Delivered messages"
+    },
+    "table": {
+      "name": "Campaign name",
+      "channel": "Channel",
+      "segment": "Segment",
+      "status": "Status",
+      "recipients": "Recipients",
+      "sentAt": "Sent",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "No campaigns yet",
+      "hint": "A campaign sends a message to a customer segment through WhatsApp or email."
+    },
+    "confirm": {
+      "sendTitle": "Send campaign",
+      "sendDescription": "The campaign “{name}” will be sent now to all targeted recipients.",
+      "deleteTitle": "Delete campaign",
+      "deleteDescription": "Are you sure you want to delete the campaign “{name}”?"
+    },
+    "createModal": {
+      "title": "New campaign"
+    },
+    "form": {
+      "name": "Campaign name",
+      "namePlaceholder": "Example: Ramadan offers 2026",
+      "message": "Message text",
+      "messagePlaceholder": "The message customers will receive...",
+      "messageLength": "{count}/1024 characters",
+      "channel": "Channel",
+      "targetSegment": "Target segment",
+      "scheduledAt": "Schedule (optional)"
+    },
+    "channels": {
+      "whatsapp": "WhatsApp",
+      "sms": "SMS",
+      "email": "Email"
+    },
+    "segments": {
+      "all": "All customers",
+      "vip": "VIP customers",
+      "inactive": "Inactive customers",
+      "new": "New customers"
+    },
+    "preview": {
+      "channel": "Channel:",
+      "segment": "Segment:",
+      "status": "Status:",
+      "message": "Message text:"
+    },
+    "toasts": {
+      "created": "Campaign created successfully",
+      "sent": "Campaign sent",
+      "deleted": "Campaign deleted"
+    },
+    "errors": {
+      "loadCampaigns": "An error occurred while loading campaigns",
+      "createCampaign": "An error occurred while creating the campaign",
+      "sendCampaign": "An error occurred while sending",
+      "deleteCampaign": "An error occurred while deleting"
+    }
+  },
+  "coupons": {
+    "title": "Coupons and discounts",
+    "actions": {
+      "new": "Add new coupon",
+      "saving": "Saving...",
+      "save": "Save",
+      "pending": "...",
+      "disable": "Disable",
+      "enable": "Enable",
+      "delete": "Delete"
+    },
+    "summary": {
+      "active": "Active coupons",
+      "totalUses": "Total uses"
+    },
+    "table": {
+      "code": "Code",
+      "type": "Type",
+      "value": "Value",
+      "uses": "Uses",
+      "limit": "Limit",
+      "expiresAt": "Expiration",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "No coupons",
+      "hint": "A coupon gives a percentage or fixed discount, and you can set a duration and maximum usage limit."
+    },
+    "types": {
+      "percentage": "Percentage discount",
+      "fixed": "Fixed discount",
+      "freeShipping": "Free shipping"
+    },
+    "values": {
+      "percentage": "{value}%"
+    },
+    "status": {
+      "active": "Active",
+      "disabled": "Disabled"
+    },
+    "createDialog": {
+      "title": "Add new coupon"
+    },
+    "form": {
+      "code": "Coupon code",
+      "codePlaceholder": "Example: SUMMER20",
+      "type": "Discount type",
+      "typePlaceholder": "Select type",
+      "value": "Value",
+      "minOrderAmount": "Minimum order amount (optional)",
+      "maxUses": "Maximum uses (optional)",
+      "expiresAt": "Expiration date (optional)",
+      "description": "Description (optional)"
+    },
+    "toasts": {
+      "created": "Coupon created successfully",
+      "statusChanged": "Coupon status changed",
+      "deleted": "Coupon deleted"
+    },
+    "errors": {
+      "createCoupon": "An error occurred while creating the coupon",
+      "generic": "An error occurred"
+    },
+    "confirm": {
+      "deleteTitle": "Delete coupon",
+      "deleteDescription": "Are you sure you want to delete this coupon? This action cannot be undone."
+    },
+    "validator": {
+      "title": "Test coupon",
+      "codePlaceholder": "Coupon code to test",
+      "orderAmount": "Order amount",
+      "orderAmountPlaceholder": "Total order amount",
+      "checking": "Checking...",
+      "submit": "Validate coupon",
+      "errors": {
+        "withMessage": "An error occurred while validating: {message}"
+      },
+      "result": {
+        "valid": "Coupon is valid!",
+        "discountValue": "Discount value: {amount}",
+        "discountType": "Discount type: {type}",
+        "invalid": "Coupon is invalid",
+        "reason": "Reason: {reason}"
+      },
+      "discountTypes": {
+        "percentage": "Percentage"
+      },
+      "invalidReasons": {
+        "invalidCode": "Code is incorrect",
+        "inactive": "Coupon is inactive",
+        "expired": "Coupon has expired",
+        "maxUsesReached": "Maximum usage limit reached",
+        "minAmountNotMet": "Minimum order amount has not been met",
+        "unknown": "Unknown error"
+      }
+    }
+  },
+  "giftCards": {
+    "metadata": {
+      "title": "Gift cards | IRTH"
+    },
+    "title": "Gift cards and balance",
+    "subtitle": "Issue and manage gift cards",
+    "actions": {
+      "issue": "+ Issue gift card",
+      "copied": "Copied",
+      "copy": "Copy",
+      "cancel": "Cancel",
+      "issuing": "Issuing…",
+      "issueCard": "Issue card"
+    },
+    "summary": {
+      "total": "Total cards",
+      "active": "Active cards",
+      "totalIssued": "Total issued",
+      "activeBalance": "Active balance"
+    },
+    "table": {
+      "code": "Code",
+      "balance": "Balance",
+      "initialAmount": "Original amount",
+      "recipient": "Recipient",
+      "status": "Status",
+      "issuedAt": "Issue date",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "No gift cards",
+      "hint": "A card has a prepaid balance that the customer can use at checkout."
+    },
+    "createModal": {
+      "title": "Issue new gift card"
+    },
+    "form": {
+      "amount": "Amount (Egyptian pounds) *",
+      "amountPlaceholder": "Example: 500",
+      "recipientName": "Recipient name",
+      "optional": "Optional",
+      "recipientEmail": "Recipient email",
+      "message": "Gift message",
+      "messagePlaceholder": "Message with the card (optional)",
+      "expiresAt": "Expiration date"
+    },
+    "validation": {
+      "amountPositive": "Amount must be greater than zero"
+    },
+    "errors": {
+      "loadGiftCards": "An error occurred while loading gift cards"
+    }
   }
 }

@@ -1,10 +1,16 @@
 import { EGP, zero } from '@irth/domain';
+import { getTranslations } from 'next-intl/server';
 import { serverCaller } from '@/server/caller';
 import GiftCardsClient, { type GiftCard, type GiftCardSummary } from './GiftCardsClient';
 
-export const metadata = { title: 'بطاقات الهدايا | IRTH' };
+export async function generateMetadata() {
+  const t = await getTranslations('giftCards');
+  return { title: t('metadata.title') };
+}
 
 export default async function GiftCardsPage() {
+  const t = await getTranslations('giftCards');
+
   try {
     const caller = await serverCaller();
     const [listRes, summaryRes] = await Promise.all([
@@ -29,7 +35,7 @@ export default async function GiftCardsPage() {
     console.error('Failed to fetch gift cards:', error);
     return (
       <div className="p-8 text-center" style={{ color: 'var(--crimson)' }}>
-        حدث خطأ في تحميل بطاقات الهدايا
+        {t('errors.loadGiftCards')}
       </div>
     );
   }
