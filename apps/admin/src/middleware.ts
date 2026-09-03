@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getSessionCookie } from "better-auth/cookies";
 import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
 
@@ -7,7 +8,7 @@ const intlMiddleware = createMiddleware(routing);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   // Apply next-intl middleware first
   const response = intlMiddleware(request);
 
@@ -33,35 +34,37 @@ export async function middleware(request: NextRequest) {
   // open self-signup page).
   const isPublicRoute = pathWithoutLocale === "login" || pathWithoutLocale === "join" || pathWithoutLocale === "";
 
-  // Check Better Auth Session
-  // CVE-2025-29927 Mitigation: Validate Host Header properly or use API
-  // Using Better Auth fetch to ensure correct host resolution securely
-  let session = null;
-  try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const sessionRes = await fetch(`${appUrl}/api/auth/get-session`, {
-      headers: {
-        cookie: request.headers.get("cookie") || "",
-        "x-forwarded-host": request.headers.get("x-forwarded-host") || request.headers.get("host") || "",
-      },
-    });
-    
-    if (sessionRes.ok) {
-      session = await sessionRes.json();
-    }
-  } catch (err) {
-    console.error("Failed to fetch session in middleware", err);
-  }
+  // Optimistic session check — cookie presence only, no DB/network call.
+  //
+  // This used to call Better Auth's DB-backed getSession directly (throws in
+  // the Edge runtime: "The edge runtime does not support Node.js 'net'
+  // module", since the Postgres driver needs raw TCP) and, briefly, a
+  // self-fetch to /api/auth/get-session (fragile: depends on
+  // NEXT_PUBLIC_APP_URL being correct in every environment, and a middleware
+  // calling back into its own deployment's API route is a known-flaky
+  // pattern on Vercel's edge network) that silently degraded to "treat as
+  // logged out" on any fetch failure, which would force-logout everyone in
+  // production the moment that fetch broke for an unrelated reason.
+  //
+  // Middleware's job here is UX routing only (redirect a logged-out visitor
+  // to /login, redirect a logged-in visitor away from /login) — it is not
+  // the authorization boundary. The real, authoritative, DB-backed session
+  // check already runs per-request in apps/admin/src/server/trpc.ts's
+  // createContext() (verifySession(), CVE-2025-29927 mitigation) and in
+  // every Better Auth API route — both execute in the Node.js runtime by
+  // default (Next.js route handlers, unlike middleware, are not Edge-only),
+  // so cross-tenant/authz enforcement is untouched by this file. A forged or
+  // stale cookie only ever buys a visitor past this redirect, never past
+  // createContext's real verification.
+  const hasSessionCookie = Boolean(getSessionCookie(request));
 
-  const hasValidSession = session && session.session;
-
-  if (!isPublicRoute && !hasValidSession) {
+  if (!isPublicRoute && !hasSessionCookie) {
     const loginUrl = new URL(`/${locale}/login`, request.url);
     return NextResponse.redirect(loginUrl);
   }
 
   // Optional: Redirect authenticated users away from login
-  if (pathWithoutLocale === "login" && hasValidSession) {
+  if (pathWithoutLocale === "login" && hasSessionCookie) {
     // `/${locale}`, not `/${locale}/dashboard` — that route was removed (see
     // login/page.tsx's own comment: it "used to point at a stale duplicate
     // that sat outside the (dashboard) group and so rendered with no
@@ -76,5 +79,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
+  matcher: ["/((?!api|_next|_vercel|.*\..*).*)"],
 };
