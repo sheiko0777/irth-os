@@ -25,6 +25,10 @@ describe('isPublic', () => {
       '/api/webhooks/bosta',
       '/webhooks/paymob',
       '/health',
+      '/api/shopify/pixel',
+      '/api/shopify/pixel/abc123',
+      '/api/shopify/oauth',
+      '/api/shopify/oauth/callback',
     ]) {
       expect(isPublic(path), `${path} should be public`).toBe(true);
     }
@@ -36,6 +40,21 @@ describe('isPublic', () => {
       '/api/orders/123',
       '/api/products',
       '/api/inventory/adjust',
+    ]) {
+      expect(isPublic(path), `${path} must NOT be public`).toBe(false);
+    }
+  });
+
+  it('does not widen the Shopify OAuth/pixel exemption to the rest of /api/shopify', () => {
+    // '/connect', '/status', '/locations' share the '/api/shopify' mount with
+    // the public 'oauth' and 'pixel' sub-paths but need a real admin session
+    // — a broadened prefix here would let anyone kick off/read a store's
+    // Shopify connection with no credentials.
+    for (const path of [
+      '/api/shopify/connect',
+      '/api/shopify/status',
+      '/api/shopify/locations',
+      '/api/shopify',
     ]) {
       expect(isPublic(path), `${path} must NOT be public`).toBe(false);
     }
