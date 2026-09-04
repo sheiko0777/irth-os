@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PermissionGate } from '@/components/PermissionGate';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
@@ -38,6 +39,12 @@ export function ShopifyConnectionCard({ callbackStatus }: { callbackStatus?: str
 
   const connection = statusResponse?.data ?? null;
   const banner = callbackStatus ? CALLBACK_BANNER[callbackStatus] : undefined;
+
+  const locationsQuery = trpc.integrations.shopifyLocations.useQuery(undefined, { enabled: !!connection });
+  const setLocation = trpc.integrations.shopifySetLocation.useMutation({
+    onSuccess: () => { toast.success('تم تحديث موقع المخزون'); refetch(); },
+    onError: (err) => toast.error(err.message),
+  });
 
   return (
     <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
@@ -76,11 +83,25 @@ export function ShopifyConnectionCard({ callbackStatus }: { callbackStatus?: str
                 {STATUS_LABEL[connection.status] ?? connection.status}
               </Badge>
             </div>
-            <div className="text-[var(--t3)]">
-              موقع المخزون:{' '}
-              {connection.inventoryLocationId ? (
-                <span className="text-[var(--t1)]" dir="ltr">{connection.inventoryLocationId}</span>
-              ) : (
+            <div className="flex items-center gap-2 text-[var(--t3)]">
+              <span>موقع المخزون:</span>
+              <PermissionGate resource="integrations" action="manage">
+                <Select
+                  value={connection.inventoryLocationId ?? undefined}
+                  disabled={locationsQuery.isLoading || setLocation.isPending}
+                  onValueChange={(inventoryLocationId) => setLocation.mutate({ inventoryLocationId })}
+                >
+                  <SelectTrigger className="max-w-xs" dir="ltr">
+                    <SelectValue placeholder={locationsQuery.isLoading ? 'جارِ التحميل…' : 'اختر موقعًا'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locationsQuery.data?.data?.map((location) => (
+                      <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </PermissionGate>
+              {!connection.inventoryLocationId && (
                 <span className="text-[var(--amber)]">لم يُحدَّد بعد</span>
               )}
             </div>

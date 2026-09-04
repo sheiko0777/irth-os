@@ -101,4 +101,68 @@ export const integrationsRouter = router({
 
             return { data: { url: authorizeUrl.toString() }, error: null, meta: null };
         }),
+
+    /**
+     * Reads and decrypts the org's Shopify token directly here rather than
+     * calling apps/api's own `/locations`/`/location` routes — those sit
+     * behind apps/api's separate Better Auth session (same cross-origin-
+     * cookie issue documented on `shopifyConnect` above), and admin already
+     * has direct DB access to the same `shopify_connections` row via
+     * `shopifyStatus`. `SHOPIFY_TOKEN_ENCRYPTION_KEY` must be set on this
+     * app's own environment too (mirrors `SHOPIFY_APP_CLIENT_ID` above,
+     * already duplicated between apps/api's Cloudflare secrets and this
+     * app's Vercel env) — decryption happens wherever the ciphertext is read.
+     */
+    shopifyLocations: protectedProcedure.query(async ({ ctx }) => {
+        const [connection] = await ctx.db
+            .select({
+                shopDomain: shopifyConnections.shopDomain,
+                accessTokenCiphertext: shopifyConnections.accessTokenCiphertext,
+                accessTokenIv: shopifyConnections.accessTokenIv,
+            })
+            .from(shopifyConnections)
+            .where(eq(shopifyConnections.orgId, ctx.orgId));
+        if (!connection) return { data: [], error: null, meta: null };
+
+        const encoded = process.env.SHOPIFY_TOKEN_ENCRYPTION_KEY;
+        if (!encoded) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'تشفير رمز Shopify غير مُهيأ على هذا الخادم' });
+        }
+        const rawKey = Buffer.from(encoded, 'base64');
+        if (rawKey.length !== 32) {
+            throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'مفتاح تشفير Shopify غير صالح' });
+        }
+        const key = await crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+        const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: Buffer.from(connection.accessTokenIv, 'base64') },
+            key,
+            Buffer.from(connection.accessTokenCiphertext, 'base64'),
+        );
+        const accessToken = Buffer.from(decrypted).toString('utf8');
+
+        const response = await fetch(`https://${connection.shopDomain}/admin/api/2025-10/graphql.json`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
+            body: JSON.stringify({ query: 'query { locations(first: 50) { nodes { id name } } }' }),
+        });
+        if (!response.ok) {
+            throw new TRPCError({ code: 'BAD_GATEWAY', message: 'تعذّر جلب مواقع المخزون من Shopify' });
+        }
+        const body = await response.json() as { data?: { locations: { nodes: Array<{ id: string; name: string }> } } };
+        return { data: body.data?.locations.nodes ?? [], error: null, meta: null };
+    }),
+
+    shopifySetLocation: requirePermission('integrations', 'manage')
+        .input(z.object({ inventoryLocationId: z.string().startsWith('gid://shopify/Location/') }))
+        .mutation(async ({ ctx, input }) => {
+            const [connection] = await ctx.withOrg((tx) => tx
+                .update(shopifyConnections)
+                .set({ inventoryLocationId: input.inventoryLocationId, updatedAt: new Date() })
+                .where(eq(shopifyConnections.orgId, ctx.orgId))
+                .returning({ inventoryLocationId: shopifyConnections.inventoryLocationId }));
+            if (!connection) {
+                throw new TRPCError({ code: 'NOT_FOUND', message: 'لا يوجد اتصال Shopify لهذه المنظمة' });
+            }
+            return { data: connection, error: null, meta: null };
+        }),
 });
