@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { InferSelectModel } from 'drizzle-orm';
 import { shopifyConnections } from '@irth/db';
 import { getEnv } from '../db';
@@ -16,28 +16,41 @@ function envVar(key: string): string | undefined {
   return (getEnv()?.[key] as string | undefined) ?? process.env[key];
 }
 
-function encryptionKey(): Buffer {
+async function aesKey(usages: Array<'encrypt' | 'decrypt'>): Promise<CryptoKey> {
   const encoded = envVar('SHOPIFY_TOKEN_ENCRYPTION_KEY');
   if (!encoded) throw new Error('SHOPIFY_TOKEN_ENCRYPTION_KEY is not configured');
-  const key = Buffer.from(encoded, 'base64');
-  if (key.length !== 32) throw new Error('SHOPIFY_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
-  return key;
+  const raw = Buffer.from(encoded, 'base64');
+  if (raw.length !== 32) throw new Error('SHOPIFY_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM', length: 256 }, false, usages);
 }
 
-export function encryptShopifyToken(token: string): { ciphertext: string; iv: string } {
+/**
+ * AES-256-GCM via the Web Crypto API, not node:crypto's createCipheriv/
+ * createDecipheriv -- Cloudflare Workers' nodejs_compat polyfills
+ * createHash/createHmac/randomBytes/timingSafeEqual (used elsewhere in this
+ * file) but not the Cipher/Decipher classes: every real attempt through this
+ * code path failed live with "[unenv] crypto.createCipheriv is not
+ * implemented yet!", caught via `wrangler tail` against the deployed Worker
+ * (not reproducible locally under Node). Workers provide the standard
+ * WebCrypto `crypto.subtle` natively, same as a browser, so that's the real
+ * implementation here. WebCrypto's AES-GCM encrypt output is ciphertext+tag
+ * already concatenated -- the same on-disk shape the old
+ * `Buffer.concat([ciphertext, authTag])` produced -- so the stored
+ * `accessTokenCiphertext` format is unchanged.
+ */
+export async function encryptShopifyToken(token: string): Promise<{ ciphertext: string; iv: string }> {
   const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv);
-  const ciphertext = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
-  return { ciphertext: Buffer.concat([ciphertext, cipher.getAuthTag()]).toString('base64'), iv: iv.toString('base64') };
+  const key = await aesKey(['encrypt']);
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, Buffer.from(token, 'utf8'));
+  return { ciphertext: Buffer.from(encrypted).toString('base64'), iv: iv.toString('base64') };
 }
 
-export function decryptShopifyToken(connection: Pick<ShopifyConnection, 'accessTokenCiphertext' | 'accessTokenIv'>): string {
-  const packed = Buffer.from(connection.accessTokenCiphertext, 'base64');
-  const ciphertext = packed.subarray(0, -16);
-  const tag = packed.subarray(-16);
-  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(connection.accessTokenIv, 'base64'));
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+export async function decryptShopifyToken(connection: Pick<ShopifyConnection, 'accessTokenCiphertext' | 'accessTokenIv'>): Promise<string> {
+  const key = await aesKey(['decrypt']);
+  const ciphertext = Buffer.from(connection.accessTokenCiphertext, 'base64');
+  const iv = Buffer.from(connection.accessTokenIv, 'base64');
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return Buffer.from(decrypted).toString('utf8');
 }
 
 export function normalizeShopDomain(value: string): string | null {
@@ -84,9 +97,10 @@ export async function exchangeShopifyAuthorizationCode(shopDomain: string, code:
 }
 
 export async function shopifyGraphQL<T>(connection: Pick<ShopifyConnection, 'shopDomain' | 'accessTokenCiphertext' | 'accessTokenIv'>, query: string, variables?: Record<string, unknown>): Promise<T> {
+  const accessToken = await decryptShopifyToken(connection);
   const response = await fetch(`https://${connection.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': decryptShopifyToken(connection) },
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
     body: JSON.stringify({ query, variables }),
   });
   if (!response.ok) throw new Error(`Shopify Admin API failed (${response.status})`);

@@ -55,7 +55,7 @@ shopifyRoute.get('/oauth/callback', async (c) => {
   const [oauthState] = await database.select().from(shopifyOAuthStates).where(and(eq(shopifyOAuthStates.stateHash, hashOpaque(state)), eq(shopifyOAuthStates.shopDomain, shopDomain), isNull(shopifyOAuthStates.consumedAt), gt(shopifyOAuthStates.expiresAt, new Date()))).limit(1);
   if (!oauthState) return c.redirect(`${adminBaseUrl()}/ar/integrations?shopify=expired_state`);
   const token = await exchangeShopifyAuthorizationCode(shopDomain, code);
-  const sealed = encryptShopifyToken(token.accessToken);
+  const sealed = await encryptShopifyToken(token.accessToken);
   const connection = await withOrgContext(database, oauthState.orgId, async (tx) => {
     await tx.update(shopifyOAuthStates).set({ consumedAt: new Date() }).where(eq(shopifyOAuthStates.id, oauthState.id));
     const [row] = await tx.insert(shopifyConnections).values({
