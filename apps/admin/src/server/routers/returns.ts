@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, type JournalLineInput } from '@irth/db';
-import { EGP, EGYPT_VAT_BP, add, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
+import { EGYPT_VAT_BP, add, assertSupportedCurrency, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
 
 export const returnsRouter = router({
@@ -188,17 +188,24 @@ export const returnsRouter = router({
       const updated = await ctx.withOrg(async (tx) => {
         let row;
         let isGenuineTransition = false;
+        // 0030/F06: the order's real currency, not a hardcoded EGP — needed
+        // whether or not this call turns out to be a genuine transition,
+        // since it's used both for the bound check below and the posting
+        // further down.
+        let returnCurrency: ReturnType<typeof assertSupportedCurrency> | undefined;
         if (input.status === 'refunded' && refundAmountMinor !== null) {
           const [target] = await tx.select({ orderId: orderReturns.orderId }).from(orderReturns)
             .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)));
           if (!target) return null;
 
           // Lock siblings in stable order before claiming any return, so
-          // concurrent partial refunds see committed posted amounts.
+          // concurrent partial refunds see committed posted amounts. Siblings
+          // of one order share that order's currency, so summing their
+          // already-posted amounts under the current return's currency is safe.
           const siblings = await tx.select({
             id: orderReturns.id, refundPostedAt: orderReturns.refundPostedAt,
             refundAmountMinor: orderReturns.refundAmountMinor,
-            totalAmountMinor: orders.totalAmountMinor,
+            totalAmountMinor: orders.totalAmountMinor, orderCurrency: orders.currency,
           }).from(orderReturns)
             .innerJoin(orders, and(eq(orders.id, orderReturns.orderId), eq(orders.orgId, ctx.orgId)))
             .where(and(eq(orderReturns.orderId, target.orderId), eq(orderReturns.orgId, ctx.orgId)))
@@ -206,11 +213,12 @@ export const returnsRouter = router({
             .for('update', { of: orderReturns });
           const current = siblings.find(sibling => sibling.id === input.id);
           if (!current) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Return is not linked to a valid order' });
+          returnCurrency = assertSupportedCurrency(current.orderCurrency);
           // Retries do not consume the remaining allowance again.
           if (current.refundPostedAt === null) {
             const total = siblings.filter(sibling => sibling.refundPostedAt !== null)
-              .reduce((amount, sibling) => add(amount, fromMinor(sibling.refundAmountMinor ?? 0n, EGP)),
-                fromMinor(refundAmountMinor, EGP));
+              .reduce((amount, sibling) => add(amount, fromMinor(sibling.refundAmountMinor ?? 0n, returnCurrency!)),
+                fromMinor(refundAmountMinor, returnCurrency));
             // Order price is the ceiling; provider capture tracking does not
             // exist yet. Negative refunds must never create extra headroom.
             if (refundAmountMinor <= 0n || total.minor > current.totalAmountMinor) {
@@ -252,14 +260,14 @@ export const returnsRouter = router({
         // specific cash movement is the accurate entry — a future cash
         // disbursement would debit this same liability to clear it.
         if (isGenuineTransition && input.status === 'refunded' && refundAmountMinor !== null && refundAmountMinor > 0n) {
-          const gross = fromMinor(refundAmountMinor, EGP);
+          const gross = fromMinor(refundAmountMinor, returnCurrency!);
           const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
           const net = netOfTax(gross, EGYPT_VAT_BP);
 
           const lines: JournalLineInput[] = [
-            { accountCode: ACCOUNT_CODES.SALES_RETURNS, debitMinor: net.minor },
-            { accountCode: ACCOUNT_CODES.VAT_PAYABLE, debitMinor: vat.minor, memo: 'Reduces VAT payable — the sale is unwinding' },
-            { accountCode: ACCOUNT_CODES.CUSTOMER_REFUNDS_PAYABLE, creditMinor: gross.minor },
+            { accountCode: ACCOUNT_CODES.SALES_RETURNS, currency: returnCurrency!, debitMinor: net.minor },
+            { accountCode: ACCOUNT_CODES.VAT_PAYABLE, currency: returnCurrency!, debitMinor: vat.minor, memo: 'Reduces VAT payable — the sale is unwinding' },
+            { accountCode: ACCOUNT_CODES.CUSTOMER_REFUNDS_PAYABLE, currency: returnCurrency!, creditMinor: gross.minor },
           ];
 
           await postJournalEntry(tx, {
@@ -316,16 +324,22 @@ export const returnsRouter = router({
           return { restocked: false, reason: 'no_variant' as const };
         }
 
+        const [orderObj] = await tx.select({ currency: orders.currency }).from(orders)
+          .where(and(eq(orders.id, returnObj.orderId), eq(orders.orgId, ctx.orgId))).limit(1);
+        if (!orderObj) throw new Error('Order not found');
+
+        const returnCurrency = assertSupportedCurrency(orderObj.currency);
+
         // NULL is an unknown cost basis; zero has no financial amount to reverse.
         if (orderItem.costMinor !== null && orderItem.costMinor > 0n) {
-          const cost = multiply(fromMinor(orderItem.costMinor), item.quantity);
+          const cost = multiply(fromMinor(orderItem.costMinor, returnCurrency), item.quantity);
           await postJournalEntry(tx, {
             orgId: ctx.orgId, journalType: 'sales',
             description: `Return restocked - ${returnObj.returnNumber}`,
             sourceTable: 'return_items', sourceId: item.id, createdBy: ctx.userId,
             lines: [
-              { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: cost.minor },
-              { accountCode: ACCOUNT_CODES.COGS, creditMinor: cost.minor },
+              { accountCode: ACCOUNT_CODES.INVENTORY, currency: returnCurrency, debitMinor: cost.minor },
+              { accountCode: ACCOUNT_CODES.COGS, currency: returnCurrency, creditMinor: cost.minor },
             ],
           });
         }

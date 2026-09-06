@@ -103,7 +103,7 @@ describe('returns', () => {
   function refundFixture(posted = false, prior = 0n) {
     const current = { id: 'ret-1', orderId: 'o-1', returnNumber: 'RMA-1',
       refundPostedAt: posted ? new Date() : null, refundAmountMinor: posted ? 1000n : null,
-      totalAmountMinor: 2000n };
+      totalAmountMinor: 2000n, orderCurrency: 'EGP' };
     const target = rows([{ orderId: 'o-1' }]);
     const siblings = rows([current, { id: 'ret-2', refundPostedAt: new Date(), refundAmountMinor: prior }]);
     const claim = rows(posted ? [] : [current]);
@@ -184,7 +184,7 @@ describe('returns', () => {
     const item = { id: 'item-1', returnId: 'ret-1', orderItemId: 'line-1', quantity: 2, condition };
     const selections = [
       rows([{ id: 'ret-1', orderId: 'o-1', returnNumber: 'RMA-1' }]),
-      rows([item]), rows([{ variantId: 'v-1', costMinor }]), rows([{ id: 'inv-1' }]),
+      rows([item]), rows([{ variantId: 'v-1', costMinor }]), rows([{ currency: 'EGP' }]), rows([{ id: 'inv-1' }]),
     ];
     const claim = rows(claimed ? [item] : []);
     for (const selection of selections) mockDb.select.mockReturnValueOnce(selection);
@@ -199,8 +199,8 @@ describe('returns', () => {
     expect(postJournalEntry).toHaveBeenCalledWith(mockDb, expect.objectContaining({
       sourceTable: 'return_items', sourceId: 'item-1',
       lines: [
-        { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: 600n },
-        { accountCode: ACCOUNT_CODES.COGS, creditMinor: 600n },
+        { accountCode: ACCOUNT_CODES.INVENTORY, currency: 'EGP', debitMinor: 600n },
+        { accountCode: ACCOUNT_CODES.COGS, currency: 'EGP', creditMinor: 600n },
       ],
     }));
     expect(mockDb.insert).toHaveBeenCalledWith(inventoryMovements);
