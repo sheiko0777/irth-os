@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db } from '../../db';
-import { orders, auditLog } from '@irth/db';
+import { orders, auditLog, paymobWebhookDeliveries } from '@irth/db';
+import { transitionOrderStatus } from '@irth/db/src/orderLedger';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -90,22 +91,99 @@ paymobRoute.post('/', async (c: Context) => {
     return c.json({ data: null, error: 'order_not_found', meta: null }, 404);
   }
 
+  const transactionId = String(obj.id);
+
+  // Idempotency: Insert transaction first to claim the delivery, catch unique violation
+  // to detect re-delivery of the same transaction id.
+  try {
+    await db.insert(paymobWebhookDeliveries).values({
+      orgId: order.orgId,
+      orderId: order.id,
+      transactionId,
+      payload: obj,
+      status: 'processed'
+    });
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505') {
+      // It's a duplicate delivery, return 200 without reprocessing.
+      return c.json({ data: { success: true }, error: null, meta: null });
+    }
+    throw err;
+  }
+
+  // Amount/currency check
+  // Compare amount and currency. Both must match.
+  const isAmountMatch = String(obj.amount_cents) === String(order.totalAmountMinor);
+  const isCurrencyMatch = typeof obj.currency === 'string' && obj.currency.toLowerCase() === (order.currency || '').toLowerCase();
+
+  if (!isAmountMatch || !isCurrencyMatch) {
+    // Mismatch - mark delivery as rejected, log audit, and return 200
+    await db.update(paymobWebhookDeliveries)
+      .set({ status: 'rejected' })
+      .where(and(eq(paymobWebhookDeliveries.orgId, order.orgId), eq(paymobWebhookDeliveries.transactionId, transactionId)));
+
+    await db.insert(auditLog).values({
+      orgId: order.orgId,
+      userId: null,
+      action: 'PAYMOB_WEBHOOK',
+      tableName: 'orders',
+      recordId: order.id,
+      changes: {
+        oldStatus: order.status,
+        newStatus: order.status,
+        error: 'amount_currency_mismatch',
+        paymobPayload: obj,
+        expected: { amount: String(order.totalAmountMinor), currency: order.currency }
+      }
+    });
+
+    return c.json({ data: { success: true }, error: null, meta: null });
+  }
+
+  // Genuine capture condition check
   const isSuccess = obj.success === true;
-  const newStatus = isSuccess ? 'confirmed' : 'payment_failed';
+  const isGenuineCapture = isSuccess && obj.pending !== true && obj.is_refunded !== true && obj.is_voided !== true;
 
-  const [updatedOrder] = await db.update(orders)
-    .set({ status: newStatus, updatedAt: new Date() })
-    .where(and(eq(orders.id, order.id), eq(orders.orgId, order.orgId)))
-    .returning();
+  if (isGenuineCapture) {
+    // Attempt the atomic status transition, restricted to not regress past 'pending'/'payment_failed'
+    const transitionResult = await transitionOrderStatus(db as any, {
+      orgId: order.orgId,
+      orderId: order.id,
+      newStatus: 'confirmed',
+      onlyIfPreviousStatusIn: ['pending', 'payment_failed']
+    });
 
-  await db.insert(auditLog).values({
-    orgId: order.orgId,
-    userId: null,
-    action: 'PAYMOB_WEBHOOK',
-    tableName: 'orders',
-    recordId: order.id,
-    changes: { oldStatus: order.status, newStatus, paymobPayload: obj }
-  });
+    // If it successfully transitioned (or if not, we audit it anyway, though transitionResult is null if no matching row to update)
+    await db.insert(auditLog).values({
+      orgId: order.orgId,
+      userId: null,
+      action: 'PAYMOB_WEBHOOK',
+      tableName: 'orders',
+      recordId: order.id,
+      changes: {
+        oldStatus: transitionResult?.previousStatus ?? order.status,
+        newStatus: transitionResult ? 'confirmed' : order.status, // untouched if null
+        paymobPayload: obj,
+        transitionSkipped: !transitionResult // log if we skipped because it was already beyond pending/payment_failed
+      }
+    });
+  } else {
+    // Not a genuine capture (e.g. pending, void, refund, or failure), record delivery but do not confirm order.
+    // We already inserted the 'processed' webhook delivery. Add audit log for traceability.
+    await db.insert(auditLog).values({
+      orgId: order.orgId,
+      userId: null,
+      action: 'PAYMOB_WEBHOOK',
+      tableName: 'orders',
+      recordId: order.id,
+      changes: {
+        oldStatus: order.status,
+        newStatus: order.status,
+        error: 'not_a_genuine_capture',
+        paymobPayload: obj
+      }
+    });
+  }
 
   return c.json({ data: { success: true }, error: null, meta: null });
 });
