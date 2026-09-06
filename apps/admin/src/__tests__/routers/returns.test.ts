@@ -100,6 +100,58 @@ describe('returns', () => {
     );
   });
 
+  function refundFixture(posted = false, prior = 0n) {
+    const current = { id: 'ret-1', orderId: 'o-1', returnNumber: 'RMA-1',
+      refundPostedAt: posted ? new Date() : null, refundAmountMinor: posted ? 1000n : null,
+      totalAmountMinor: 2000n };
+    const target = rows([{ orderId: 'o-1' }]);
+    const siblings = rows([current, { id: 'ret-2', refundPostedAt: new Date(), refundAmountMinor: prior }]);
+    const claim = rows(posted ? [] : [current]);
+    const retry = rows([current]);
+    mockDb.select.mockReturnValueOnce(target).mockReturnValueOnce(siblings);
+    mockDb.update.mockReturnValueOnce(claim).mockReturnValueOnce(retry);
+    return { claim, retry, siblings };
+  }
+
+  it('claims the first refund with a durable timestamp and posts once', async () => {
+    const { claim, siblings } = refundFixture();
+    await caller.updateStatus({ id: 'ret-1', status: 'refunded', refundAmount: '10' });
+    expect(claim.set).toHaveBeenCalledWith(expect.objectContaining({
+      refundAmountMinor: 1000n, refundPostedAt: expect.any(Object),
+    }));
+    expect(siblings.for).toHaveBeenCalledWith('update', expect.any(Object));
+    expect(postJournalEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the posted amount on a retry even when the new amount exceeds the bound', async () => {
+    const { retry } = refundFixture(true);
+    await caller.updateStatus({ id: 'ret-1', status: 'refunded', refundAmount: '999', adminNotes: 'updated' });
+    expect(retry.set).toHaveBeenCalledWith({ status: 'refunded', adminNotes: 'updated', resolvedAt: expect.any(Date) });
+    expect(postJournalEntry).not.toHaveBeenCalled();
+  });
+
+  it('rejects cumulative refunds above the order total before claiming', async () => {
+    refundFixture(false, 1500n);
+    await expectCode(caller.updateStatus({ id: 'ret-1', status: 'refunded', refundAmount: '10' }), 'BAD_REQUEST');
+    expect(mockDb.update).not.toHaveBeenCalled();
+    expect(postJournalEntry).not.toHaveBeenCalled();
+  });
+
+  it.each(['0', '-1'])('rejects a nonpositive first refund (%s) without claiming', async (refundAmount) => {
+    refundFixture();
+    await expectCode(caller.updateStatus({ id: 'ret-1', status: 'refunded', refundAmount }), 'BAD_REQUEST');
+    expect(mockDb.update).not.toHaveBeenCalled();
+    expect(postJournalEntry).not.toHaveBeenCalled();
+  });
+
+  it.each(['rejected', 'refunded'] as const)('keeps the amount intact on a plain %s update', async (status) => {
+    const update = rows([{ id: 'ret-1', refundAmountMinor: 1000n }]);
+    mockDb.update.mockReturnValueOnce(update);
+    await caller.updateStatus({ id: 'ret-1', status });
+    expect(update.set).toHaveBeenCalledWith({ status, adminNotes: undefined, resolvedAt: expect.any(Date) });
+    expect(postJournalEntry).not.toHaveBeenCalled();
+  });
+
   it('restock on a missing return throws "Not found"', async () => {
     await expect(
       caller.restock({ returnId: 'ret-missing', itemId: 'item-1' })
@@ -132,7 +184,7 @@ describe('returns', () => {
     const item = { id: 'item-1', returnId: 'ret-1', orderItemId: 'line-1', quantity: 2, condition };
     const selections = [
       rows([{ id: 'ret-1', orderId: 'o-1', returnNumber: 'RMA-1' }]),
-      rows([item]), rows([{ variantId: 'v-1', costMinor }]), rows([{ currency: 'EGP' }]), rows([{ id: 'inv-1' }]),
+      rows([item]), rows([{ variantId: 'v-1', costMinor }]), rows([{ id: 'inv-1' }]),
     ];
     const claim = rows(claimed ? [item] : []);
     for (const selection of selections) mockDb.select.mockReturnValueOnce(selection);
@@ -147,8 +199,8 @@ describe('returns', () => {
     expect(postJournalEntry).toHaveBeenCalledWith(mockDb, expect.objectContaining({
       sourceTable: 'return_items', sourceId: 'item-1',
       lines: [
-        { accountCode: ACCOUNT_CODES.INVENTORY, currency: 'EGP', debitMinor: 600n },
-        { accountCode: ACCOUNT_CODES.COGS, currency: 'EGP', creditMinor: 600n },
+        { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: 600n },
+        { accountCode: ACCOUNT_CODES.COGS, creditMinor: 600n },
       ],
     }));
     expect(mockDb.insert).toHaveBeenCalledWith(inventoryMovements);

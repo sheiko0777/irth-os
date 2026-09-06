@@ -13,6 +13,7 @@ export const orderReturns = pgTable('order_returns', {
   notes: text('notes'),
   adminNotes: text('admin_notes'),
   refundAmountMinor: bigint('refund_amount_minor', { mode: 'bigint' }),
+  refundPostedAt: timestamp('refund_posted_at'),
   requestedAt: timestamp('requested_at').defaultNow(),
   resolvedAt: timestamp('resolved_at'),
   createdAt: timestamp('created_at').defaultNow(),
