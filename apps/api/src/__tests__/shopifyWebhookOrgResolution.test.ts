@@ -9,7 +9,7 @@
  *
  * `resolveWebhookOrg` is what closes that gap: it resolves org from the
  * request's own `X-Shopify-Shop-Domain` header against `shopify_connections`
- * first, falling back to the legacy env var only when no connection matches
+ * first, falling back to the legacy env var only when the header is absent
  * (preserving the pre-existing single-tenant integration's behavior
  * unchanged — see shopifyInventoryGuard.test.ts, which sends no shop-domain
  * header at all and still passes against this same file after this fix).
@@ -44,7 +44,7 @@ vi.mock('../middlewares/verifyShopifyWebhook', () => ({
 const CONNECTION_A = { id: 'conn-a', orgId: 'org-a' };
 const CONNECTION_B = { id: 'conn-b', orgId: 'org-b' };
 
-let connectionsByDomain: Record<string, typeof CONNECTION_A | undefined> = {};
+let connectionsByDomain: Record<string, (typeof CONNECTION_A & { status?: string }) | undefined> = {};
 let lastQueriedDomain = '';
 let lastWebhookIdHeader = '';
 let deliveryInsertCalls: Array<{ orgId: string; connectionId: string | null; webhookId: string }> = [];
@@ -78,7 +78,8 @@ vi.mock('../db', () => ({
           if ('orgId' in cols) {
             // resolveWebhookOrg's connection lookup.
             const domain = lastQueriedDomain;
-            return Promise.resolve(connectionsByDomain[domain] ? [connectionsByDomain[domain]] : []);
+            const connection = connectionsByDomain[domain];
+            return Promise.resolve(connection && connection.status !== 'uninstalled' ? [connection] : []);
           }
           // claimDelivery's own redelivery-status lookup (F01 fix) — only
           // reached when the insert below hit the unique-constraint branch.
@@ -164,7 +165,7 @@ function post(shopDomain: string | undefined, webhookId: string | undefined) {
   lastQueriedDomain = shopDomain ?? '';
   lastWebhookIdHeader = webhookId ?? '';
   const headers: Record<string, string> = {};
-  if (shopDomain) headers['x-shopify-shop-domain'] = shopDomain;
+  if (shopDomain !== undefined) headers['x-shopify-shop-domain'] = shopDomain;
   if (webhookId) headers['x-shopify-webhook-id'] = webhookId;
   return buildApp().request('/webhooks/shopify/inventory-levels-update', {
     method: 'POST',
@@ -214,6 +215,35 @@ describe('Shopify webhook org resolution', () => {
     connectionsByDomain = {};
 
     const res = await post('unknown-shop.myshopify.com', 'wh-4');
+
+    expect(res.status).toBe(404);
+    expect(deliveryInsertCalls).toEqual([]);
+  });
+
+  it.each(['unknown-shop.myshopify.com', '', '   '])('refuses a supplied unmatched domain %j even with a legacy org configured', async (domain) => {
+    process.env.SHOPIFY_ORG_ID = 'legacy-org';
+
+    const res = await post(domain, 'wh-unmatched');
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ data: null, error: 'no_matching_connection', meta: null });
+    expect(deliveryInsertCalls).toEqual([]);
+  });
+
+  it('preserves the legacy fallback when the shop-domain header is absent', async () => {
+    process.env.SHOPIFY_ORG_ID = 'legacy-org';
+
+    const res = await post(undefined, 'wh-legacy');
+
+    expect(res.status).toBe(200);
+    expect(deliveryInsertCalls).toEqual([]);
+  });
+
+  it('refuses an uninstalled shop even with a legacy org configured', async () => {
+    process.env.SHOPIFY_ORG_ID = 'legacy-org';
+    connectionsByDomain = { 'shop-a.myshopify.com': { ...CONNECTION_A, status: 'uninstalled' } };
+
+    const res = await post('shop-a.myshopify.com', 'wh-uninstalled');
 
     expect(res.status).toBe(404);
     expect(deliveryInsertCalls).toEqual([]);

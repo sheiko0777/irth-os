@@ -84,6 +84,10 @@ export async function processOutbox(database: typeof db): Promise<number> {
                     const [connection] = await database.select().from(shopifyConnections)
                         .where(and(eq(shopifyConnections.orgId, orgId), eq(shopifyConnections.status, 'active')));
 
+                    if (!connection && orgId !== envVar('SHOPIFY_ORG_ID')) {
+                        throw new Error(`Shopify product push for org ${orgId} has no active connection and does not match the legacy single-tenant org — refusing to avoid a cross-tenant misroute`);
+                    }
+
                     const productInput = {
                         shopifyProductId: product.shopifyProductId,
                         title: product.name,

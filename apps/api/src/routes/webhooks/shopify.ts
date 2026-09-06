@@ -34,9 +34,8 @@ const shopifyWebhookRoute = new Hono();
 /**
  * Legacy single-tenant fallback. The org every webhook wrote into before
  * per-org connections existed — `resolveWebhookOrg` only reaches for this
- * when the request's shop domain doesn't match any `shopify_connections`
- * row, so an org that has genuinely connected is never at the mercy of this
- * env var.
+ * when the request's shop-domain header is absent. A supplied domain must
+ * match an active connection and can never fall back to this env var.
  */
 function getSyncOrgId(): string | undefined {
   return (getEnv()?.SHOPIFY_ORG_ID as string | undefined) ?? process.env.SHOPIFY_ORG_ID;
@@ -54,17 +53,18 @@ interface ResolvedWebhookOrg {
  * webhook delivery — this is the ONLY place in the multi-tenant flow that
  * decides tenancy, so getting it right here is what makes every downstream
  * `withOrgContext(db, orgId, ...)` call actually safe. Falls back to the
- * legacy single-tenant org only when no connection matches the shop domain
- * (or the header is missing, which only the pre-existing legacy integration
- * would ever trigger — a connection-based webhook always carries the header).
+ * legacy single-tenant org only when the header is missing, which only the
+ * pre-existing legacy integration would ever trigger. A supplied domain
+ * without an active connection is refused, including an empty header.
  */
 async function resolveWebhookOrg(c: Context, db: ReturnType<typeof getDb>): Promise<ResolvedWebhookOrg | null> {
   const shopDomain = c.req.header('x-shopify-shop-domain')?.toLowerCase().trim();
-  if (shopDomain) {
+  if (shopDomain !== undefined) {
     const [connection] = await db.select({ id: shopifyConnections.id, orgId: shopifyConnections.orgId })
       .from(shopifyConnections)
       .where(and(eq(shopifyConnections.shopDomain, shopDomain), eq(shopifyConnections.status, 'active')));
     if (connection) return { orgId: connection.orgId, connectionId: connection.id };
+    return null;
   }
   const legacyOrgId = getSyncOrgId();
   return legacyOrgId ? { orgId: legacyOrgId, connectionId: null } : null;
