@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { type SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { purchaseOrders, purchaseOrderItems } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
@@ -18,6 +21,116 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
 }
 
 const VALID_UUID = '11111111-1111-4111-8111-111111111111';
+const SECOND_UUID = '22222222-2222-4222-8222-222222222222';
+const INVALID_UUID = '33333333-3333-4333-8333-333333333333';
+
+// A local transaction mock keeps the receipt tests independent of the shared
+// db.query limitation. SQL predicates are inspected, not enforced as real RLS.
+function receiptFixture(received: (number | null)[] = [0, null]) {
+  const lines = received.map((receivedQuantity, index) => ({
+    id: index === 0 ? VALID_UUID : SECOND_UUID,
+    poId: VALID_UUID,
+    quantity: 5,
+    receivedQuantity,
+  }));
+  const foreignLine = { id: INVALID_UUID, poId: SECOND_UUID, quantity: 5, receivedQuantity: 0 };
+  const po = { id: VALID_UUID, poNumber: 'PO-1', status: 'partial' };
+  const dialect = new PgDialect();
+  const writes: string[] = [];
+  const tx = {
+    insert: mockDb.insert,
+    update: vi.fn((table: unknown) => ({
+      set: (values: { receivedQuantity?: SQL; status?: string }) => ({
+        where: (predicate: SQL) => ({
+          returning: async () => {
+            const { params } = dialect.sqlToQuery(predicate);
+            if (table === purchaseOrderItems) {
+              expect(params.slice(1)).toEqual(['org-1', po.id]);
+              const line = [...lines, foreignLine].find(
+                (item) => item.id === params[0] && item.poId === params[2],
+              );
+              if (!line) return [];
+              const increment = dialect.sqlToQuery(values.receivedQuantity!).params[0];
+              line.receivedQuantity = (line.receivedQuantity ?? 0) + Number(increment);
+              writes.push(line.id);
+              return [{ ...line }];
+            }
+            expect(table).toBe(purchaseOrders);
+            expect(tx.select).toHaveBeenCalledOnce();
+            po.status = values.status!;
+            return [{ ...po }];
+          },
+        }),
+      }),
+    })),
+    select: vi.fn(() => ({
+      from: (table: unknown) => ({
+        where: async (predicate: SQL) => {
+          expect(table).toBe(purchaseOrderItems);
+          const query = dialect.sqlToQuery(predicate);
+          expect(query.params).toEqual([po.id, 'org-1']);
+          expect(query.sql).toContain('"purchase_order_items"."po_id"');
+          expect(query.sql).toContain('"purchase_order_items"."org_id"');
+          return lines.map((line) => ({ ...line }));
+        },
+      }),
+    })),
+  };
+  const context = {
+    ...ctx(),
+    db: { query: { purchaseOrders: { findFirst: async () => ({ ...po }) } } },
+    withOrg: <T>(fn: (transaction: typeof tx) => Promise<T>) => fn(tx),
+  } as unknown as Context;
+  return { caller: purchasingRouter.createCaller(context), lines, foreignLine, writes, po };
+}
+
+describe('purchasing.po.receive completion', () => {
+  it('keeps a two-line PO partial when only one line is fully received', async () => {
+    const { caller, lines } = receiptFixture();
+    const res = await caller.po.receive({ id: VALID_UUID, items: [{ id: VALID_UUID, receivedQuantity: 5 }] });
+    expect(res.data.status).toBe('partial');
+    expect(res.data.invalidItemIds).toEqual([]);
+    expect(lines.map((line) => line.receivedQuantity)).toEqual([5, null]);
+  });
+
+  it.each([
+    { received: [0, null], status: 'partial' },
+    { received: [5, 2], status: 'partial' },
+    { received: [5, 5], status: 'received' },
+  ])('uses actual line state for an empty receipt: $received', async ({ received, status }) => {
+    const { caller, writes, po } = receiptFixture(received);
+    po.status = status;
+    const res = await caller.po.receive({ id: VALID_UUID, items: [] });
+    expect(res.data.status).toBe(status);
+    expect(res.data.invalidItemIds).toEqual([]);
+    expect(writes).toEqual([]);
+  });
+
+  it('reports an unmatched item and still processes valid lines before and after it', async () => {
+    const { caller, lines, foreignLine, writes } = receiptFixture();
+    const res = await caller.po.receive({ id: VALID_UUID, items: [
+      { id: VALID_UUID, receivedQuantity: 5 },
+      { id: INVALID_UUID, receivedQuantity: 5 },
+      { id: SECOND_UUID, receivedQuantity: 5 },
+    ] });
+    expect(res.data.invalidItemIds).toEqual([INVALID_UUID]);
+    expect(res.data.status).toBe('received');
+    expect(lines.map((line) => line.receivedQuantity)).toEqual([5, 5]);
+    expect(writes).toEqual([VALID_UUID, SECOND_UUID]);
+    expect(foreignLine.receivedQuantity).toBe(0);
+    expect(res.error).toBeNull();
+  });
+
+  it('marks the PO received when all lines are filled in one call', async () => {
+    const { caller } = receiptFixture();
+    const res = await caller.po.receive({ id: VALID_UUID, items: [
+      { id: VALID_UUID, receivedQuantity: 5 },
+      { id: SECOND_UUID, receivedQuantity: 5 },
+    ] });
+    expect(res.data.status).toBe('received');
+    expect(res.data.invalidItemIds).toEqual([]);
+  });
+});
 
 async function expectCode(p: Promise<unknown>, code: TRPCError['code']) {
   await expect(p).rejects.toSatisfy(
