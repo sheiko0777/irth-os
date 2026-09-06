@@ -380,7 +380,7 @@ export const purchasingRouter = router({
         if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
         const result = await ctx.withOrg(async (tx) => {
-            let fullyReceived = true;
+            const invalidItemIds: string[] = [];
             // Total cost of everything costed in this call, across every line —
             // what the goods-received ledger posting debits to Inventory. Stays
             // 0n (and posts nothing) when no line had a known unit cost, rather
@@ -407,12 +407,10 @@ export const purchasingRouter = router({
                         eq(purchaseOrderItems.poId, po.id),
                     ))
                     .returning();
-                // No such line, or it belongs to a different PO — the same
-                // silent skip as before, now decided by the database.
-                if (!poItem) continue;
-
-                if ((poItem.receivedQuantity ?? 0) < poItem.quantity) {
-                    fullyReceived = false;
+                // Report unmatched lines while continuing to process valid ones.
+                if (!poItem) {
+                    invalidItemIds.push(itemInput.id);
+                    continue;
                 }
 
                 // Update inventory if requested and SKU exists
@@ -483,11 +481,23 @@ export const purchasingRouter = router({
                 }
             }
 
+            // Read every PO line after this receipt's writes, including lines
+            // omitted from the submission (which may itself be empty).
+            const allItems = await tx.select({
+                receivedQuantity: purchaseOrderItems.receivedQuantity,
+                quantity: purchaseOrderItems.quantity,
+            }).from(purchaseOrderItems).where(and(
+                eq(purchaseOrderItems.poId, po.id),
+                eq(purchaseOrderItems.orgId, ctx.orgId),
+            ));
+            const newStatus = allItems.every(
+                (item) => (item.receivedQuantity ?? 0) >= item.quantity,
+            ) ? 'received' : 'partial';
+
             // Re-asserts the org scope the lookup above established rather than
             // trusting it across statements, and takes NOT_FOUND from this
             // write's own result: without the predicate this was the one write
             // in the procedure the tenant filter never reached.
-            const newStatus = fullyReceived ? 'received' : 'partial';
             const [updatedPo] = await tx.update(purchaseOrders)
                 .set({ status: newStatus, receivedAt: new Date(), updatedAt: new Date() })
                 .where(and(eq(purchaseOrders.id, po.id), eq(purchaseOrders.orgId, ctx.orgId)))
@@ -529,7 +539,7 @@ export const purchasingRouter = router({
               }
             );
 
-            return updatedPo;
+            return { ...updatedPo, invalidItemIds };
         });
 
         return { data: result, error: null, meta: null };
