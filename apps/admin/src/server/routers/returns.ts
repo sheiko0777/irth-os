@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, type JournalLineInput } from '@irth/db';
-import { assertSupportedCurrency, EGYPT_VAT_BP, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
-import { eq, and, count, sum, sql, desc, ne } from 'drizzle-orm';
+import { EGYPT_VAT_BP, add, assertSupportedCurrency, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
+import { eq, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
 
 export const returnsRouter = router({
   list: protectedProcedure
@@ -179,63 +179,65 @@ export const returnsRouter = router({
           ? null
           : parseDecimal(input.refundAmount).minor;
 
-      // The org check is the UPDATE's own WHERE, not a SELECT before it. The
-      // separate existence read added nothing — the UPDATE already carried the
-      // same predicate — while giving a concurrent delete a window to land
-      // between the two, and costing a round trip on every call.
       const setValues = {
         status: input.status,
         adminNotes: input.adminNotes,
-        refundAmountMinor,
-        resolvedAt: resolvedAt,
+        resolvedAt,
       };
 
       const updated = await ctx.withOrg(async (tx) => {
-        // 0030/F03: Join to `orders` to retrieve the original order's actual
-        // currency instead of hardcoding EGP. We do this before the update
-        // to cleanly validate before any mutations happen.
-        const [returnWithOrder] = await tx
-          .select({ orderCurrency: orders.currency })
-          .from(orderReturns)
-          .innerJoin(orders, eq(orderReturns.orderId, orders.id))
-          .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
-          .limit(1);
-
-        if (!returnWithOrder) return null;
-        const returnCurrency = assertSupportedCurrency(returnWithOrder.orderCurrency);
-
-        // Transitioning TO 'refunded' is attempted first WITH a guard against
-        // already being 'refunded' — the one status this procedure now has a
-        // side effect for (the ledger posting below). Without it, calling
-        // this twice on the same return would reverse the same sale twice.
         let row;
-        let isGenuineTransition = true;
-        if (input.status === 'refunded') {
-          [row] = await tx.update(orderReturns)
-            .set(setValues)
-            .where(and(
-              eq(orderReturns.id, input.id),
-              eq(orderReturns.orgId, ctx.orgId),
-              ne(orderReturns.status, 'refunded'),
-            ))
-            .returning();
+        let isGenuineTransition = false;
+        // 0030/F06: the order's real currency, not a hardcoded EGP — needed
+        // whether or not this call turns out to be a genuine transition,
+        // since it's used both for the bound check below and the posting
+        // further down.
+        let returnCurrency: ReturnType<typeof assertSupportedCurrency> | undefined;
+        if (input.status === 'refunded' && refundAmountMinor !== null) {
+          const [target] = await tx.select({ orderId: orderReturns.orderId }).from(orderReturns)
+            .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)));
+          if (!target) return null;
 
-          // The guard matched nothing for one of two reasons: the return does
-          // not exist, or it was already refunded. Only the SECOND case
-          // deserves a plain retry — the return's notes are still legitimately
-          // editable after it is refunded, just without re-posting to the
-          // ledger. A single unconditional retry, not a pre-read: it costs an
-          // extra round trip only on the (rare) already-refunded path, and
-          // resolves the ambiguity from the write's own result rather than
-          // from a stale read.
-          if (!row) {
-            isGenuineTransition = false;
-            [row] = await tx.update(orderReturns)
-              .set(setValues)
-              .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
-              .returning();
+          // Lock siblings in stable order before claiming any return, so
+          // concurrent partial refunds see committed posted amounts. Siblings
+          // of one order share that order's currency, so summing their
+          // already-posted amounts under the current return's currency is safe.
+          const siblings = await tx.select({
+            id: orderReturns.id, refundPostedAt: orderReturns.refundPostedAt,
+            refundAmountMinor: orderReturns.refundAmountMinor,
+            totalAmountMinor: orders.totalAmountMinor, orderCurrency: orders.currency,
+          }).from(orderReturns)
+            .innerJoin(orders, and(eq(orders.id, orderReturns.orderId), eq(orders.orgId, ctx.orgId)))
+            .where(and(eq(orderReturns.orderId, target.orderId), eq(orderReturns.orgId, ctx.orgId)))
+            .orderBy(orderReturns.id)
+            .for('update', { of: orderReturns });
+          const current = siblings.find(sibling => sibling.id === input.id);
+          if (!current) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Return is not linked to a valid order' });
+          returnCurrency = assertSupportedCurrency(current.orderCurrency);
+          // Retries do not consume the remaining allowance again.
+          if (current.refundPostedAt === null) {
+            const total = siblings.filter(sibling => sibling.refundPostedAt !== null)
+              .reduce((amount, sibling) => add(amount, fromMinor(sibling.refundAmountMinor ?? 0n, returnCurrency!)),
+                fromMinor(refundAmountMinor, returnCurrency));
+            // Order price is the ceiling; provider capture tracking does not
+            // exist yet. Negative refunds must never create extra headroom.
+            if (refundAmountMinor <= 0n || total.minor > current.totalAmountMinor) {
+              throw new TRPCError({ code: 'BAD_REQUEST', message: 'Refund amount is invalid or exceeds the order total' });
+            }
           }
-        } else {
+          // Like restock, the atomic claim guards all ledger side effects.
+          // Its durable marker is independent of the editable current status.
+          [row] = await tx.update(orderReturns)
+            .set({ ...setValues, refundAmountMinor, refundPostedAt: sql`now()` })
+            .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId),
+              isNull(orderReturns.refundPostedAt)))
+            .returning();
+          isGenuineTransition = !!row;
+        }
+        if (!row) {
+          // The return's notes are still legitimately editable after it is
+          // refunded. Retries and status round-trips must preserve the posted
+          // amount and its durable marker.
           [row] = await tx.update(orderReturns)
             .set(setValues)
             .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
@@ -258,14 +260,14 @@ export const returnsRouter = router({
         // specific cash movement is the accurate entry — a future cash
         // disbursement would debit this same liability to clear it.
         if (isGenuineTransition && input.status === 'refunded' && refundAmountMinor !== null && refundAmountMinor > 0n) {
-          const gross = fromMinor(refundAmountMinor, returnCurrency);
+          const gross = fromMinor(refundAmountMinor, returnCurrency!);
           const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
           const net = netOfTax(gross, EGYPT_VAT_BP);
 
           const lines: JournalLineInput[] = [
-            { accountCode: ACCOUNT_CODES.SALES_RETURNS, currency: returnCurrency, debitMinor: net.minor },
-            { accountCode: ACCOUNT_CODES.VAT_PAYABLE, currency: returnCurrency, debitMinor: vat.minor, memo: 'Reduces VAT payable — the sale is unwinding' },
-            { accountCode: ACCOUNT_CODES.CUSTOMER_REFUNDS_PAYABLE, currency: returnCurrency, creditMinor: gross.minor },
+            { accountCode: ACCOUNT_CODES.SALES_RETURNS, currency: returnCurrency!, debitMinor: net.minor },
+            { accountCode: ACCOUNT_CODES.VAT_PAYABLE, currency: returnCurrency!, debitMinor: vat.minor, memo: 'Reduces VAT payable — the sale is unwinding' },
+            { accountCode: ACCOUNT_CODES.CUSTOMER_REFUNDS_PAYABLE, currency: returnCurrency!, creditMinor: gross.minor },
           ];
 
           await postJournalEntry(tx, {
