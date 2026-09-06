@@ -1,8 +1,27 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { EGYPT_VAT_BP, currency, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
 import { orderItems } from './schema';
 import { ACCOUNT_CODES, postJournalEntry, type JournalLineInput } from './ledger';
 import type { DbTx } from './index';
+
+/** Locks the order until transaction end, returning the status this update replaced. */
+export async function transitionOrderStatus(
+    tx: Pick<DbTx, 'execute'>,
+    input: { orgId: string; orderId: string; newStatus: string },
+): Promise<{ previousStatus: string } | null> {
+    const [row] = await tx.execute<{ previous_status: string }>(sql`
+        WITH before AS (
+            SELECT status FROM orders
+            WHERE id = ${input.orderId} AND org_id = ${input.orgId}
+            FOR UPDATE
+        )
+        UPDATE orders SET status = ${input.newStatus}, updated_at = now()
+        FROM before
+        WHERE orders.id = ${input.orderId} AND orders.org_id = ${input.orgId}
+        RETURNING before.status AS previous_status
+    `);
+    return row ? { previousStatus: row.previous_status } : null;
+}
 
 /**
  * Books revenue, VAT and COGS for an order that has just become `delivered`.

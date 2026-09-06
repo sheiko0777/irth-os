@@ -9,6 +9,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
   IdempotencyError,
+  ACCOUNT_CODES,
+  accounts,
+  journalEntries,
+  journalLines,
+  transitionOrderStatus,
+  postOrderDeliveredEntry,
   fingerprint,
   inventoryItems,
   inventoryDiscrepancies,
@@ -45,6 +51,47 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await closeTestDb();
+});
+
+describe('order delivery — concurrent status transitions', () => {
+  it('books one entry and one sales revenue line for concurrent deliveries', async () => {
+    const [order] = await testDb.insert(orders).values({
+      orgId: orgA, orderNumber: `DELIVERY-${Date.now()}`,
+      status: 'shipped', totalAmountMinor: 11400n, currency: 'EGP',
+    }).returning();
+
+    // Every caller deliberately shares the stale shipped order, as the routes do.
+    const results = await Promise.allSettled(Array.from({ length: 20 }, () =>
+      withOrgContext(testDb, orgA, async (tx) => {
+        const transition = await transitionOrderStatus(tx, {
+          orgId: orgA, orderId: order.id, newStatus: 'delivered',
+        });
+        if (!transition) throw new Error('order_not_found');
+        await postOrderDeliveredEntry(tx, {
+          orgId: orgA, order, previousStatus: transition.previousStatus, newStatus: 'delivered',
+        });
+        return transition.previousStatus;
+      }),
+    ));
+    expect(results.filter((r) => r.status === 'rejected')).toEqual([]);
+    expect(results.filter((r) => r.status === 'fulfilled' && r.value === 'shipped')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'fulfilled' && r.value === 'delivered')).toHaveLength(19);
+
+    const entries = await testDb.select().from(journalEntries).where(and(
+      eq(journalEntries.orgId, orgA), eq(journalEntries.sourceTable, 'orders'),
+      eq(journalEntries.sourceId, order.id),
+    ));
+    expect(entries).toHaveLength(1);
+    const revenue = await testDb.select({ creditMinor: journalLines.creditMinor }).from(journalLines)
+      .innerJoin(journalEntries, eq(journalLines.entryId, journalEntries.id))
+      .innerJoin(accounts, eq(journalLines.accountId, accounts.id))
+      .where(and(
+        eq(journalLines.orgId, orgA), eq(journalEntries.orgId, orgA), eq(accounts.orgId, orgA),
+        eq(journalEntries.sourceTable, 'orders'), eq(journalEntries.sourceId, order.id),
+        eq(accounts.code, ACCOUNT_CODES.SALES_REVENUE),
+      ));
+    expect(revenue).toEqual([{ creditMinor: 10000n }]);
+  });
 });
 
 describe('withIdempotency', () => {

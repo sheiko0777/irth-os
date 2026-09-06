@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent, postOrderDeliveredEntry } from '@irth/db';
+import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent, postOrderDeliveredEntry, transitionOrderStatus } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { verifyHmac } from '../../middlewares/verifyWebhook';
 
@@ -113,12 +113,12 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
 
     const [order] = await tx.select().from(orders)
       .where(and(eq(orders.id, shipment.orderId), eq(orders.orgId, shipment.orgId)));
-    if (!order || order.status === newOrderStatus) return null;
-
-    const [row] = await tx.update(orders)
-      .set({ status: newOrderStatus, updatedAt: new Date() })
-      .where(and(eq(orders.id, order.id), eq(orders.orgId, order.orgId)))
-      .returning();
+    if (!order) return null;
+    const transition = await transitionOrderStatus(tx, {
+      orgId: shipment.orgId, orderId: order.id, newStatus: newOrderStatus,
+    });
+    if (!transition || transition.previousStatus === newOrderStatus) return null;
+    const { previousStatus } = transition;
 
     // userId: null throughout this file — a webhook has no authenticated
     // user, and audit_log.user_id is nullable for exactly this reason.
@@ -128,7 +128,7 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
       action: 'BOSTA_WEBHOOK_STATUS_UPDATE',
       tableName: 'orders',
       recordId: order.id,
-      changes: { oldStatus: order.status, newStatus: newOrderStatus, bostaState },
+      changes: { oldStatus: previousStatus, newStatus: newOrderStatus, bostaState },
     });
 
     // Same transaction as the status change — this replaces what used to be
@@ -137,8 +137,7 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     // identical fix for the full reasoning: on Workers, an un-awaited
     // promise not registered with waitUntil can be killed the instant the
     // response returns, so the ETA submission could silently never run.
-    // `order.status !== newOrderStatus` is already guaranteed by the guard
-    // above (`row` only exists on a genuine transition).
+    // The locked previousStatus comparison above guarantees a genuine transition.
     if (newOrderStatus === 'delivered') {
       await emitOutboxEvent(tx, { orgId: order.orgId, eventType: 'eta.invoice.issue', payload: { orgId: order.orgId, orderId: order.id } });
     }
@@ -153,12 +152,12 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     await postOrderDeliveredEntry(tx, {
       orgId: order.orgId,
       order,
-      previousStatus: order.status,
+      previousStatus,
       newStatus: newOrderStatus,
       createdBy: null,
     });
 
-    return row;
+    return transition;
   });
 
   return c.json({ data: { success: true }, error: null, meta: null });
