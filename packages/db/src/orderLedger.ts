@@ -7,12 +7,16 @@ import type { DbTx } from './index';
 /** Locks the order until transaction end, returning the status this update replaced. */
 export async function transitionOrderStatus(
     tx: Pick<DbTx, 'execute'>,
-    input: { orgId: string; orderId: string; newStatus: string },
+    input: { orgId: string; orderId: string; newStatus: string; onlyIfPreviousStatusIn?: string[] },
 ): Promise<{ previousStatus: string } | null> {
+    const statusCondition = input.onlyIfPreviousStatusIn && input.onlyIfPreviousStatusIn.length > 0
+        ? sql`AND status IN (${sql.join(input.onlyIfPreviousStatusIn.map(s => sql`${s}`), sql`, `)})`
+        : sql``;
+
     const [row] = await tx.execute<{ previous_status: string }>(sql`
         WITH before AS (
             SELECT status FROM orders
-            WHERE id = ${input.orderId} AND org_id = ${input.orgId}
+            WHERE id = ${input.orderId} AND org_id = ${input.orgId} ${statusCondition}
             FOR UPDATE
         )
         UPDATE orders SET status = ${input.newStatus}, updated_at = now()

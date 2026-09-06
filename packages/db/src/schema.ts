@@ -206,3 +206,4 @@ export const activityLog = pgTable('activity_log', {
   meta: jsonb('meta'),
   createdAt: timestamp('created_at').defaultNow(),
 });
+export * from './schema/index';
