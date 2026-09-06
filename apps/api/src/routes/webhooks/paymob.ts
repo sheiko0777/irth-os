@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db } from '../../db';
-import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus } from '@irth/db';
+import { orders, auditLog, paymobWebhookDeliveries } from '@irth/db';
+import { transitionOrderStatus } from '@irth/db/src/orderLedger';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -111,18 +112,8 @@ paymobRoute.post('/', async (c: Context) => {
   }
 
   // Amount/currency check
-  // Compare amount and currency. Both must match. amount_cents arrives as a
-  // JSON number (float-precision) while totalAmountMinor is an exact bigint —
-  // comparing via String() coerces both through Number's lossy range instead
-  // of comparing the exact integers, so this converts amount_cents to a
-  // BigInt explicitly. A non-integer/malformed amount_cents is itself a
-  // mismatch, not a thrown error.
-  let isAmountMatch: boolean;
-  try {
-    isAmountMatch = BigInt(obj.amount_cents) === order.totalAmountMinor;
-  } catch {
-    isAmountMatch = false;
-  }
+  // Compare amount and currency. Both must match.
+  const isAmountMatch = String(obj.amount_cents) === String(order.totalAmountMinor);
   const isCurrencyMatch = typeof obj.currency === 'string' && obj.currency.toLowerCase() === (order.currency || '').toLowerCase();
 
   if (!isAmountMatch || !isCurrencyMatch) {

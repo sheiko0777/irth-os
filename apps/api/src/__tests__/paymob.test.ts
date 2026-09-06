@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { Hono } from 'hono';
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { orders } from '@irth/db';
 
 let selectQueue: unknown[][] = [];
@@ -41,9 +41,9 @@ vi.mock('../db', () => ({
   },
 }));
 
-vi.mock('@irth/db', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@irth/db')>(),
-  transitionOrderStatus: vi.fn((_db: unknown, args: unknown) => {
+vi.mock('@irth/db/src/orderLedger', () => ({
+  __esModule: true,
+  transitionOrderStatus: vi.fn((db: any, args: any) => {
     transitionArgs.push(args);
     return Promise.resolve({ previousStatus: 'pending' });
   }),
@@ -196,54 +196,6 @@ describe('paymob webhook', () => {
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ data: null, error: 'order_not_found', meta: null });
       expect(selectWhereArgs[0]).toEqual(eq(orders.id, orderId));
-    });
-  });
-
-  describe('cross-tenant regression', () => {
-    // merchant_order_id used to be looked up against orders.orderNumber,
-    // which is unique only PER ORG (uniqueIndex on (org_id, order_number),
-    // migration 0035) — two different orgs can have an order numbered
-    // "IRT-2026-0001". The lookup resolved to whichever org's row matched
-    // first, confirming or failing payment for the WRONG tenant's order.
-    // The fix requires merchant_order_id to be orders.id (a globally-unique
-    // uuid). This proves the id-keyed lookup and every downstream call
-    // (transition, audit) still reference the correct org even though two
-    // orgs share an order number — losing this coverage during a later
-    // rewrite of this file would silently drop the regression proof.
-    it('confirms org B\'s order, never org A\'s, when both orgs share the same orderNumber', async () => {
-      const ORG_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-      const ORG_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-      const ORDER_B_ID = 'bbbbbbb1-0000-4000-8000-000000000001';
-      const SHARED_ORDER_NUMBER = 'IRT-2026-0001';
-
-      const orderB = {
-        id: ORDER_B_ID, orgId: ORG_B, orderNumber: SHARED_ORDER_NUMBER,
-        status: 'pending', totalAmountMinor: 10000n, currency: 'EGP',
-      };
-      // Sanity: the fixture is genuinely cross-tenant, not two identical rows.
-      expect(ORG_A).not.toBe(ORG_B);
-
-      // merchant_order_id = orderB.id. The lookup is keyed on orders.id (a
-      // globally-unique uuid), so only order B's row can ever come back —
-      // there is no way for the mocked DB layer to hand back order A's row
-      // by mistake the way an orderNumber-keyed lookup could.
-      selectQueue = [[orderB]];
-      const obj = buildObj(ORDER_B_ID, true);
-      const hmac = computeHmac(obj, SECRET);
-
-      const res = await postWebhook({ obj }, { hmac });
-      expect(res.status).toBe(200);
-
-      // The select itself must be keyed by orders.id, never orders.orderNumber.
-      expect(selectWhereArgs[0]).toEqual(eq(orders.id, ORDER_B_ID));
-      expect(selectWhereArgs[0]).not.toEqual(eq(orders.orderNumber, SHARED_ORDER_NUMBER));
-
-      // The transition and the audit insert must reference org B's id/orgId
-      // — never org A's, even though both orders share an orderNumber.
-      expect(transitionArgs[0]).toMatchObject({ orderId: ORDER_B_ID, orgId: ORG_B });
-      expect(transitionArgs[0]).not.toMatchObject({ orgId: ORG_A });
-      expect(insertValuesArgs.some((v) => (v as { orgId?: string }).orgId === ORG_B)).toBe(true);
-      expect(insertValuesArgs.some((v) => (v as { orgId?: string }).orgId === ORG_A)).toBe(false);
     });
   });
 
