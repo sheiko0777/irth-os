@@ -21,13 +21,3 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "paymob_webhook_deliveries_org_transaction_idx" ON "paymob_webhook_deliveries" ("org_id", "transaction_id");
-
---> statement-breakpoint
-ALTER TABLE "paymob_webhook_deliveries" ENABLE ROW LEVEL SECURITY;
---> statement-breakpoint
-ALTER TABLE "paymob_webhook_deliveries" FORCE ROW LEVEL SECURITY;
---> statement-breakpoint
-CREATE POLICY "tenant_isolation" ON "paymob_webhook_deliveries"
-  AS PERMISSIVE FOR ALL
-  TO public
-  USING ("org_id" = current_setting('app.current_org_id', true)::uuid);

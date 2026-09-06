@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, jsonb, uniqueIndex, pgPolicy } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { organizations, orders } from "../schema";
 
 export const paymobWebhookDeliveries = pgTable("paymob_webhook_deliveries", {
@@ -11,10 +11,4 @@ export const paymobWebhookDeliveries = pgTable("paymob_webhook_deliveries", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   orgTransactionUnique: uniqueIndex("paymob_webhook_deliveries_org_transaction_idx").on(table.orgId, table.transactionId),
-  tenantIsolation: pgPolicy("tenant_isolation", {
-    as: 'permissive',
-    for: 'all',
-    to: 'public',
-    using: require('drizzle-orm').sql`"org_id" = current_setting('app.current_org_id', true)::uuid`,
-  }),
-})).enableRLS();
+}));
