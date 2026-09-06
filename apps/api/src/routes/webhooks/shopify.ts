@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import { getDb, getEnv } from '../../db';
 import {
   orders, orderItems, customers, productVariants, inventoryItems, inventoryMovements,
-  inventoryDiscrepancies, orgMembers, notifications,
+  inventoryDiscrepancies, inventoryLevelDiscrepancies, orgMembers, notifications,
   shopifyConnections, shopifyWebhookDeliveries,
   withOrgContext, withAudit, jsonSafe,
   nextDocumentNumber, formatDocumentNumber,
@@ -735,7 +735,7 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
   const { orgId } = resolved;
 
   const bodyRaw = c.get('rawBody') as string;
-  const payload = parseWebhookBody<{ inventory_item_id: number | string; available: number }>(bodyRaw);
+  const payload = parseWebhookBody<{ inventory_item_id: number | string; location_id: number; available: number; updated_at: string }>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
   const delivery = await claimDelivery(db, resolved, c, 'inventory_levels/update', payload);
   if (delivery.kind === 'processed') {
@@ -757,35 +757,55 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
   }
 
   try {
-    await withOrgContext(db, orgId, async (tx) => {
+    const skipped = await withOrgContext(db, orgId, async (tx) => {
+    const [connection] = resolved.connectionId
+      ? await tx.select({ inventoryLocationId: shopifyConnections.inventoryLocationId })
+          .from(shopifyConnections)
+          .where(and(eq(shopifyConnections.orgId, orgId), eq(shopifyConnections.id, resolved.connectionId)))
+      : [];
+    // The picker stores a GID; this webhook topic sends a numeric location ID.
+    if (!connection?.inventoryLocationId ||
+        connection.inventoryLocationId !== shopifyGid('Location', payload.location_id)) {
+      if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
+      return 'location_not_selected' as const;
+    }
+
+    const eventAt = new Date(payload.updated_at);
+    if (!Number.isFinite(eventAt.getTime())) throw new Error('Invalid Shopify inventory updated_at');
+
     const [item] = await tx.select().from(inventoryItems)
-      .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)));
+      .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id))).for('update');
 
     if (!item) {
       if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
       return;
     }
 
-    const delta = payload.available - item.quantity;
-    if (delta === 0) {
+    // Serialize freshness checks with other webhook and IRTH stock writes.
+    if (item.lastShopifyInventoryEventAt && eventAt <= item.lastShopifyInventoryEventAt) {
       if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
-      return;
+      return 'stale_event' as const;
     }
 
+    // Matching reports also advance freshness, without touching stock or updatedAt.
     await tx.update(inventoryItems)
-      .set({ quantity: payload.available, updatedAt: new Date() })
-      .where(eq(inventoryItems.id, item.id));
+      .set({ lastShopifyInventoryEventAt: eventAt })
+      .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.id, item.id)));
 
-    await tx.insert(inventoryMovements).values({
-      orgId,
-      itemId: item.id,
-      type: 'adjustment',
-      quantity: delta,
-      note: 'Shopify inventory_levels/update (edited directly in Shopify)',
-    });
+    if (payload.available !== item.quantity) {
+      await tx.insert(inventoryLevelDiscrepancies).values({
+        orgId,
+        variantId: variant.id,
+        locationId: connection.inventoryLocationId,
+        irthQuantity: item.quantity,
+        shopifyQuantity: payload.available,
+        eventAt,
+      });
+    }
 
     if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
   });
+    if (skipped) return c.json({ data: { skipped }, error: null, meta: null });
   } catch (err) {
     if (delivery.kind !== 'unrecorded') await markDeliveryFailed(db, delivery.deliveryId, err);
     throw err;

@@ -13,6 +13,8 @@ export const inventoryItems = pgTable("inventory_items", {
   // Weighted-average cost per unit, minor units. NULL until a receipt with a
   // known unit cost first updates it (0039) — see packages/db/src/costing.ts.
   averageCostMinor: bigint("average_cost_minor", { mode: 'bigint' }),
+  // Shopify inventory_levels/update.updated_at, independent of IRTH stock edits.
+  lastShopifyInventoryEventAt: timestamp('last_shopify_inventory_event_at', { withTimezone: true }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -28,3 +28,21 @@ export const inventoryDiscrepancies = pgTable('inventory_discrepancies', {
   orgIdIdx: index('inventory_discrepancies_org_id_idx').on(table.orgId),
   orgIdStatusIdx: index('inventory_discrepancies_org_id_status_idx').on(table.orgId, table.status),
 }));
+
+/** External inventory reports never change IRTH's authoritative stock. */
+export const inventoryLevelDiscrepancies = pgTable('inventory_level_discrepancies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
+  variantId: uuid('variant_id').notNull().references(() => productVariants.id),
+  locationId: text('location_id').notNull(),
+  irthQuantity: integer('irth_quantity').notNull(),
+  shopifyQuantity: integer('shopify_quantity').notNull(),
+  eventAt: timestamp('event_at', { withTimezone: true }).notNull(),
+  status: discrepancyStatusEnum('status').notNull().default('open'),
+  resolvedBy: text('resolved_by'),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  orgIdIdx: index('inventory_level_discrepancies_org_id_idx').on(table.orgId),
+  orgIdStatusIdx: index('inventory_level_discrepancies_org_id_status_idx').on(table.orgId, table.status),
+}));
