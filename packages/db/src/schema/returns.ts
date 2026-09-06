@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, uuid, bigint, integer, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { organizations } from '../schema';
+import { organizations, orderItems } from '../schema';
 
 export const orderReturns = pgTable('order_returns', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -36,7 +36,7 @@ export const returnItems = pgTable('return_items', {
   // but both exist in the database.
   orgId: uuid('org_id').notNull().references(() => organizations.id),
   returnId: uuid('return_id').notNull().references(() => orderReturns.id, { onDelete: 'cascade' }),
-  orderItemId: uuid('order_item_id'),
+  orderItemId: uuid('order_item_id').references(() => orderItems.id),
   productName: text('product_name').notNull(),
   variantName: text('variant_name'),
   quantity: integer('quantity').notNull().default(1),

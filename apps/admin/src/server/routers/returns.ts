@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, type JournalLineInput } from '@irth/db';
-import { EGP, EGYPT_VAT_BP, fromMinor, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, type JournalLineInput } from '@irth/db';
+import { EGP, EGYPT_VAT_BP, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, ne } from 'drizzle-orm';
 
 export const returnsRouter = router({
@@ -82,10 +82,8 @@ export const returnsRouter = router({
       resolutionType: z.enum(['refund', 'exchange', 'store_credit', 'none']).default('none'),
       notes: z.string().optional(),
       items: z.array(z.object({
-        productName: z.string(),
-        variantName: z.string().optional(),
-        quantity: z.number().min(1),
-        unitPrice: z.string().optional(),
+        orderItemId: z.string().uuid(),
+        quantity: z.number().int().min(1),
         condition: z.enum(['new', 'good', 'damaged', 'unknown']).optional()
       }))
     }))
@@ -96,6 +94,32 @@ export const returnsRouter = router({
       // second insert left a return with no items — indistinguishable from a
       // genuinely empty return, and its refund total silently reads as zero.
       const createdReturn = await ctx.withOrg(async (tx) => {
+        const quantities = new Map<string, number>();
+        for (const item of input.items) {
+          quantities.set(item.orderItemId, (quantities.get(item.orderItemId) ?? 0) + item.quantity);
+        }
+        const lines = new Map<string, { productName: string; variantName: string; unitPriceMinor: bigint }>();
+        // Stable lock order avoids deadlocks across overlapping multi-line requests.
+        // Hold each sold line until commit; sum only AFTER acquiring its lock.
+        for (const orderItemId of [...quantities.keys()].sort()) {
+          const [line] = await tx.select({
+            id: orderItems.id, quantity: orderItems.quantity,
+            unitPriceMinor: orderItems.priceMinor,
+            productName: products.name, variantName: productVariants.name,
+          }).from(orderItems)
+            .innerJoin(orders, and(eq(orders.id, orderItems.orderId), eq(orders.orgId, ctx.orgId)))
+            .innerJoin(productVariants, and(eq(productVariants.id, orderItems.variantId), eq(productVariants.orgId, ctx.orgId)))
+            .innerJoin(products, and(eq(products.id, productVariants.productId), eq(products.orgId, ctx.orgId)))
+            .where(and(eq(orderItems.id, orderItemId), eq(orderItems.orderId, input.orderId), eq(orderItems.orgId, ctx.orgId)))
+            .for('update', { of: orderItems });
+          if (!line) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Order item not found in this order' });
+          const [prior] = await tx.select({ quantity: sum(returnItems.quantity) }).from(returnItems)
+            .where(and(eq(returnItems.orderItemId, orderItemId), eq(returnItems.orgId, ctx.orgId)));
+          if (Number(prior?.quantity ?? 0) + quantities.get(orderItemId)! > line.quantity) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Returned quantity exceeds ordered quantity' });
+          }
+          lines.set(orderItemId, { productName: line.productName, variantName: line.variantName, unitPriceMinor: line.unitPriceMinor });
+        }
         // Claimed from the tenant's counter, not counted. The old
         // `count(*) + 1` was read-then-write: at READ COMMITTED two concurrent
         // creates both saw N and both built RMA-{N+1}. The row lock inside
@@ -121,13 +145,9 @@ export const returnsRouter = router({
             // the parent return so the two can never disagree.
             orgId: ctx.orgId,
             returnId: created.id,
-            productName: item.productName,
-            variantName: item.variantName,
+            orderItemId: item.orderItemId,
+            ...lines.get(item.orderItemId)!,
             quantity: item.quantity,
-            unitPriceMinor:
-              item.unitPrice === undefined || item.unitPrice === null
-                ? null
-                : parseDecimal(String(item.unitPrice)).minor,
             condition: item.condition,
           }));
           await tx.insert(returnItems).values(itemsToInsert);
@@ -264,39 +284,43 @@ export const returnsRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const returnObj = await db.select().from(orderReturns).where(and(eq(orderReturns.id, input.returnId), eq(orderReturns.orgId, ctx.orgId))).limit(1);
-      if (returnObj.length === 0) {
-        throw new Error('Not found');
-      }
-
-      const [item] = await db.select().from(returnItems).where(eq(returnItems.id, input.itemId));
-      if (!item || item.returnId !== input.returnId) {
-        throw new Error('Item not found');
-      }
-
-      // Idempotency guard: restocking is additive, so a second call would
-      // invent stock that never came back. The `restock` flag is the record
-      // of "this item's units already went back on the shelf".
-      if (item.restock) {
-        return { data: { restocked: false, alreadyRestocked: true }, error: null, meta: null };
-      }
-
-      // Return lines only carry product/variant NAMES, so inventory can only be
-      // resolved through orderItemId -> orderItems.variantId. Without that link
-      // there is no variant to credit: flag the line and write nothing, rather
-      // than guessing at a match by name.
       const result = await ctx.withOrg(async (tx) => {
-        await tx.update(returnItems).set({ restock: true })
-          .where(and(eq(returnItems.id, input.itemId), eq(returnItems.orgId, ctx.orgId)));
+        const [returnObj] = await tx.select().from(orderReturns)
+          .where(and(eq(orderReturns.id, input.returnId), eq(orderReturns.orgId, ctx.orgId))).limit(1);
+        if (!returnObj) throw new Error('Not found');
+        const [existing] = await tx.select().from(returnItems)
+          .where(and(eq(returnItems.id, input.itemId), eq(returnItems.orgId, ctx.orgId), eq(returnItems.returnId, input.returnId)));
+        if (!existing) throw new Error('Item not found');
+
+        // The conditional UPDATE serializes retries before any stock or ledger effects.
+        const [item] = await tx.update(returnItems).set({ restock: true })
+          .where(and(eq(returnItems.id, input.itemId), eq(returnItems.orgId, ctx.orgId),
+            eq(returnItems.returnId, input.returnId), eq(returnItems.restock, false)))
+          .returning();
+        if (!item) return { restocked: false, alreadyRestocked: true };
 
         if (!item.orderItemId) {
           return { restocked: false, reason: 'no_order_item_link' as const };
         }
 
         const [orderItem] = await tx.select().from(orderItems)
-          .where(eq(orderItems.id, item.orderItemId)).limit(1);
+          .where(and(eq(orderItems.id, item.orderItemId), eq(orderItems.orgId, ctx.orgId), eq(orderItems.orderId, returnObj.orderId))).limit(1);
         if (!orderItem?.variantId) {
           return { restocked: false, reason: 'no_variant' as const };
+        }
+
+        // NULL is an unknown cost basis; zero has no financial amount to reverse.
+        if (orderItem.costMinor !== null && orderItem.costMinor > 0n) {
+          const cost = multiply(fromMinor(orderItem.costMinor), item.quantity);
+          await postJournalEntry(tx, {
+            orgId: ctx.orgId, journalType: 'sales',
+            description: `Return restocked - ${returnObj.returnNumber}`,
+            sourceTable: 'return_items', sourceId: item.id, createdBy: ctx.userId,
+            lines: [
+              { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: cost.minor },
+              { accountCode: ACCOUNT_CODES.COGS, creditMinor: cost.minor },
+            ],
+          });
         }
 
         const [invItem] = await tx.select().from(inventoryItems)
@@ -306,7 +330,8 @@ export const returnsRouter = router({
           return { restocked: false, reason: 'no_inventory_item' as const };
         }
 
-        await tx.update(inventoryItems)
+        const saleable = item.condition === 'new' || item.condition === 'good';
+        if (saleable) await tx.update(inventoryItems)
           .set({ quantity: sql`${inventoryItems.quantity} + ${item.quantity}`, updatedAt: new Date() })
           .where(and(eq(inventoryItems.id, invItem.id), eq(inventoryItems.orgId, ctx.orgId)));
 
@@ -315,9 +340,10 @@ export const returnsRouter = router({
         await tx.insert(inventoryMovements).values({
           orgId: ctx.orgId,
           itemId: invItem.id,
-          type: 'in',
+          type: saleable ? 'in' : 'adjustment',
           quantity: item.quantity,
-          note: `Return restock ${input.returnId}`,
+          note: saleable ? `Return restock ${input.returnId}`
+            : `Return restock ${input.returnId} - condition: ${item.condition ?? 'unknown'}, held out of saleable stock, no quarantine location configured`,
         });
 
         await withAudit(
