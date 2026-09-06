@@ -11,6 +11,7 @@ import {
 } from '@irth/db';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
+import { UnsupportedCurrencyError, assertSupportedCurrency } from '@irth/domain';
 
 /**
  * Inbound half of the Shopify sync (the dashboard-owns-catalog outbound half
@@ -286,6 +287,19 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
 
   const status = mapFinancialStatusToOrderStatus(payload.financial_status, payload.cancelled_at);
 
+  let validatedCurrency: string;
+  try {
+    validatedCurrency = assertSupportedCurrency((payload.currency || 'EGP').slice(0, 3).toUpperCase());
+  } catch (err) {
+    if (err instanceof UnsupportedCurrencyError) {
+      if (delivery.kind !== 'unrecorded') await markDeliveryFailed(db, delivery.deliveryId, err);
+      // Return 200 so Shopify doesn't retry a permanently unsupported currency order.
+      // This matches the "we understood the webhook but can't safely process it" quarantine pattern.
+      return c.json({ data: { skipped: 'unsupported_currency', message: err.message }, error: null, meta: null });
+    }
+    throw err;
+  }
+
   let result;
   try {
     result = await withOrgContext(db, orgId, async (tx) => {
@@ -442,7 +456,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
         orderNumber,
         status,
         totalAmountMinor: totalMinor,
-        currency: (payload.currency || 'EGP').slice(0, 3).toUpperCase(),
+        currency: validatedCurrency,
         customerId,
         shopifyOrderId,
       }).returning();

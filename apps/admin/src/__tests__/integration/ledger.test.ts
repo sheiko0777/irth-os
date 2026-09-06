@@ -157,8 +157,8 @@ describe('reverseJournalEntry — the only correction mechanism', () => {
       journalType: 'general',
       description: 'original entry',
       lines: [
-        { accountCode: ACCOUNT_CODES.CASH, debitMinor: 1000n },
-        { accountCode: ACCOUNT_CODES.SALES_REVENUE, creditMinor: 1000n },
+        { accountCode: ACCOUNT_CODES.CASH, currency: "EGP", debitMinor: 1000n },
+        { accountCode: ACCOUNT_CODES.SALES_REVENUE, currency: "EGP", creditMinor: 1000n },
       ],
     }));
 
@@ -194,23 +194,23 @@ describe('trial balance', () => {
       await postJournalEntry(tx, {
         orgId: org2.id, journalType: 'sales', description: 'sale 1',
         lines: [
-          { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, debitMinor: 1140n },
-          { accountCode: ACCOUNT_CODES.SALES_REVENUE, creditMinor: 1000n },
-          { accountCode: ACCOUNT_CODES.VAT_PAYABLE, creditMinor: 140n },
+          { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, currency: "EGP", debitMinor: 1140n },
+          { accountCode: ACCOUNT_CODES.SALES_REVENUE, currency: "EGP", creditMinor: 1000n },
+          { accountCode: ACCOUNT_CODES.VAT_PAYABLE, currency: "EGP", creditMinor: 140n },
         ],
       });
       await postJournalEntry(tx, {
         orgId: org2.id, journalType: 'purchases', description: 'goods received',
         lines: [
-          { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: 500n },
-          { accountCode: ACCOUNT_CODES.ACCOUNTS_PAYABLE, creditMinor: 500n },
+          { accountCode: ACCOUNT_CODES.INVENTORY, currency: "EGP", debitMinor: 500n },
+          { accountCode: ACCOUNT_CODES.ACCOUNTS_PAYABLE, currency: "EGP", creditMinor: 500n },
         ],
       });
       await postJournalEntry(tx, {
         orgId: org2.id, journalType: 'cash', description: 'cod remitted',
         lines: [
-          { accountCode: ACCOUNT_CODES.BANK, debitMinor: 1140n },
-          { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, creditMinor: 1140n },
+          { accountCode: ACCOUNT_CODES.BANK, currency: "EGP", debitMinor: 1140n },
+          { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, currency: "EGP", creditMinor: 1140n },
         ],
       });
     });

@@ -82,8 +82,8 @@ describe('goods received → order delivered → pnl aggregation', () => {
         orgId, journalType: 'purchases', description: 'Goods received',
         sourceTable: 'purchase_orders', sourceId: invItem.id,
         lines: [
-          { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: 6000n },
-          { accountCode: ACCOUNT_CODES.ACCOUNTS_PAYABLE, creditMinor: 6000n },
+          { accountCode: ACCOUNT_CODES.INVENTORY, currency: "EGP", debitMinor: 6000n },
+          { accountCode: ACCOUNT_CODES.ACCOUNTS_PAYABLE, currency: "EGP", creditMinor: 6000n },
         ],
       });
     });
@@ -104,11 +104,11 @@ describe('goods received → order delivered → pnl aggregation', () => {
 
     await withOrgContext(testDb, orgId, async (tx) => {
       const lines: JournalLineInput[] = [
-        { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, debitMinor: gross.minor },
-        { accountCode: ACCOUNT_CODES.SALES_REVENUE, creditMinor: net.minor },
-        { accountCode: ACCOUNT_CODES.VAT_PAYABLE, creditMinor: vat.minor },
-        { accountCode: ACCOUNT_CODES.COGS, debitMinor: costMinor },
-        { accountCode: ACCOUNT_CODES.INVENTORY, creditMinor: costMinor },
+        { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, currency: "EGP", debitMinor: gross.minor },
+        { accountCode: ACCOUNT_CODES.SALES_REVENUE, currency: "EGP", creditMinor: net.minor },
+        { accountCode: ACCOUNT_CODES.VAT_PAYABLE, currency: "EGP", creditMinor: vat.minor },
+        { accountCode: ACCOUNT_CODES.COGS, currency: "EGP", debitMinor: costMinor },
+        { accountCode: ACCOUNT_CODES.INVENTORY, currency: "EGP", creditMinor: costMinor },
       ];
       await postJournalEntry(tx, {
         orgId, journalType: 'sales', description: 'Order delivered',
