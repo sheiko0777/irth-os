@@ -39,33 +39,46 @@ beforeEach(() => {
 });
 
 describe('returns.restock — idempotency', () => {
-  it('a second restock of the same item is a no-op (never re-enters the transaction)', async () => {
-    // 1st select -> the return row; 2nd select -> a line already restocked.
+  it('a second restock of the same item is a no-op (the atomic claim finds nothing to claim)', async () => {
+    // The idempotency guard moved INSIDE the transaction (F04): a plain
+    // pre-check read before ctx.withOrg was a TOCTOU race between two
+    // concurrent restock calls (both could read restock=false before either
+    // wrote it). The guard is now a single conditional
+    // `UPDATE ... WHERE restock = false RETURNING` — which requires entering
+    // the transaction to attempt it at all. Asserting "never re-enters the
+    // transaction" (the old invariant here) would now be asserting the very
+    // race this fix closes. What must still hold: entering the transaction
+    // is harmless when the claim is already taken — no physical or
+    // financial effect fires a second time.
+    // 1st select -> the return row; 2nd select -> the existing item (ownership check).
     mockDb.select = vi.fn()
-      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1' }]))
-      .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, restock: true, orderItemId: UUID }]));
-    // Spy on ctx.withOrg, not mockDb.transaction: the procedure now opens its
-    // transaction through the RLS-scoped runner, so asserting on the old seam
-    // would pass no matter what the code did.
+      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderId: UUID }]))
+      .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, orgId: 'org-1' }]));
+    // The claim's own UPDATE ... RETURNING finds no row: already restocked.
+    mockDb.update = vi.fn(() => chainOf([]));
     const withOrgSpy = vi.fn(withOrgMock);
 
     const res = await returnsRouter.createCaller(ctx(withOrgSpy)).restock({ returnId: UUID, itemId: UUID });
 
     expect(res.data).toMatchObject({ restocked: false, alreadyRestocked: true });
-    // The guard must short-circuit before any write — this is the whole fix.
-    expect(withOrgSpy).not.toHaveBeenCalled();
+    expect(withOrgSpy).toHaveBeenCalled();
+    // Exactly one UPDATE — the claim attempt itself, and nothing beyond it
+    // (no inventory quantity update, no ledger reversal).
+    expect(mockDb.update).toHaveBeenCalledTimes(1);
   });
 
   it('a first restock does enter the transaction', async () => {
     mockDb.select = vi.fn()
-      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1' }]))
-      .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, restock: false, orderItemId: null }]));
+      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderId: UUID }]))
+      .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, orgId: 'org-1' }]));
+    // The claim's own UPDATE ... RETURNING wins, returning the now-claimed row.
+    mockDb.update = vi.fn(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, orderItemId: null, condition: 'good' }]));
     const withOrgSpy = vi.fn(withOrgMock);
 
     const res = await returnsRouter.createCaller(ctx(withOrgSpy)).restock({ returnId: UUID, itemId: UUID });
 
     expect(withOrgSpy).toHaveBeenCalled();
-    // No orderItemId -> nothing to credit, but the line is still flagged.
+    // No orderItemId -> nothing to credit, but the line is still flagged as claimed.
     expect(res.data).toMatchObject({ restocked: false, reason: 'no_order_item_link' });
   });
 });

@@ -1,8 +1,21 @@
 import { EGP, zero } from '@irth/domain';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
+
+vi.mock('@irth/db', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@irth/db')>(),
+  db: mockDb,
+  postJournalEntry: vi.fn(),
+}));
+const { postJournalEntry, inventoryItems, inventoryMovements, ACCOUNT_CODES } = await import('@irth/db');
+
+function rows(value: unknown[]) {
+  const chain = mockDb.select();
+  chain.then = (resolve: (v: unknown) => void) => Promise.resolve(value).then(resolve);
+  return chain;
+}
 
 const { returnsRouter } = await import('@/server/routers/returns');
 
@@ -33,6 +46,7 @@ async function expectRejectsPastAuthz(p: Promise<unknown>) {
 }
 
 describe('returns', () => {
+  beforeEach(() => mockDb._reset());
   const caller = returnsRouter.createCaller(ctx('owner'));
 
   it('list rejects an invalid status filter with BAD_REQUEST', async () => {
@@ -90,6 +104,74 @@ describe('returns', () => {
     await expect(
       caller.restock({ returnId: 'ret-missing', itemId: 'item-1' })
     ).rejects.toThrow('Not found');
+  });
+
+  it('create rejects a line outside the requested order before inserting', async () => {
+    await expectCode(caller.create({
+      orderId: 'o-1', reason: 'other',
+      items: [{ orderItemId: '00000000-0000-4000-8000-000000000001', quantity: 1 }],
+    }), 'BAD_REQUEST');
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it.each([1, 2])('create bounds prior returns plus duplicate request lines (%s)', async (copies) => {
+    const line = rows([{ quantity: 2, productName: 'Widget', variantName: 'Default', unitPriceMinor: 100n }]);
+    const prior = rows([{ quantity: copies === 1 ? '2' : '1' }]);
+    mockDb.select.mockReturnValueOnce(line).mockReturnValueOnce(prior);
+    await expectCode(caller.create({
+      orderId: 'o-1', reason: 'other',
+      items: Array.from({ length: copies }, () => ({
+        orderItemId: '00000000-0000-4000-8000-000000000001', quantity: 1,
+      })),
+    }), 'BAD_REQUEST');
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(line.for).toHaveBeenCalledWith('update', expect.any(Object));
+  });
+
+  function restockFixture(condition: string, costMinor: bigint | null, claimed = true) {
+    const item = { id: 'item-1', returnId: 'ret-1', orderItemId: 'line-1', quantity: 2, condition };
+    const selections = [
+      rows([{ id: 'ret-1', orderId: 'o-1', returnNumber: 'RMA-1' }]),
+      rows([item]), rows([{ variantId: 'v-1', costMinor }]), rows([{ id: 'inv-1' }]),
+    ];
+    const claim = rows(claimed ? [item] : []);
+    for (const selection of selections) mockDb.select.mockReturnValueOnce(selection);
+    mockDb.update.mockReturnValueOnce(claim);
+  }
+
+  it.each(['damaged', 'unknown'])('holds %s stock out of saleable inventory but reverses cost', async (condition) => {
+    restockFixture(condition, 300n);
+    const result = await caller.restock({ returnId: 'ret-1', itemId: 'item-1' });
+    expect(result.data.restocked).toBe(true);
+    expect(mockDb.update).not.toHaveBeenCalledWith(inventoryItems);
+    expect(postJournalEntry).toHaveBeenCalledWith(mockDb, expect.objectContaining({
+      sourceTable: 'return_items', sourceId: 'item-1',
+      lines: [
+        { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: 600n },
+        { accountCode: ACCOUNT_CODES.COGS, creditMinor: 600n },
+      ],
+    }));
+    expect(mockDb.insert).toHaveBeenCalledWith(inventoryMovements);
+    const movement = mockDb.insert.mock.results[0].value;
+    expect(movement.values).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'adjustment', quantity: 2, note: expect.stringContaining('held out of saleable stock'),
+    }));
+  });
+
+  it('restocks physically with null cost without inventing a reversal', async () => {
+    restockFixture('good', null);
+    expect((await caller.restock({ returnId: 'ret-1', itemId: 'item-1' })).data.restocked).toBe(true);
+    expect(mockDb.update).toHaveBeenCalledWith(inventoryItems);
+    expect(postJournalEntry).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the conditional claim loses', async () => {
+    restockFixture('good', 300n, false);
+    expect((await caller.restock({ returnId: 'ret-1', itemId: 'item-1' })).data)
+      .toEqual({ restocked: false, alreadyRestocked: true });
+    expect(mockDb.update).not.toHaveBeenCalledWith(inventoryItems);
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(postJournalEntry).not.toHaveBeenCalled();
   });
 
   it('summary resolves with zeroed counters on an empty db', async () => {
