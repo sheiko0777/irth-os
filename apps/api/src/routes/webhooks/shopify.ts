@@ -70,38 +70,96 @@ async function resolveWebhookOrg(c: Context, db: ReturnType<typeof getDb>): Prom
   return legacyOrgId ? { orgId: legacyOrgId, connectionId: null } : null;
 }
 
+type DbOrTx = ReturnType<typeof getDb> | Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+
+type DeliveryClaim =
+  | { kind: 'new'; deliveryId: string }
+  | { kind: 'retry'; deliveryId: string }
+  | { kind: 'processed' }
+  // No durable dedup possible (legacy single-tenant path, or Shopify omitted
+  // the webhook-id header) — the caller's own existing per-handler checks
+  // (e.g. orders-create's `alreadySynced` lookup) are the real backstop.
+  | { kind: 'unrecorded' };
+
 /**
- * Idempotency + audit trail for the multi-tenant path, keyed on
+ * Durable inbox claim for one webhook delivery, keyed on
  * `(connectionId, webhookId)` — Shopify's own recommended dedup key
- * (`X-Shopify-Webhook-Id`), redelivered on retry. Insert-first: if the
- * unique index rejects it, this is a redelivery — the caller should treat it
- * as already-processed rather than re-running the handler. Returns `true` if
- * this delivery is new (caller should proceed), `false` if it's a repeat.
- * No-ops (returns `true`) on the legacy fallback path, which has no
- * connection row to record against and keeps its own existing per-handler
- * idempotency checks.
+ * (`X-Shopify-Webhook-Id`), redelivered on retry.
+ *
+ * Fix for a real defect (see the reviewed implementation plan's finding
+ * F01): the previous version of this function treated "a delivery row with
+ * this id already exists" as "already processed" — but the row is inserted
+ * BEFORE the business transaction runs, so a crash, timeout, or any error
+ * other than the orders-table's own unique-constraint race, landing between
+ * that insert and the transaction committing, left a delivery row on record
+ * with NOTHING actually done. On Shopify's automatic redelivery (same
+ * webhook id) the old code hit the (connectionId, webhookId) unique
+ * constraint immediately and returned early with `alreadyProcessed: true` —
+ * before ever reaching the caller's own order-existence check — so the order
+ * was silently lost forever; Shopify saw a 200 and stopped retrying.
+ *
+ * The schema already had `status`/`error`/`processedAt` columns for exactly
+ * this lifecycle (`packages/db/src/schema/shopify.ts`) — nothing here ever
+ * read or wrote them; a genuinely new delivery is inserted as `'received'`.
+ * A redelivery now looks up the EXISTING row's status: only `'processed'` is
+ * safe to short-circuit on. `'received'`/`'failed'` mean the business effect
+ * never durably completed, so the caller must reprocess, reusing the same
+ * row (via `markDeliveryProcessed`/`markDeliveryFailed`) rather than losing
+ * the attempt.
+ *
+ * The id is generated client-side (`crypto.randomUUID()`, native in Workers
+ * same as a browser) rather than read back via `.returning()` — this insert
+ * otherwise matches the prior version's shape exactly, so it stays
+ * compatible with every existing test's mock of a plain `insert(...).values(...)`.
  */
-async function recordDelivery(
+async function claimDelivery(
   db: ReturnType<typeof getDb>,
   resolved: ResolvedWebhookOrg,
   c: Context,
   topic: string,
   payload: unknown,
-): Promise<boolean> {
-  if (!resolved.connectionId) return true;
+): Promise<DeliveryClaim> {
+  if (!resolved.connectionId) return { kind: 'unrecorded' };
   const webhookId = c.req.header('x-shopify-webhook-id');
-  if (!webhookId) return true; // Nothing to dedup against — proceed, handler-level checks still apply.
+  if (!webhookId) return { kind: 'unrecorded' };
+
+  const deliveryId = crypto.randomUUID();
   try {
     await db.insert(shopifyWebhookDeliveries).values({
-      orgId: resolved.orgId, connectionId: resolved.connectionId, webhookId, topic,
-      payload: payload as object,
+      id: deliveryId, orgId: resolved.orgId, connectionId: resolved.connectionId, webhookId, topic,
+      payload: payload as object, status: 'received',
     });
+    await db.update(shopifyConnections).set({ lastWebhookAt: new Date() }).where(eq(shopifyConnections.id, resolved.connectionId));
+    return { kind: 'new', deliveryId };
   } catch (err) {
-    if ((err as { code?: string }).code === '23505') return false; // Redelivery, already recorded.
-    throw err;
+    if ((err as { code?: string }).code !== '23505') throw err;
   }
-  await db.update(shopifyConnections).set({ lastWebhookAt: new Date() }).where(eq(shopifyConnections.id, resolved.connectionId));
-  return true;
+
+  // Redelivery — decide based on durable state, not mere existence.
+  const [existing] = await db.select({ id: shopifyWebhookDeliveries.id, status: shopifyWebhookDeliveries.status })
+    .from(shopifyWebhookDeliveries)
+    .where(and(eq(shopifyWebhookDeliveries.connectionId, resolved.connectionId), eq(shopifyWebhookDeliveries.webhookId, webhookId)));
+  if (existing?.status === 'processed') return { kind: 'processed' };
+  return { kind: 'retry', deliveryId: existing?.id ?? '' };
+}
+
+async function markDeliveryProcessed(executor: DbOrTx, deliveryId: string): Promise<void> {
+  if (!deliveryId) return;
+  await executor.update(shopifyWebhookDeliveries)
+    .set({ status: 'processed', processedAt: new Date() })
+    .where(eq(shopifyWebhookDeliveries.id, deliveryId));
+}
+
+async function markDeliveryFailed(db: ReturnType<typeof getDb>, deliveryId: string, error: unknown): Promise<void> {
+  if (!deliveryId) return;
+  try {
+    await db.update(shopifyWebhookDeliveries)
+      .set({ status: 'failed', error: error instanceof Error ? error.message : String(error) })
+      .where(eq(shopifyWebhookDeliveries.id, deliveryId));
+  } catch {
+    // Best-effort — called from a catch block about to rethrow the real
+    // error; a failure writing this marker must never mask that error.
+  }
 }
 
 interface ShopifyLineItem {
@@ -205,7 +263,8 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<ShopifyOrderPayload>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
-  if (!(await recordDelivery(db, resolved, c, 'orders/create', payload))) {
+  const delivery = await claimDelivery(db, resolved, c, 'orders/create', payload);
+  if (delivery.kind === 'processed') {
     return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
   }
   const shopifyOrderId = shopifyGid('Order', payload.id);
@@ -217,6 +276,11 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
   const [alreadySynced] = await db.select({ id: orders.id }).from(orders)
     .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
   if (alreadySynced) {
+    // The order exists even though this exact delivery attempt's own row may
+    // not say 'processed' (a concurrent request created it, or a prior
+    // attempt crashed after inserting the order but before reaching the
+    // processed-marker below) — backfill it now that the truth is known.
+    await markDeliveryProcessed(db, delivery.kind === 'unrecorded' ? '' : delivery.deliveryId);
     return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
   }
 
@@ -443,6 +507,12 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       if (notification) await emitOutboxEvent(tx, { orgId, eventType, payload: notification });
     }
 
+    // Marked processed IN THE SAME transaction as the order/stock effect it
+    // describes — either both commit together, or neither does, so a crash
+    // here can never leave a 'processed' delivery row next to a missing
+    // order (or vice versa).
+    if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
+
     return { order: insertedOrder, unmatchedSkus };
     });
   } catch (err) {
@@ -455,8 +525,12 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
     if ((err as { code?: string }).code === '23505') {
       const [synced] = await db.select({ id: orders.id }).from(orders)
         .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
-      if (synced) return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
+      if (synced) {
+        if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(db, delivery.deliveryId);
+        return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
+      }
     }
+    if (delivery.kind !== 'unrecorded') await markDeliveryFailed(db, delivery.deliveryId, err);
     throw err;
   }
 
@@ -472,7 +546,8 @@ shopifyWebhookRoute.post('/orders-updated', verifyShopifyWebhook(), async (c: Co
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<ShopifyOrderPayload>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
-  if (!(await recordDelivery(db, resolved, c, 'orders/updated', payload))) {
+  const delivery = await claimDelivery(db, resolved, c, 'orders/updated', payload);
+  if (delivery.kind === 'processed') {
     return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
   }
   const shopifyOrderId = shopifyGid('Order', payload.id);
@@ -482,29 +557,40 @@ shopifyWebhookRoute.post('/orders-updated', verifyShopifyWebhook(), async (c: Co
   // orders/updated can arrive before orders/create has been processed (no
   // ordering guarantee across topics) — nothing to update yet is not an
   // error, just early; orders/create will pick up the current state when it
-  // lands.
+  // lands. Deliberately not marking this delivery 'processed' here — leaving
+  // it 'received' keeps it retryable rather than silently discarded.
   if (!existing) return c.json({ data: { skipped: 'order_not_found_yet' }, error: null, meta: null });
 
   const newStatus = mapFinancialStatusToOrderStatus(payload.financial_status, payload.cancelled_at);
   if (newStatus === existing.status) {
+    if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(db, delivery.deliveryId);
     return c.json({ data: { unchanged: true }, error: null, meta: null });
   }
 
-  const updated = await withOrgContext(db, orgId, (tx) => withAudit(tx, async () => {
-    const [row] = await tx.update(orders)
-      .set({ status: newStatus, updatedAt: new Date() })
-      .where(and(eq(orders.id, existing.id), eq(orders.orgId, orgId)))
-      .returning();
-    return row;
-  }, {
-    orgId,
-    userId: null,
-    action: 'SHOPIFY_ORDER_UPDATE',
-    tableName: 'orders',
-    changes: { oldStatus: existing.status, newStatus },
-  }));
-
-  return c.json({ data: jsonSafe(updated), error: null, meta: null });
+  try {
+    const updated = await withOrgContext(db, orgId, (tx) => withAudit(tx, async () => {
+      const [row] = await tx.update(orders)
+        .set({ status: newStatus, updatedAt: new Date() })
+        .where(and(eq(orders.id, existing.id), eq(orders.orgId, orgId)))
+        .returning();
+      return row;
+    }, {
+      orgId,
+      userId: null,
+      action: 'SHOPIFY_ORDER_UPDATE',
+      tableName: 'orders',
+      changes: { oldStatus: existing.status, newStatus },
+    }));
+    // A plain status update on an already-scoped order row is safely
+    // re-runnable (retrying it just sets the same status again), so marking
+    // processed just after commit — rather than inside the same
+    // transaction, like orders-create's stock-affecting path — is fine here.
+    if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(db, delivery.deliveryId);
+    return c.json({ data: jsonSafe(updated), error: null, meta: null });
+  } catch (err) {
+    if (delivery.kind !== 'unrecorded') await markDeliveryFailed(db, delivery.deliveryId, err);
+    throw err;
+  }
 });
 
 shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: Context) => {
@@ -516,7 +602,8 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<{ id: number | string }>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
-  if (!(await recordDelivery(db, resolved, c, 'orders/cancelled', payload))) {
+  const delivery = await claimDelivery(db, resolved, c, 'orders/cancelled', payload);
+  if (delivery.kind === 'processed') {
     return c.json({ data: { unchanged: true }, error: null, meta: null });
   }
   const shopifyOrderId = shopifyGid('Order', payload.id);
@@ -524,10 +611,17 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
   const [existing] = await db.select().from(orders)
     .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
   if (!existing || existing.status === 'cancelled') {
+    // Already cancelled (or never existed) — the order's own status is the
+    // real idempotency guard for the restock below, so this is safe
+    // regardless of this delivery row's state; mark it processed too so it
+    // stops showing as outstanding.
+    if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(db, delivery.deliveryId);
     return c.json({ data: { unchanged: true }, error: null, meta: null });
   }
 
-  const updated = await withOrgContext(db, orgId, (tx) => withAudit(tx, async () => {
+  let updated;
+  try {
+    updated = await withOrgContext(db, orgId, (tx) => withAudit(tx, async () => {
     const [row] = await tx.update(orders)
       .set({ status: 'cancelled', updatedAt: new Date() })
       .where(and(eq(orders.id, existing.id), eq(orders.orgId, orgId)))
@@ -569,6 +663,10 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
       });
     }
 
+    // Same transaction as the cancellation + restock — commits or rolls
+    // back together with the stock effect it describes.
+    if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
+
     return row;
   }, {
     orgId,
@@ -577,6 +675,10 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
     tableName: 'orders',
     changes: { oldStatus: existing.status, newStatus: 'cancelled' },
   }));
+  } catch (err) {
+    if (delivery.kind !== 'unrecorded') await markDeliveryFailed(db, delivery.deliveryId, err);
+    throw err;
+  }
 
   return c.json({ data: jsonSafe(updated), error: null, meta: null });
 });
@@ -594,13 +696,22 @@ shopifyWebhookRoute.post('/customers-upsert', verifyShopifyWebhook(), async (c: 
   // header comment) — the delivery-id dedup key already disambiguates
   // retries of the same event, so recording under one shared topic name here
   // is fine; `findOrCreateCustomer` is idempotent regardless.
-  if (!(await recordDelivery(db, resolved, c, 'customers/upsert', payload))) {
+  const delivery = await claimDelivery(db, resolved, c, 'customers/upsert', payload);
+  if (delivery.kind === 'processed') {
     return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
   }
 
-  const customerId = await withOrgContext(db, orgId, (tx) => findOrCreateCustomer(tx, orgId, payload));
-
-  return c.json({ data: { customerId }, error: null, meta: null });
+  try {
+    const customerId = await withOrgContext(db, orgId, async (tx) => {
+      const id = await findOrCreateCustomer(tx, orgId, payload);
+      if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
+      return id;
+    });
+    return c.json({ data: { customerId }, error: null, meta: null });
+  } catch (err) {
+    if (delivery.kind !== 'unrecorded') await markDeliveryFailed(db, delivery.deliveryId, err);
+    throw err;
+  }
 });
 
 shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), async (c: Context) => {
@@ -612,7 +723,8 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
   const bodyRaw = c.get('rawBody') as string;
   const payload = parseWebhookBody<{ inventory_item_id: number | string; available: number }>(bodyRaw);
   if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
-  if (!(await recordDelivery(db, resolved, c, 'inventory_levels/update', payload))) {
+  const delivery = await claimDelivery(db, resolved, c, 'inventory_levels/update', payload);
+  if (delivery.kind === 'processed') {
     return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
   }
   const shopifyInventoryItemId = shopifyGid('InventoryItem', payload.inventory_item_id);
@@ -622,17 +734,29 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
 
   // Not every Shopify inventory item is one this dashboard has pushed (e.g. a
   // product created directly in Shopify, outside the sync) — nothing to
-  // reconcile against, not an error.
-  if (!variant) return c.json({ data: { skipped: 'no_matching_variant' }, error: null, meta: null });
+  // reconcile against, not an error. A deliberate, valid terminal outcome,
+  // not a failure — mark processed so a redelivery of this same id doesn't
+  // re-run the (equally inconclusive) lookup.
+  if (!variant) {
+    if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(db, delivery.deliveryId);
+    return c.json({ data: { skipped: 'no_matching_variant' }, error: null, meta: null });
+  }
 
-  await withOrgContext(db, orgId, async (tx) => {
+  try {
+    await withOrgContext(db, orgId, async (tx) => {
     const [item] = await tx.select().from(inventoryItems)
       .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)));
 
-    if (!item) return;
+    if (!item) {
+      if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
+      return;
+    }
 
     const delta = payload.available - item.quantity;
-    if (delta === 0) return;
+    if (delta === 0) {
+      if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
+      return;
+    }
 
     await tx.update(inventoryItems)
       .set({ quantity: payload.available, updatedAt: new Date() })
@@ -645,7 +769,13 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
       quantity: delta,
       note: 'Shopify inventory_levels/update (edited directly in Shopify)',
     });
+
+    if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
   });
+  } catch (err) {
+    if (delivery.kind !== 'unrecorded') await markDeliveryFailed(db, delivery.deliveryId, err);
+    throw err;
+  }
 
   return c.json({ data: { synced: true }, error: null, meta: null });
 });
@@ -672,4 +802,5 @@ shopifyWebhookRoute.post('/app-uninstalled', verifyShopifyWebhook(), async (c: C
   return c.json({ data: { uninstalled: true }, error: null, meta: null });
 });
 
-export { shopifyWebhookRoute };
+export { shopifyWebhookRoute, claimDelivery, markDeliveryProcessed, markDeliveryFailed };
+export type { DeliveryClaim, ResolvedWebhookOrg };

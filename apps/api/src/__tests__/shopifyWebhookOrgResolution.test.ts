@@ -46,46 +46,77 @@ const CONNECTION_B = { id: 'conn-b', orgId: 'org-b' };
 
 let connectionsByDomain: Record<string, typeof CONNECTION_A | undefined> = {};
 let lastQueriedDomain = '';
+let lastWebhookIdHeader = '';
 let deliveryInsertCalls: Array<{ orgId: string; connectionId: string | null; webhookId: string }> = [];
 let seenWebhookIds = new Set<string>();
-// The handler issues exactly two `select().from().where()` calls in a fixed
-// order when it reaches this far: (1) resolveWebhookOrg's shopify_connections
-// lookup, (2) the product_variants match check. Distinguishing them by call
-// order rather than introspecting the table argument — a real Drizzle
-// pgTable's name lives behind a Symbol key, not a plain `.name` property, so
-// checking `table.name` here would silently never match either branch.
-let selectCallIndex = 0;
+// F01's fix (claimDelivery) adds a THIRD select — a redelivery's own
+// {id, status} lookup on shopify_webhook_deliveries — so call order is no
+// longer a safe way to distinguish these from each other or from the
+// product_variants check below. Branching on the `cols` argument passed to
+// `select(cols)` instead: resolveWebhookOrg's connection lookup always
+// passes {id, orgId}, claimDelivery's redelivery lookup always passes
+// {id, status}, and the product_variants check always calls bare
+// `select()` (cols undefined) — a real, stable shape difference, not an
+// ordering assumption.
+let deliveryStatusByKey = new Map<string, string>();
+function currentDeliveryKey(): string | null {
+  const conn = connectionsByDomain[lastQueriedDomain];
+  return conn ? `${conn.id}:${lastWebhookIdHeader}` : null;
+}
 
 vi.mock('../db', () => ({
   getDb: () => ({
-    select: vi.fn(() => ({
+    select: vi.fn((cols?: Record<string, unknown>) => ({
       from: vi.fn(() => ({
         where: vi.fn(() => {
-          const callIndex = selectCallIndex++;
-          if (callIndex === 0) {
+          if (cols === undefined) {
+            // The product_variants match check — always miss, so the
+            // handler returns right after this and never reaches
+            // withOrgContext, which this file deliberately never mocks.
+            return Promise.resolve([]);
+          }
+          if ('orgId' in cols) {
             // resolveWebhookOrg's connection lookup.
             const domain = lastQueriedDomain;
             return Promise.resolve(connectionsByDomain[domain] ? [connectionsByDomain[domain]] : []);
           }
-          // The product_variants match check — always miss, so the handler
-          // returns right after recordDelivery and never reaches
-          // withOrgContext, which this file deliberately never mocks.
-          return Promise.resolve([]);
+          // claimDelivery's own redelivery-status lookup (F01 fix) — only
+          // reached when the insert below hit the unique-constraint branch.
+          const key = currentDeliveryKey();
+          const status = key ? deliveryStatusByKey.get(key) : undefined;
+          return Promise.resolve(status ? [{ id: key, status }] : []);
         }),
       })),
     })),
     insert: vi.fn(() => ({
-      values: vi.fn((row: { orgId: string; connectionId: string | null; webhookId: string }) => {
+      values: vi.fn((row: { orgId: string; connectionId: string | null; webhookId: string; status?: string }) => {
         const key = `${row.connectionId}:${row.webhookId}`;
         if (seenWebhookIds.has(key)) {
           return Promise.reject(Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' }));
         }
         seenWebhookIds.add(key);
+        deliveryStatusByKey.set(key, row.status ?? 'received');
         deliveryInsertCalls.push(row);
         return Promise.resolve();
       }),
     })),
-    update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(() => Promise.resolve()) })) })),
+    // Two distinct callers hit `update` here: the `shopifyConnections.
+    // lastWebhookAt` bump inside claimDelivery's success path ({lastWebhookAt}
+    // patch — a harmless no-op below, same as before this fix) and
+    // markDeliveryProcessed/Failed's delivery-row update ({status, ...}
+    // patch) — distinguished the same way as the select branch above, by
+    // patch shape rather than which row/table was targeted.
+    update: vi.fn(() => ({
+      set: vi.fn((patch: Record<string, unknown>) => ({
+        where: vi.fn(() => {
+          if (patch && 'status' in patch) {
+            const key = currentDeliveryKey();
+            if (key) deliveryStatusByKey.set(key, patch.status as string);
+          }
+          return Promise.resolve();
+        }),
+      })),
+    })),
   }),
   getEnv: () => ({}),
 }));
@@ -131,7 +162,7 @@ function buildApp() {
 
 function post(shopDomain: string | undefined, webhookId: string | undefined) {
   lastQueriedDomain = shopDomain ?? '';
-  selectCallIndex = 0; // Reset per request, not per test — a test can post() more than once.
+  lastWebhookIdHeader = webhookId ?? '';
   const headers: Record<string, string> = {};
   if (shopDomain) headers['x-shopify-shop-domain'] = shopDomain;
   if (webhookId) headers['x-shopify-webhook-id'] = webhookId;
@@ -149,8 +180,9 @@ describe('Shopify webhook org resolution', () => {
     connectionsByDomain = {};
     deliveryInsertCalls = [];
     seenWebhookIds = new Set();
+    deliveryStatusByKey = new Map();
     lastQueriedDomain = '';
-    selectCallIndex = 0;
+    lastWebhookIdHeader = '';
     delete process.env.SHOPIFY_ORG_ID;
   });
 
