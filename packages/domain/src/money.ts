@@ -42,6 +42,28 @@ export function currency(code: string): Currency {
 
 export const EGP = currency('EGP');
 
+export class UnsupportedCurrencyError extends Error {
+  constructor(public readonly code: string) {
+    super(`Currency ${code} is not currently supported by the system.`);
+    this.name = 'UnsupportedCurrencyError';
+  }
+}
+
+/**
+ * See docs/implementation/BASELINE.md Phase 0 section: the system is temporarily
+ * restricted to an EGP-primary baseline for correctness fixes. Multi-currency
+ * is an explicit, separate, later phase. This allowlist is meant to grow.
+ */
+export const SUPPORTED_CURRENCIES = ['EGP'] as const;
+
+export function assertSupportedCurrency(code: string): Currency {
+  const c = currency(code);
+  if (!SUPPORTED_CURRENCIES.includes(c as any)) {
+    throw new UnsupportedCurrencyError(c);
+  }
+  return c;
+}
+
 export function exponentOf(c: Currency): number {
   return EXPONENTS[c] ?? DEFAULT_EXPONENT;
 }

@@ -3,6 +3,8 @@ import fc from 'fast-check';
 import {
   EGP,
   EGYPT_VAT_BP,
+  UnsupportedCurrencyError,
+  assertSupportedCurrency,
   add,
   allocate,
   applyRate,
@@ -23,6 +25,22 @@ import {
 /** Amounts up to ~90 billion EGP, positive and negative. */
 const amount = fc.bigInt({ min: -9_000_000_000_000n, max: 9_000_000_000_000n });
 const money = amount.map((minor) => fromMinor(minor, EGP));
+
+describe('assertSupportedCurrency', () => {
+  it('passes a supported currency', () => {
+    expect(assertSupportedCurrency('EGP')).toBe('EGP');
+  });
+
+  it('throws UnsupportedCurrencyError for an unsupported but well-formed currency', () => {
+    expect(() => assertSupportedCurrency('USD')).toThrow(UnsupportedCurrencyError);
+    expect(() => assertSupportedCurrency('USD')).toThrow(/not currently supported by the system/);
+  });
+
+  it('still throws TypeError for a malformed currency before checking support', () => {
+    expect(() => assertSupportedCurrency('EURO')).toThrow(TypeError);
+    expect(() => assertSupportedCurrency('EG')).toThrow(TypeError);
+  });
+});
 
 describe('parseDecimal / toDecimalString', () => {
   it('round-trips any amount', () => {

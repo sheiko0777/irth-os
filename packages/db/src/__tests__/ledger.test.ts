@@ -27,8 +27,8 @@ describe('postJournalEntry — guarantee 1 (pure pre-SQL check)', () => {
       journalType: 'general',
       description: 'test',
       lines: [
-        { accountCode: '1010', debitMinor: 100n },
-        { accountCode: '4010', creditMinor: 99n },
+        { accountCode: '1010', currency: 'EGP', debitMinor: 100n },
+        { accountCode: '4010', currency: 'EGP', creditMinor: 99n },
       ],
     })).rejects.toBeInstanceOf(LedgerImbalanceError);
   });
@@ -50,8 +50,8 @@ describe('postJournalEntry — guarantee 1 (pure pre-SQL check)', () => {
       journalType: 'general',
       description: 'both sides',
       lines: [
-        { accountCode: '1010', debitMinor: 100n, creditMinor: 100n },
-        { accountCode: '4010', creditMinor: 100n },
+        { accountCode: '1010', currency: 'EGP', debitMinor: 100n, creditMinor: 100n },
+        { accountCode: '4010', currency: 'EGP', creditMinor: 100n },
       ],
     })).rejects.toThrow(/exactly one of debit\/credit/);
   });
@@ -63,8 +63,8 @@ describe('postJournalEntry — guarantee 1 (pure pre-SQL check)', () => {
       journalType: 'general',
       description: 'neither side',
       lines: [
-        { accountCode: '1010' },
-        { accountCode: '4010', creditMinor: 0n },
+        { accountCode: '1010', currency: 'EGP' },
+        { accountCode: '4010', currency: 'EGP', creditMinor: 0n },
       ],
     })).rejects.toThrow(/exactly one of debit\/credit/);
   });
@@ -76,10 +76,36 @@ describe('postJournalEntry — guarantee 1 (pure pre-SQL check)', () => {
       journalType: 'general',
       description: 'negative',
       lines: [
-        { accountCode: '1010', debitMinor: -100n },
-        { accountCode: '4010', creditMinor: 100n },
+        { accountCode: '1010', currency: 'EGP', debitMinor: -100n },
+        { accountCode: '4010', currency: 'EGP', creditMinor: 100n },
       ],
     })).rejects.toThrow(RangeError);
+  });
+
+  it('rejects an entry whose lines do not all share one currency', async () => {
+    const tx = txThatMustNotBeCalled();
+    await expect(postJournalEntry(tx as never, {
+      orgId: 'org-1',
+      journalType: 'general',
+      description: 'mixed currency',
+      lines: [
+        { accountCode: '1010', currency: 'EGP', debitMinor: 100n },
+        { accountCode: '4010', currency: 'USD', creditMinor: 100n },
+      ],
+    })).rejects.toThrow(/exactly one currency/);
+  });
+
+  it('rejects an entry with an unsupported currency', async () => {
+    const tx = txThatMustNotBeCalled();
+    await expect(postJournalEntry(tx as never, {
+      orgId: 'org-1',
+      journalType: 'general',
+      description: 'unsupported currency',
+      lines: [
+        { accountCode: '1010', currency: 'USD', debitMinor: 100n },
+        { accountCode: '4010', currency: 'USD', creditMinor: 100n },
+      ],
+    })).rejects.toThrow(/not currently supported by the system/);
   });
 
   it('accepts a genuinely balanced multi-line entry and proceeds to resolve accounts', async () => {
@@ -97,9 +123,9 @@ describe('postJournalEntry — guarantee 1 (pure pre-SQL check)', () => {
       journalType: 'sales',
       description: 'balanced three-line entry',
       lines: [
-        { accountCode: '1030', debitMinor: 1140n },
-        { accountCode: '4010', creditMinor: 1000n },
-        { accountCode: '2030', creditMinor: 140n },
+        { accountCode: '1030', currency: 'EGP', debitMinor: 1140n },
+        { accountCode: '4010', currency: 'EGP', creditMinor: 1000n },
+        { accountCode: '2030', currency: 'EGP', creditMinor: 140n },
       ],
     })).rejects.toThrow(/reached SELECT/);
     expect(reachedSelect).toBe(true);

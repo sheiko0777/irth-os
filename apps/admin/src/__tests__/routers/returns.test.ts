@@ -132,7 +132,7 @@ describe('returns', () => {
     const item = { id: 'item-1', returnId: 'ret-1', orderItemId: 'line-1', quantity: 2, condition };
     const selections = [
       rows([{ id: 'ret-1', orderId: 'o-1', returnNumber: 'RMA-1' }]),
-      rows([item]), rows([{ variantId: 'v-1', costMinor }]), rows([{ id: 'inv-1' }]),
+      rows([item]), rows([{ variantId: 'v-1', costMinor }]), rows([{ currency: 'EGP' }]), rows([{ id: 'inv-1' }]),
     ];
     const claim = rows(claimed ? [item] : []);
     for (const selection of selections) mockDb.select.mockReturnValueOnce(selection);
@@ -147,8 +147,8 @@ describe('returns', () => {
     expect(postJournalEntry).toHaveBeenCalledWith(mockDb, expect.objectContaining({
       sourceTable: 'return_items', sourceId: 'item-1',
       lines: [
-        { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: 600n },
-        { accountCode: ACCOUNT_CODES.COGS, creditMinor: 600n },
+        { accountCode: ACCOUNT_CODES.INVENTORY, currency: 'EGP', debitMinor: 600n },
+        { accountCode: ACCOUNT_CODES.COGS, currency: 'EGP', creditMinor: 600n },
       ],
     }));
     expect(mockDb.insert).toHaveBeenCalledWith(inventoryMovements);

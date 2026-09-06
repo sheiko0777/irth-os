@@ -3,7 +3,7 @@ import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../t
 import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { eq, and, desc, sql, ne } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { currency, fromMinor, parseDecimal } from '@irth/domain';
+import { assertSupportedCurrency, currency, fromMinor, parseDecimal } from '@irth/domain';
 
 const moneyInput = z.string().min(1).or(z.number().positive());
 
@@ -121,8 +121,9 @@ export const giftCardsRouter = router({
             sourceId: issued.id,
             createdBy: ctx.userId,
             lines: [
-              { accountCode: ACCOUNT_CODES.BANK, debitMinor: initialAmountMinor },
-              { accountCode: ACCOUNT_CODES.GIFT_CARD_LIABILITY, creditMinor: initialAmountMinor },
+              // Provisional: defaulted to EGP pending gift_cards acquiring a currency column.
+              { accountCode: ACCOUNT_CODES.BANK, currency: assertSupportedCurrency('EGP'), debitMinor: initialAmountMinor },
+              { accountCode: ACCOUNT_CODES.GIFT_CARD_LIABILITY, currency: assertSupportedCurrency('EGP'), creditMinor: initialAmountMinor },
             ],
           });
         }
@@ -289,8 +290,9 @@ export const giftCardsRouter = router({
           sourceId: input.id,
           createdBy: ctx.userId,
           lines: [
-            { accountCode: ACCOUNT_CODES.GIFT_CARD_LIABILITY, debitMinor: amountMinor },
-            { accountCode: ACCOUNT_CODES.SALES_REVENUE, creditMinor: amountMinor },
+            // Provisional: defaulted to EGP pending gift_cards acquiring a currency column.
+            { accountCode: ACCOUNT_CODES.GIFT_CARD_LIABILITY, currency: assertSupportedCurrency('EGP'), debitMinor: amountMinor },
+            { accountCode: ACCOUNT_CODES.SALES_REVENUE, currency: assertSupportedCurrency('EGP'), creditMinor: amountMinor },
           ],
         });
 

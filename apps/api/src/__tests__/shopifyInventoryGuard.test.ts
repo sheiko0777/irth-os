@@ -71,6 +71,29 @@ const ORDER_PAYLOAD = {
   line_items: [],
 };
 
+describe('orders/create — validation', () => {
+  it('quarantines a payload with an unsupported currency', async () => {
+    // 1st select: the alreadySynced pre-check — empty
+    selectQueue = [[]];
+
+    const res = await buildApp().request('/webhooks/shopify/orders-create', {
+      method: 'POST',
+      body: JSON.stringify({ ...ORDER_PAYLOAD, currency: 'USD' }),
+    });
+
+    // It should quarantine the event: catch UnsupportedCurrencyError,
+    // markDeliveryFailed (which is just a no-op mock right now, or implicitly handled
+    // by the `withOrgContext` not being reached), and return 200 with skipped details.
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      data: {
+        skipped: 'unsupported_currency',
+        message: expect.stringContaining('not currently supported by the system')
+      }
+    });
+  });
+});
+
 describe('orders/create — idempotency race', () => {
   it('catches a 23505 unique-violation raised by a concurrent duplicate delivery and returns alreadyProcessed', async () => {
     // 1st select: the alreadySynced pre-check — empty, this delivery thinks

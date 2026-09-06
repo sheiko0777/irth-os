@@ -3,6 +3,7 @@ import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { stocktakingSessions, stocktakingItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { eq, and, desc, count, sql, ne, isNotNull } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+import { assertSupportedCurrency } from '@irth/domain';
 
 export const stocktakingRouter = router({
   sessions: router({
@@ -226,14 +227,15 @@ export const stocktakingRouter = router({
               ? `${varianceLinesUncosted} line(s) had no known cost basis and are excluded from this figure`
               : undefined;
             const magnitude = varianceValueMinor > 0n ? varianceValueMinor : -varianceValueMinor;
+            // Provisional: defaulted to EGP pending stocktaking variance acquiring a natural currency.
             const lines = varianceValueMinor > 0n
               ? [
-                  { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: magnitude, memo },
-                  { accountCode: ACCOUNT_CODES.INVENTORY_VARIANCE, creditMinor: magnitude, memo },
+                  { accountCode: ACCOUNT_CODES.INVENTORY, currency: assertSupportedCurrency('EGP'), debitMinor: magnitude, memo },
+                  { accountCode: ACCOUNT_CODES.INVENTORY_VARIANCE, currency: assertSupportedCurrency('EGP'), creditMinor: magnitude, memo },
                 ]
               : [
-                  { accountCode: ACCOUNT_CODES.INVENTORY_VARIANCE, debitMinor: magnitude, memo },
-                  { accountCode: ACCOUNT_CODES.INVENTORY, creditMinor: magnitude, memo },
+                  { accountCode: ACCOUNT_CODES.INVENTORY_VARIANCE, currency: assertSupportedCurrency('EGP'), debitMinor: magnitude, memo },
+                  { accountCode: ACCOUNT_CODES.INVENTORY, currency: assertSupportedCurrency('EGP'), creditMinor: magnitude, memo },
                 ];
 
             await postJournalEntry(tx, {

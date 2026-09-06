@@ -1,6 +1,7 @@
 import { and, eq, inArray, lte, gte } from 'drizzle-orm';
 import { accounts, journalEntries, journalLines, fiscalPeriods } from './schema/ledger';
 import type { DbTx } from './index';
+import { assertSupportedCurrency } from '@irth/domain';
 
 /** Raised by `postJournalEntry` before any SQL runs — guarantee 1 of 3, see 0038. */
 export class LedgerImbalanceError extends Error {
@@ -82,6 +83,7 @@ export async function ensureChartOfAccounts(tx: Pick<DbTx, 'insert'>, orgId: str
 
 export interface JournalLineInput {
   accountCode: string;
+  currency: string;
   debitMinor?: bigint;
   creditMinor?: bigint;
   memo?: string;
@@ -153,6 +155,21 @@ export async function postJournalEntry(
     throw new LedgerImbalanceError(debitTotal, creditTotal);
   }
 
+  // Cross-line currency check (Guarantee 4): this codebase's ledger is not
+  // currently designed to hold a single journal entry with mixed-currency
+  // lines.
+  const uniqueCurrencies = new Set(input.lines.map((l) => l.currency));
+  if (uniqueCurrencies.size !== 1) {
+    throw new Error('A journal entry must have exactly one currency across all its lines.');
+  }
+
+  // Now we know it's exactly one currency. Validate that it's a supported one.
+  const entryCurrencyRaw = uniqueCurrencies.values().next().value;
+  if (!entryCurrencyRaw) {
+    throw new Error('Missing currency on journal lines.');
+  }
+  const entryCurrency = assertSupportedCurrency(entryCurrencyRaw);
+
   const entryDate = input.entryDate ?? new Date();
 
   // Fail-open on absence, fail-closed on an explicit close — see 0038's
@@ -205,6 +222,7 @@ export async function postJournalEntry(
       orgId: input.orgId,
       entryId: entry.id,
       accountId: idByCode.get(line.accountCode)!,
+      currency: entryCurrency,
       debitMinor: line.debitMinor ?? 0n,
       creditMinor: line.creditMinor ?? 0n,
       memo: line.memo ?? null,
@@ -228,7 +246,7 @@ export async function reverseJournalEntry(
   description: string,
 ): Promise<{ id: string }> {
   const original = await tx
-    .select({ accountCode: accounts.code, debitMinor: journalLines.debitMinor, creditMinor: journalLines.creditMinor, memo: journalLines.memo })
+    .select({ accountCode: accounts.code, currency: journalLines.currency, debitMinor: journalLines.debitMinor, creditMinor: journalLines.creditMinor, memo: journalLines.memo })
     .from(journalLines)
     .innerJoin(accounts, eq(journalLines.accountId, accounts.id))
     .where(and(eq(journalLines.entryId, entryId), eq(journalLines.orgId, orgId)));
@@ -252,6 +270,7 @@ export async function reverseJournalEntry(
     reversalOf: entryId,
     lines: original.map((l) => ({
       accountCode: l.accountCode,
+      currency: l.currency,
       // Swapped: what was a debit becomes a credit and vice versa.
       debitMinor: l.creditMinor > 0n ? l.creditMinor : undefined,
       creditMinor: l.debitMinor > 0n ? l.debitMinor : undefined,

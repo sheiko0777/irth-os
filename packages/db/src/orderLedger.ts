@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { EGYPT_VAT_BP, currency, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
+import { EGYPT_VAT_BP, assertSupportedCurrency, currency, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
 import { orderItems } from './schema';
 import { ACCOUNT_CODES, postJournalEntry, type JournalLineInput } from './ledger';
 import type { DbTx } from './index';
@@ -106,14 +106,15 @@ export async function postOrderDeliveredEntry(
         return null;
     }
 
-    const gross = fromMinor(order.totalAmountMinor, currency(order.currency));
+    const orderCurrency = assertSupportedCurrency(order.currency);
+    const gross = fromMinor(order.totalAmountMinor, orderCurrency);
     const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
     const net = netOfTax(gross, EGYPT_VAT_BP);
 
     const lines: JournalLineInput[] = [
-        { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, debitMinor: gross.minor, memo: 'Gross, VAT-inclusive' },
-        { accountCode: ACCOUNT_CODES.SALES_REVENUE, creditMinor: net.minor },
-        { accountCode: ACCOUNT_CODES.VAT_PAYABLE, creditMinor: vat.minor },
+        { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, currency: orderCurrency, debitMinor: gross.minor, memo: 'Gross, VAT-inclusive' },
+        { accountCode: ACCOUNT_CODES.SALES_REVENUE, currency: orderCurrency, creditMinor: net.minor },
+        { accountCode: ACCOUNT_CODES.VAT_PAYABLE, currency: orderCurrency, creditMinor: vat.minor },
     ];
 
     // COGS rides in the same entry when a cost basis is known. `costMinor` is
@@ -134,8 +135,8 @@ export async function postOrderDeliveredEntry(
             ? `${gap} of ${costRows.length} line(s) had no known cost basis and are excluded`
             : undefined;
         lines.push(
-            { accountCode: ACCOUNT_CODES.COGS, debitMinor: totalCostMinor, memo },
-            { accountCode: ACCOUNT_CODES.INVENTORY, creditMinor: totalCostMinor, memo },
+            { accountCode: ACCOUNT_CODES.COGS, currency: orderCurrency, debitMinor: totalCostMinor, memo },
+            { accountCode: ACCOUNT_CODES.INVENTORY, currency: orderCurrency, creditMinor: totalCostMinor, memo },
         );
     }
 

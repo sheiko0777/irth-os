@@ -1,7 +1,7 @@
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
 import { courierShipments, courierRemittances, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
-import { fromMinor, parseDecimal } from '@irth/domain';
+import { assertSupportedCurrency, fromMinor, parseDecimal } from '@irth/domain';
 import { eq, and, ne, sql, sum, inArray, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
@@ -196,8 +196,9 @@ export const courierRouter = router({
               sourceId: remittance.id,
               createdBy: ctx.userId,
               lines: [
-                { accountCode: ACCOUNT_CODES.BANK, debitMinor: remittance.amountMinor },
-                { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, creditMinor: remittance.amountMinor },
+                // Provisional: defaulted to EGP pending courier remittances acquiring a currency column.
+                { accountCode: ACCOUNT_CODES.BANK, currency: assertSupportedCurrency('EGP'), debitMinor: remittance.amountMinor },
+                { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, currency: assertSupportedCurrency('EGP'), creditMinor: remittance.amountMinor },
               ],
             });
           }

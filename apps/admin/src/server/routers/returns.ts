@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, type JournalLineInput } from '@irth/db';
-import { EGP, EGYPT_VAT_BP, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
+import { assertSupportedCurrency, EGYPT_VAT_BP, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, ne } from 'drizzle-orm';
 
 export const returnsRouter = router({
@@ -191,6 +191,19 @@ export const returnsRouter = router({
       };
 
       const updated = await ctx.withOrg(async (tx) => {
+        // 0030/F03: Join to `orders` to retrieve the original order's actual
+        // currency instead of hardcoding EGP. We do this before the update
+        // to cleanly validate before any mutations happen.
+        const [returnWithOrder] = await tx
+          .select({ orderCurrency: orders.currency })
+          .from(orderReturns)
+          .innerJoin(orders, eq(orderReturns.orderId, orders.id))
+          .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, ctx.orgId)))
+          .limit(1);
+
+        if (!returnWithOrder) return null;
+        const returnCurrency = assertSupportedCurrency(returnWithOrder.orderCurrency);
+
         // Transitioning TO 'refunded' is attempted first WITH a guard against
         // already being 'refunded' — the one status this procedure now has a
         // side effect for (the ledger posting below). Without it, calling
@@ -245,14 +258,14 @@ export const returnsRouter = router({
         // specific cash movement is the accurate entry — a future cash
         // disbursement would debit this same liability to clear it.
         if (isGenuineTransition && input.status === 'refunded' && refundAmountMinor !== null && refundAmountMinor > 0n) {
-          const gross = fromMinor(refundAmountMinor, EGP);
+          const gross = fromMinor(refundAmountMinor, returnCurrency);
           const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
           const net = netOfTax(gross, EGYPT_VAT_BP);
 
           const lines: JournalLineInput[] = [
-            { accountCode: ACCOUNT_CODES.SALES_RETURNS, debitMinor: net.minor },
-            { accountCode: ACCOUNT_CODES.VAT_PAYABLE, debitMinor: vat.minor, memo: 'Reduces VAT payable — the sale is unwinding' },
-            { accountCode: ACCOUNT_CODES.CUSTOMER_REFUNDS_PAYABLE, creditMinor: gross.minor },
+            { accountCode: ACCOUNT_CODES.SALES_RETURNS, currency: returnCurrency, debitMinor: net.minor },
+            { accountCode: ACCOUNT_CODES.VAT_PAYABLE, currency: returnCurrency, debitMinor: vat.minor, memo: 'Reduces VAT payable — the sale is unwinding' },
+            { accountCode: ACCOUNT_CODES.CUSTOMER_REFUNDS_PAYABLE, currency: returnCurrency, creditMinor: gross.minor },
           ];
 
           await postJournalEntry(tx, {
@@ -309,16 +322,22 @@ export const returnsRouter = router({
           return { restocked: false, reason: 'no_variant' as const };
         }
 
+        const [orderObj] = await tx.select({ currency: orders.currency }).from(orders)
+          .where(and(eq(orders.id, returnObj.orderId), eq(orders.orgId, ctx.orgId))).limit(1);
+        if (!orderObj) throw new Error('Order not found');
+
+        const returnCurrency = assertSupportedCurrency(orderObj.currency);
+
         // NULL is an unknown cost basis; zero has no financial amount to reverse.
         if (orderItem.costMinor !== null && orderItem.costMinor > 0n) {
-          const cost = multiply(fromMinor(orderItem.costMinor), item.quantity);
+          const cost = multiply(fromMinor(orderItem.costMinor, returnCurrency), item.quantity);
           await postJournalEntry(tx, {
             orgId: ctx.orgId, journalType: 'sales',
             description: `Return restocked - ${returnObj.returnNumber}`,
             sourceTable: 'return_items', sourceId: item.id, createdBy: ctx.userId,
             lines: [
-              { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: cost.minor },
-              { accountCode: ACCOUNT_CODES.COGS, creditMinor: cost.minor },
+              { accountCode: ACCOUNT_CODES.INVENTORY, currency: returnCurrency, debitMinor: cost.minor },
+              { accountCode: ACCOUNT_CODES.COGS, currency: returnCurrency, creditMinor: cost.minor },
             ],
           });
         }

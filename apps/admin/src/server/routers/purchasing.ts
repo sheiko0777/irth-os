@@ -2,7 +2,7 @@ import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../t
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
-import { parseDecimal } from '@irth/domain';
+import { parseDecimal, assertSupportedCurrency } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
 
 export const purchasingRouter = router({
@@ -502,6 +502,7 @@ export const purchasingRouter = router({
             // nothing to post, and posting a zero/zero entry would be a journal
             // entry that documents no event.
             if (totalReceivedCostMinor > 0n) {
+                const poCurrency = assertSupportedCurrency(po.currency);
                 await postJournalEntry(tx, {
                     orgId: ctx.orgId,
                     journalType: 'purchases',
@@ -510,8 +511,8 @@ export const purchasingRouter = router({
                     sourceId: po.id,
                     createdBy: ctx.userId,
                     lines: [
-                        { accountCode: ACCOUNT_CODES.INVENTORY, debitMinor: totalReceivedCostMinor },
-                        { accountCode: ACCOUNT_CODES.ACCOUNTS_PAYABLE, creditMinor: totalReceivedCostMinor },
+                        { accountCode: ACCOUNT_CODES.INVENTORY, currency: poCurrency, debitMinor: totalReceivedCostMinor },
+                        { accountCode: ACCOUNT_CODES.ACCOUNTS_PAYABLE, currency: poCurrency, creditMinor: totalReceivedCostMinor },
                     ],
                 });
             }
