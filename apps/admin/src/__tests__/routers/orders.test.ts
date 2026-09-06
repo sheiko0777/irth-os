@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
-import { getTableName } from 'drizzle-orm';
+import { getTableName, type SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { TRPCError } from '@trpc/server';
 import { outboxEvents } from '@irth/db';
 import type { Context } from '@/server/trpc';
@@ -137,7 +138,14 @@ const CUSTOMER_UUID = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22';
 const CONTACT = { name: 'سارة', email: 'sara@example.com', phone: '+201000000000' };
 
 /** Stands in for `ctx.db.query.orders.findFirst`, which the shared mock leaves empty. */
-function stubOrder(order: Record<string, unknown> | undefined) {
+function stubOrder(order: Record<string, unknown> | undefined, previousStatus = order?.status) {
+  // Execute now returns the locked pre-update status; the following SELECT
+  // retrieves the response row in Drizzle's camelCase shape.
+  mockDb.execute = vi.fn(async (query: SQL) => {
+    const { params } = new PgDialect().sqlToQuery(query);
+    mockDb.select.mockImplementationOnce(() => chainOf([{ id: order?.id, status: params[2] }]));
+    return order ? [{ previous_status: previousStatus }] : [];
+  }) as unknown as typeof mockDb.execute;
   (mockDb as unknown as { query: Record<string, unknown> }).query = {
     orders: { findFirst: vi.fn(async () => order) },
   };
@@ -237,6 +245,30 @@ describe('orders.updateStatus — outbox producer', () => {
     expect(outboxRows()).toEqual([]);
   });
 
+  it('uses the locked status to suppress a notification after a concurrent confirmation', async () => {
+    stubOrder({ id: ORDER_UUID, status: 'pending', customerId: CUSTOMER_UUID }, 'confirmed');
+    queueSelects([[CONTACT]]);
+    await caller.updateStatus({ id: ORDER_UUID, status: 'confirmed' });
+    expect(mockDb.execute).toHaveBeenCalledOnce();
+    expect(outboxRows()).toEqual([]);
+  });
+
+  it('does not book revenue when the locked status is already delivered', async () => {
+    stubOrder({ id: ORDER_UUID, status: 'shipped', totalAmountMinor: 11400n, currency: 'EGP' }, 'delivered');
+    queueSelects([]);
+    await caller.updateStatus({ id: ORDER_UUID, status: 'delivered' });
+    expect(mockDb.execute).toHaveBeenCalledOnce();
+    expect(insertCalls().map(([table]) => getTableName(table as Parameters<typeof getTableName>[0])))
+      .not.toContain('journal_entries');
+  });
+
+  it('returns NOT_FOUND when the atomic update finds no order', async () => {
+    stubOrder({ id: ORDER_UUID, status: 'shipped' });
+    mockDb.execute = vi.fn(async () => []);
+    await expectCode(caller.updateStatus({ id: ORDER_UUID, status: 'delivered' }), 'NOT_FOUND');
+    expect(insertCalls()).toEqual([]);
+  });
+
   it('writes nothing for a status the worker has no branch for', async () => {
     // 'delivered' would be polled, match neither branch, and be marked
     // processed having sent nothing — indistinguishable from a real send.
@@ -298,7 +330,7 @@ describe('orders.updateStatus — outbox producer', () => {
 
     expect(row.orgId).toBe('org-1');
     expect(mockDb.insert.mock.invocationCallOrder[outboxCall]).toBeGreaterThan(
-      mockDb.update.mock.invocationCallOrder[0],
+      mockDb.execute.mock.invocationCallOrder[0],
     );
   });
 });
@@ -321,7 +353,6 @@ describe('orders router — authorization', () => {
     // covered above) stays out of scope for this authorization check.
     stubOrder({ id: ORDER_UUID, orderNumber: 'IRT-2026-0010', status: 'confirmed', customerId: null });
     queueSelects([[]]);
-    mockDb.update = vi.fn(() => chainOf([{ id: ORDER_UUID, status: 'confirmed' }]));
 
     const caller = ordersRouter.createCaller(ctx('admin'));
     const res = await caller.updateStatus({ id: ORDER_UUID, status: 'confirmed' });

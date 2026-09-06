@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, getDb, withOrg } from '../db';
 import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postOrderDeliveredEntry } from '@irth/db';
-import { withAudit } from '@irth/db';
+import { withAudit, transitionOrderStatus } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
 import { requirePermission } from '../middlewares/requirePermission';
@@ -295,18 +295,20 @@ ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c:
   const eventType = OUTBOX_EVENT_BY_STATUS[status];
 
   const updatedOrder = await withOrg(c, async (tx) => {
+    const transition = await transitionOrderStatus(tx, { orgId, orderId: order.id, newStatus: status });
+    if (!transition) return null;
+    const { previousStatus } = transition;
     const res = await withAudit(tx, async () => {
-        const [row] = await tx.update(orders)
-          .set({ status, updatedAt: new Date() })
-          .where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)))
-          .returning();
+        // Preserve the response shape and database timestamp after the raw update.
+        const [row] = await tx.select().from(orders)
+          .where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
         return row;
     }, {
       orgId,
       userId,
       action: 'UPDATE_STATUS',
       tableName: 'orders',
-      changes: { oldStatus: order.status, newStatus: status }
+      changes: { oldStatus: previousStatus, newStatus: status }
     });
 
     // Same transaction as the status change, and only when the status actually
@@ -318,7 +320,7 @@ ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c:
     // orders table, and only one of them emitting meant a customer heard about
     // a confirmation made in the admin console but not the identical change
     // made through the API.
-    if (eventType && order.status !== status) {
+    if (eventType && previousStatus !== status) {
       const payload = await buildOrderNotification(tx, orgId, res, eventType);
       if (payload) {
         await emitOutboxEvent(tx, { orgId, eventType, payload });
@@ -337,7 +339,7 @@ ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c:
     // atomically with the status change: a killed isolate loses nothing, and
     // the cron drain (already running under waitUntil — see index.ts's
     // scheduled() handler) picks it up regardless.
-    if (status === 'delivered' && order.status !== status) {
+    if (status === 'delivered' && previousStatus !== status) {
       await emitOutboxEvent(tx, { orgId, eventType: 'eta.invoice.issue', payload: { orgId, orderId: res.id } });
     }
 
@@ -350,7 +352,7 @@ ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c:
     await postOrderDeliveredEntry(tx, {
       orgId,
       order,
-      previousStatus: order.status,
+      previousStatus,
       newStatus: status,
       createdBy: userId,
     });
@@ -358,6 +360,7 @@ ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c:
     return res;
   });
 
+  if (!updatedOrder) return c.json({ data: null, error: 'not_found', meta: null }, 404);
   return c.json({ data: jsonSafe(updatedOrder), error: null, meta: null });
 });
 

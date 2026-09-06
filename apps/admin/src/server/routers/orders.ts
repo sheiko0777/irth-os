@@ -3,7 +3,7 @@ import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum,
 import { eq, and, desc, sql, count, ilike, gte, lte, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { withAudit, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postOrderDeliveredEntry } from '@irth/db';
+import { withAudit, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postOrderDeliveredEntry, transitionOrderStatus } from '@irth/db';
 import type { DbTx, OutboxEventType, OrderNotificationPayload } from '@irth/db';
 
 const statusEnum = z.enum(orderStatusEnum.enumValues);
@@ -173,16 +173,20 @@ export const ordersRouter = router({
             // row written outside the transaction would tell the customer about
             // a change that then rolled back.
             const result = await ctx.withOrg(async (tx) => {
+                const transition = await transitionOrderStatus(tx, {
+                    orgId: ctx.orgId, orderId: input.id, newStatus: input.status,
+                });
+                if (!transition) throw new TRPCError({ code: 'NOT_FOUND' });
+                const { previousStatus } = transition;
                 const updated = await withAudit(
                     tx,
                     async () => {
-                        const [row] = await tx.update(orders)
-                            .set({ status: input.status, updatedAt: new Date() })
+                        // Preserve the response shape and database timestamp after the raw update.
+                        const [row] = await tx.select().from(orders)
                             .where(and(
                                 eq(orders.id, input.id),
                                 eq(orders.orgId, ctx.orgId)
-                            ))
-                            .returning();
+                            ));
                         return row;
                     },
                     {
@@ -190,7 +194,7 @@ export const ordersRouter = router({
                         userId: ctx.userId,
                         action: 'UPDATE_ORDER_STATUS',
                         tableName: 'orders',
-                        changes: { from: order.status, to: input.status }
+                        changes: { from: previousStatus, to: input.status }
                     }
                 );
 
@@ -213,15 +217,8 @@ export const ordersRouter = router({
                 // change commit together or not at all. That is the whole point
                 // of the outbox pattern.
                 const eventType = OUTBOX_EVENT_BY_STATUS[input.status];
-                // Only on an actual transition. The UPDATE above has no
-                // `ne(status, input.status)` guard, so re-saving 'confirmed' on
-                // an already-confirmed order returns a row perfectly happily —
-                // and would re-send the confirmation WhatsApp and email every
-                // time somebody clicked. The read is the one from the top of
-                // the procedure; a concurrent double-click can still race it,
-                // which is what `ctx.idempotent` is for if this ever needs to
-                // be exactly-once rather than nearly-always-once.
-                if (eventType && order.status !== input.status) {
+                // The locked transition result also prevents concurrent re-notification.
+                if (eventType && previousStatus !== input.status) {
                     const payload = await buildOrderNotification(tx, ctx.orgId, order, eventType);
                     if (payload) {
                         await emitOutboxEvent(tx, { orgId: ctx.orgId, eventType, payload });
@@ -239,7 +236,7 @@ export const ordersRouter = router({
                 await postOrderDeliveredEntry(tx, {
                     orgId: ctx.orgId,
                     order,
-                    previousStatus: order.status,
+                    previousStatus,
                     newStatus: input.status,
                     createdBy: ctx.userId,
                 });
