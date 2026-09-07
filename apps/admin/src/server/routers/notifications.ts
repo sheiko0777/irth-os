@@ -17,7 +17,7 @@ export const notificationsRouter = router({
                 ctx.db
                     .select()
                     .from(notifications)
-                    .where(eq(notifications.orgId, ctx.orgId))
+                    .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.userId, ctx.userId)))
                     .orderBy(desc(notifications.createdAt))
                     .limit(pageSize)
                     .offset(offset),
@@ -27,7 +27,7 @@ export const notificationsRouter = router({
                         unread: sql<number>`count(*) filter (where ${notifications.read} = false)::int`,
                     })
                     .from(notifications)
-                    .where(eq(notifications.orgId, ctx.orgId)),
+                    .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.userId, ctx.userId))),
             ]);
 
             const { total, unread } = totals[0] ?? { total: 0, unread: 0 };
@@ -40,7 +40,7 @@ export const notificationsRouter = router({
             await ctx.withOrg(async (tx) => tx
                 .update(notifications)
                 .set({ read: true })
-                .where(and(eq(notifications.id, input.id), eq(notifications.orgId, ctx.orgId))));
+                .where(and(eq(notifications.id, input.id), eq(notifications.orgId, ctx.orgId), eq(notifications.userId, ctx.userId))));
             return { data: { ok: true }, error: null, meta: null };
         }),
 
@@ -49,7 +49,7 @@ export const notificationsRouter = router({
             await ctx.withOrg(async (tx) => tx
                 .update(notifications)
                 .set({ read: true })
-                .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.read, false))));
+                .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.userId, ctx.userId), eq(notifications.read, false))));
             return { data: { ok: true }, error: null, meta: null };
         }),
 
@@ -58,7 +58,7 @@ export const notificationsRouter = router({
             const rows = await ctx.db
                 .select({ count: sql<number>`count(*)::int` })
                 .from(notifications)
-                .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.read, false)));
+                .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.userId, ctx.userId), eq(notifications.read, false)));
             return { data: { count: rows[0]?.count ?? 0 }, error: null, meta: null };
         }),
 });

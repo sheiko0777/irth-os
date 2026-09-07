@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
+import { type SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import type { Context } from '@/server/trpc';
 import { notificationsRouter } from '@/server/routers/notifications';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
@@ -74,5 +76,62 @@ describe('notifications router', () => {
     mockDb.select = vi.fn(() => chainOf([]));
     const res = await caller.unreadCount();
     expect(res).toEqual({ data: { count: 0 }, error: null, meta: null });
+  });
+
+  // Captures the real predicate passed to `.where(...)` and inspects its
+  // generated SQL/params via drizzle's own dialect — asserting the mock was
+  // *called* proves nothing about what it was scoped by (an `orgId`-only
+  // predicate calls `where()` too), which is exactly the IDOR this closes.
+  function capturingChain(value: unknown) {
+    const wherePredicates: SQL[] = [];
+    const chain = chainOf(value);
+    chain.where = vi.fn((predicate: SQL) => { wherePredicates.push(predicate); return chain; });
+    return { chain, wherePredicates };
+  }
+
+  function assertScopedToCallerUser(predicate: SQL) {
+    const { sql, params } = new PgDialect().sqlToQuery(predicate);
+    expect(sql).toContain('"notifications"."user_id"');
+    expect(params).toContain('user-1');
+  }
+
+  it('list scopes both the items and the count query to the caller\'s own userId', async () => {
+    const itemsQuery = capturingChain([]);
+    const countQuery = capturingChain([{ total: 0, unread: 0 }]);
+    mockDb.select = vi.fn()
+      .mockImplementationOnce(() => itemsQuery.chain)
+      .mockImplementationOnce(() => countQuery.chain);
+
+    await caller.list({ page: 1, pageSize: 20 });
+
+    assertScopedToCallerUser(itemsQuery.wherePredicates[0]);
+    assertScopedToCallerUser(countQuery.wherePredicates[0]);
+  });
+
+  it('markRead scopes the update to the caller\'s own userId', async () => {
+    const { chain, wherePredicates } = capturingChain([{ id: UUID }]);
+    mockDb.update = vi.fn(() => chain);
+
+    await caller.markRead({ id: UUID });
+
+    assertScopedToCallerUser(wherePredicates[0]);
+  });
+
+  it('markAllRead scopes the update to the caller\'s own userId', async () => {
+    const { chain, wherePredicates } = capturingChain([{ id: UUID }]);
+    mockDb.update = vi.fn(() => chain);
+
+    await caller.markAllRead();
+
+    assertScopedToCallerUser(wherePredicates[0]);
+  });
+
+  it('unreadCount scopes the query to the caller\'s own userId', async () => {
+    const { chain, wherePredicates } = capturingChain([]);
+    mockDb.select = vi.fn(() => chain);
+
+    await caller.unreadCount();
+
+    assertScopedToCallerUser(wherePredicates[0]);
   });
 });
