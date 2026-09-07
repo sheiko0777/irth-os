@@ -94,7 +94,7 @@ describe('rbac — router wiring', () => {
   it('settings: member cannot write settings', async () => {
     const { settingsRouter } = await import('@/server/routers/settings');
     await expectForbidden(
-      settingsRouter.createCaller(ctxWithRole('member')).set({ key: 'a', value: 'b' })
+      settingsRouter.createCaller(ctxWithRole('member')).set({ key: 'org.name', value: 'b' })
     );
   });
 

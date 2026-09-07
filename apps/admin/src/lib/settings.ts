@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export const SETTING_KEYS = {
   org: {
     name: 'org.name',
@@ -45,7 +47,14 @@ export const SETTING_KEYS = {
   },
 } as const;
 
-export type SettingKey = typeof SETTING_KEYS[keyof typeof SETTING_KEYS][keyof typeof SETTING_KEYS[keyof typeof SETTING_KEYS]];
+const allSettingKeys = Object.values(SETTING_KEYS).flatMap(group => Object.values(group));
+export const settingKeySchema = z.enum(allSettingKeys);
+export type SettingKey = z.infer<typeof settingKeySchema>;
+
+export const settingInputSchema = z.object({
+  key: settingKeySchema,
+  value: z.string().max(2000),
+});
 
 export const SENSITIVE_KEYS = [
   SETTING_KEYS.integration.whatsapp_api_key,
