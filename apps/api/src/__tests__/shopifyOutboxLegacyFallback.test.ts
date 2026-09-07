@@ -61,6 +61,8 @@ describe('Shopify outbox legacy fallback', () => {
     expect(db.set).toHaveBeenCalledExactlyOnceWith({
       attempts: 3,
       lastError: expect.stringContaining('Shopify product push for org other-org has no active connection'),
+      // F12: every non-ETA event type now gets a shared retry cooldown on failure.
+      nextRetryAt: expect.any(Date),
     });
   });
 
