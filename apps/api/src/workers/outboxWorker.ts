@@ -1,7 +1,7 @@
 import { db } from '@irth/db';
-import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload } from '@irth/db';
+import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
-import { and, eq, lt, lte, or, isNull, inArray } from 'drizzle-orm';
+import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
@@ -232,6 +232,97 @@ export async function processOutbox(database: typeof db): Promise<number> {
                     continue;
                 }
 
+                if (event.eventType === 'campaign.recipient.send') {
+                    const payload = JSON.parse(event.payload) as CampaignRecipientSendPayload;
+
+                    const [recipient] = await database.select().from(campaignRecipients)
+                        .innerJoin(campaigns, eq(campaigns.id, campaignRecipients.campaignId))
+                        .innerJoin(customers, eq(customers.id, campaignRecipients.customerId))
+                        .where(and(eq(campaignRecipients.id, payload.recipientId), eq(campaignRecipients.orgId, payload.orgId)));
+
+                    if (!recipient) {
+                        // Deleted or missing, cannot proceed.
+                        await database.update(outboxEvents)
+                            .set({ processed: true, processedAt: new Date() })
+                            .where(eq(outboxEvents.id, event.id));
+                        continue;
+                    }
+
+                    if (recipient.campaigns.status === 'cancelled') {
+                        await database.update(campaignRecipients)
+                            .set({ status: 'skipped_cancelled', updatedAt: new Date() })
+                            .where(eq(campaignRecipients.id, recipient.campaign_recipients.id));
+                        await database.update(outboxEvents)
+                            .set({ processed: true, processedAt: new Date() })
+                            .where(eq(outboxEvents.id, event.id));
+                        continue;
+                    }
+
+                    if (recipient.campaign_recipients.status !== 'pending') {
+                        // Already resolved by an earlier attempt (sent, or
+                        // skipped for some other reason) — nothing left to do.
+                        await database.update(outboxEvents)
+                            .set({ processed: true, processedAt: new Date() })
+                            .where(eq(outboxEvents.id, event.id));
+                        continue;
+                    }
+
+                    let providerMessageId: string | null = null;
+                    if (recipient.campaign_recipients.channel === 'whatsapp' && recipient.customers.phone) {
+                        const res = await sendWhatsAppTemplate(recipient.customers.phone, 'campaign_message', [
+                            {
+                                type: 'body',
+                                parameters: [
+                                    { type: 'text', text: recipient.customers.name || 'عميلنا العزيز' },
+                                    { type: 'text', text: recipient.campaigns.message }
+                                ]
+                            }
+                        ]) as { messages?: { id?: string }[] };
+                        providerMessageId = res?.messages?.[0]?.id ?? null;
+                    } else if (recipient.campaign_recipients.channel === 'email' && recipient.customers.email) {
+                        const res = await sendTransactionalEmail({
+                            to: recipient.customers.email,
+                            subject: recipient.campaigns.name,
+                            html: `<h1>مرحباً ${recipient.customers.name || 'عميلنا العزيز'}</h1><p>${recipient.campaigns.message}</p>`
+                        }) as { id?: string };
+                        providerMessageId = res?.id ?? null;
+                    } else {
+                        // Not a transient failure — retrying won't add a phone/
+                        // email that doesn't exist. Still goes through the
+                        // normal attempts/backoff path below; the dead-letter
+                        // finalization in the outer catch marks it 'failed'
+                        // once attempts are exhausted rather than retrying
+                        // forever.
+                        throw new Error('Unsupported channel or missing contact info for this recipient');
+                    }
+
+                    await database.transaction(async (tx) => {
+                        await tx.update(campaignRecipients)
+                            .set({ status: 'sent', providerMessageId, sentAt: new Date(), updatedAt: new Date() })
+                            .where(eq(campaignRecipients.id, recipient.campaign_recipients.id));
+                        await tx.update(campaigns)
+                            .set({ deliveredCount: sql`${campaigns.deliveredCount} + 1`, updatedAt: new Date() })
+                            .where(eq(campaigns.id, recipient.campaigns.id));
+
+                        const [remaining] = await tx.select({ count: sql<number>`count(*)` }).from(campaignRecipients)
+                            .where(and(eq(campaignRecipients.campaignId, recipient.campaigns.id), eq(campaignRecipients.status, 'pending')));
+                        if (Number(remaining.count) === 0) {
+                            await tx.update(campaigns)
+                                .set({
+                                    status: sql`CASE WHEN ${campaigns.failedCount} > 0 THEN 'failed'::campaign_status ELSE 'sent'::campaign_status END`,
+                                    updatedAt: new Date(),
+                                })
+                                .where(eq(campaigns.id, recipient.campaigns.id));
+                        }
+                    });
+
+                    await database.update(outboxEvents)
+                        .set({ processed: true, processedAt: new Date() })
+                        .where(eq(outboxEvents.id, event.id));
+
+                    continue;
+                }
+
                 if (event.eventType === 'org.invite.sent') {
                     const payload = JSON.parse(event.payload) as OrgInvitePayload;
                     const roleLabel = payload.role === 'owner' ? 'مالك' : payload.role === 'admin' ? 'مدير' : 'عضو';
@@ -293,13 +384,48 @@ export async function processOutbox(database: typeof db): Promise<number> {
                 const nextRetryAt = event.eventType === 'eta.invoice.issue'
                     ? undefined
                     : new Date(Date.now() + Math.min(2 ** (event.attempts + 1), 60) * 60_000);
+                const attemptsAfterThis = event.attempts + 1;
                 await database.update(outboxEvents)
                     .set({
-                        attempts: event.attempts + 1,
+                        attempts: attemptsAfterThis,
                         lastError: errorMessage,
                         ...(nextRetryAt ? { nextRetryAt } : {})
                     })
                     .where(eq(outboxEvents.id, event.id));
+
+                // The claim query excludes attempts >= 5 — this event is
+                // about to become permanently dead-lettered. A campaign
+                // recipient stuck this way must not be left 'pending'
+                // forever (the campaign would never leave 'sending'); record
+                // the failure, count it, and re-check completion the same
+                // way the success path does.
+                if (event.eventType === 'campaign.recipient.send' && attemptsAfterThis >= 5) {
+                    try {
+                        const payload = JSON.parse(event.payload) as CampaignRecipientSendPayload;
+                        await database.transaction(async (tx) => {
+                            const [recipient] = await tx.select().from(campaignRecipients)
+                                .where(and(eq(campaignRecipients.id, payload.recipientId), eq(campaignRecipients.orgId, payload.orgId)));
+                            if (!recipient || recipient.status !== 'pending') return;
+
+                            await tx.update(campaignRecipients)
+                                .set({ status: 'failed', error: errorMessage, updatedAt: new Date() })
+                                .where(eq(campaignRecipients.id, recipient.id));
+                            await tx.update(campaigns)
+                                .set({ failedCount: sql`${campaigns.failedCount} + 1`, updatedAt: new Date() })
+                                .where(eq(campaigns.id, recipient.campaignId));
+
+                            const [remaining] = await tx.select({ count: sql<number>`count(*)` }).from(campaignRecipients)
+                                .where(and(eq(campaignRecipients.campaignId, recipient.campaignId), eq(campaignRecipients.status, 'pending')));
+                            if (Number(remaining.count) === 0) {
+                                await tx.update(campaigns)
+                                    .set({ status: 'failed', updatedAt: new Date() })
+                                    .where(eq(campaigns.id, recipient.campaignId));
+                            }
+                        });
+                    } catch (finalizeError) {
+                        console.error('Failed to finalize dead-lettered campaign recipient', finalizeError);
+                    }
+                }
             }
         }
         return pendingEvents.length;

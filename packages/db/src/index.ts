@@ -309,3 +309,4 @@ export function formatDocumentNumber(kind: DocumentKind, value: number, year?: n
             return `PO-${year ?? new Date().getFullYear()}-${seq}`;
     }
 }
+export * from './campaignDispatch';
