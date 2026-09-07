@@ -11,4 +11,5 @@ export const outboxEvents = pgTable('outbox_events', {
     lastError: text('last_error'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     processedAt: timestamp('processed_at'),
+    claimedAt: timestamp('claimed_at'),
 });

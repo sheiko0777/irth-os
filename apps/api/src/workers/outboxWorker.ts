@@ -1,7 +1,7 @@
 import { db } from '@irth/db';
 import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, lt, or, isNull, inArray } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
@@ -35,15 +35,31 @@ export async function processOutbox(database: typeof db): Promise<number> {
     if (!database) return 0;
 
     try {
-        const pendingEvents = await database.select()
-            .from(outboxEvents)
-            .where(
-                and(
-                    eq(outboxEvents.processed, false),
-                    lt(outboxEvents.attempts, 5)
+        const pendingEvents = await database.transaction(async (tx) => {
+            const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
+            const toClaim = await tx.select()
+                .from(outboxEvents)
+                .where(
+                    and(
+                        eq(outboxEvents.processed, false),
+                        lt(outboxEvents.attempts, 5),
+                        or(
+                            isNull(outboxEvents.claimedAt),
+                            lt(outboxEvents.claimedAt, staleThreshold)
+                        )
+                    )
                 )
-            )
-            .limit(OUTBOX_BATCH_SIZE);
+                .limit(OUTBOX_BATCH_SIZE)
+                .for('update', { skipLocked: true });
+
+            if (toClaim.length === 0) return [];
+
+            await tx.update(outboxEvents)
+                .set({ claimedAt: new Date() })
+                .where(inArray(outboxEvents.id, toClaim.map(e => e.id)));
+
+            return toClaim;
+        });
 
         for (const event of pendingEvents) {
             try {

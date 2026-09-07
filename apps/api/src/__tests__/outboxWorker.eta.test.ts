@@ -25,7 +25,7 @@ import { processOutbox } from '../workers/outboxWorker';
 /** A chainable query-builder stub: every method returns itself, `then` resolves the configured value. */
 function chainable(finalValue: unknown) {
   const chain: Record<string, unknown> = {};
-  for (const m of ['from', 'where', 'limit', 'set', 'values', 'onConflictDoUpdate']) {
+  for (const m of ['from', 'where', 'limit', 'set', 'values', 'onConflictDoUpdate', 'for']) {
     chain[m] = vi.fn(() => chain);
   }
   chain.then = (resolve: (v: unknown) => void) => Promise.resolve(finalValue).then(resolve);
@@ -55,6 +55,9 @@ function mockDatabase(selectSequence: unknown[]) {
     select,
     insert: vi.fn(() => chainable(undefined)),
     update: vi.fn(() => chainable(undefined)),
+    transaction: vi.fn(async (cb) => { 
+        return cb({ select, update: vi.fn(() => chainable(undefined)) }); 
+    }),
   };
 }
 
