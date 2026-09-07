@@ -12,7 +12,6 @@ import { MiddlewareHandler } from 'hono';
 // (one key per unique IP), which is itself a memory-pressure DoS vector. The
 // sweep runs only when the cap is reached, so steady-state traffic pays
 // nothing.
-const hits = new Map<string, { count: number; resetAt: number }>();
 const MAX_TRACKED_KEYS = 10_000;
 
 /**
@@ -26,6 +25,8 @@ export function rateLimit(
   windowMs: number,
   trustedProxiesCount: number | (() => number) = 0,
 ): MiddlewareHandler {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+
   return async (c, next) => {
     const trustedProxies =
       typeof trustedProxiesCount === 'function' ? trustedProxiesCount() : trustedProxiesCount;
