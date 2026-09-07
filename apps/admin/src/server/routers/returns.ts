@@ -85,9 +85,16 @@ export const returnsRouter = router({
         orderItemId: z.string().uuid(),
         quantity: z.number().int().min(1),
         condition: z.enum(['new', 'good', 'damaged', 'unknown']).optional()
-      }))
+      })),
+      // A retried create (timeout, double-tap) has nothing else to key off
+      // of — unlike restock/updateStatus below, which already guard against
+      // concurrent processing of one EXISTING return via an atomic claim,
+      // this would otherwise create a second, entirely separate return row
+      // for the same customer intent.
+      idempotencyKey: z.string().min(1).max(255).optional(),
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) =>
+      ctx.idempotent('returns.create', input.idempotencyKey, input, async () => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
       // Header and lines in one transaction. Separately, a failure on the
@@ -157,7 +164,7 @@ export const returnsRouter = router({
       });
 
       return { data: createdReturn, error: null, meta: null };
-    }),
+    })),
 
   updateStatus: adminProcedure
     .input(z.object({
