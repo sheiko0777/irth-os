@@ -2,3 +2,8 @@
 **Vulnerability:** The invite endpoint `apps/api/src/routes/orgs.ts` allowed the `role` field to be any arbitrary string due to insufficient schema validation (`z.string()`), and did not prevent `admin` users from inviting new users with the `owner` role.
 **Learning:** `requireRole('owner', 'admin')` allows admins into the endpoint, but does not implicitly restrict them from acting on equal or higher privilege tiers. Zod schemas must explicitly restrict enum-like string inputs (e.g. `z.enum(['owner', 'admin', 'member'])`).
 **Prevention:** Always use `z.enum` for role-based string fields. For endpoints shared by multiple roles, explicitly check the caller's role against the target role being modified or created to enforce a proper role hierarchy.
+
+## 2024-06-22 - Weak Random Number Generation in Invite OTPs
+**Vulnerability:** The `generateInviteOtp` function used `Math.random()` to generate the 6-digit OTP code for organization invites.
+**Learning:** `Math.random()` is not cryptographically secure and its outputs can be predicted if the internal state of the PRNG is known. This makes the generated OTPs vulnerable to prediction/brute-forcing. Even if brute-force is mitigated by `otpAttempts`, a predicted OTP completely bypasses the security intent.
+**Prevention:** Always use cryptographically secure random number generators (CSPRNG) such as `crypto.getRandomValues` or Node's `crypto.randomBytes` / `crypto.randomInt` for generating any security-sensitive tokens, passwords, or OTPs.
