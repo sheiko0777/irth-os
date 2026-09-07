@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { randomBytes, createHash } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure, requirePermission } from '../trpc';
-import { outboxEvents, shopifyConnections, shopifyOAuthStates } from '@irth/db';
+import { outboxEvents, SHOPIFY_API_VERSION, shopifyConnections, shopifyOAuthStates } from '@irth/db';
 import { desc, eq, and } from 'drizzle-orm';
 
 const SHOPIFY_SCOPES = [
@@ -140,7 +140,7 @@ export const integrationsRouter = router({
         );
         const accessToken = Buffer.from(decrypted).toString('utf8');
 
-        const response = await fetch(`https://${connection.shopDomain}/admin/api/2025-10/graphql.json`, {
+        const response = await fetch(`https://${connection.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
             body: JSON.stringify({ query: 'query { locations(first: 50) { nodes { id name } } }' }),
