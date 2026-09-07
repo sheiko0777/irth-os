@@ -12,7 +12,7 @@ import { outboxEvents } from '@irth/db';
 
 function chainable(value: unknown) {
   const chain: Record<string, unknown> = {};
-  for (const method of ['from', 'where', 'limit']) chain[method] = vi.fn(() => chain);
+  for (const method of ['from', 'where', 'limit', 'for', 'set']) chain[method] = vi.fn(() => chain);
   chain.then = (resolve: (value: unknown) => void) => Promise.resolve(value).then(resolve);
   return chain;
 }
@@ -30,7 +30,14 @@ function mockDatabase(orgId: string, connections: unknown[] = []) {
     connections,
   ]) select.mockReturnValueOnce(chainable(rows));
   const set = vi.fn(() => chainable(undefined));
-  return { select, set, update: vi.fn(() => ({ set })) };
+  return { 
+      select, 
+      set, 
+      update: vi.fn(() => ({ set })), 
+      transaction: vi.fn(async (cb) => { 
+          return cb({ select, update: vi.fn(() => chainable(undefined)) }); 
+      })
+  };
 }
 
 beforeEach(() => {
