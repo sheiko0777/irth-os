@@ -1,4 +1,4 @@
-import { MiddlewareHandler } from 'hono';
+import { type Context, MiddlewareHandler } from 'hono';
 
 // Simple sliding window — resets per Worker instance.
 // KNOWN LIMIT (interim): this is per-isolate, so the effective limit is
@@ -24,6 +24,7 @@ export function rateLimit(
   max: number,
   windowMs: number,
   trustedProxiesCount: number | (() => number) = 0,
+  keyResolver?: (c: Context) => string | undefined,
 ): MiddlewareHandler {
   const hits = new Map<string, { count: number; resetAt: number }>();
 
@@ -31,8 +32,11 @@ export function rateLimit(
     const trustedProxies =
       typeof trustedProxiesCount === 'function' ? trustedProxiesCount() : trustedProxiesCount;
 
+    // A route may provide a server-derived key (for example, an authenticated
+    // organization). All existing callers omit this and remain IP-keyed.
+    let key = keyResolver?.(c);
     // Prefer the platform-provided client IP (trusted on Cloudflare).
-    let key = c.req.header('CF-Connecting-IP');
+    if (!key) key = c.req.header('CF-Connecting-IP');
     if (!key) {
       // Only honor X-Forwarded-For when trusted proxies are explicitly configured.
       // With no trusted proxies the header is client-spoofable, so trusting it
@@ -72,6 +76,9 @@ export function rateLimit(
     } else {
       entry.count++;
       if (entry.count > max) {
+        c.header('X-RateLimit-Limit', String(max));
+        c.header('X-RateLimit-Remaining', '0');
+        c.header('Retry-After', String(Math.max(1, Math.ceil((entry.resetAt - now) / 1000))));
         return c.json({ data: null, error: 'Too Many Requests', meta: null }, 429);
       }
     }

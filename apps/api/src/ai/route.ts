@@ -26,7 +26,7 @@ const chatSchema = z.object({
 export const aiChatRouter = new Hono();
 
 const trustedProxyCount = () => parseInt(envVar('TRUSTED_PROXY_COUNT') || '0', 10);
-aiChatRouter.use('/chat', rateLimit(20, 60_000, trustedProxyCount));
+aiChatRouter.use('/chat', rateLimit(20, 60_000, trustedProxyCount, (c) => getAuth(c)?.orgId));
 
 function getAuth(c: Context): { orgId: string; userId: string; role: Role } | null {
   const orgId = c.get('orgId') as string | undefined;
