@@ -154,28 +154,37 @@ export const purchasingRouter = router({
       .query(async ({ ctx, input }) => {
         const offset = (input.page - 1) * input.pageSize;
 
-        const data = await ctx.db
-          .select({
-            id: purchaseOrders.id,
-            poNumber: purchaseOrders.poNumber,
-            status: purchaseOrders.status,
-            totalAmountMinor: purchaseOrders.totalAmountMinor,
-            currency: purchaseOrders.currency,
-            orderedAt: purchaseOrders.orderedAt,
-            createdAt: purchaseOrders.createdAt,
-            supplierName: suppliers.name,
-            itemsCount: sql<number>`count(${purchaseOrderItems.id})::int`,
-          })
-          .from(purchaseOrders)
-          .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-          .leftJoin(purchaseOrderItems, eq(purchaseOrderItems.poId, purchaseOrders.id))
-          .where(eq(purchaseOrders.orgId, ctx.orgId))
-          .groupBy(purchaseOrders.id, suppliers.name)
-          .orderBy(desc(purchaseOrders.createdAt))
-          .limit(input.pageSize)
-          .offset(offset);
+        // ⚡ Bolt: Execute list and count queries concurrently to reduce max latency
+        const [data, totalResult] = await Promise.all([
+          ctx.db
+            .select({
+              id: purchaseOrders.id,
+              poNumber: purchaseOrders.poNumber,
+              status: purchaseOrders.status,
+              totalAmountMinor: purchaseOrders.totalAmountMinor,
+              currency: purchaseOrders.currency,
+              orderedAt: purchaseOrders.orderedAt,
+              createdAt: purchaseOrders.createdAt,
+              supplierName: suppliers.name,
+              itemsCount: sql<number>`count(${purchaseOrderItems.id})::int`,
+            })
+            .from(purchaseOrders)
+            .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+            .leftJoin(purchaseOrderItems, eq(purchaseOrderItems.poId, purchaseOrders.id))
+            .where(eq(purchaseOrders.orgId, ctx.orgId))
+            .groupBy(purchaseOrders.id, suppliers.name)
+            .orderBy(desc(purchaseOrders.createdAt))
+            .limit(input.pageSize)
+            .offset(offset),
+          ctx.db
+            .select({ count: count() })
+            .from(purchaseOrders)
+            .where(eq(purchaseOrders.orgId, ctx.orgId))
+        ]);
 
-        return { data, error: null, meta: null };
+        const total = totalResult[0]?.count ?? 0;
+
+        return { data, error: null, meta: { total, page: input.page, pageSize: input.pageSize } };
       }),
 
     get: protectedProcedure
