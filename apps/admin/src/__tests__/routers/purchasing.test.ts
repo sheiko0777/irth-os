@@ -209,7 +209,7 @@ describe('purchasing.po', () => {
     const res = await caller.po.list({});
     expect(res.data).toEqual([]);
     expect(res.error).toBeNull();
-    expect(res.meta).toBeNull();
+    expect(res.meta).toEqual({ total: 0, page: 1, pageSize: 20 });
   });
 
   it('get rejects a malformed uuid with BAD_REQUEST', async () => {
