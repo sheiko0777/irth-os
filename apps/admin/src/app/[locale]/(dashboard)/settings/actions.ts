@@ -2,11 +2,12 @@
 
 import { serverCaller } from "@/server/caller";
 import { revalidatePath } from "next/cache";
+import { settingInputSchema } from "@/lib/settings";
 
 export async function saveSettingsAction(settings: { key: string; value: string }[]) {
   try {
     const caller = await serverCaller();
-    const result = await caller.settings.setMany(settings);
+    const result = await caller.settings.setMany(settingInputSchema.array().parse(settings));
 
     if (result.error) {
       return { success: false, error: "Failed to save settings" };
