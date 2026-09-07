@@ -135,3 +135,4 @@ describe('notifications router', () => {
     assertScopedToCallerUser(wherePredicates[0]);
   });
 });
+
