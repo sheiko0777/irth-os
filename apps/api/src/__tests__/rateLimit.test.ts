@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { rateLimit } from '../middlewares/rateLimit';
 
@@ -60,6 +60,28 @@ describe('rateLimit middleware', () => {
     res = await app.request(new Request('http://localhost/limit', { headers: { 'CF-Connecting-IP': ip } }));
     expect(res.status).toBe(429);
     expect(await res.json()).toEqual({ data: null, error: 'Too Many Requests', meta: null });
+    const retryAfter = res.headers.get('Retry-After');
+    expect(retryAfter).toMatch(/^\d+$/);
+    expect(Number(retryAfter)).toBeGreaterThan(0);
+  });
+
+  it('keeps /chat budgets independent for different organizations sharing an IP', async () => {
+    const app = new Hono();
+    app.use('/chat', async (c, next) => {
+      c.set('orgId', c.req.header('X-Org-ID'));
+      await next();
+    });
+    app.post('/chat', rateLimit(2, 60_000, 0, (c) => c.get('orgId') as string | undefined), (c) => c.text('ok'));
+
+    const requestFor = (orgId: string) => new Request('http://localhost/chat', {
+      method: 'POST',
+      headers: { 'CF-Connecting-IP': '10.0.0.1', 'X-Org-ID': orgId },
+    });
+
+    expect((await app.request(requestFor('org-a'))).status).toBe(200);
+    expect((await app.request(requestFor('org-a'))).status).toBe(200);
+    expect((await app.request(requestFor('org-a'))).status).toBe(429);
+    expect((await app.request(requestFor('org-b'))).status).toBe(200);
   });
 
   describe('IP resolution logic', () => {
