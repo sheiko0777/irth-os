@@ -68,7 +68,7 @@ describe('rateLimit middleware', () => {
   it('keeps /chat budgets independent for different organizations sharing an IP', async () => {
     const app = new Hono();
     app.use('/chat', async (c, next) => {
-      c.set('orgId', c.req.header('X-Org-ID'));
+      c.set('orgId', c.req.header('X-Org-ID') ?? '');
       await next();
     });
     app.post('/chat', rateLimit(2, 60_000, 0, (c) => c.get('orgId') as string | undefined), (c) => c.text('ok'));
