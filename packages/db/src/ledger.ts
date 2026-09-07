@@ -35,6 +35,8 @@ export const STANDARD_ACCOUNTS = [
   { code: '1020', name: 'البنك', type: 'asset', normalBalance: 'debit' },
   { code: '1030', name: 'ذمم مدينة - تحصيل عند الاستلام', type: 'asset', normalBalance: 'debit' },
   { code: '1040', name: 'المخزون', type: 'asset', normalBalance: 'debit' },
+  // Holds money captured online (e.g. Paymob) before an actual bank settlement.
+  { code: '1050', name: 'ذمم مدينة - دفع إلكتروني', type: 'asset', normalBalance: 'debit' },
   { code: '2010', name: 'ذمم دائنة - موردون', type: 'liability', normalBalance: 'credit' },
   { code: '2020', name: 'التزامات بطاقات الهدايا', type: 'liability', normalBalance: 'credit' },
   { code: '2030', name: 'ضريبة القيمة المضافة مستحقة', type: 'liability', normalBalance: 'credit' },
@@ -56,6 +58,7 @@ export const ACCOUNT_CODES = {
   BANK: '1020',
   ACCOUNTS_RECEIVABLE_COD: '1030',
   INVENTORY: '1040',
+  ACCOUNTS_RECEIVABLE_ONLINE: '1050',
   ACCOUNTS_PAYABLE: '2010',
   GIFT_CARD_LIABILITY: '2020',
   VAT_PAYABLE: '2030',

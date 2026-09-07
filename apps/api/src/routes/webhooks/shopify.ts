@@ -181,6 +181,7 @@ interface ShopifyOrderPayload {
   name: string; // "#1001"
   financial_status: string | null; // 'paid' | 'pending' | 'refunded' | ...
   cancelled_at: string | null;
+  payment_gateway_names?: string[];
   currency: string;
   total_price: string;
   customer?: ShopifyCustomerPayload | null;
@@ -450,11 +451,14 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       return BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
     })();
 
+    const paymentMethod = payload.payment_gateway_names?.some(name => /cash on delivery|\bcod\b/i.test(name)) ? 'cod' : 'online';
+
     const insertedOrder = await withAudit(tx, async () => {
       const [row] = await tx.insert(orders).values({
         orgId,
         orderNumber,
         status,
+        paymentMethod,
         totalAmountMinor: totalMinor,
         currency: validatedCurrency,
         customerId,

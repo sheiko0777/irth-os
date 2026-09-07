@@ -26,6 +26,7 @@ const createOrderSchema = z.object({
   // Only the CALLER can tell a retry from a second genuine order — ordering the
   // same item twice in a minute is legitimate, so the server cannot infer it.
   idempotencyKey: z.string().min(1).max(255).optional(),
+  paymentMethod: z.enum(['cod', 'online']).optional(),
   items: z.array(z.object({
     variantId: z.string().uuid(),
     quantity: z.number().int().positive()
@@ -183,6 +184,7 @@ ordersRoute.post('/', async (c: Context) => {
             orgId,
             orderNumber,
             status: 'pending',
+            paymentMethod: data.paymentMethod ?? 'cod',
             totalAmountMinor: total.minor,
             currency: total.currency,
             // NOT `customerId: userId`. customer_id is uuid and refers to
