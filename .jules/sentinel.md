@@ -7,3 +7,8 @@
 **Vulnerability:** The `generateInviteOtp` function used `Math.random()` to generate the 6-digit OTP code for organization invites.
 **Learning:** `Math.random()` is not cryptographically secure and its outputs can be predicted if the internal state of the PRNG is known. This makes the generated OTPs vulnerable to prediction/brute-forcing. Even if brute-force is mitigated by `otpAttempts`, a predicted OTP completely bypasses the security intent.
 **Prevention:** Always use cryptographically secure random number generators (CSPRNG) such as `crypto.getRandomValues` or Node's `crypto.randomBytes` / `crypto.randomInt` for generating any security-sensitive tokens, passwords, or OTPs.
+
+## 2025-02-24 - IDOR in Notifications Endpoint
+**Vulnerability:** The notification endpoints in `apps/admin/src/server/routers/notifications.ts` (list, markRead, markAllRead, unreadCount) failed to scope queries to `userId`, allowing any member of an organization to access and modify notifications for all other users within the same organization.
+**Learning:** While `ctx.withOrg` and `orgId` filters properly restrict access to the tenant level, user-specific resources like notifications must also be explicitly scoped with `eq(notifications.userId, ctx.userId)` to prevent horizontal privilege escalation (IDOR) within the organization.
+**Prevention:** Always verify that endpoints serving user-specific data apply both the tenant filter (`orgId`) and the user filter (`userId`).
