@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import { getTableName } from 'drizzle-orm';
+import { outboxEvents } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { productsRouter } from '@/server/routers/products';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
@@ -148,5 +150,71 @@ describe('products router — authorization', () => {
     const caller = productsRouter.createCaller(ctx('owner'));
     const res = await caller.deactivate({ id: PRODUCT_UUID });
     expect(res.data).toEqual({ id: PRODUCT_UUID, status: 'archived' });
+  });
+});
+
+function insertCalls(): unknown[][] {
+  return mockDb.insert.mock.calls as unknown as unknown[][];
+}
+
+function isOutbox(call: unknown[]): boolean {
+  return getTableName(call[0] as Parameters<typeof getTableName>[0]) === getTableName(outboxEvents);
+}
+
+function outboxRows(): { eventType: string; payload: string }[] {
+  const rows: { eventType: string; payload: string }[] = [];
+  insertCalls().forEach((call, i) => {
+    if (!isOutbox(call)) return;
+    const chain = mockDb.insert.mock.results[i].value as { values: { mock: { calls: unknown[][] } } };
+    for (const [row] of chain.values.mock.calls) {
+      rows.push(row as { eventType: string; payload: string });
+    }
+  });
+  return rows;
+}
+
+describe('products router — outbox producer', () => {
+  it('create: emits shopify.product.push event', async () => {
+    mockDb.insert = vi.fn(() => chainOf([{ id: PRODUCT_UUID, name: 'Product', sku: 'P-001' }]));
+    const caller = productsRouter.createCaller(ctx('admin'));
+    
+    await caller.create({ name: 'Product', sku: 'P-001', price: 100, stock: 5 });
+    
+    const rows = outboxRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].eventType).toBe('shopify.product.push');
+    expect(JSON.parse(rows[0].payload)).toEqual({ orgId: 'org-1', productId: PRODUCT_UUID });
+  });
+
+  it('update: emits shopify.product.push event', async () => {
+    (mockDb as unknown as { query: Record<string, unknown> }).query = {
+      products: { findFirst: vi.fn(async () => ({ id: PRODUCT_UUID, name: 'Product', sku: 'P-001' })) },
+    };
+    mockDb.update = vi.fn(() => chainOf([{ id: PRODUCT_UUID, name: 'Updated' }]));
+    // We need to capture inserts as well for the outbox event
+    mockDb.insert = vi.fn(() => chainOf([{}]));
+
+    const caller = productsRouter.createCaller(ctx('admin'));
+    
+    await caller.update({ id: PRODUCT_UUID, name: 'Updated' });
+    
+    const rows = outboxRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].eventType).toBe('shopify.product.push');
+    expect(JSON.parse(rows[0].payload)).toEqual({ orgId: 'org-1', productId: PRODUCT_UUID });
+  });
+
+  it('deactivate: emits shopify.product.push event', async () => {
+    mockDb.update = vi.fn(() => chainOf([{ id: PRODUCT_UUID, status: 'archived' }]));
+    mockDb.insert = vi.fn(() => chainOf([{}]));
+
+    const caller = productsRouter.createCaller(ctx('owner'));
+    
+    await caller.deactivate({ id: PRODUCT_UUID });
+    
+    const rows = outboxRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].eventType).toBe('shopify.product.push');
+    expect(JSON.parse(rows[0].payload)).toEqual({ orgId: 'org-1', productId: PRODUCT_UUID });
   });
 });

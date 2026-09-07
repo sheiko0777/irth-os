@@ -3,7 +3,7 @@ import { products, productVariants, categories, brandEnum } from '@irth/db';
 import { eq, and, desc, sql, count, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { withAudit } from '@irth/db';
+import { withAudit, emitOutboxEvent } from '@irth/db';
 import { EGP, parseDecimal } from '@irth/domain';
 
 export const productsRouter = router({
@@ -127,6 +127,7 @@ export const productsRouter = router({
                         })
                         .returning();
 
+                    await emitOutboxEvent(tx, { orgId: ctx.orgId, eventType: 'shopify.product.push', payload: { orgId: ctx.orgId, productId: product.id } });
                     return product;
                 },
                 {
@@ -183,6 +184,9 @@ export const productsRouter = router({
                             eq(products.orgId, ctx.orgId)
                         ))
                         .returning();
+                    if (updated) {
+                        await emitOutboxEvent(tx, { orgId: ctx.orgId, eventType: 'shopify.product.push', payload: { orgId: ctx.orgId, productId: updated.id } });
+                    }
                     return updated;
                 },
                 {
@@ -216,6 +220,7 @@ export const productsRouter = router({
                     if (!updated) {
                          throw new TRPCError({ code: 'NOT_FOUND' });
                     }
+                    await emitOutboxEvent(tx, { orgId: ctx.orgId, eventType: 'shopify.product.push', payload: { orgId: ctx.orgId, productId: updated.id } });
                     return updated;
                 },
                 {
