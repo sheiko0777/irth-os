@@ -73,6 +73,22 @@ describe('returns', () => {
     );
   });
 
+  it('create delegates to the idempotency wrapper', async () => {
+    const input = { orderId: '00000000-0000-4000-8000-000000000001', reason: 'other', items: [], idempotencyKey: 'test-key-1' } as const;
+    const mockCtx = ctx('owner');
+    mockCtx.idempotent = vi.fn().mockResolvedValue({ data: { id: 'ret-1' }, error: null, meta: null });
+    const localCaller = returnsRouter.createCaller(mockCtx);
+
+    const res = await localCaller.create(input as never);
+    expect(res).toEqual({ data: { id: 'ret-1' }, error: null, meta: null });
+    expect(mockCtx.idempotent).toHaveBeenCalledWith(
+      'returns.create',
+      'test-key-1',
+      expect.objectContaining({ idempotencyKey: 'test-key-1' }),
+      expect.any(Function)
+    );
+  });
+
   it('member is FORBIDDEN on create and updateStatus (admin-gated)', async () => {
     const member = returnsRouter.createCaller(ctx('member'));
     await expectCode(member.create({} as never), 'FORBIDDEN');
