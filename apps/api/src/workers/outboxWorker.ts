@@ -1,7 +1,7 @@
 import { db } from '@irth/db';
 import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
-import { and, eq, lt, or, isNull, inArray } from 'drizzle-orm';
+import { and, eq, lt, lte, or, isNull, inArray } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
@@ -36,6 +36,7 @@ export async function processOutbox(database: typeof db): Promise<number> {
 
     try {
         const pendingEvents = await database.transaction(async (tx) => {
+            const now = new Date();
             const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
             const toClaim = await tx.select()
                 .from(outboxEvents)
@@ -43,6 +44,10 @@ export async function processOutbox(database: typeof db): Promise<number> {
                     and(
                         eq(outboxEvents.processed, false),
                         lt(outboxEvents.attempts, 5),
+                        or(
+                            isNull(outboxEvents.nextRetryAt),
+                            lte(outboxEvents.nextRetryAt, now)
+                        ),
                         or(
                             isNull(outboxEvents.claimedAt),
                             lt(outboxEvents.claimedAt, staleThreshold)
@@ -283,10 +288,16 @@ export async function processOutbox(database: typeof db): Promise<number> {
 
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
+                // ETA keeps its own retry state on eta_invoices. All other
+                // event types share this outbox-level cooldown.
+                const nextRetryAt = event.eventType === 'eta.invoice.issue'
+                    ? undefined
+                    : new Date(Date.now() + Math.min(2 ** (event.attempts + 1), 60) * 60_000);
                 await database.update(outboxEvents)
                     .set({
                         attempts: event.attempts + 1,
-                        lastError: errorMessage
+                        lastError: errorMessage,
+                        ...(nextRetryAt ? { nextRetryAt } : {})
                     })
                     .where(eq(outboxEvents.id, event.id));
             }
