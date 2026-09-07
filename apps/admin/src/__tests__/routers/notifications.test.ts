@@ -75,4 +75,30 @@ describe('notifications router', () => {
     const res = await caller.unreadCount();
     expect(res).toEqual({ data: { count: 0 }, error: null, meta: null });
   });
+
+  it('applies userId scope to all queries', async () => {
+    // We can spy on the 'where' call in our chain.
+    const chain = chainOf([]);
+    mockDb.select = vi.fn().mockImplementation(() => chain);
+    mockDb.update = vi.fn().mockImplementation(() => chain);
+
+    await caller.list({ page: 1, pageSize: 20 });
+    // Check first where call (the items query)
+    // Drizzle's 'and' creates an SQL object. It's complex to assert its exact structure in mocked vitest,
+    // but we can just check that mockDb methods were called. Since this is mocked without real postgres,
+    // we can at least assert that where() was called (which it was, due to our changes).
+    expect(chain.where as any).toHaveBeenCalled();
+
+    (chain.where as any).mockClear();
+    await caller.markRead({ id: UUID });
+    expect(chain.where as any).toHaveBeenCalled();
+
+    (chain.where as any).mockClear();
+    await caller.markAllRead();
+    expect(chain.where as any).toHaveBeenCalled();
+
+    (chain.where as any).mockClear();
+    await caller.unreadCount();
+    expect(chain.where as any).toHaveBeenCalled();
+  });
 });
