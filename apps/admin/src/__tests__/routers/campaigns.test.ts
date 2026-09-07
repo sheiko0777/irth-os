@@ -3,7 +3,13 @@ import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
+vi.mock('@irth/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@irth/db')>();
+  return { ...actual, snapshotAndEnqueueCampaign: vi.fn() };
+});
+
 const { campaignsRouter } = await import('@/server/routers/campaigns');
+const { snapshotAndEnqueueCampaign, UnresolvedSegmentError } = await import('@irth/db');
 
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
   return {
@@ -98,5 +104,39 @@ describe('campaigns', () => {
     await expect(
       campaignsRouter.createCaller(ctx('admin')).delete({ id: UUID })
     ).rejects.toSatisfy(forbidden);
+  });
+
+  it('send surfaces an unresolved target-segment as BAD_REQUEST, not a raw 500', async () => {
+    mockDb.select = vi.fn(() => chainOf([]));
+    mockDb.update = vi.fn(() => chainOf([{ id: UUID, status: 'sending', targetSegment: 'vip' }]));
+    vi.mocked(snapshotAndEnqueueCampaign).mockRejectedValueOnce(new UnresolvedSegmentError('vip'));
+
+    await expectCode(campaignsRouter.createCaller(ctx()).send({ id: UUID }), 'BAD_REQUEST');
+  });
+
+  it('cancel marks still-pending recipients skipped_cancelled', async () => {
+    const recipientsUpdateWhere = vi.fn(() => Promise.resolve(undefined));
+    let updateCallCount = 0;
+    mockDb.update = vi.fn(() => {
+      updateCallCount++;
+      if (updateCallCount === 1) {
+        // campaigns.update(...).set(...).where(...).returning()
+        return chainOf([{ id: UUID, status: 'cancelled' }]);
+      }
+      // campaignRecipients.update(...).set(...).where(...)
+      const chain = chainOf(undefined);
+      chain.where = recipientsUpdateWhere;
+      return chain;
+    });
+
+    const res = await campaignsRouter.createCaller(ctx()).cancel({ id: UUID });
+
+    expect(res.data).toMatchObject({ status: 'cancelled' });
+    expect(recipientsUpdateWhere).toHaveBeenCalled();
+  });
+
+  it('cancel reports BAD_REQUEST when the campaign is not in a cancellable state', async () => {
+    mockDb.update = vi.fn(() => chainOf([]));
+    await expectCode(campaignsRouter.createCaller(ctx()).cancel({ id: UUID }), 'BAD_REQUEST');
   });
 });

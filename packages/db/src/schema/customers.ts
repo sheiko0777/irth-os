@@ -1,3 +1,4 @@
+import { boolean } from "drizzle-orm/pg-core";
 import { pgTable, uuid, timestamp, text, integer, bigint, uniqueIndex } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
@@ -11,6 +12,7 @@ export const customers = pgTable('customers', {
   // Shopify counterpart's GID once linked (inbound webhook, or pushed from
   // the dashboard) — see migration 0041.
   shopifyCustomerId: text('shopify_customer_id'),
+  marketingConsent: boolean('marketing_consent').notNull().default(true),
   loyaltyPoints: integer('loyalty_points').notNull().default(0),
   totalOrders: integer('total_orders').notNull().default(0),
   totalSpentMinor: bigint('total_spent_minor', { mode: 'bigint' }).notNull().default(0n),

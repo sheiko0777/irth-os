@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import { sql } from 'drizzle-orm'
+import { sql, eq, and, lte } from 'drizzle-orm'
+import { campaigns, snapshotAndEnqueueCampaign, UnresolvedSegmentError } from '@irth/db'
 import { auth } from './auth'
 import { ordersRoute } from './routes/orders'
 import { shippingRoute } from './routes/shipping'
@@ -172,5 +173,43 @@ export default {
       const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1))
       ctx.waitUntil(rollupStorefrontMetrics(db, yesterday))
     }
+    
+    // Process scheduled campaigns
+    ctx.waitUntil((async () => {
+      const dueCampaigns = await db.select({ id: campaigns.id }).from(campaigns)
+          .where(and(
+              eq(campaigns.status, 'scheduled'),
+              lte(campaigns.scheduledAt, new Date())
+          ))
+          .limit(50);
+
+      for (const camp of dueCampaigns) {
+          // One campaign's failure (e.g. an unresolved target segment) must
+          // not abort the rest of this batch, and must not leave the
+          // campaign silently stuck in 'sending' with zero recipients ever
+          // enqueued — record why and mark it failed instead.
+          try {
+              await db.transaction(async (tx) => {
+                  const [updated] = await tx.update(campaigns)
+                      .set({ status: 'sending', sentAt: new Date(), updatedAt: new Date() })
+                      .where(and(
+                          eq(campaigns.id, camp.id),
+                          eq(campaigns.status, 'scheduled')
+                      ))
+                      .returning();
+
+                  if (updated) {
+                      await snapshotAndEnqueueCampaign(tx, updated);
+                  }
+              });
+          } catch (e) {
+              const message = e instanceof UnresolvedSegmentError ? e.message : (e instanceof Error ? e.message : String(e));
+              await db.update(campaigns)
+                  .set({ status: 'failed', updatedAt: new Date() })
+                  .where(eq(campaigns.id, camp.id));
+              console.error(`[scheduled-campaign] ${camp.id} failed to dispatch: ${message}`);
+          }
+      }
+    })());
   },
 }

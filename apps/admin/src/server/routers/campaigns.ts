@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
-import { campaigns } from '@irth/db';
+import { campaigns, campaignRecipients, snapshotAndEnqueueCampaign, UnresolvedSegmentError } from '@irth/db';
 import { eq, and, desc, count, sql, or, ne } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
@@ -75,15 +75,31 @@ export const campaignsRouter = router({
       // transition the campaign, which downstream means the dispatch worker can
       // send the same blast to customers twice.
       // Mark as sending — actual dispatch handled by outbox/360dialog worker
-      const [campaign] = await ctx.withOrg(async (tx) => tx
-        .update(campaigns)
-        .set({ status: 'sending', sentAt: new Date(), updatedAt: new Date() })
-        .where(and(
-          eq(campaigns.id, input.id),
-          eq(campaigns.orgId, ctx.orgId),
-          or(eq(campaigns.status, 'draft'), eq(campaigns.status, 'scheduled')),
-        ))
-        .returning());
+      let campaign;
+      try {
+        [campaign] = await ctx.withOrg(async (tx) => {
+          const [updated] = await tx
+            .update(campaigns)
+            .set({ status: 'sending', sentAt: new Date(), updatedAt: new Date() })
+            .where(and(
+              eq(campaigns.id, input.id),
+              eq(campaigns.orgId, ctx.orgId),
+              or(eq(campaigns.status, 'draft'), eq(campaigns.status, 'scheduled')),
+            ))
+            .returning();
+
+          if (updated) {
+            await snapshotAndEnqueueCampaign(tx, updated);
+          }
+
+          return [updated];
+        });
+      } catch (e) {
+        if (e instanceof UnresolvedSegmentError) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: e.message });
+        }
+        throw e;
+      }
 
       if (!campaign) {
         const [existing] = await ctx.db
@@ -93,6 +109,40 @@ export const campaignsRouter = router({
           .limit(1);
         if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'Campaign not found' });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Campaign already sent or sending' });
+      }
+
+      return { data: campaign, error: null };
+    }),
+
+  cancel: adminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [campaign] = await ctx.withOrg(async (tx) => {
+        const [updated] = await tx
+          .update(campaigns)
+          .set({ status: 'cancelled', updatedAt: new Date() })
+          .where(and(
+            eq(campaigns.id, input.id),
+            eq(campaigns.orgId, ctx.orgId),
+            or(eq(campaigns.status, 'scheduled'), eq(campaigns.status, 'sending')),
+          ))
+          .returning();
+        
+        if (updated) {
+           await tx.update(campaignRecipients)
+              .set({ status: 'skipped_cancelled', updatedAt: new Date() })
+              .where(and(
+                eq(campaignRecipients.campaignId, updated.id),
+                eq(campaignRecipients.orgId, ctx.orgId),
+                eq(campaignRecipients.status, 'pending')
+              ));
+        }
+
+        return [updated];
+      });
+
+      if (!campaign) {
+         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Campaign cannot be cancelled' });
       }
 
       return { data: campaign, error: null };

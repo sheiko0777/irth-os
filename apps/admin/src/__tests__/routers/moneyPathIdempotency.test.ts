@@ -4,6 +4,18 @@ import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
+// This file's "no pre-read before the atomic write" tests care about
+// ordering around the guarded UPDATE itself, not about campaigns.send's own
+// post-guard recipient-snapshot work (which legitimately reads/writes more,
+// after the guard has already committed) — stub it out so that unrelated
+// concern doesn't leak into the assertion here. Real coverage for
+// snapshotAndEnqueueCampaign lives in routers/campaigns.test.ts and
+// packages/db's own tests.
+vi.mock('@irth/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@irth/db')>();
+  return { ...actual, snapshotAndEnqueueCampaign: vi.fn() };
+});
+
 const { returnsRouter } = await import('@/server/routers/returns');
 const { giftCardsRouter } = await import('@/server/routers/giftCards');
 const { couponsRouter } = await import('@/server/routers/coupons');
