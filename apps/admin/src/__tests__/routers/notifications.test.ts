@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
+import { type SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import type { Context } from '@/server/trpc';
 import { notificationsRouter } from '@/server/routers/notifications';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
@@ -76,29 +78,60 @@ describe('notifications router', () => {
     expect(res).toEqual({ data: { count: 0 }, error: null, meta: null });
   });
 
-  it('applies userId scope to all queries', async () => {
-    // We can spy on the 'where' call in our chain.
-    const chain = chainOf([]);
-    mockDb.select = vi.fn().mockImplementation(() => chain);
-    mockDb.update = vi.fn().mockImplementation(() => chain);
+  // Captures the real predicate passed to `.where(...)` and inspects its
+  // generated SQL/params via drizzle's own dialect — asserting the mock was
+  // *called* proves nothing about what it was scoped by (an `orgId`-only
+  // predicate calls `where()` too), which is exactly the gap this fix closes.
+  function capturingChain(value: unknown) {
+    const wherePredicates: SQL[] = [];
+    const chain = chainOf(value);
+    chain.where = vi.fn((predicate: SQL) => { wherePredicates.push(predicate); return chain; });
+    return { chain, wherePredicates };
+  }
+
+  function assertScopedToCallerUser(predicate: SQL) {
+    const { sql, params } = new PgDialect().sqlToQuery(predicate);
+    expect(sql).toContain('"notifications"."user_id"');
+    expect(params).toContain('user-1');
+  }
+
+  it('list scopes both the items and the count query to the caller\'s own userId', async () => {
+    const itemsQuery = capturingChain([]);
+    const countQuery = capturingChain([{ total: 0, unread: 0 }]);
+    mockDb.select = vi.fn()
+      .mockImplementationOnce(() => itemsQuery.chain)
+      .mockImplementationOnce(() => countQuery.chain);
 
     await caller.list({ page: 1, pageSize: 20 });
-    // Check first where call (the items query)
-    // Drizzle's 'and' creates an SQL object. It's complex to assert its exact structure in mocked vitest,
-    // but we can just check that mockDb methods were called. Since this is mocked without real postgres,
-    // we can at least assert that where() was called (which it was, due to our changes).
-    expect(chain.where as any).toHaveBeenCalled();
 
-    (chain.where as any).mockClear();
+    assertScopedToCallerUser(itemsQuery.wherePredicates[0]);
+    assertScopedToCallerUser(countQuery.wherePredicates[0]);
+  });
+
+  it('markRead scopes the update to the caller\'s own userId', async () => {
+    const { chain, wherePredicates } = capturingChain([{ id: UUID }]);
+    mockDb.update = vi.fn(() => chain);
+
     await caller.markRead({ id: UUID });
-    expect(chain.where as any).toHaveBeenCalled();
 
-    (chain.where as any).mockClear();
+    assertScopedToCallerUser(wherePredicates[0]);
+  });
+
+  it('markAllRead scopes the update to the caller\'s own userId', async () => {
+    const { chain, wherePredicates } = capturingChain([{ id: UUID }]);
+    mockDb.update = vi.fn(() => chain);
+
     await caller.markAllRead();
-    expect(chain.where as any).toHaveBeenCalled();
 
-    (chain.where as any).mockClear();
+    assertScopedToCallerUser(wherePredicates[0]);
+  });
+
+  it('unreadCount scopes the query to the caller\'s own userId', async () => {
+    const { chain, wherePredicates } = capturingChain([]);
+    mockDb.select = vi.fn(() => chain);
+
     await caller.unreadCount();
-    expect(chain.where as any).toHaveBeenCalled();
+
+    assertScopedToCallerUser(wherePredicates[0]);
   });
 });
