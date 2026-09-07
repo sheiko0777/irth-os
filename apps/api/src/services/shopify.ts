@@ -1,4 +1,5 @@
 import { getEnv } from '../db';
+import { SHOPIFY_API_VERSION } from './shopifyApi';
 
 /**
  * `process.env` is empty on Workers even inside a handler — see db.ts's
@@ -86,11 +87,6 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.accessToken;
 }
 
-// Pinned rather than "latest" so a Shopify API version bump can't silently
-// change response shapes underneath these calls without a deliberate bump
-// here first.
-const API_VERSION = '2024-10';
-
 interface GraphQLResponse<T> {
   data?: T;
   errors?: Array<{ message: string }>;
@@ -99,7 +95,7 @@ interface GraphQLResponse<T> {
 export async function shopifyGraphQL<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
   const token = await getAccessToken();
 
-  const response = await fetch(`https://${shopDomain()}/admin/api/${API_VERSION}/graphql.json`, {
+  const response = await fetch(`https://${shopDomain()}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

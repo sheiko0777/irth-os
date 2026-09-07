@@ -3,8 +3,8 @@ import type { InferSelectModel } from 'drizzle-orm';
 import { shopifyConnections } from '@irth/db';
 import { getEnv } from '../db';
 import { minorToDecimalString } from './shopify';
+import { SHOPIFY_API_VERSION } from './shopifyApi';
 
-export const SHOPIFY_API_VERSION = '2025-10';
 export const SHOPIFY_SCOPES = [
   'read_products', 'write_products', 'read_inventory', 'write_inventory',
   'read_orders', 'read_customers', 'read_pixels', 'write_pixels',
