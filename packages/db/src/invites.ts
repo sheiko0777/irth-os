@@ -12,7 +12,9 @@ import type { DbInstance } from './index';
  * column already applies (also plaintext).
  */
 export function generateInviteOtp(ttlMs = 15 * 60_000): { code: string; expiresAt: Date } {
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  // SECURITY: Math.random() is predictable. Use Web Crypto API for secure OTP generation.
+  const randomVal = crypto.getRandomValues(new Uint32Array(1))[0];
+  const code = String(100000 + (randomVal % 900000));
   return { code, expiresAt: new Date(Date.now() + ttlMs) };
 }
 
