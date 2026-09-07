@@ -159,7 +159,8 @@ paymobRoute.post('/', async (c: Context) => {
       orgId: order.orgId,
       orderId: order.id,
       newStatus: 'confirmed',
-      onlyIfPreviousStatusIn: ['pending', 'payment_failed']
+      onlyIfPreviousStatusIn: ['pending', 'payment_failed'],
+      setPaymentMethod: 'online'
     });
 
     // If it successfully transitioned (or if not, we audit it anyway, though transitionResult is null if no matching row to update)

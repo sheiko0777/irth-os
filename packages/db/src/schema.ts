@@ -7,6 +7,7 @@ import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, 
 export const brandEnum = pgEnum('brand', ['irth']);
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
 export const shippingProviderEnum = pgEnum('shipping_provider', ['bosta', 'mylerz']);
+export const paymentMethodEnum = pgEnum('payment_method', ['cod', 'online']);
 
 // Base columns for all tables with org_id rule
 const baseColumns = {
@@ -126,6 +127,7 @@ export const orders = pgTable("orders", {
   // an order collided with the first org's IRT-2026-0001 and could not order.
   orderNumber: varchar("order_number", { length: 50 }).notNull(), // IRT-2026-0001
   status: orderStatusEnum("status").notNull().default('pending'),
+  paymentMethod: paymentMethodEnum("payment_method"),
   totalAmountMinor: bigint("total_amount_minor", { mode: 'bigint' }).notNull(),
   currency: char("currency", { length: 3 }).notNull().default('EGP'),
   // NOT a user id. This is uuid, while Better Auth user ids are text — see

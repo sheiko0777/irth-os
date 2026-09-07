@@ -7,10 +7,14 @@ import type { DbTx } from './index';
 /** Locks the order until transaction end, returning the status this update replaced. */
 export async function transitionOrderStatus(
     tx: Pick<DbTx, 'execute'>,
-    input: { orgId: string; orderId: string; newStatus: string; onlyIfPreviousStatusIn?: string[] },
+    input: { orgId: string; orderId: string; newStatus: string; onlyIfPreviousStatusIn?: string[], setPaymentMethod?: 'cod' | 'online' },
 ): Promise<{ previousStatus: string } | null> {
     const statusCondition = input.onlyIfPreviousStatusIn && input.onlyIfPreviousStatusIn.length > 0
         ? sql`AND status IN (${sql.join(input.onlyIfPreviousStatusIn.map(s => sql`${s}`), sql`, `)})`
+        : sql``;
+
+    const paymentMethodUpdate = input.setPaymentMethod
+        ? sql`, payment_method = COALESCE(orders.payment_method, ${input.setPaymentMethod})`
         : sql``;
 
     const [row] = await tx.execute<{ previous_status: string }>(sql`
@@ -19,7 +23,7 @@ export async function transitionOrderStatus(
             WHERE id = ${input.orderId} AND org_id = ${input.orgId} ${statusCondition}
             FOR UPDATE
         )
-        UPDATE orders SET status = ${input.newStatus}, updated_at = now()
+        UPDATE orders SET status = ${input.newStatus}, updated_at = now() ${paymentMethodUpdate}
         FROM before
         WHERE orders.id = ${input.orderId} AND orders.org_id = ${input.orgId}
         RETURNING before.status AS previous_status
@@ -68,6 +72,7 @@ export interface PostOrderDeliveredInput {
         orderNumber: string;
         currency: string;
         totalAmountMinor: bigint;
+        paymentMethod?: 'cod' | 'online' | null;
     };
     /** Status BEFORE the update that triggered this call. */
     previousStatus: string;
@@ -115,8 +120,13 @@ export async function postOrderDeliveredEntry(
     const vat = taxIncludedIn(gross, EGYPT_VAT_BP);
     const net = netOfTax(gross, EGYPT_VAT_BP);
 
+    // Default to COD matching today's behaviour if paymentMethod is somehow null
+    const assetAccount = order.paymentMethod === 'online' 
+        ? ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_ONLINE 
+        : ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD;
+
     const lines: JournalLineInput[] = [
-        { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, currency: orderCurrency, debitMinor: gross.minor, memo: 'Gross, VAT-inclusive' },
+        { accountCode: assetAccount, currency: orderCurrency, debitMinor: gross.minor, memo: 'Gross, VAT-inclusive' },
         { accountCode: ACCOUNT_CODES.SALES_REVENUE, currency: orderCurrency, creditMinor: net.minor },
         { accountCode: ACCOUNT_CODES.VAT_PAYABLE, currency: orderCurrency, creditMinor: vat.minor },
     ];

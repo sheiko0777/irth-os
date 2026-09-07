@@ -136,7 +136,6 @@ export const financeRouter = router({
             const end = new Date(input.endDate);
             end.setHours(23, 59, 59, 999);
 
-            // Since there is no paymentMethod column, querying all delivered orders
             const rows = await ctx.db
                 .select({
                     orderId: orders.id,
@@ -150,7 +149,8 @@ export const financeRouter = router({
                     eq(orders.orgId, ctx.orgId),
                     gte(orders.createdAt, start),
                     lte(orders.createdAt, end),
-                    eq(orders.status, 'delivered')
+                    eq(orders.status, 'delivered'),
+                    eq(orders.paymentMethod, 'cod')
                 ))
                 .orderBy(desc(orders.createdAt));
 
