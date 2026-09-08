@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { sql, eq, and, lte } from 'drizzle-orm'
-import { campaigns, snapshotAndEnqueueCampaign, UnresolvedSegmentError } from '@irth/db'
+import { campaigns, snapshotAndEnqueueCampaign, sweepIdempotencyKeys, UnresolvedSegmentError } from '@irth/db'
 import { auth } from './auth'
 import { ordersRoute } from './routes/orders'
 import { shippingRoute } from './routes/shipping'
@@ -151,6 +151,8 @@ export default {
   async scheduled(_event: ScheduledEvent, env: unknown, ctx: ExecutionContext): Promise<void> {
     captureEnv(env as Record<string, unknown>)
     const db = getDb()
+
+    ctx.waitUntil(db.transaction((tx) => sweepIdempotencyKeys(tx)))
 
     ctx.waitUntil((async () => {
       for (let i = 0; i < OUTBOX_MAX_BATCHES_PER_TICK; i++) {

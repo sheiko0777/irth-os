@@ -1,4 +1,5 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { idempotencyKeys } from './schema/idempotency';
 import { jsonSafe } from './json';
 import type { DbInstance, DbTx } from './index';
@@ -27,20 +28,7 @@ export class IdempotencyError extends Error {
  */
 export function fingerprint(input: unknown): string {
     const canonical = stableStringify(jsonSafe(input));
-
-    // FNV-1a. Not a security primitive and does not need to be: this detects a
-    // client reusing a key with different parameters — an honest bug — not an
-    // adversary forging a collision. A real hash would mean pulling in a crypto
-    // dependency that must work on Workers, Node and React Native alike, for no
-    // gain against the threat that actually exists.
-    let h = 0x811c9dc5;
-    for (let i = 0; i < canonical.length; i++) {
-        h ^= canonical.charCodeAt(i);
-        h = Math.imul(h, 0x01000193) >>> 0;
-    }
-    // Length too: FNV-1a over 32 bits collides readily enough that a bare hash
-    // would occasionally reject a legitimate retry.
-    return `${h.toString(16)}-${canonical.length}`;
+    return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
 
 function stableStringify(value: unknown): string {
@@ -99,7 +87,7 @@ export async function withIdempotency<T>(
         /** Request input, hashed to detect a key reused with different parameters. */
         request: unknown;
     },
-    operation: () => Promise<T>,
+    operation: (claimId?: string) => Promise<T>,
 ): Promise<T> {
     const { orgId, operation: name, key, request } = args;
 
@@ -120,7 +108,14 @@ export async function withIdempotency<T>(
     // which a concurrent retry also finds nothing and also inserts.
     const claimed = await dbInstance
         .insert(idempotencyKeys)
-        .values({ orgId, key, operation: name, requestFingerprint: fp, state: 'in_progress' })
+        .values({
+            orgId,
+            key,
+            operation: name,
+            requestFingerprint: fp,
+            state: 'in_progress',
+            recoveryTracked: true,
+        })
         .onConflictDoNothing()
         .returning({ id: idempotencyKeys.id });
 
@@ -170,17 +165,19 @@ export async function withIdempotency<T>(
 
     let result: T;
     try {
-        result = await operation();
+        result = await operation(claimed[0].id);
     } catch (err) {
-        // Release the claim so a genuine retry can proceed. If this delete fails
-        // the key stays stuck until swept — annoying, but it fails toward
-        // refusing rather than toward double-applying.
+        // Release the claim only when no business transaction committed. A
+        // callback can throw after its transaction commits; deleting that claim
+        // would let a retry apply the already-committed effect again.
         await dbInstance
             .delete(idempotencyKeys)
             .where(and(
                 eq(idempotencyKeys.orgId, orgId),
                 eq(idempotencyKeys.operation, name),
                 eq(idempotencyKeys.key, key),
+                eq(idempotencyKeys.recoveryTracked, true),
+                isNull(idempotencyKeys.effectCommittedAt),
             ))
             .catch(() => undefined);
         throw err;
@@ -201,14 +198,34 @@ export async function withIdempotency<T>(
 }
 
 /**
- * Deletes keys older than `olderThanHours`.
+ * Records, inside the wrapped business transaction, that its effects committed.
+ * If that transaction rolls back the marker rolls back with it. A sweeper can
+ * therefore distinguish a pre-commit crash from a committed effect whose later
+ * response-marker update never ran.
+ */
+export async function markIdempotencyEffect(
+    tx: Pick<DbTx, 'update'>,
+    claimId: string,
+    orgId: string,
+): Promise<void> {
+    await tx.update(idempotencyKeys)
+        .set({ effectCommittedAt: new Date() })
+        .where(and(eq(idempotencyKeys.id, claimId), eq(idempotencyKeys.orgId, orgId)));
+}
+
+/**
+ * Deletes completed keys and safely reclaimable incomplete claims older than
+ * `olderThanHours`.
  *
  * Two reasons this is not optional. Stuck `in_progress` rows from processes that
  * died mid-operation would otherwise return CONFLICT forever. And the table
  * stores a full response per financial mutation, so it grows without bound.
  *
- * 24h default: comfortably longer than any client's retry window, short enough
- * that a stuck key is not a lasting outage.
+ * An in-progress claim is reclaimable only when it was created by the
+ * recovery-aware implementation and has no effect marker. The marker is
+ * written in the business transaction, so a committed-but-unmarked effect is
+ * retained instead of being applied twice by a retry. Legacy claims are also
+ * retained because their outcome cannot be proved.
  *
  * NOTE: replayed responses are only correct while the key survives. Sweeping
  * too aggressively means a late retry re-applies for real.
@@ -221,6 +238,14 @@ export async function sweepIdempotencyKeys(
         WITH deleted AS (
             DELETE FROM idempotency_keys
             WHERE created_at < now() - (${olderThanHours} * INTERVAL '1 hour')
+              AND (
+                state = 'completed'
+                OR (
+                  state = 'in_progress'
+                  AND recovery_tracked = true
+                  AND effect_committed_at IS NULL
+                )
+              )
             RETURNING 1
         )
         SELECT count(*)::text AS count FROM deleted

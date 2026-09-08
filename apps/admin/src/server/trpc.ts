@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, resolveActiveOrgMembership, withOrgContext, withIdempotency, IdempotencyError, can, type ActionFor, type Resource } from '@irth/db';
+import { db, resolveActiveOrgMembership, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, can, type ActionFor, type Resource } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
@@ -26,6 +26,7 @@ export const createContext = async () => {
     }
 
     const orgId = membership.orgId;
+    let activeIdempotencyClaimId: string | undefined;
 
     return {
         db,
@@ -57,7 +58,12 @@ export const createContext = async () => {
          * not scoped.
          */
         withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]): Promise<T> =>
-            withOrgContext(db, orgId, fn),
+            withOrgContext(db, orgId, async (tx) => {
+                if (activeIdempotencyClaimId) {
+                    await markIdempotencyEffect(tx, activeIdempotencyClaimId, orgId);
+                }
+                return fn(tx);
+            }),
 
         /**
          * The deliberate cross-tenant escape hatch, for `platformAdminProcedure`
@@ -111,7 +117,15 @@ export const createContext = async () => {
             request: unknown,
             fn: () => Promise<T>,
         ): Promise<T> =>
-            withIdempotency(db, { orgId, operation, key, request }, fn),
+            withIdempotency(db, { orgId, operation, key, request }, async (claimId) => {
+                const previousClaimId = activeIdempotencyClaimId;
+                activeIdempotencyClaimId = claimId;
+                try {
+                    return await fn();
+                } finally {
+                    activeIdempotencyClaimId = previousClaimId;
+                }
+            }),
     };
 };
 

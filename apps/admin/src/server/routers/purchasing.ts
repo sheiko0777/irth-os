@@ -378,7 +378,7 @@ export const purchasingRouter = router({
           // The highest-consequence of the three: receiving twice adds the
           // quantity to stock twice, and nothing downstream can tell the
           // difference between that and a genuine second delivery.
-          idempotencyKey: z.string().min(1).max(255).optional(),
+          idempotencyKey: z.string().min(1).max(255),
         })
       )
       .mutation(async ({ ctx, input }) =>

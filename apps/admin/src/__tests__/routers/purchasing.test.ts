@@ -87,7 +87,7 @@ function receiptFixture(received: (number | null)[] = [0, null]) {
 describe('purchasing.po.receive completion', () => {
   it('keeps a two-line PO partial when only one line is fully received', async () => {
     const { caller, lines } = receiptFixture();
-    const res = await caller.po.receive({ id: VALID_UUID, items: [{ id: VALID_UUID, receivedQuantity: 5 }] });
+    const res = await caller.po.receive({ id: VALID_UUID, items: [{ id: VALID_UUID, receivedQuantity: 5 }], idempotencyKey: 'partial' });
     expect(res.data.status).toBe('partial');
     expect(res.data.invalidItemIds).toEqual([]);
     expect(lines.map((line) => line.receivedQuantity)).toEqual([5, null]);
@@ -100,7 +100,7 @@ describe('purchasing.po.receive completion', () => {
   ])('uses actual line state for an empty receipt: $received', async ({ received, status }) => {
     const { caller, writes, po } = receiptFixture(received);
     po.status = status;
-    const res = await caller.po.receive({ id: VALID_UUID, items: [] });
+    const res = await caller.po.receive({ id: VALID_UUID, items: [], idempotencyKey: `empty-${received.join('-')}` });
     expect(res.data.status).toBe(status);
     expect(res.data.invalidItemIds).toEqual([]);
     expect(writes).toEqual([]);
@@ -112,7 +112,7 @@ describe('purchasing.po.receive completion', () => {
       { id: VALID_UUID, receivedQuantity: 5 },
       { id: INVALID_UUID, receivedQuantity: 5 },
       { id: SECOND_UUID, receivedQuantity: 5 },
-    ] });
+    ], idempotencyKey: 'mixed-lines' });
     expect(res.data.invalidItemIds).toEqual([INVALID_UUID]);
     expect(res.data.status).toBe('received');
     expect(lines.map((line) => line.receivedQuantity)).toEqual([5, 5]);
@@ -126,7 +126,7 @@ describe('purchasing.po.receive completion', () => {
     const res = await caller.po.receive({ id: VALID_UUID, items: [
       { id: VALID_UUID, receivedQuantity: 5 },
       { id: SECOND_UUID, receivedQuantity: 5 },
-    ] });
+    ], idempotencyKey: 'all-lines' });
     expect(res.data.status).toBe('received');
     expect(res.data.invalidItemIds).toEqual([]);
   });
@@ -239,6 +239,6 @@ describe('purchasing.po', () => {
     await expectRejectsPastAuthz(
       caller.po.updateStatus({ id: VALID_UUID, status: 'ordered' })
     );
-    await expectRejectsPastAuthz(caller.po.receive({ id: VALID_UUID, items: [] }));
+    await expectRejectsPastAuthz(caller.po.receive({ id: VALID_UUID, items: [], idempotencyKey: 'missing-po' }));
   });
 });
