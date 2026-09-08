@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, jsonb, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, jsonb, timestamp, boolean, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import { organizations } from '../schema';
 
 /**
@@ -19,6 +19,10 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   requestFingerprint: text('request_fingerprint').notNull(),
   state: text('state', { enum: ['in_progress', 'completed'] }).notNull().default('in_progress'),
   response: jsonb('response'),
+  /** False on legacy rows whose business outcome cannot be inferred safely. */
+  recoveryTracked: boolean('recovery_tracked').notNull().default(false),
+  /** Written in the same transaction as the business effect. */
+  effectCommittedAt: timestamp('effect_committed_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   completedAt: timestamp('completed_at'),
 }, (table) => [

@@ -49,16 +49,16 @@ describe('giftCards router', () => {
   });
 
   it('topup: missing card rejects NOT_FOUND', async () => {
-    await expectCode(caller.topup({ id: UUID, amount: 50 }), 'NOT_FOUND');
+    await expectCode(caller.topup({ id: UUID, amount: 50, idempotencyKey: 'missing-card' }), 'NOT_FOUND');
   });
 
   it('topup: malformed uuid rejects BAD_REQUEST', async () => {
-    await expectCode(caller.topup({ id: 'not-a-uuid', amount: 50 }), 'BAD_REQUEST');
+    await expectCode(caller.topup({ id: 'not-a-uuid', amount: 50, idempotencyKey: 'bad-card' }), 'BAD_REQUEST');
   });
 
   it('topup: non-positive amount rejects BAD_REQUEST', async () => {
-    await expectCode(caller.topup({ id: UUID, amount: 0 }), 'BAD_REQUEST');
-    await expectCode(caller.topup({ id: UUID, amount: -5 }), 'BAD_REQUEST');
+    await expectCode(caller.topup({ id: UUID, amount: 0, idempotencyKey: 'zero' }), 'BAD_REQUEST');
+    await expectCode(caller.topup({ id: UUID, amount: -5, idempotencyKey: 'negative' }), 'BAD_REQUEST');
   });
 
   it('cancel: missing card rejects NOT_FOUND', async () => {

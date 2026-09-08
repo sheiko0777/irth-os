@@ -111,7 +111,7 @@ describe('giftCards.topup — decimal safety', () => {
     mockDb.update = vi.fn(() => updateChain);
     mockDb.transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(mockDb));
 
-    await giftCardsRouter.createCaller(ctx()).topup({ id: UUID, amount: 0.2 });
+    await giftCardsRouter.createCaller(ctx()).topup({ id: UUID, amount: 0.2, idempotencyKey: 'topup-decimal' });
 
     expect(capturedSet).toBeDefined();
     const balance = capturedSet!.balanceMinor;
@@ -219,7 +219,7 @@ describe('atomic guards — no read-before-write on the success path', () => {
     mockDb.update = vi.fn(() => chainOf([]));
 
     await expect(
-      giftCardsRouter.createCaller(ctx()).topup({ id: UUID, amount: 50 })
+      giftCardsRouter.createCaller(ctx()).topup({ id: UUID, amount: 50, idempotencyKey: 'topup-cancelled' })
     ).rejects.toSatisfy((e: unknown) => e instanceof TRPCError && e.code === 'BAD_REQUEST');
     // No ledger line for a topup that did not happen.
     expect(insertSpy).not.toHaveBeenCalled();

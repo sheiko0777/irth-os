@@ -138,10 +138,9 @@ export const giftCardsRouter = router({
     .input(z.object({
       id: z.string().uuid(),
       amount: moneyInput,
-      // Optional so existing callers are unaffected; a client opts in by
-      // sending one. Only the CALLER can distinguish a retry from a second
-      // genuine request — doing this twice in a minute is legitimate.
-      idempotencyKey: z.string().min(1).max(255).optional(),
+      // Only the caller can distinguish a retry from a second genuine request
+      // — doing this twice in a minute is legitimate, so the key is required.
+      idempotencyKey: z.string().min(1).max(255),
     }))
     .mutation(async ({ ctx, input }) =>
       ctx.idempotent('giftCards.topup', input.idempotencyKey, input, async () => {
@@ -225,7 +224,7 @@ export const giftCardsRouter = router({
       // a card can be redeemed as a standalone credit with nothing else on
       // this schema recording which order it went toward.
       orderId: z.string().uuid().optional(),
-      idempotencyKey: z.string().min(1).max(255).optional(),
+      idempotencyKey: z.string().min(1).max(255),
     }))
     .mutation(async ({ ctx, input }) =>
       ctx.idempotent('giftCards.redeem', input.idempotencyKey, input, async () => {

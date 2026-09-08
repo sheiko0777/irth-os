@@ -161,10 +161,9 @@ export const customersRouter = router({
         id: z.string().uuid(),
         points: z.number().int().min(1),
         note: z.string().optional(),
-        // Optional so existing callers are unaffected; a client opts in by
-        // sending one. Granting the same customer the same points twice in a
-        // minute is legitimate, so only the caller can call this a retry.
-        idempotencyKey: z.string().min(1).max(255).optional(),
+        // Granting the same customer the same points twice in a minute is
+        // legitimate, so only the caller's required key can identify a retry.
+        idempotencyKey: z.string().min(1).max(255),
       })
     )
     .mutation(async ({ ctx, input }) =>

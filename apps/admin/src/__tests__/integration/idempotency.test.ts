@@ -16,6 +16,7 @@ import {
   transitionOrderStatus,
   postOrderDeliveredEntry,
   fingerprint,
+  idempotencyKeys,
   inventoryItems,
   inventoryDiscrepancies,
   orders,
@@ -24,6 +25,8 @@ import {
   products,
   withIdempotency,
   withOrgContext,
+  markIdempotencyEffect,
+  sweepIdempotencyKeys,
 } from '@irth/db';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
 
@@ -218,9 +221,97 @@ describe('withIdempotency', () => {
     expect(late).toEqual({ ok: true });
     expect(ran).toBe(1);
   });
+
+  it('reclaims a crash-before-commit claim because no effect marker committed', async () => {
+    const key = `crash-before-${Date.now()}`;
+    await testDb.insert(idempotencyKeys).values({
+      orgId: orgA,
+      operation: 'test.crash-before',
+      key,
+      requestFingerprint: fingerprint({ value: 1 }),
+      recoveryTracked: true,
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    });
+
+    await testDb.transaction((tx) => sweepIdempotencyKeys(tx, 1));
+    const rows = await testDb.select().from(idempotencyKeys).where(and(
+      eq(idempotencyKeys.orgId, orgA), eq(idempotencyKeys.key, key),
+    ));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('preserves a crash-after-commit effect whose completion response was never written', async () => {
+    const key = `crash-after-${Date.now()}`;
+    const [before] = await testDb.select({ quantity: inventoryItems.quantity }).from(inventoryItems)
+      .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, variantId)));
+    const [claim] = await testDb.insert(idempotencyKeys).values({
+      orgId: orgA,
+      operation: 'test.crash-after',
+      key,
+      requestFingerprint: fingerprint({ value: 1 }),
+      recoveryTracked: true,
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    }).returning();
+
+    await withOrgContext(testDb, orgA, async (tx) => {
+      await markIdempotencyEffect(tx, claim.id, orgA);
+      await tx.update(inventoryItems)
+        .set({ quantity: sql`${inventoryItems.quantity} + 1` })
+        .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, variantId)));
+    });
+
+    await testDb.transaction((tx) => sweepIdempotencyKeys(tx, 1));
+    const [preserved] = await testDb.select().from(idempotencyKeys).where(and(
+      eq(idempotencyKeys.orgId, orgA), eq(idempotencyKeys.key, key),
+    ));
+    expect(preserved.state).toBe('in_progress');
+    expect(preserved.effectCommittedAt).not.toBeNull();
+    await expect(withIdempotency(
+      testDb,
+      { orgId: orgA, operation: 'test.crash-after', key, request: { value: 1 } },
+      async () => ({ duplicated: true }),
+    )).rejects.toBeInstanceOf(IdempotencyError);
+    const [after] = await testDb.select({ quantity: inventoryItems.quantity }).from(inventoryItems)
+      .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, variantId)));
+    expect(after.quantity).toBe(before.quantity + 1);
+  });
+
+  it('allows one retry after sweeping a crash-before-commit claim', async () => {
+    const key = `sweep-retry-${Date.now()}`;
+    const request = { value: 1 };
+    await testDb.insert(idempotencyKeys).values({
+      orgId: orgA,
+      operation: 'test.sweep-retry',
+      key,
+      requestFingerprint: fingerprint(request),
+      recoveryTracked: true,
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    });
+
+    await testDb.transaction((tx) => sweepIdempotencyKeys(tx, 1));
+    let ran = 0;
+    const result = await withIdempotency(
+      testDb,
+      { orgId: orgA, operation: 'test.sweep-retry', key, request },
+      async () => ({ attempt: ++ran }),
+    );
+    const replay = await withIdempotency(
+      testDb,
+      { orgId: orgA, operation: 'test.sweep-retry', key, request },
+      async () => ({ attempt: ++ran }),
+    );
+
+    expect(result).toEqual({ attempt: 1 });
+    expect(replay).toEqual(result);
+    expect(ran).toBe(1);
+  });
 });
 
 describe('fingerprint', () => {
+  it('returns a canonical SHA-256 hex digest', () => {
+    expect(fingerprint({ a: 1 })).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it('ignores object key order', () => {
     // JSON.stringify preserves insertion order, so hashing it directly would
     // call a retry a mismatch depending on how the client built the object.
