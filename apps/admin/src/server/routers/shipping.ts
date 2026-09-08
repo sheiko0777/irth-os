@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { shippingZones, shippingRates } from '@irth/db';
-import { eq, and, count } from 'drizzle-orm';
+import { eq, and, count, getTableColumns } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { EGP, fromMinor, parseDecimal } from '@irth/domain';
 
@@ -11,24 +11,23 @@ export const shippingRouter = router({
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
         const zones = await ctx.db
-          .select()
+          .select({
+            ...getTableColumns(shippingZones),
+            rateCount: count(shippingRates.id),
+          })
           .from(shippingZones)
+          .leftJoin(shippingRates, eq(shippingZones.id, shippingRates.zoneId))
           .where(eq(shippingZones.orgId, ctx.orgId))
+          .groupBy(shippingZones.id)
           .orderBy(shippingZones.name);
 
-        const zonesWithCounts = await Promise.all(
-          zones.map(async (zone) => {
-            const [{ cnt }] = await ctx.db
-              .select({ cnt: count(shippingRates.id) })
-              .from(shippingRates)
-              .where(eq(shippingRates.zoneId, zone.id));
-            return {
-              ...zone,
-              countries: (zone.countries as string[]) ?? [],
-              rateCount: Number(cnt ?? 0),
-            };
-          })
-        );
+        const zonesWithCounts = zones.map((zone) => {
+          return {
+            ...zone,
+            countries: (zone.countries as string[]) ?? [],
+            rateCount: Number(zone.rateCount ?? 0),
+          };
+        });
 
         return { data: zonesWithCounts, error: null };
       }),

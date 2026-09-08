@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { stocktakingSessions, stocktakingItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
-import { eq, and, desc, count, sql, ne, isNotNull } from 'drizzle-orm';
+import { eq, and, desc, count, sql, ne, isNotNull, getTableColumns } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { assertSupportedCurrency } from '@irth/domain';
 
@@ -11,28 +11,25 @@ export const stocktakingRouter = router({
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
         const sessions = await ctx.db
-          .select()
+          .select({
+            ...getTableColumns(stocktakingSessions),
+            itemCount: count(stocktakingItems.id),
+            varianceCount: sql<number>`COALESCE(COUNT(CASE WHEN ${stocktakingItems.variance} != 0 AND ${stocktakingItems.actualQuantity} IS NOT NULL THEN 1 END), 0)`,
+          })
           .from(stocktakingSessions)
+          .leftJoin(stocktakingItems, eq(stocktakingSessions.id, stocktakingItems.sessionId))
           .where(eq(stocktakingSessions.orgId, ctx.orgId))
+          .groupBy(stocktakingSessions.id)
           .orderBy(desc(stocktakingSessions.createdAt))
           .limit(50);
 
-        const sessionsWithCounts = await Promise.all(
-          sessions.map(async (s) => {
-            const [counts] = await ctx.db
-              .select({
-                itemCount: count(stocktakingItems.id),
-                varianceCount: sql<number>`COALESCE(COUNT(CASE WHEN ${stocktakingItems.variance} != 0 AND ${stocktakingItems.actualQuantity} IS NOT NULL THEN 1 END), 0)`,
-              })
-              .from(stocktakingItems)
-              .where(eq(stocktakingItems.sessionId, s.id));
-            return {
-              ...s,
-              itemCount: Number(counts?.itemCount ?? 0),
-              varianceCount: Number(counts?.varianceCount ?? 0),
-            };
-          })
-        );
+        const sessionsWithCounts = sessions.map((s) => {
+          return {
+            ...s,
+            itemCount: Number(s.itemCount ?? 0),
+            varianceCount: Number(s.varianceCount ?? 0),
+          };
+        });
 
         return { data: sessionsWithCounts, error: null };
       }),
