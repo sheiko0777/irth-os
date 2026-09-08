@@ -20,6 +20,10 @@ export default function CustomerPointsDialog({ customerId, customerName, current
   const [points, setPoints] = useState('');
   const [pointsNote, setPointsNote] = useState('');
   const [pointsAction, setPointsAction] = useState<'add' | 'redeem'>('add');
+  // customers.addPoints now requires an idempotency key (F10) — one per
+  // dialog open, so a network retry of the same submit reuses it, but
+  // opening the dialog again for a genuinely new addition gets a fresh one.
+  const [addPointsKey, setAddPointsKey] = useState(() => crypto.randomUUID());
 
   const addPointsMutation = trpc.customers.addPoints.useMutation({
     onSuccess: () => {
@@ -28,6 +32,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
       setIsOpen(false);
       setPoints('');
       setPointsNote('');
+      setAddPointsKey(crypto.randomUUID());
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : 'حدث خطأ');
@@ -55,7 +60,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
       return;
     }
     if (pointsAction === 'add') {
-      addPointsMutation.mutate({ id: customerId, points: pts, note: pointsNote || undefined });
+      addPointsMutation.mutate({ id: customerId, points: pts, note: pointsNote || undefined, idempotencyKey: addPointsKey });
     } else {
       redeemPointsMutation.mutate({ id: customerId, points: pts, note: pointsNote || undefined });
     }
