@@ -4,3 +4,6 @@
 ## 2026-09-07 - Batch Purchasing PO List Query
 **Learning:** The po.list query was fetching data without a corresponding total count, missing essential pagination data, and implementing this sequentially would double latency.
 **Action:** Execute list and count queries concurrently in API routes/tRPC procedures using `Promise.all` to return complete pagination metadata while reducing max latency.
+## 2025-02-14 - Refactoring N+1 mapping to GROUP BY count()
+**Learning:** Found sequential independent count queries using Promise.all inside a mapping loop which executes n queries against the database for every fetched item.
+**Action:** Refactor N+1 mapping loop queries by pushing the logic down to the database level through a single grouped query utilizing left joins, GROUP BY, and aggregate functions (like count()) to eliminate database roundtrips.

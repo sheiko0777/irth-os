@@ -1,34 +1,33 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
 import { priceLists, priceListItems } from '@irth/db';
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, getTableColumns } from 'drizzle-orm';
 
 export const pricelistsRouter = router({
   list: protectedProcedure
     .input(z.object({}).optional())
     .query(async ({ ctx }) => {
       const lists = await ctx.db
-        .select()
+        .select({
+            ...getTableColumns(priceLists),
+            itemCount: count(priceListItems.id),
+        })
         .from(priceLists)
+        .leftJoin(priceListItems, eq(priceLists.id, priceListItems.priceListId))
         .where(eq(priceLists.orgId, ctx.orgId))
+        .groupBy(priceLists.id)
         .orderBy(desc(priceLists.createdAt));
 
-      const listsWithCounts = await Promise.all(
-        lists.map(async (pl) => {
-          const [{ cnt }] = await ctx.db
-            .select({ cnt: count(priceListItems.id) })
-            .from(priceListItems)
-            .where(eq(priceListItems.priceListId, pl.id));
-          return {
-            ...pl,
-            itemCount: Number(cnt ?? 0),
-            // Stored as integer basis points; surfaced as a percent for display.
-            // 1000 bp -> 10. Integer division by 100 keeps the tenth of a
-            // percent that bp can express without going through a float.
-            discountPercent: pl.discountBp === null ? null : pl.discountBp / 100,
-          };
-        })
-      );
+      const listsWithCounts = lists.map((pl) => {
+        return {
+          ...pl,
+          itemCount: Number(pl.itemCount ?? 0),
+          // Stored as integer basis points; surfaced as a percent for display.
+          // 1000 bp -> 10. Integer division by 100 keeps the tenth of a
+          // percent that bp can express without going through a float.
+          discountPercent: pl.discountBp === null ? null : pl.discountBp / 100,
+        };
+      });
 
       return listsWithCounts;
     }),
