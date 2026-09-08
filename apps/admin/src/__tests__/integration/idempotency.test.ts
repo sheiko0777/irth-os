@@ -241,9 +241,24 @@ describe('withIdempotency', () => {
   });
 
   it('preserves a crash-after-commit effect whose completion response was never written', async () => {
+    // Its own product/variant/inventory row, deliberately NOT the file's
+    // shared `variantId` — this test's whole point is to actually mutate
+    // stock as the stand-in "business effect", and the 'stock guard'
+    // describe block below depends on the shared fixture still reading
+    // exactly 5 when it runs. Reusing it here previously left it at 6,
+    // silently breaking those unrelated, later tests.
+    const [crashAfterProduct] = await testDb.insert(products).values({
+      orgId: orgA, name: 'Crash-After Widget', sku: `CA-SKU-${Date.now()}`, priceMinor: 1000n, currency: 'EGP',
+    }).returning();
+    const [crashAfterVariant] = await testDb.insert(productVariants).values({
+      orgId: orgA, productId: crashAfterProduct.id, name: 'Default', sku: `CA-V-${Date.now()}`, priceMinor: 1000n,
+    }).returning();
+    const crashAfterVariantId = crashAfterVariant.id;
+    await testDb.insert(inventoryItems).values({ orgId: orgA, variantId: crashAfterVariantId, quantity: 5 });
+
     const key = `crash-after-${Date.now()}`;
     const [before] = await testDb.select({ quantity: inventoryItems.quantity }).from(inventoryItems)
-      .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, variantId)));
+      .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, crashAfterVariantId)));
     const [claim] = await testDb.insert(idempotencyKeys).values({
       orgId: orgA,
       operation: 'test.crash-after',
@@ -257,7 +272,7 @@ describe('withIdempotency', () => {
       await markIdempotencyEffect(tx, claim.id, orgA);
       await tx.update(inventoryItems)
         .set({ quantity: sql`${inventoryItems.quantity} + 1` })
-        .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, variantId)));
+        .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, crashAfterVariantId)));
     });
 
     await testDb.transaction((tx) => sweepIdempotencyKeys(tx, 1));
@@ -272,7 +287,7 @@ describe('withIdempotency', () => {
       async () => ({ duplicated: true }),
     )).rejects.toBeInstanceOf(IdempotencyError);
     const [after] = await testDb.select({ quantity: inventoryItems.quantity }).from(inventoryItems)
-      .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, variantId)));
+      .where(and(eq(inventoryItems.orgId, orgA), eq(inventoryItems.variantId, crashAfterVariantId)));
     expect(after.quantity).toBe(before.quantity + 1);
   });
 
