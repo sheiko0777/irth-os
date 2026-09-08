@@ -12,3 +12,8 @@
 **Vulnerability:** The notification endpoints in `apps/admin/src/server/routers/notifications.ts` (list, markRead, markAllRead, unreadCount) failed to scope queries to `userId`, allowing any member of an organization to access and modify notifications for all other users within the same organization.
 **Learning:** While `ctx.withOrg` and `orgId` filters properly restrict access to the tenant level, user-specific resources like notifications must also be explicitly scoped with `eq(notifications.userId, ctx.userId)` to prevent horizontal privilege escalation (IDOR) within the organization.
 **Prevention:** Always verify that endpoints serving user-specific data apply both the tenant filter (`orgId`) and the user filter (`userId`).
+
+## 2025-02-24 - Weak Random Number Generation in Gift Card Codes
+**Vulnerability:** The `generateCode` function in `apps/admin/src/server/routers/giftCards.ts` used `Math.random()` to generate characters for gift card codes.
+**Learning:** `Math.random()` is not cryptographically secure, and its outputs can be predicted if the internal state of the PRNG is known or deduced over time. This makes financial artifacts like gift cards vulnerable to being guessed and stolen by malicious actors.
+**Prevention:** Always use cryptographically secure pseudo-random number generators (CSPRNG) such as `crypto.getRandomValues` or Node's `crypto.randomBytes` / `crypto.randomInt` for generating security-sensitive, financial, or authentication codes.
