@@ -98,3 +98,12 @@ export function can<R extends Resource>(role: Role, resource: R, action: ActionF
   const allowed = (PERMISSIONS[resource] as Record<string, Role[]> | undefined)?.[action as string];
   return allowed ? allowed.includes(role) : false;
 }
+
+// Deny unknown runtime roles as well as actors without assignment permission.
+export function canAssignRole(actorRole: Role, targetRole: Role): boolean {
+  if (targetRole === 'owner') return actorRole === 'owner';
+  if (targetRole === 'admin' || targetRole === 'member') {
+    return actorRole === 'owner' || actorRole === 'admin';
+  }
+  return false;
+}

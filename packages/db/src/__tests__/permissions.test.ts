@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { can, PERMISSIONS, type Resource } from '../permissions';
+import { can, canAssignRole, PERMISSIONS, type Resource, type Role } from '../permissions';
 
 describe('can', () => {
   it('matches the matrix for every declared resource and action', () => {
@@ -33,5 +33,28 @@ describe('can', () => {
     // @ts-expect-error 'bogus' is not a key of PERMISSIONS.products — can()'s
     // generic signature must reject it rather than widening to `string`.
     can('owner', 'products', 'bogus');
+  });
+});
+
+describe('canAssignRole', () => {
+  it.each([
+    ['owner', 'owner', true],
+    ['owner', 'admin', true],
+    ['owner', 'member', true],
+    ['admin', 'owner', false],
+    ['admin', 'admin', true],
+    ['admin', 'member', true],
+    ['member', 'owner', false],
+    ['member', 'admin', false],
+    ['member', 'member', false],
+  ] as const)('%s assigning %s returns %s', (actorRole, targetRole, allowed) => {
+    expect(canAssignRole(actorRole, targetRole)).toBe(allowed);
+  });
+
+  it('fails closed on unknown runtime roles', () => {
+    for (const role of ['owner', 'admin', 'member'] as const) {
+      expect(canAssignRole('unknown' as Role, role)).toBe(false);
+      expect(canAssignRole(role, 'unknown' as Role)).toBe(false);
+    }
   });
 });
