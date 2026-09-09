@@ -4,6 +4,7 @@ import { db, getDb } from '../../db';
 import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification, safeEqual } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { envVar } from '../../utils/env';
+import { resolveCourierShipmentByTracking } from './resolveCourierShipmentByTracking';
 
 /**
  * Courier states that mean "the parcel is moving" — the natural trigger for
@@ -56,10 +57,11 @@ aramexWebhookRoute.post('/', async (c: Context) => {
   else if (updateCode === 'SH001') courierStatus = 'picked_up';
   else if (updateCode === 'SH002') courierStatus = 'in_transit';
 
-  const [existingShipment] = await db
-    .select()
-    .from(courierShipments)
-    .where(eq(courierShipments.trackingNumber, trackingNumber));
+  const resolution = await resolveCourierShipmentByTracking(db, 'aramex', trackingNumber);
+  if (resolution.status === 'ambiguous') {
+    return c.json({ data: null, error: 'ambiguous_tracking_number', meta: null }, 409);
+  }
+  const existingShipment = resolution.shipment;
 
   if (existingShipment) {
     const updatedEvents = [...(existingShipment.webhookEvents || []), payload];
