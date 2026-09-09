@@ -120,6 +120,8 @@ export async function shopifyGraphQL<T>(query: string, variables?: Record<string
 }
 
 export interface ShopifyProductInput {
+  /** Stable local identifier used to make a first push idempotent by handle. */
+  localProductId: string;
   // Present when this is an update to a product already linked to Shopify;
   // omitted on first push, letting `productSet` create it.
   shopifyProductId?: string | null;
@@ -163,8 +165,8 @@ export async function upsertShopifyProduct(input: ShopifyProductInput): Promise<
   variants: Array<{ sku: string; shopifyVariantId: string }>;
 }> {
   const query = `
-    mutation ProductSet($input: ProductSetInput!) {
-      productSet(input: $input, synchronous: true) {
+    mutation ProductSet($input: ProductSetInput!, $identifier: ProductSetIdentifiers) {
+      productSet(input: $input, identifier: $identifier, synchronous: true) {
         product {
           id
           variants(first: 100) {
@@ -176,9 +178,16 @@ export async function upsertShopifyProduct(input: ShopifyProductInput): Promise<
     }
   `;
 
+  const stableHandle = `irth-${input.localProductId.toLowerCase()}`;
   const variables = {
+    // Shopify documents productSet as an upsert by identifier. A deterministic
+    // handle lets a retry reconcile with a product created before a local DB
+    // commit/crash instead of issuing another create with no identity.
+    identifier: input.shopifyProductId
+      ? { id: input.shopifyProductId }
+      : { handle: stableHandle },
     input: {
-      id: input.shopifyProductId ?? undefined,
+      ...(!input.shopifyProductId ? { handle: stableHandle } : {}),
       title: input.title,
       descriptionHtml: input.descriptionHtml,
       status: input.status,

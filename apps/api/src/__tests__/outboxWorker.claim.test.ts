@@ -72,4 +72,38 @@ describe('processOutbox — claim mechanism', () => {
         // Assert that the email send function was only called once despite two processOutbox calls
         expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
     });
+
+    it('fails an unknown event type instead of marking it processed', async () => {
+        const event = { ...pendingEvent({}), eventType: 'future.unknown.event' };
+        const applied: Array<Record<string, unknown>> = [];
+        const db = {
+            transaction: vi.fn(async (cb) => cb({
+                select: vi.fn(() => chainable([event])),
+                update: vi.fn(() => {
+                    const chain = chainable(undefined);
+                    chain.set = vi.fn((value: Record<string, unknown>) => {
+                        applied.push(value);
+                        return chain;
+                    });
+                    return chain;
+                }),
+            })),
+            update: vi.fn(() => {
+                const chain = chainable(undefined);
+                chain.set = vi.fn((value: Record<string, unknown>) => {
+                    applied.push(value);
+                    return chain;
+                });
+                return chain;
+            }),
+        };
+
+        await expect(processOutbox(db as never)).resolves.toBe(1);
+
+        expect(applied).toContainEqual(expect.objectContaining({
+            attempts: 1,
+            lastError: 'Unknown outbox event type: future.unknown.event',
+        }));
+        expect(applied.some((update) => update.processed === true)).toBe(false);
+    });
 });

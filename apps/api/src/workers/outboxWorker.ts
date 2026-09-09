@@ -110,6 +110,7 @@ export async function processOutbox(database: typeof db): Promise<number> {
                     }
 
                     const productInput = {
+                        localProductId: product.id,
                         shopifyProductId: product.shopifyProductId,
                         title: product.name,
                         descriptionHtml: product.description ?? undefined,
@@ -371,6 +372,8 @@ export async function processOutbox(database: typeof db): Promise<number> {
                             }
                         ]);
                     }
+                } else {
+                    throw new Error(`Unknown outbox event type: ${event.eventType}`);
                 }
 
                 await database.update(outboxEvents)
@@ -381,9 +384,18 @@ export async function processOutbox(database: typeof db): Promise<number> {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 // ETA keeps its own retry state on eta_invoices. All other
                 // event types share this outbox-level cooldown.
+                const baseBackoffMinutes = Math.min(2 ** (event.attempts + 1), 60);
+                // +/-20% jitter prevents every event delayed by the same
+                // provider outage from becoming eligible on the same tick.
+                // Clamp after jitter so the established 60-minute ceiling
+                // remains a hard cap.
+                const jitteredBackoffMinutes = Math.min(
+                    baseBackoffMinutes * (0.8 + Math.random() * 0.4),
+                    60,
+                );
                 const nextRetryAt = event.eventType === 'eta.invoice.issue'
                     ? undefined
-                    : new Date(Date.now() + Math.min(2 ** (event.attempts + 1), 60) * 60_000);
+                    : new Date(Date.now() + jitteredBackoffMinutes * 60_000);
                 const attemptsAfterThis = event.attempts + 1;
                 await database.update(outboxEvents)
                     .set({
