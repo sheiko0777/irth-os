@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
+import { symbolOf } from '../format';
 import {
   EGP,
   EGYPT_VAT_BP,
@@ -21,6 +22,13 @@ import {
   toDecimalString,
   zero,
 } from '../money';
+
+describe('symbolOf', () => {
+  it('renders the Arabic abbreviations for BHD and OMR', () => {
+    expect(symbolOf(currency('BHD'))).toBe('د.ب');
+    expect(symbolOf(currency('OMR'))).toBe('ر.ع');
+  });
+});
 
 /** Amounts up to ~90 billion EGP, positive and negative. */
 const amount = fc.bigInt({ min: -9_000_000_000_000n, max: 9_000_000_000_000n });
