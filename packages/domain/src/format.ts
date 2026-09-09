@@ -7,23 +7,31 @@
  * zero fraction digits, gift cards force two, and the returns detail page
  * prints "EGP" instead of "ج.م". Same number, four appearances.
  */
-import { type Currency, type Money, exponentOf, toDecimalString } from './money';
+import {
+  type Currency,
+  type KnownCurrencyCode,
+  type Money,
+  exponentOf,
+  toDecimalString,
+} from './money';
 
 /**
  * Arabic symbols, matching what the UI already uses. `ج.م` is the established
  * spelling here — not the ISO code, which reads as a foreign string to the
  * Egyptian audience this admin is for.
  */
-const SYMBOLS: Readonly<Record<string, string>> = {
+const SYMBOLS: Record<KnownCurrencyCode, string> = {
   EGP: 'ج.م',
+  USD: '$',
   SAR: 'ر.س',
   AED: 'د.إ',
   KWD: 'د.ك',
-  USD: '$',
+  BHD: 'د.ب',
+  OMR: 'ر.ع',
 };
 
 export function symbolOf(c: Currency): string {
-  return SYMBOLS[c] ?? c;
+  return SYMBOLS[c as KnownCurrencyCode] ?? c;
 }
 
 export interface FormatOptions {

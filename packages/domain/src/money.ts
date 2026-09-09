@@ -16,12 +16,15 @@
 /** ISO 4217 code. Branded so a bare string cannot be passed as a currency. */
 export type Currency = string & { readonly __brand: 'Currency' };
 
+export const KNOWN_CURRENCIES = ['EGP', 'USD', 'SAR', 'AED', 'KWD', 'BHD', 'OMR'] as const;
+export type KnownCurrencyCode = (typeof KNOWN_CURRENCIES)[number];
+
 /**
  * How many decimal places a currency has. EGP, USD, SAR and AED are all 2.
  * Kept as a lookup rather than a constant because the Gulf market includes
  * KWD/BHD/OMR at 3 — adding one here must not require touching arithmetic.
  */
-const EXPONENTS: Readonly<Record<string, number>> = {
+const EXPONENTS: Record<KnownCurrencyCode, number> = {
   EGP: 2,
   USD: 2,
   SAR: 2,
@@ -54,18 +57,18 @@ export class UnsupportedCurrencyError extends Error {
  * restricted to an EGP-primary baseline for correctness fixes. Multi-currency
  * is an explicit, separate, later phase. This allowlist is meant to grow.
  */
-export const SUPPORTED_CURRENCIES = ['EGP'] as const;
+export const SUPPORTED_CURRENCIES = ['EGP'] as const satisfies readonly KnownCurrencyCode[];
 
 export function assertSupportedCurrency(code: string): Currency {
   const c = currency(code);
-  if (!SUPPORTED_CURRENCIES.includes(c as any)) {
+  if (!SUPPORTED_CURRENCIES.some((supported) => supported === code)) {
     throw new UnsupportedCurrencyError(c);
   }
   return c;
 }
 
 export function exponentOf(c: Currency): number {
-  return EXPONENTS[c] ?? DEFAULT_EXPONENT;
+  return EXPONENTS[c as KnownCurrencyCode] ?? DEFAULT_EXPONENT;
 }
 
 /**
