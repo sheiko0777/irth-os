@@ -1,15 +1,11 @@
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { can, jsonSafe, shopifyConnections, shopifyOAuthStates, withOrgContext, type Role } from '@irth/db';
 import { getDb, getEnv } from '../db';
 import { encryptShopifyToken, exchangeShopifyAuthorizationCode, hashOpaque, listShopifyLocations, newOpaqueToken, normalizeShopDomain, registerShopifyWebhooks, SHOPIFY_SCOPES, verifyShopifyOAuthHmac } from '../services/shopifyConnection';
+import { requireOrgId } from '../middlewares/requireOrgId';
 
 export const shopifyRoute = new Hono();
-
-function requireRole(c: Context): Role | null {
-  return (c.get('role') as Role | undefined) ?? null;
-}
 
 function apiBaseUrl(): string {
   return ((getEnv()?.SHOPIFY_APP_URL as string | undefined) ?? process.env.SHOPIFY_APP_URL ?? 'http://localhost:3001').replace(/\/$/, '');
@@ -19,15 +15,10 @@ function adminBaseUrl(): string {
   return ((getEnv()?.ADMIN_APP_URL as string | undefined) ?? process.env.ADMIN_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 }
 
-function requireOrg(c: Context): string | null {
-  return c.get('orgId') as string | undefined ?? null;
-}
-
-shopifyRoute.get('/connect', async (c) => {
-  const orgId = requireOrg(c);
-  const role = requireRole(c);
+shopifyRoute.get('/connect', requireOrgId(), async (c) => {
+  const orgId = c.get('orgId') as string;
+  const role = c.get('role') as Role;
   const shopDomain = normalizeShopDomain(c.req.query('shop') ?? '');
-  if (!orgId || !role) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
   if (!can(role, 'integrations', 'connect')) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
   if (!shopDomain) return c.json({ data: null, error: 'invalid_shop_domain', meta: null }, 400);
   const state = newOpaqueToken();
@@ -72,29 +63,26 @@ shopifyRoute.get('/oauth/callback', async (c) => {
   return c.redirect(`${adminBaseUrl()}/ar/integrations?shopify=connected`);
 });
 
-shopifyRoute.get('/status', async (c) => {
-  const orgId = requireOrg(c);
-  const role = requireRole(c);
-  if (!orgId || !role) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+shopifyRoute.get('/status', requireOrgId(), async (c) => {
+  const orgId = c.get('orgId') as string;
+  const role = c.get('role') as Role;
   if (!can(role, 'integrations', 'view')) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
   const [connection] = await getDb().select({ id: shopifyConnections.id, shopDomain: shopifyConnections.shopDomain, inventoryLocationId: shopifyConnections.inventoryLocationId, status: shopifyConnections.status, lastSyncAt: shopifyConnections.lastSyncAt, lastWebhookAt: shopifyConnections.lastWebhookAt, lastError: shopifyConnections.lastError }).from(shopifyConnections).where(eq(shopifyConnections.orgId, orgId)).limit(1);
   return c.json({ data: jsonSafe(connection ?? null), error: null, meta: null });
 });
 
-shopifyRoute.get('/locations', async (c) => {
-  const orgId = requireOrg(c);
-  const role = requireRole(c);
-  if (!orgId || !role) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+shopifyRoute.get('/locations', requireOrgId(), async (c) => {
+  const orgId = c.get('orgId') as string;
+  const role = c.get('role') as Role;
   if (!can(role, 'integrations', 'view')) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
   const [connection] = await getDb().select().from(shopifyConnections).where(and(eq(shopifyConnections.orgId, orgId), eq(shopifyConnections.status, 'active'))).limit(1);
   if (!connection) return c.json({ data: null, error: 'not_connected', meta: null }, 404);
   return c.json({ data: jsonSafe(await listShopifyLocations(connection)), error: null, meta: null });
 });
 
-shopifyRoute.put('/location', async (c) => {
-  const orgId = requireOrg(c);
-  const role = requireRole(c);
-  if (!orgId || !role) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+shopifyRoute.put('/location', requireOrgId(), async (c) => {
+  const orgId = c.get('orgId') as string;
+  const role = c.get('role') as Role;
   if (!can(role, 'integrations', 'manage')) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
   const body = await c.req.json<{ inventoryLocationId?: string }>();
   if (!body.inventoryLocationId?.startsWith('gid://shopify/Location/')) return c.json({ data: null, error: 'invalid_location', meta: null }, 400);

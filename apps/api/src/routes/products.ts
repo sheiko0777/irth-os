@@ -7,13 +7,13 @@ import { db, withOrg } from '../db';
 import { products, productVariants, withAudit, jsonSafe, emitOutboxEvent } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
+import { requireOrgId } from '../middlewares/requireOrgId';
 
 export const productsRouter = new Hono();
 
-productsRouter.get('/', async (c: Context) => {
+productsRouter.get('/', requireOrgId(), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const page = parseInt(c.req.query('page') || '1', 10);
     const limit = parseInt(c.req.query('limit') || '20', 10);
@@ -61,8 +61,7 @@ const createProductSchema = z.object({
 
 productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const userId = (c.get('userId') as string | undefined) ?? 'system';
     const body = await c.req.json();
@@ -109,10 +108,9 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   }
 });
 
-productsRouter.get('/:id', async (c: Context) => {
+productsRouter.get('/:id', requireOrgId(), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
     
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
@@ -147,8 +145,7 @@ const updateProductSchema = z.object({
 
 productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
@@ -209,8 +206,7 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
 
 productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
@@ -241,10 +237,9 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   }
 });
 
-productsRouter.get('/:id/variants', async (c: Context) => {
+productsRouter.get('/:id/variants', requireOrgId(), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
@@ -274,8 +269,7 @@ const createVariantSchema = z.object({
 
 productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);

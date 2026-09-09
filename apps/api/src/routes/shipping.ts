@@ -5,22 +5,19 @@ import { db } from '../db';
 import { orders, shipmentTracking, auditLog, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { envVar } from '../utils/env';
+import { requireOrgId } from '../middlewares/requireOrgId';
 
 const shippingRoute = new Hono();
 
-const getOrgId = (c: Context): string | undefined => c.get('orgId') as string | undefined;
-const getUserId = (c: Context): string | undefined => c.get('userId') as string | undefined;
+const getUserId = (c: Context): string => c.get('userId') as string;
 
 const createShippingSchema = z.object({
   orderId: z.string().uuid()
 });
 
-shippingRoute.post('/create', async (c: Context) => {
-  const orgId = getOrgId(c);
+shippingRoute.post('/create', requireOrgId(), async (c: Context) => {
+  const orgId = c.get('orgId') as string;
   const userId = getUserId(c);
-  if (!orgId || !userId) {
-    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
-  }
   const body = await c.req.json();
 
   const { orderId } = createShippingSchema.parse(body);
