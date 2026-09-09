@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { campaigns, campaignRecipients } from './schema/campaigns';
 import { customers } from './schema/customers';
-import { emitOutboxEvent } from './outbox';
+import { emitOutboxEvents } from './outbox';
 import type { DbTx } from './index';
 
 /**
@@ -39,35 +39,45 @@ export async function snapshotAndEnqueueCampaign(tx: DbTx, campaign: { id: strin
 
   let totalRecipients = 0;
 
-  for (const c of resolvedCustomers) {
-    let status: 'pending' | 'skipped_no_consent' | 'skipped_unsupported_channel' = 'pending';
-    if (c.marketingConsent === false) {
-      status = 'skipped_no_consent';
-    } else if (campaign.channel === 'sms') {
-      // No SMS provider client exists anywhere in this repo yet — quarantine
-      // rather than fabricate a send.
-      status = 'skipped_unsupported_channel';
-    }
+  if (resolvedCustomers.length > 0) {
+    const recipientRows = resolvedCustomers.map((c) => {
+      let status: 'pending' | 'skipped_no_consent' | 'skipped_unsupported_channel' = 'pending';
+      if (c.marketingConsent === false) {
+        status = 'skipped_no_consent';
+      } else if (campaign.channel === 'sms') {
+        // No SMS provider client exists anywhere in this repo yet — quarantine
+        // rather than fabricate a send.
+        status = 'skipped_unsupported_channel';
+      }
 
-    const [recipient] = await tx.insert(campaignRecipients).values({
-      orgId: campaign.orgId,
-      campaignId: campaign.id,
-      customerId: c.id,
-      channel: campaign.channel,
-      status,
-    }).returning({ id: campaignRecipients.id });
+      return {
+        orgId: campaign.orgId,
+        campaignId: campaign.id,
+        customerId: c.id,
+        channel: campaign.channel,
+        status,
+      };
+    });
 
-    if (status === 'pending') {
-      await emitOutboxEvent(tx, {
+    const recipients = await tx.insert(campaignRecipients).values(recipientRows).returning({
+      id: campaignRecipients.id,
+      status: campaignRecipients.status,
+    });
+
+    const pendingRecipients = recipients.filter((recipient) => recipient.status === 'pending');
+
+    if (pendingRecipients.length > 0) {
+      await emitOutboxEvents(tx, pendingRecipients.map((recipient) => ({
         orgId: campaign.orgId,
         eventType: 'campaign.recipient.send',
         payload: {
           orgId: campaign.orgId,
           recipientId: recipient.id,
         },
-      });
-      totalRecipients++;
+      })));
     }
+
+    totalRecipients = pendingRecipients.length;
   }
 
   await tx.update(campaigns)
