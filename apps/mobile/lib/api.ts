@@ -57,6 +57,27 @@ export async function apiFetch<S extends z.ZodTypeAny>(
   return schema.parse(body.data);
 }
 
+export async function apiFetchWithMeta<
+  S extends z.ZodTypeAny,
+  M extends z.ZodTypeAny,
+>(
+  endpoint: string,
+  schema: S,
+  metaSchema: M,
+  options: FetchOptions = {},
+): Promise<{ data: z.infer<S>; meta: z.infer<M> }> {
+  const body = (await rawFetch(endpoint, options)) as ApiEnvelope<unknown>;
+
+  if (body.error) {
+    throw new Error(body.error);
+  }
+
+  return {
+    data: schema.parse(body.data),
+    meta: metaSchema.parse(body.meta),
+  };
+}
+
 /**
  * For Better Auth's own routes (/api/auth/**, mounted directly to
  * auth.handler in apps/api/src/index.ts — `app.on(['POST','GET'],
