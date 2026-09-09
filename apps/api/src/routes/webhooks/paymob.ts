@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db } from '../../db';
-import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus } from '@irth/db';
+import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -57,13 +57,7 @@ paymobRoute.post('/', async (c: Context) => {
   }
 
   const expected = crypto.createHmac('sha512', hmacSecret).update(concatenatedString).digest('hex');
-  const sigBuf = Buffer.from(hmacHeader, 'hex');
-  const expBuf = Buffer.from(expected, 'hex');
-
-  const hashedSig = crypto.createHash('sha256').update(sigBuf).digest();
-  const hashedExp = crypto.createHash('sha256').update(expBuf).digest();
-
-  if (!crypto.timingSafeEqual(hashedSig, hashedExp)) {
+  if (!safeEqual(hmacHeader, expected, 'hex')) {
     return c.json({ data: null, error: 'invalid_hmac', meta: null }, 401);
   }
 

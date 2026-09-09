@@ -32,6 +32,7 @@ import * as authSchema from './schema/auth';
 const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema, ...stocktakingSchema, ...pricelistsSchema, ...shippingZonesSchema, ...campaignsSchema, ...giftCardsSchema, ...customerSegmentsSchema, ...orgFeatureFlagsSchema, ...documentCountersSchema, ...idempotencySchema, ...ledgerSchema, ...shopifySchema, ...aiSchema, ...authSchema };
 import { auditLog } from './schema';
 
+export * from './crypto';
 export * from './json';
 export * from './permissions';
 export * from './schema';

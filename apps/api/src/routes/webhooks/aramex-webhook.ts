@@ -1,9 +1,8 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification } from '@irth/db';
+import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification, safeEqual } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { envVar } from '../../utils/env';
 
 /**
@@ -31,10 +30,7 @@ aramexWebhookRoute.post('/', async (c: Context) => {
     return c.json({ data: null, error: 'missing_token', meta: null }, 401);
   }
 
-  const hashedHeaderToken = createHash('sha256').update(Buffer.from(headerToken)).digest();
-  const hashedToken = createHash('sha256').update(Buffer.from(token)).digest();
-
-  if (!timingSafeEqual(hashedHeaderToken, hashedToken)) {
+  if (!safeEqual(headerToken, token)) {
     return c.json({ data: null, error: 'invalid_token', meta: null }, 401);
   }
 

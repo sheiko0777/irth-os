@@ -2,9 +2,8 @@ import { parseDecimal } from '@irth/domain';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification } from '@irth/db';
+import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification, safeEqual } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
-import { timingSafeEqual } from 'node:crypto';
 import { envVar } from '../../utils/env';
 
 /**
@@ -49,14 +48,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
-  const sigBuf = Buffer.from(signature, 'hex');
-  const expBuf = Buffer.from(expectedHex, 'hex');
-
-  const { createHash } = await import('node:crypto');
-  const hashedSig = createHash('sha256').update(sigBuf).digest();
-  const hashedExp = createHash('sha256').update(expBuf).digest();
-
-  if (!timingSafeEqual(hashedSig, hashedExp)) {
+  if (!safeEqual(signature, expectedHex, 'hex')) {
     return c.json({ data: null, error: 'invalid_signature', meta: null }, 401);
   }
 

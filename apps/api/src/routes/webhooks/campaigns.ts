@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
-import { timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { customers } from '@irth/db';
+import { customers, safeEqual } from '@irth/db';
 import { getDb } from '../../db';
 import { envVar } from '../../utils/env';
 
@@ -51,13 +50,7 @@ campaignsWebhookRoute.get('/unsubscribe', async (c) => {
 
     const expectedToken = await generateUnsubscribeToken(customerId);
 
-    // Constant-time — matches the timingSafeEqual pattern this repo already
-    // uses for every other signed-token comparison (verifyShopifyWebhook.ts,
-    // paymob.ts, shopifyConnection.ts, etc.). Mismatched length is a
-    // mismatch, not an error.
-    const tokenBuf = Buffer.from(token, 'utf8');
-    const expectedBuf = Buffer.from(expectedToken, 'utf8');
-    if (tokenBuf.length !== expectedBuf.length || !timingSafeEqual(tokenBuf, expectedBuf)) {
+    if (!safeEqual(token, expectedToken)) {
         return c.text('Invalid signature', 403);
     }
 

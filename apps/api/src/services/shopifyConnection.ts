@@ -1,6 +1,6 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type { InferSelectModel } from 'drizzle-orm';
-import { shopifyConnections } from '@irth/db';
+import { shopifyConnections, safeEqual } from '@irth/db';
 import { getEnv } from '../db';
 import { minorToDecimalString } from './shopify';
 import { SHOPIFY_API_VERSION } from './shopifyApi';
@@ -76,9 +76,7 @@ export function verifyShopifyOAuthHmac(params: URLSearchParams): boolean {
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
   const expected = createHmac('sha256', secret).update(message).digest('hex');
-  const actual = Buffer.from(hmac, 'hex');
-  const expectedBuffer = Buffer.from(expected, 'hex');
-  return actual.length === expectedBuffer.length && timingSafeEqual(actual, expectedBuffer);
+  return safeEqual(hmac, expected, 'hex');
 }
 
 export async function exchangeShopifyAuthorizationCode(shopDomain: string, code: string): Promise<{ accessToken: string; scope: string }> {
