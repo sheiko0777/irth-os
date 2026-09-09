@@ -86,9 +86,16 @@ describe('bulkUpdateOrderStatus — outbox and count', () => {
   const UUID2 = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22';
 
   /** Update returns `changed`; the contact SELECT returns `contact`. */
-  function wire(changed: unknown[], contact: unknown[] = []) {
-    const updateChain = chainOf(changed);
-    mockDb.update = vi.fn(() => updateChain);
+  function wire(changed: Array<{ id: string; orderNumber: string; customerId: string | null }>, contact: unknown[] = []) {
+    mockDb.execute = vi.fn(async () => changed.map((row) => ({
+      id: row.id,
+      order_number: row.orderNumber,
+      customer_id: row.customerId,
+      currency: 'EGP',
+      total_amount_minor: 0n,
+      payment_method: 'cod',
+      previous_status: 'pending',
+    })));
     // First select is the contact lookup in buildOrderNotification; any later
     // one (tracking URL / template) resolves empty, which is the unconfigured
     // path and keeps trackingUrl absent.

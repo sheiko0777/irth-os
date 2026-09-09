@@ -55,6 +55,10 @@ const ADMIN_ORDERS_ROUTER = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../../admin/src/server/routers/orders.ts',
 );
+const ADMIN_BULK_ROUTER = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../admin/src/server/routers/bulk.ts',
+);
 
 /**
  * Matches an INVOCATION, not a mention. `src.includes('postOrderDeliveredEntry')`
@@ -103,5 +107,9 @@ describe('revenue posting gate', () => {
     // while checking two — the same kind of claim-without-substance this
     // changeset exists to remove.
     expect(INVOKES.test(readFileSync(ADMIN_ORDERS_ROUTER, 'utf8'))).toBe(true);
+  });
+
+  it('the admin bulk delivery path books every transitioned sale too', () => {
+    expect(INVOKES.test(readFileSync(ADMIN_BULK_ROUTER, 'utf8'))).toBe(true);
   });
 });
