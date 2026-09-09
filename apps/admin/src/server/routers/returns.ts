@@ -1,17 +1,17 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, type JournalLineInput } from '@irth/db';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
 import { EGYPT_VAT_BP, add, assertSupportedCurrency, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
 
 export const returnsRouter = router({
   list: protectedProcedure
     .input(z.object({
+      ...paginationInputSchema(10),
       status: z.enum(['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged']).optional(),
       orderId: z.string().optional(),
-      page: z.number().optional().default(1),
-      pageSize: z.number().optional().default(10),
     }))
     .query(async ({ ctx, input }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
@@ -24,7 +24,7 @@ export const returnsRouter = router({
         conditions.push(eq(orderReturns.orderId, input.orderId));
       }
 
-      const offset = (input.page - 1) * input.pageSize;
+      const offset = paginationOffset(input.page, input.pageSize);
 
       // Execute list and count queries concurrently to reduce latency
       const [data, totalResult] = await Promise.all([
@@ -46,9 +46,7 @@ export const returnsRouter = router({
         data,
         error: null,
         meta: {
-          total,
-          page: input.page,
-          pageSize: input.pageSize,
+          ...paginationMeta(input.page, input.pageSize, total),
           totalPages: Math.ceil(total / input.pageSize),
         },
       };

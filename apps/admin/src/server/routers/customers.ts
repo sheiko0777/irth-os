@@ -1,7 +1,8 @@
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count, ilike, or, gte } from 'drizzle-orm';
-import { customers, loyaltyTransactions, withAudit } from '@irth/db';
+import { customers, loyaltyTransactions, paginationMeta, paginationOffset, withAudit } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
 import { TRPCError } from '@trpc/server';
 import { EGP, parseDecimal } from '@irth/domain';
 
@@ -9,13 +10,12 @@ export const customersRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        page: z.number().default(1),
-        pageSize: z.number().default(50),
+        ...paginationInputSchema(50),
         search: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const offset = (input.page - 1) * input.pageSize;
+      const offset = paginationOffset(input.page, input.pageSize);
 
       const whereClause = input.search
         ? and(
@@ -48,7 +48,7 @@ export const customersRouter = router({
       return {
         data,
         error: null,
-        meta: { total: totalRow?.count ?? 0, page: input.page, pageSize: input.pageSize },
+        meta: paginationMeta(input.page, input.pageSize, totalRow?.count ?? 0),
       };
     }),
 

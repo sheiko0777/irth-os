@@ -1,7 +1,8 @@
 import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
+import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
 import { parseDecimal, assertSupportedCurrency } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
 
@@ -148,11 +149,10 @@ export const purchasingRouter = router({
   po: router({
     list: protectedProcedure
       .input(z.object({
-        page: z.number().default(1),
-        pageSize: z.number().default(20),
+        ...paginationInputSchema(20),
       }))
       .query(async ({ ctx, input }) => {
-        const offset = (input.page - 1) * input.pageSize;
+        const offset = paginationOffset(input.page, input.pageSize);
 
         // ⚡ Bolt: Execute list and count queries concurrently to reduce max latency
         const [data, totalResult] = await ctx.withOrg(async (tx) => Promise.all([
@@ -184,7 +184,7 @@ export const purchasingRouter = router({
 
         const total = totalResult[0]?.count ?? 0;
 
-        return { data, error: null, meta: { total, page: input.page, pageSize: input.pageSize } };
+        return { data, error: null, meta: paginationMeta(input.page, input.pageSize, total) };
       }),
 
     get: protectedProcedure

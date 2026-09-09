@@ -1,5 +1,6 @@
 import { router, requirePermission } from '../trpc';
-import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum, notifications, customers, orgSettings } from '@irth/db';
+import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum, notifications, customers, orgSettings, paginationMeta, paginationOffset } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, sql, count, ilike, gte, lte, isNotNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
@@ -40,8 +41,7 @@ const statusEnum = z.enum(orderStatusEnum.enumValues);
 export const ordersRouter = router({
     list: requirePermission('orders', 'view')
         .input(z.object({
-            page: z.number().default(1),
-            pageSize: z.number().default(20),
+            ...paginationInputSchema(20),
             status: statusEnum.optional(),
             search: z.string().optional(),
             dateRange: z.object({
@@ -51,7 +51,7 @@ export const ordersRouter = router({
         }))
         .query(async ({ ctx, input }) => {
             const { page, pageSize, status, search, dateRange } = input;
-            const offset = (page - 1) * pageSize;
+            const offset = paginationOffset(page, pageSize);
 
             // Everything except the status filter. The status tab counts have to
             // respect the search and date narrowing, but not the tab the user is
@@ -94,9 +94,7 @@ export const ordersRouter = router({
                 data,
                 error: null,
                 meta: {
-                    total: totalQuery[0].count,
-                    page,
-                    pageSize,
+                    ...paginationMeta(page, pageSize, totalQuery[0].count),
                     statusCounts: statusCountsQuery.map((r) => ({ status: r.status, count: r.count })),
                 }
             };
