@@ -1,13 +1,38 @@
-import { router, requirePermission } from '../trpc';
-import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum, notifications, customers, orgSettings } from '@irth/db';
-import { eq, and, desc, sql, count, ilike, gte, lte, isNotNull } from 'drizzle-orm';
-import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
-import { withAudit, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postOrderDeliveredEntry, transitionOrderStatus } from '@irth/db';
-import type { DbTx, OutboxEventType, OrderNotificationPayload } from '@irth/db';
+import { router, requirePermission } from "../trpc";
+import {
+  orders,
+  orderItems,
+  shipmentTracking,
+  productVariants,
+  orderStatusEnum,
+  notifications,
+  customers,
+  orgSettings,
+} from "@irth/db";
+import {
+  eq,
+  and,
+  desc,
+  sql,
+  count,
+  ilike,
+  gte,
+  lte,
+  isNotNull,
+} from "drizzle-orm";
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import {
+  withAudit,
+  emitOutboxEvent,
+  buildOrderNotification,
+  OUTBOX_EVENT_BY_STATUS,
+  postOrderDeliveredEntry,
+  transitionOrderStatus,
+} from "@irth/db";
+import type { DbTx, OutboxEventType, OrderNotificationPayload } from "@irth/db";
 
 const statusEnum = z.enum(orderStatusEnum.enumValues);
-
 
 /**
  * org_settings key holding the courier's public tracking page, with `{tracking}`
@@ -38,212 +63,233 @@ const statusEnum = z.enum(orderStatusEnum.enumValues);
  * change and its audit row still happen either way.
  */
 export const ordersRouter = router({
-    list: requirePermission('orders', 'view')
-        .input(z.object({
-            page: z.number().default(1),
-            pageSize: z.number().default(20),
-            status: statusEnum.optional(),
-            search: z.string().optional(),
-            dateRange: z.object({
-                from: z.date().optional(),
-                to: z.date().optional(),
-            }).optional(),
-        }))
-        .query(async ({ ctx, input }) => {
-            const { page, pageSize, status, search, dateRange } = input;
-            const offset = (page - 1) * pageSize;
+  list: requirePermission("orders", "view")
+    .input(
+      z.object({
+        page: z.number().default(1),
+        pageSize: z.number().default(20),
+        status: statusEnum.optional(),
+        search: z.string().optional(),
+        dateRange: z
+          .object({
+            from: z.date().optional(),
+            to: z.date().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { page, pageSize, status, search, dateRange } = input;
+      const offset = (page - 1) * pageSize;
 
-            // Everything except the status filter. The status tab counts have to
-            // respect the search and date narrowing, but not the tab the user is
-            // standing on — otherwise every tab but the active one reads zero.
-            const scope = [eq(orders.orgId, ctx.orgId)];
+      // Everything except the status filter. The status tab counts have to
+      // respect the search and date narrowing, but not the tab the user is
+      // standing on — otherwise every tab but the active one reads zero.
+      const scope = [eq(orders.orgId, ctx.orgId)];
 
-            if (search) {
-                scope.push(ilike(orders.orderNumber, `%${search}%`));
-            }
-            if (dateRange?.from) {
-                scope.push(gte(orders.createdAt, dateRange.from));
-            }
-            if (dateRange?.to) {
-                scope.push(lte(orders.createdAt, dateRange.to));
-            }
+      if (search) {
+        scope.push(ilike(orders.orderNumber, `%${search}%`));
+      }
+      if (dateRange?.from) {
+        scope.push(gte(orders.createdAt, dateRange.from));
+      }
+      if (dateRange?.to) {
+        scope.push(lte(orders.createdAt, dateRange.to));
+      }
 
-            const conditions = status ? [...scope, eq(orders.status, status)] : scope;
+      const conditions = status ? [...scope, eq(orders.status, status)] : scope;
 
-            // Execute list, count and status breakdown concurrently
-            const [data, totalQuery, statusCountsQuery] = await Promise.all([
-                ctx.db
-                    .select()
-                    .from(orders)
-                    .where(and(...conditions))
-                    .orderBy(desc(orders.createdAt))
-                    .limit(pageSize)
-                    .offset(offset),
-                ctx.db
-                    .select({ count: count() })
-                    .from(orders)
-                    .where(and(...conditions)),
-                ctx.db
-                    .select({ status: orders.status, count: count() })
-                    .from(orders)
-                    .where(and(...scope))
-                    .groupBy(orders.status),
-            ]);
+      // Execute list, count and status breakdown concurrently
+      const [data, totalQuery, statusCountsQuery] = await Promise.all([
+        ctx.db
+          .select()
+          .from(orders)
+          .where(and(...conditions))
+          .orderBy(desc(orders.createdAt))
+          .limit(pageSize)
+          .offset(offset),
+        ctx.db
+          .select({ count: count() })
+          .from(orders)
+          .where(and(...conditions)),
+        ctx.db
+          .select({ status: orders.status, count: count() })
+          .from(orders)
+          .where(and(...scope))
+          .groupBy(orders.status),
+      ]);
 
-            return {
-                data,
-                error: null,
-                meta: {
-                    total: totalQuery[0].count,
-                    page,
-                    pageSize,
-                    statusCounts: statusCountsQuery.map((r) => ({ status: r.status, count: r.count })),
-                }
-            };
+      return {
+        data,
+        error: null,
+        meta: {
+          total: totalQuery[0].count,
+          page,
+          pageSize,
+          statusCounts: statusCountsQuery.map((r) => ({
+            status: r.status,
+            count: r.count,
+          })),
+        },
+      };
+    }),
+
+  getById: requirePermission("orders", "view")
+    .input(
+      z.object({
+        id: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      // Optimization: Execute independent entity queries concurrently
+      // Impact: Reduces 3 sequential roundtrips down to 1 (up to 66% latency reduction on happy path).
+      // Trade-off: Items and history queries will safely execute (returning empty) before throwing if order is NOT_FOUND.
+      const [order, items, history] = await Promise.all([
+        ctx.db.query.orders.findFirst({
+          where: and(eq(orders.id, input.id), eq(orders.orgId, ctx.orgId)),
         }),
+        ctx.db
+          .select({
+            id: orderItems.id,
+            quantity: orderItems.quantity,
+            priceMinor: orderItems.priceMinor,
+            sku: productVariants.sku,
+          })
+          .from(orderItems)
+          .innerJoin(
+            productVariants,
+            eq(orderItems.variantId, productVariants.id),
+          )
+          .where(
+            and(
+              eq(orderItems.orderId, input.id),
+              eq(orderItems.orgId, ctx.orgId),
+            ),
+          ),
+        ctx.db
+          .select()
+          .from(shipmentTracking)
+          .where(
+            and(
+              eq(shipmentTracking.orderId, input.id),
+              eq(shipmentTracking.orgId, ctx.orgId),
+            ),
+          )
+          .orderBy(desc(shipmentTracking.createdAt)),
+      ]);
 
-    getById: requirePermission('orders', 'view')
-        .input(z.object({
-            id: z.string().uuid()
-        }))
-        .query(async ({ ctx, input }) => {
-            const order = await ctx.db.query.orders.findFirst({
-                where: and(
-                    eq(orders.id, input.id),
-                    eq(orders.orgId, ctx.orgId)
-                )
-            });
+      if (!order) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
 
-            if (!order) {
-                throw new TRPCError({ code: 'NOT_FOUND' });
-            }
+      return {
+        data: { order, items, history },
+        error: null,
+        meta: null,
+      };
+    }),
 
-            const items = await ctx.db
-                .select({
-                    id: orderItems.id,
-                    quantity: orderItems.quantity,
-                    priceMinor: orderItems.priceMinor,
-                    sku: productVariants.sku,
-                })
-                .from(orderItems)
-                .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-                .where(and(
-                    eq(orderItems.orderId, order.id),
-                    eq(orderItems.orgId, ctx.orgId)
-                ));
-            
-            const history = await ctx.db
-                .select()
-                .from(shipmentTracking)
-                .where(and(
-                    eq(shipmentTracking.orderId, order.id),
-                    eq(shipmentTracking.orgId, ctx.orgId)
-                ))
-                .orderBy(desc(shipmentTracking.createdAt));
+  updateStatus: requirePermission("orders", "write")
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        status: statusEnum,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const order = await ctx.db.query.orders.findFirst({
+        where: and(eq(orders.id, input.id), eq(orders.orgId, ctx.orgId)),
+      });
 
-            return {
-                data: { order, items, history },
-                error: null,
-                meta: null
-            };
-        }),
+      if (!order) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
 
-    updateStatus: requirePermission('orders', 'write')
-        .input(z.object({
-            id: z.string().uuid(),
-            status: statusEnum
-        }))
-        .mutation(async ({ ctx, input }) => {
-            const order = await ctx.db.query.orders.findFirst({
-                where: and(
-                    eq(orders.id, input.id),
-                    eq(orders.orgId, ctx.orgId)
-                )
-            });
+      // Status change, audit row, staff notification and the customer
+      // outbox event in one transaction. As separate autocommits, a
+      // failure between them left the order advanced with no audit trail
+      // and no notification — the customer never heard about a change
+      // that had in fact happened, and in the other direction an outbox
+      // row written outside the transaction would tell the customer about
+      // a change that then rolled back.
+      const result = await ctx.withOrg(async (tx) => {
+        const transition = await transitionOrderStatus(tx, {
+          orgId: ctx.orgId,
+          orderId: input.id,
+          newStatus: input.status,
+        });
+        if (!transition) throw new TRPCError({ code: "NOT_FOUND" });
+        const { previousStatus } = transition;
+        const updated = await withAudit(
+          tx,
+          async () => {
+            // Preserve the response shape and database timestamp after the raw update.
+            const [row] = await tx
+              .select()
+              .from(orders)
+              .where(and(eq(orders.id, input.id), eq(orders.orgId, ctx.orgId)));
+            return row;
+          },
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: "UPDATE_ORDER_STATUS",
+            tableName: "orders",
+            changes: { from: previousStatus, to: input.status },
+          },
+        );
 
-            if (!order) {
-                throw new TRPCError({ code: 'NOT_FOUND' });
-            }
+        await tx.insert(notifications).values({
+          orgId: ctx.orgId,
+          userId: ctx.userId,
+          type: "order_status",
+          title: `تحديث الطلب ${order.orderNumber}`,
+          body: `تم تغيير حالة الطلب إلى: ${input.status}`,
+          read: false,
+        });
 
-            // Status change, audit row, staff notification and the customer
-            // outbox event in one transaction. As separate autocommits, a
-            // failure between them left the order advanced with no audit trail
-            // and no notification — the customer never heard about a change
-            // that had in fact happened, and in the other direction an outbox
-            // row written outside the transaction would tell the customer about
-            // a change that then rolled back.
-            const result = await ctx.withOrg(async (tx) => {
-                const transition = await transitionOrderStatus(tx, {
-                    orgId: ctx.orgId, orderId: input.id, newStatus: input.status,
-                });
-                if (!transition) throw new TRPCError({ code: 'NOT_FOUND' });
-                const { previousStatus } = transition;
-                const updated = await withAudit(
-                    tx,
-                    async () => {
-                        // Preserve the response shape and database timestamp after the raw update.
-                        const [row] = await tx.select().from(orders)
-                            .where(and(
-                                eq(orders.id, input.id),
-                                eq(orders.orgId, ctx.orgId)
-                            ));
-                        return row;
-                    },
-                    {
-                        orgId: ctx.orgId,
-                        userId: ctx.userId,
-                        action: 'UPDATE_ORDER_STATUS',
-                        tableName: 'orders',
-                        changes: { from: previousStatus, to: input.status }
-                    }
-                );
+        // The customer-facing side. `notifications` above is the STAFF
+        // feed inside the admin — nothing has ever read a row out of it
+        // and messaged a customer. outbox_events is what the worker in
+        // apps/api polls, and until now nothing wrote to it, so no
+        // customer notification has ever been sent by this system.
+        //
+        // Emitted through `tx`, never ctx.db: the event and the state
+        // change commit together or not at all. That is the whole point
+        // of the outbox pattern.
+        const eventType = OUTBOX_EVENT_BY_STATUS[input.status];
+        // The locked transition result also prevents concurrent re-notification.
+        if (eventType && previousStatus !== input.status) {
+          const payload = await buildOrderNotification(
+            tx,
+            ctx.orgId,
+            order,
+            eventType,
+          );
+          if (payload) {
+            await emitOutboxEvent(tx, { orgId: ctx.orgId, eventType, payload });
+          }
+        }
 
-                await tx.insert(notifications).values({
-                    orgId: ctx.orgId,
-                    userId: ctx.userId,
-                    type: 'order_status',
-                    title: `تحديث الطلب ${order.orderNumber}`,
-                    body: `تم تغيير حالة الطلب إلى: ${input.status}`,
-                    read: false,
-                });
+        // Revenue, VAT and COGS, recognised together at the point
+        // the sale becomes final. The posting, and the transition
+        // guard in front of it, live in @irth/db's
+        // postOrderDeliveredEntry so that this router, apps/api's
+        // PATCH /:id/status and the Bosta delivery webhook all book
+        // the same entry from one implementation. They did not:
+        // until that helper existed this was the ONLY one of the
+        // three paths that posted anything at all.
+        await postOrderDeliveredEntry(tx, {
+          orgId: ctx.orgId,
+          order,
+          previousStatus,
+          newStatus: input.status,
+          createdBy: ctx.userId,
+        });
 
-                // The customer-facing side. `notifications` above is the STAFF
-                // feed inside the admin — nothing has ever read a row out of it
-                // and messaged a customer. outbox_events is what the worker in
-                // apps/api polls, and until now nothing wrote to it, so no
-                // customer notification has ever been sent by this system.
-                //
-                // Emitted through `tx`, never ctx.db: the event and the state
-                // change commit together or not at all. That is the whole point
-                // of the outbox pattern.
-                const eventType = OUTBOX_EVENT_BY_STATUS[input.status];
-                // The locked transition result also prevents concurrent re-notification.
-                if (eventType && previousStatus !== input.status) {
-                    const payload = await buildOrderNotification(tx, ctx.orgId, order, eventType);
-                    if (payload) {
-                        await emitOutboxEvent(tx, { orgId: ctx.orgId, eventType, payload });
-                    }
-                }
+        return updated;
+      });
 
-                // Revenue, VAT and COGS, recognised together at the point
-                // the sale becomes final. The posting, and the transition
-                // guard in front of it, live in @irth/db's
-                // postOrderDeliveredEntry so that this router, apps/api's
-                // PATCH /:id/status and the Bosta delivery webhook all book
-                // the same entry from one implementation. They did not:
-                // until that helper existed this was the ONLY one of the
-                // three paths that posted anything at all.
-                await postOrderDeliveredEntry(tx, {
-                    orgId: ctx.orgId,
-                    order,
-                    previousStatus,
-                    newStatus: input.status,
-                    createdBy: ctx.userId,
-                });
-
-                return updated;
-            });
-
-            return { data: result, error: null, meta: null };
-        }),
+      return { data: result, error: null, meta: null };
+    }),
 });
