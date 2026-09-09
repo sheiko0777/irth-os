@@ -314,19 +314,12 @@ export const returnsRouter = router({
           .where(and(eq(returnItems.id, input.itemId), eq(returnItems.orgId, ctx.orgId), eq(returnItems.returnId, input.returnId)));
         if (!existing) throw new Error('Item not found');
 
-        // The conditional UPDATE serializes retries before any stock or ledger effects.
-        const [item] = await tx.update(returnItems).set({ restock: true })
-          .where(and(eq(returnItems.id, input.itemId), eq(returnItems.orgId, ctx.orgId),
-            eq(returnItems.returnId, input.returnId), eq(returnItems.restock, false)))
-          .returning();
-        if (!item) return { restocked: false, alreadyRestocked: true };
-
-        if (!item.orderItemId) {
+        if (!existing.orderItemId) {
           return { restocked: false, reason: 'no_order_item_link' as const };
         }
 
         const [orderItem] = await tx.select().from(orderItems)
-          .where(and(eq(orderItems.id, item.orderItemId), eq(orderItems.orgId, ctx.orgId), eq(orderItems.orderId, returnObj.orderId))).limit(1);
+          .where(and(eq(orderItems.id, existing.orderItemId), eq(orderItems.orgId, ctx.orgId), eq(orderItems.orderId, returnObj.orderId))).limit(1);
         if (!orderItem?.variantId) {
           return { restocked: false, reason: 'no_variant' as const };
         }
@@ -336,6 +329,21 @@ export const returnsRouter = router({
         if (!orderObj) throw new Error('Order not found');
 
         const returnCurrency = assertSupportedCurrency(orderObj.currency);
+
+        const [invItem] = await tx.select().from(inventoryItems)
+          .where(and(eq(inventoryItems.orgId, ctx.orgId), eq(inventoryItems.variantId, orderItem.variantId)))
+          .limit(1);
+        if (!invItem) {
+          return { restocked: false, reason: 'no_inventory_item' as const };
+        }
+
+        // Validate all links before claiming so failures remain retryable.
+        // The conditional UPDATE serializes retries before any stock or ledger effects.
+        const [item] = await tx.update(returnItems).set({ restock: true })
+          .where(and(eq(returnItems.id, input.itemId), eq(returnItems.orgId, ctx.orgId),
+            eq(returnItems.returnId, input.returnId), eq(returnItems.restock, false)))
+          .returning();
+        if (!item) return { restocked: false, alreadyRestocked: true };
 
         // NULL is an unknown cost basis; zero has no financial amount to reverse.
         if (orderItem.costMinor !== null && orderItem.costMinor > 0n) {
@@ -349,13 +357,6 @@ export const returnsRouter = router({
               { accountCode: ACCOUNT_CODES.COGS, currency: returnCurrency, creditMinor: cost.minor },
             ],
           });
-        }
-
-        const [invItem] = await tx.select().from(inventoryItems)
-          .where(and(eq(inventoryItems.orgId, ctx.orgId), eq(inventoryItems.variantId, orderItem.variantId)))
-          .limit(1);
-        if (!invItem) {
-          return { restocked: false, reason: 'no_inventory_item' as const };
         }
 
         const saleable = item.condition === 'new' || item.condition === 'good';
