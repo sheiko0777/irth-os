@@ -15,6 +15,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
 import { orders, organizations, withOrgContext } from '@irth/db';
+import { ordersRouter } from '@/server/routers/orders';
+import type { Context } from '@/server/trpc';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
 
 let orgA: string;
@@ -47,6 +49,34 @@ afterAll(async () => {
 });
 
 describe('tenant isolation', () => {
+  // Calls the actual procedure with the same withOrgContext adapter as production.
+  // Mutation check: temporarily remove eq(orders.orgId, ctx.orgId) from
+  // orders.getById and rerun this file. Both tests must still pass; restore
+  // the predicate afterwards. The own-order control rules out blanket denial.
+  function callerFor(orgId: string) {
+    return ordersRouter.createCaller({
+      db: testDb,
+      orgId, userId: 'integration-user', role: 'owner',
+      session: { user: { id: 'integration-user', email: 'integration@example.com' } },
+      withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) =>
+        withOrgContext(testDb, orgId, fn),
+    } as unknown as Context);
+  }
+
+  it("orders.getById returns the caller's own order", async () => {
+    const [own] = await testDb.select().from(orders).where(eq(orders.orgId, orgA));
+    const result = await callerFor(orgA).getById({ id: own.id });
+    expect(result.data.order.id).toBe(own.id);
+    expect(result.data.order.orgId).toBe(orgA);
+  });
+
+  it('orders.getById refuses a known order id from another tenant in both directions', async () => {
+    const [a] = await testDb.select().from(orders).where(eq(orders.orgId, orgA));
+    const [b] = await testDb.select().from(orders).where(eq(orders.orgId, orgB));
+    await expect(callerFor(orgA).getById({ id: b.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(callerFor(orgB).getById({ id: a.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it('sees only its own rows, even with no orgId in the query', async () => {
     // Deliberately unscoped: `select * from orders` with no WHERE. This is the
     // forgotten-predicate case RLS exists to catch.

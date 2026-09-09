@@ -21,10 +21,10 @@ export const courierRouter = router({
           conditions.push(eq(courierShipments.courierStatus, input.status));
         }
 
-        const data = await ctx.db
+        const data = await ctx.withOrg(async (tx) => tx
           .select()
           .from(courierShipments)
-          .where(and(...conditions));
+          .where(and(...conditions)));
 
         return { data, error: null, meta: null };
       }),
@@ -72,10 +72,10 @@ export const courierRouter = router({
           conditions.push(eq(courierRemittances.status, input.status));
         }
 
-        const data = await ctx.db
+        const data = await ctx.withOrg(async (tx) => tx
           .select()
           .from(courierRemittances)
-          .where(and(...conditions));
+          .where(and(...conditions)));
 
         return { data, error: null, meta: null };
       }),
@@ -222,26 +222,26 @@ export const courierRouter = router({
 
   summary: protectedProcedure.query(async ({ ctx }) => {
     // We will run the aggregations using Promise.all per the memory guidelines
-    const [collectedRes, remittedRes, unremittedRes, statusesRes] = await Promise.all([
+    const [collectedRes, remittedRes, unremittedRes, statusesRes] = await ctx.withOrg(async (tx) => Promise.all([
       // The CAST is gone with the column: cod_amount_minor is already bigint,
       // so sum() aggregates it natively.
-      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
+      tx.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true))),
 
-      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
+      tx.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codRemitted, true))),
 
-      ctx.db.select({ total: sum(courierShipments.codAmountMinor) })
+      tx.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
         .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true), eq(courierShipments.codRemitted, false))),
 
-      ctx.db.select({ status: courierShipments.courierStatus, count: count() })
+      tx.select({ status: courierShipments.courierStatus, count: count() })
         .from(courierShipments)
         .where(eq(courierShipments.orgId, ctx.orgId))
         .groupBy(courierShipments.courierStatus)
-    ]);
+    ]));
 
     const shipmentsByStatus = statusesRes.reduce((acc: Record<string, number>, curr: { status: string; count: number }) => {
       acc[curr.status] = curr.count;

@@ -75,6 +75,10 @@ function receiptFixture(received: (number | null)[] = [0, null]) {
         },
       }),
     })),
+    // po.receive's initial lookup now runs through ctx.withOrg (F18: read-side
+    // RLS gate), so it reads tx.query.purchaseOrders, not ctx.db.query — mirror
+    // the same po fixture here, not just on `db` below.
+    query: { purchaseOrders: { findFirst: async () => ({ ...po }) } },
   };
   const context = {
     ...ctx(),

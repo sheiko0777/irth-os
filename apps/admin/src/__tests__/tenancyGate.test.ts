@@ -1,6 +1,8 @@
 /**
  * Fails the build if any tRPC router writes outside a tenant-scoped
  * transaction.
+ * Reads use an explicit site baseline: establish it before migrating routers,
+ * then remove each fixed site. New sites must fail, including in baseline files.
  *
  * This exists because a hand-run `grep "ctx\.db\.(insert|update|delete)"`
  * reported zero remaining write sites when there were thirty. Drizzle chains
@@ -38,6 +40,107 @@ const CROSS_ORG_BY_DESIGN = new Set(['platformAdmin.ts']);
  * sites from a line-based search.
  */
 const UNSCOPED_WRITE = /(^|[^.\w])(ctx\s*\.\s*)?db\s*\.\s*(insert|update|delete)\s*\(/g;
+
+/** Includes relational reads, distinct/count queries, raw SQL and CTE entry points. */
+const UNSCOPED_READ = /(^|[^.\w])(ctx\s*\.\s*)?db\s*\.\s*(?:(?:select(?:Distinct(?:On)?)?|\$count|execute)\s*\(|query\s*\.|\$with\s*\(|with\s*\()/g;
+
+/**
+ * F18 rollout baseline, captured before converting any router reads.
+ * Exact file:line sites rather than whole-file exemptions: adding a read to a
+ * legacy file must fail too. Shrink this list as sites are moved to withOrg;
+ * line-only shifts require review, never regenerate it to accept new reads.
+ * API Hono routes are outside this admin-router scanner and need a separate
+ * follow-up gate/migration (orders, products, categories, orgs, shipping).
+ */
+const UNSCOPED_READ_BASELINE = [
+  'analytics.ts:26',
+  'analytics.ts:55',
+  'analytics.ts:93',
+  'analytics.ts:154',
+  'analytics.ts:158',
+  'analytics.ts:162',
+  'analytics.ts:166',
+  'analytics.ts:175',
+  'analytics.ts:179',
+  'analytics.ts:232',
+  'analytics.ts:263',
+  'analytics.ts:287',
+  'bulk.ts:149',
+  'bulk.ts:168',
+  'bulk.ts:187',
+  'campaigns.ts:11',
+  'campaigns.ts:23',
+  'campaigns.ts:105',
+  'campaigns.ts:154',
+  'categories.ts:11',
+  'coupons.ts:50',
+  'coupons.ts:57',
+  'coupons.ts:70',
+  'coupons.ts:210',
+  'customerSegments.ts:11',
+  'customerSegments.ts:87',
+  'customerSegments.ts:94',
+  'customerSegments.ts:121',
+  'customerSegments.ts:161',
+  'customerSegments.ts:169',
+  'customerSegments.ts:175',
+  'dashboard.ts:60',
+  'dashboard.ts:64',
+  'dashboard.ts:68',
+  'dashboard.ts:72',
+  'dashboard.ts:76',
+  'dashboard.ts:84',
+  'dashboard.ts:93',
+  'dashboard.ts:106',
+  'dashboard.ts:119',
+  'dashboard.ts:186',
+  'dashboard.ts:194',
+  'dashboard.ts:201',
+  'dashboard.ts:222',
+  'eta.ts:19',
+  'eta.ts:34',
+  'eta.ts:103',
+  'eta.ts:126',
+  'eta.ts:148',
+  'finance.ts:38',
+  'finance.ts:54',
+  'finance.ts:62',
+  'finance.ts:71',
+  'finance.ts:139',
+  'finance.ts:174',
+  'finance.ts:218',
+  'finance.ts:243',
+  'finance.ts:257',
+  'finance.ts:272',
+  'giftCards.ts:26',
+  'giftCards.ts:36',
+  'giftCards.ts:151',
+  'giftCards.ts:235',
+  'giftCards.ts:327',
+  'giftCards.ts:371',
+  'integrations.ts:42',
+  'integrations.ts:90',
+  'integrations.ts:154',
+  'inventory.ts:30',
+  'inventory.ts:46',
+  'inventory.ts:68',
+  'inventory.ts:94',
+  'notifications.ts:17',
+  'notifications.ts:24',
+  'notifications.ts:58',
+  'pricelists.ts:10',
+  'pricelists.ts:77',
+  'returns.ts:31',
+  'returns.ts:37',
+  'returns.ts:62',
+  'returns.ts:70',
+  'returns.ts:400',
+  'shipping.ts:13',
+  'shipping.ts:67',
+  'stocktaking.ts:13',
+  'stocktaking.ts:280',
+  'stocktaking.ts:295',
+];
 
 /** `withAudit(ctx.db, …)` — the audit row lands outside the transaction. */
 const UNSCOPED_AUDIT = /withAudit\s*\(\s*(ctx\s*\.\s*)?db\s*,/g;
@@ -78,6 +181,38 @@ describe('tenancy gate', () => {
         `policies do not apply to them. Wrap in ctx.withOrg(async (tx) => …) ` +
         `and write through tx:\n  ${offenders.join('\n  ')}`,
     ).toEqual([]);
+  });
+
+  it('allows only the existing unscoped read baseline', () => {
+    const offenders: string[] = [];
+    for (const file of routerFiles()) {
+      if (CROSS_ORG_BY_DESIGN.has(file)) continue;
+      offenders.push(...findAll(readFileSync(path.join(ROUTERS, file), 'utf8'), file, UNSCOPED_READ));
+    }
+    expect(
+      offenders.sort(),
+      'Unscoped reads bypass RLS. Move new reads to ctx.withOrg(async (tx) => …); ' +
+        'remove fixed sites from UNSCOPED_READ_BASELINE. Current sites: ' + offenders.join(', '),
+    ).toEqual([...UNSCOPED_READ_BASELINE].sort());
+  });
+
+  it('detects unscoped read shapes across whitespace', () => {
+    for (const source of [
+      'await ctx.db.select().from(orders);',
+      'await ctx.db\n .select().from(orders);',
+      'await ctx . db . query . orders.findFirst({});',
+      'const { db } = ctx; await db.query.orders.findMany();',
+      'await db.selectDistinct().from(orders);',
+      'await ctx.db.selectDistinctOn([orders.id]).from(orders);',
+      'await ctx.db.$count(orders);',
+      'await ctx.db.execute(sql);',
+      'ctx.db.$with("orders").as(query);',
+      'ctx.db.with(cte).select().from(cte);',
+    ]) {
+      expect(findAll(source, 'x.ts', UNSCOPED_READ), source).toHaveLength(1);
+    }
+    expect(findAll('ctx.withOrg(async (tx) => tx.select().from(orders))', 'x.ts', UNSCOPED_READ)).toEqual([]);
+    expect(findAll('ctx.withOrg(async (tx) => tx.query.orders.findMany())', 'x.ts', UNSCOPED_READ)).toEqual([]);
   });
 
   it('never hands withAudit a non-transaction', () => {
