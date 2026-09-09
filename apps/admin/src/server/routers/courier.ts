@@ -1,18 +1,21 @@
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
-import { courierShipments, courierRemittances, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
+import { courierShipments, courierRemittances, paginationMeta, paginationOffset, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { assertSupportedCurrency, fromMinor, parseDecimal } from '@irth/domain';
 import { eq, and, ne, sql, sum, inArray, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+import { paginationInputSchema } from '../pagination';
 
 export const courierRouter = router({
   shipments: router({
     list: protectedProcedure
       .input(z.object({
+        ...paginationInputSchema(20),
         courier: z.string().optional(),
         status: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        const offset = paginationOffset(input.page, input.pageSize);
         const conditions = [eq(courierShipments.orgId, ctx.orgId)];
         if (input.courier) {
           conditions.push(eq(courierShipments.courier, input.courier));
@@ -21,12 +24,26 @@ export const courierRouter = router({
           conditions.push(eq(courierShipments.courierStatus, input.status));
         }
 
-        const data = await ctx.withOrg(async (tx) => tx
-          .select()
-          .from(courierShipments)
-          .where(and(...conditions)));
+        const [data, totalRowResult] = await ctx.withOrg(async (tx) => Promise.all([
+          tx
+            .select()
+            .from(courierShipments)
+            .where(and(...conditions))
+            .limit(input.pageSize)
+            .offset(offset),
+          tx
+            .select({ count: count() })
+            .from(courierShipments)
+            .where(and(...conditions))
+        ]));
 
-        return { data, error: null, meta: null };
+        const totalRow = totalRowResult[0];
+
+        return {
+          data,
+          error: null,
+          meta: paginationMeta(input.page, input.pageSize, totalRow?.count ?? 0),
+        };
       }),
 
     markRemitted: adminProcedure
@@ -64,20 +81,36 @@ export const courierRouter = router({
   remittances: router({
     list: protectedProcedure
       .input(z.object({
+        ...paginationInputSchema(20),
         status: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
+        const offset = paginationOffset(input.page, input.pageSize);
         const conditions = [eq(courierRemittances.orgId, ctx.orgId)];
         if (input.status) {
           conditions.push(eq(courierRemittances.status, input.status));
         }
 
-        const data = await ctx.withOrg(async (tx) => tx
-          .select()
-          .from(courierRemittances)
-          .where(and(...conditions)));
+        const [data, totalRowResult] = await ctx.withOrg(async (tx) => Promise.all([
+          tx
+            .select()
+            .from(courierRemittances)
+            .where(and(...conditions))
+            .limit(input.pageSize)
+            .offset(offset),
+          tx
+            .select({ count: count() })
+            .from(courierRemittances)
+            .where(and(...conditions))
+        ]));
 
-        return { data, error: null, meta: null };
+        const totalRow = totalRowResult[0];
+
+        return {
+          data,
+          error: null,
+          meta: paginationMeta(input.page, input.pageSize, totalRow?.count ?? 0),
+        };
       }),
 
     create: adminProcedure

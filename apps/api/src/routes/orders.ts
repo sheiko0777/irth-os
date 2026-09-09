@@ -238,15 +238,19 @@ ordersRoute.post('/', requireOrgId(), async (c: Context) => {
 
 ordersRoute.get('/', requireOrgId(), async (c: Context) => {
   const orgId = c.get('orgId') as string;
-  
+
+  const page = parseInt(c.req.query('page') || '1', 10);
+  const limit = parseInt(c.req.query('limit') || '20', 10);
+  const offset = (page - 1) * limit;
+
   const [list, countResult] = await Promise.all([
-    db.select().from(orders).where(eq(orders.orgId, orgId)).orderBy(desc(orders.createdAt)),
+    db.select().from(orders).where(eq(orders.orgId, orgId)).limit(limit).offset(offset).orderBy(desc(orders.createdAt)),
     db.select({ count: sql<number>`count(*)` }).from(orders).where(eq(orders.orgId, orgId))
   ]);
 
   const totalCount = Number(countResult[0]?.count || 0);
 
-  return c.json({ data: jsonSafe(list), error: null, meta: { total: totalCount } });
+  return c.json({ data: jsonSafe(list), error: null, meta: { total: totalCount, page, limit } });
 });
 
 ordersRoute.get('/:id', requireOrgId(), async (c: Context) => {
