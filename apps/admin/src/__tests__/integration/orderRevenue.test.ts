@@ -35,6 +35,8 @@ import {
 } from '@irth/db';
 import { EGP, EGYPT_VAT_BP, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
+import { bulkRouter } from '@/server/routers/bulk';
+import type { Context } from '@/server/trpc';
 
 let orgId: string;
 let variantId: string;
@@ -63,14 +65,20 @@ afterAll(async () => {
 });
 
 /** An order sitting at `shipped`, with one costed line, ready to be delivered. */
-async function seedOrder(opts: { totalAmountMinor?: bigint; costMinor?: bigint | null } = {}) {
+async function seedOrder(opts: {
+  totalAmountMinor?: bigint;
+  costMinor?: bigint | null;
+  status?: 'pending' | 'confirmed' | 'payment_failed' | 'shipped' | 'delivered' | 'cancelled';
+  paymentMethod?: 'cod' | 'online';
+} = {}) {
   const total = opts.totalAmountMinor ?? GROSS;
   const [order] = await testDb.insert(orders).values({
     orgId,
     orderNumber: `IRT-REV-${++seq}-${Date.now()}`,
-    status: 'shipped',
+    status: opts.status ?? 'shipped',
     totalAmountMinor: total,
     currency: 'EGP',
+    paymentMethod: opts.paymentMethod,
   }).returning();
 
   await testDb.insert(orderItems).values({
@@ -96,6 +104,54 @@ async function linesByCode(entryId: string) {
 }
 
 describe('order delivered → revenue posting', () => {
+  it('bulk delivery posts once per transitioned order and skips unchanged/non-delivered rows', async () => {
+    const cod = await seedOrder({ status: 'shipped', paymentMethod: 'cod' });
+    const online = await seedOrder({ status: 'confirmed', paymentMethod: 'online' });
+    const alreadyDelivered = await seedOrder({ status: 'delivered', paymentMethod: 'cod' });
+    const nonDelivered = await seedOrder({ status: 'shipped', paymentMethod: 'cod' });
+
+    const caller = bulkRouter.createCaller({
+      db: testDb,
+      orgId, userId: 'integration-user', role: 'owner',
+      session: { user: { id: 'integration-user', email: 'integration@example.com' } },
+      withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
+    } as unknown as Context);
+
+    const delivered = await caller.bulkUpdateOrderStatus({
+      ids: [cod.id, online.id, alreadyDelivered.id],
+      status: 'delivered',
+    });
+    expect(delivered.data.updated).toBe(2);
+
+    const movedElsewhere = await caller.bulkUpdateOrderStatus({
+      ids: [nonDelivered.id],
+      status: 'confirmed',
+    });
+    expect(movedElsewhere.data.updated).toBe(1);
+
+    const rows = await testDb
+      .select({ sourceId: journalEntries.sourceId, code: accounts.code })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalLines.entryId, journalEntries.id))
+      .innerJoin(accounts, eq(journalLines.accountId, accounts.id))
+      .where(eq(journalEntries.sourceTable, 'orders'));
+
+    const entries = await testDb
+      .select({ sourceId: journalEntries.sourceId })
+      .from(journalEntries)
+      .where(and(
+        eq(journalEntries.orgId, orgId),
+        eq(journalEntries.sourceTable, 'orders'),
+      ));
+
+    expect(entries.filter((entry) => entry.sourceId === cod.id)).toHaveLength(1);
+    expect(entries.filter((entry) => entry.sourceId === online.id)).toHaveLength(1);
+    expect(entries.filter((entry) => entry.sourceId === alreadyDelivered.id)).toHaveLength(0);
+    expect(entries.filter((entry) => entry.sourceId === nonDelivered.id)).toHaveLength(0);
+    expect(rows.filter((row) => row.sourceId === cod.id && row.code === ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD)).toHaveLength(1);
+    expect(rows.filter((row) => row.sourceId === online.id && row.code === ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_ONLINE)).toHaveLength(1);
+  });
+
   it('books gross receivable, net revenue, VAT and COGS in one balanced entry', async () => {
     const order = await seedOrder();
 
