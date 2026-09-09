@@ -5,6 +5,7 @@ import { db, getDb } from '../../db';
 import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification, safeEqual } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { envVar } from '../../utils/env';
+import { resolveCourierShipmentByTracking } from './resolveCourierShipmentByTracking';
 
 /**
  * Courier states that mean "the parcel is moving" — the natural trigger for
@@ -82,14 +83,11 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   else if (state === 'RECEIVED_AT_WAREHOUSE' || state === 'OUT_FOR_DELIVERY') courierStatus = 'in_transit';
   else if (state === 'PACKAGE_PICKED_UP') courierStatus = 'picked_up';
 
-  // We need the org_id and order_id to upsert. Since it's by trackingNumber, we must find the shipment first.
-  // The spec says "Upsert courier_shipments by tracking_number" but tracking_number is not unique.
-  // Wait, the spec says "Upsert using onConflictDoUpdate on order_id for shipments"
-  // Let's first try to find the shipment by tracking_number
-  const [existingShipment] = await db
-    .select()
-    .from(courierShipments)
-    .where(eq(courierShipments.trackingNumber, trackingNumber));
+  const resolution = await resolveCourierShipmentByTracking(db, 'bosta', trackingNumber);
+  if (resolution.status === 'ambiguous') {
+    return c.json({ data: null, error: 'ambiguous_tracking_number', meta: null }, 409);
+  }
+  const existingShipment = resolution.shipment;
 
   if (!existingShipment) {
     // If not found, we can't easily upsert because we don't know the order_id and org_id.
