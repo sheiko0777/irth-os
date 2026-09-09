@@ -51,6 +51,22 @@ beforeEach(() => {
 });
 
 describe('returns.restock — idempotency', () => {
+  // F03 moved every linkage/validation check (orderItemId, variantId,
+  // inventoryItems) to run BEFORE the atomic claim, so reaching the claim at
+  // all now requires all five selects below to resolve — return row,
+  // existing item (with a real orderItemId), the linked orderItem (with a
+  // variantId and cost basis), the order (for currency), and a matching
+  // inventoryItems row. Only once every one of those passes does the
+  // conditional UPDATE ... WHERE restock = false RETURNING actually fire.
+  function mockResolvedLinkage() {
+    mockDb.select = vi.fn()
+      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderId: UUID }])) // return row
+      .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, orgId: 'org-1', orderItemId: 'oi-1' }])) // existing item
+      .mockImplementationOnce(() => chainOf([{ id: 'oi-1', variantId: 'v-1', costMinor: 0n }])) // linked order item
+      .mockImplementationOnce(() => chainOf([{ currency: 'EGP' }])) // order (currency)
+      .mockImplementationOnce(() => chainOf([{ id: 'inv-1', variantId: 'v-1', quantity: 5 }])); // inventory item
+  }
+
   it('a second restock of the same item is a no-op (the atomic claim finds nothing to claim)', async () => {
     // The idempotency guard moved INSIDE the transaction (F04): a plain
     // pre-check read before ctx.withOrg was a TOCTOU race between two
@@ -62,10 +78,7 @@ describe('returns.restock — idempotency', () => {
     // race this fix closes. What must still hold: entering the transaction
     // is harmless when the claim is already taken — no physical or
     // financial effect fires a second time.
-    // 1st select -> the return row; 2nd select -> the existing item (ownership check).
-    mockDb.select = vi.fn()
-      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderId: UUID }]))
-      .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, orgId: 'org-1' }]));
+    mockResolvedLinkage();
     // The claim's own UPDATE ... RETURNING finds no row: already restocked.
     mockDb.update = vi.fn(() => chainOf([]));
     const withOrgSpy = vi.fn(withOrgMock);
@@ -79,19 +92,33 @@ describe('returns.restock — idempotency', () => {
     expect(mockDb.update).toHaveBeenCalledTimes(1);
   });
 
-  it('a first restock does enter the transaction', async () => {
-    mockDb.select = vi.fn()
-      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderId: UUID }]))
-      .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, orgId: 'org-1' }]));
+  it('a first restock does enter the transaction and claims the row', async () => {
+    mockResolvedLinkage();
     // The claim's own UPDATE ... RETURNING wins, returning the now-claimed row.
-    mockDb.update = vi.fn(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, orderItemId: null, condition: 'good' }]));
+    mockDb.update = vi.fn(() => chainOf([{ id: UUID, returnId: UUID, quantity: 3, orderItemId: 'oi-1', condition: 'good' }]));
     const withOrgSpy = vi.fn(withOrgMock);
 
     const res = await returnsRouter.createCaller(ctx(withOrgSpy)).restock({ returnId: UUID, itemId: UUID });
 
     expect(withOrgSpy).toHaveBeenCalled();
-    // No orderItemId -> nothing to credit, but the line is still flagged as claimed.
+    expect(res.data).toMatchObject({ restocked: true, reason: null });
+    expect(mockDb.update).toHaveBeenCalledTimes(2); // the claim, then the inventory quantity increment
+  });
+
+  it('a validation failure (no linked order item) never reaches the claim', async () => {
+    // The exact shape F03 fixed: a missing link must bail out BEFORE the
+    // atomic claim, so the row stays retryable instead of getting stuck
+    // claimed with nothing to show for it.
+    mockDb.select = vi.fn()
+      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderId: UUID }]))
+      .mockImplementationOnce(() => chainOf([{ id: UUID, returnId: UUID, orgId: 'org-1', orderItemId: null }]));
+    mockDb.update = vi.fn(() => chainOf([{ id: UUID }])); // would "win" if reached — must not be
+    const withOrgSpy = vi.fn(withOrgMock);
+
+    const res = await returnsRouter.createCaller(ctx(withOrgSpy)).restock({ returnId: UUID, itemId: UUID });
+
     expect(res.data).toMatchObject({ restocked: false, reason: 'no_order_item_link' });
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 });
 

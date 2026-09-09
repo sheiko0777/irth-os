@@ -207,6 +207,39 @@ describe('returns', () => {
     mockDb.update.mockReturnValueOnce(claim);
   }
 
+  it.each(['no_inventory_item', 'no_variant', 'no_order_item_link'] as const)(
+    'does not claim or post any effects on %s', async (reason) => {
+      const item = { id: 'item-1', restock: false,
+        orderItemId: reason === 'no_order_item_link' ? null : 'line-1' };
+      const selections = [
+        rows([{ id: 'ret-1', orderId: 'o-1' }]), rows([item]),
+        rows([{ variantId: reason === 'no_variant' ? null : 'v-1', costMinor: 300n }]),
+        rows([{ currency: 'EGP' }]), rows([]),
+      ];
+      for (const selection of selections) mockDb.select.mockReturnValueOnce(selection);
+      expect((await caller.restock({ returnId: 'ret-1', itemId: 'item-1' })).data)
+        .toEqual({ restocked: false, reason });
+      expect(mockDb.update).not.toHaveBeenCalled();
+      expect(mockDb.insert).not.toHaveBeenCalled();
+      expect(postJournalEntry).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['new', 'good'])('increments %s saleable stock and reverses known cost', async (condition) => {
+    restockFixture(condition, 300n);
+    expect((await caller.restock({ returnId: 'ret-1', itemId: 'item-1' })).data.restocked).toBe(true);
+    expect(mockDb.update).toHaveBeenCalledWith(inventoryItems);
+    expect(postJournalEntry).toHaveBeenCalledTimes(1);
+    expect(postJournalEntry).toHaveBeenCalledWith(mockDb, expect.objectContaining({
+      lines: [
+        { accountCode: ACCOUNT_CODES.INVENTORY, currency: 'EGP', debitMinor: 600n },
+        { accountCode: ACCOUNT_CODES.COGS, currency: 'EGP', creditMinor: 600n },
+      ],
+    }));
+    const movement = mockDb.insert.mock.results[0].value;
+    expect(movement.values).toHaveBeenCalledWith(expect.objectContaining({ type: 'in', quantity: 2 }));
+  });
+
   it.each(['damaged', 'unknown'])('holds %s stock out of saleable inventory but reverses cost', async (condition) => {
     restockFixture(condition, 300n);
     const result = await caller.restock({ returnId: 'ret-1', itemId: 'item-1' });
