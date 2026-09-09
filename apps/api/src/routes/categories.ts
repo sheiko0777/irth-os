@@ -5,14 +5,14 @@ import { z } from 'zod';
 import { db, withOrg } from '../db';
 import { categories, withAudit, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
+import { requireOrgId } from '../middlewares/requireOrgId';
 import { requireRole } from '../middlewares/requireRole';
 
 export const categoriesRouter = new Hono();
 
-categoriesRouter.get('/', async (c: Context) => {
+categoriesRouter.get('/', requireOrgId(), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const data = await db.select().from(categories).where(eq(categories.orgId, orgId));
 
@@ -30,8 +30,7 @@ const createCategorySchema = z.object({
 
 categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const userId = (c.get('userId') as string | undefined) ?? 'system';
     const body = await c.req.json();
@@ -68,8 +67,7 @@ categoriesRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => 
 
 categoriesRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
 
     const id = c.req.param('id');
     if (!id) return c.json({ data: null, error: 'Invalid ID', meta: null }, 400);
