@@ -71,24 +71,24 @@ export const ordersRouter = router({
             const conditions = status ? [...scope, eq(orders.status, status)] : scope;
 
             // Execute list, count and status breakdown concurrently
-            const [data, totalQuery, statusCountsQuery] = await Promise.all([
-                ctx.db
+            const [data, totalQuery, statusCountsQuery] = await ctx.withOrg(async (tx) => Promise.all([
+                tx
                     .select()
                     .from(orders)
                     .where(and(...conditions))
                     .orderBy(desc(orders.createdAt))
                     .limit(pageSize)
                     .offset(offset),
-                ctx.db
+                tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(...conditions)),
-                ctx.db
+                tx
                     .select({ status: orders.status, count: count() })
                     .from(orders)
                     .where(and(...scope))
                     .groupBy(orders.status),
-            ]);
+            ]));
 
             return {
                 data,
@@ -107,18 +107,18 @@ export const ordersRouter = router({
             id: z.string().uuid()
         }))
         .query(async ({ ctx, input }) => {
-            const order = await ctx.db.query.orders.findFirst({
+            const order = await ctx.withOrg(async (tx) => tx.query.orders.findFirst({
                 where: and(
                     eq(orders.id, input.id),
                     eq(orders.orgId, ctx.orgId)
                 )
-            });
+            }));
 
             if (!order) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
             }
 
-            const items = await ctx.db
+            const items = await ctx.withOrg(async (tx) => tx
                 .select({
                     id: orderItems.id,
                     quantity: orderItems.quantity,
@@ -130,16 +130,16 @@ export const ordersRouter = router({
                 .where(and(
                     eq(orderItems.orderId, order.id),
                     eq(orderItems.orgId, ctx.orgId)
-                ));
+                )));
             
-            const history = await ctx.db
+            const history = await ctx.withOrg(async (tx) => tx
                 .select()
                 .from(shipmentTracking)
                 .where(and(
                     eq(shipmentTracking.orderId, order.id),
                     eq(shipmentTracking.orgId, ctx.orgId)
                 ))
-                .orderBy(desc(shipmentTracking.createdAt));
+                .orderBy(desc(shipmentTracking.createdAt)));
 
             return {
                 data: { order, items, history },
@@ -154,12 +154,12 @@ export const ordersRouter = router({
             status: statusEnum
         }))
         .mutation(async ({ ctx, input }) => {
-            const order = await ctx.db.query.orders.findFirst({
+            const order = await ctx.withOrg(async (tx) => tx.query.orders.findFirst({
                 where: and(
                     eq(orders.id, input.id),
                     eq(orders.orgId, ctx.orgId)
                 )
-            });
+            }));
 
             if (!order) {
                 throw new TRPCError({ code: 'NOT_FOUND' });

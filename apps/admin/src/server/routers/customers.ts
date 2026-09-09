@@ -29,19 +29,19 @@ export const customersRouter = router({
         : eq(customers.orgId, ctx.orgId);
 
       // Execute list and count queries concurrently to reduce latency
-      const [data, totalRowResult] = await Promise.all([
-        ctx.db
+      const [data, totalRowResult] = await ctx.withOrg(async (tx) => Promise.all([
+        tx
           .select()
           .from(customers)
           .where(whereClause)
           .orderBy(desc(customers.createdAt))
           .limit(input.pageSize)
           .offset(offset),
-        ctx.db
+        tx
           .select({ count: count() })
           .from(customers)
           .where(whereClause)
-      ]);
+      ]));
 
       const totalRow = totalRowResult[0];
 
@@ -55,18 +55,18 @@ export const customersRouter = router({
   get: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const customer = await ctx.db.query.customers.findFirst({
+      const customer = await ctx.withOrg(async (tx) => tx.query.customers.findFirst({
         where: and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)),
-      });
+      }));
 
       if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
 
-      const transactions = await ctx.db
+      const transactions = await ctx.withOrg(async (tx) => tx
         .select()
         .from(loyaltyTransactions)
         .where(eq(loyaltyTransactions.customerId, input.id))
         .orderBy(desc(loyaltyTransactions.createdAt))
-        .limit(10);
+        .limit(10));
 
       return { data: { ...customer, transactions }, error: null, meta: null };
     }),
@@ -305,13 +305,13 @@ export const customersRouter = router({
     }),
 
   summary: protectedProcedure.query(async ({ ctx }) => {
-    const [totals] = await ctx.db
+    const [totals] = await ctx.withOrg(async (tx) => tx
       .select({
         totalCustomers: count(),
         totalPoints: sql<number>`COALESCE(SUM(${customers.loyaltyPoints}), 0)::int`,
       })
       .from(customers)
-      .where(eq(customers.orgId, ctx.orgId));
+      .where(eq(customers.orgId, ctx.orgId)));
 
     return {
       data: {

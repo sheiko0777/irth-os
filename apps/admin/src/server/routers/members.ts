@@ -29,7 +29,7 @@ export const membersRouter = router({
     //
     // leftJoin, not innerJoin: a membership whose user record is missing is a
     // data problem worth seeing in the UI, not a row to silently drop.
-    const members = await ctx.db
+    const members = await ctx.withOrg(async (tx) => tx
       .select({
         id: orgMembers.id,
         userId: orgMembers.userId,
@@ -40,7 +40,7 @@ export const membersRouter = router({
       })
       .from(orgMembers)
       .leftJoin(user, eq(user.id, orgMembers.userId))
-      .where(eq(orgMembers.orgId, ctx.orgId));
+      .where(eq(orgMembers.orgId, ctx.orgId)));
 
     return { data: members, error: null, meta: { orgId: ctx.orgId } };
   }),
@@ -107,11 +107,11 @@ export const membersRouter = router({
   // Every pending invite for the active org (owner/admin only — same view
   // boundary as the member list itself).
   listInvites: requirePermission('members', 'view').query(async ({ ctx }) => {
-    const invites = await ctx.db
+    const invites = await ctx.withOrg(async (tx) => tx
       .select()
       .from(orgInvites)
       .where(eq(orgInvites.orgId, ctx.orgId))
-      .orderBy(desc(orgInvites.createdAt));
+      .orderBy(desc(orgInvites.createdAt)));
 
     return { data: invites, error: null, meta: null };
   }),
@@ -127,8 +127,8 @@ export const membersRouter = router({
   resendInvite: requirePermission('members', 'invite')
     .input(z.object({ inviteId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.db.select().from(orgInvites)
-        .where(and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, ctx.orgId))).limit(1);
+      const [existing] = await ctx.withOrg(async (tx) => tx.select().from(orgInvites)
+        .where(and(eq(orgInvites.id, input.inviteId), eq(orgInvites.orgId, ctx.orgId))).limit(1));
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found' });
 
       const newToken = crypto.randomUUID();
@@ -262,11 +262,11 @@ export const membersRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       // Load the target row, scoped to the caller's org.
-      const [target] = await ctx.db
+      const [target] = await ctx.withOrg(async (tx) => tx
         .select()
         .from(orgMembers)
         .where(and(eq(orgMembers.id, input.memberId), eq(orgMembers.orgId, ctx.orgId)))
-        .limit(1);
+        .limit(1));
 
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });
@@ -313,11 +313,11 @@ export const membersRouter = router({
   remove: requirePermission('members', 'remove')
     .input(z.object({ memberId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const [target] = await ctx.db
+      const [target] = await ctx.withOrg(async (tx) => tx
         .select()
         .from(orgMembers)
         .where(and(eq(orgMembers.id, input.memberId), eq(orgMembers.orgId, ctx.orgId)))
-        .limit(1);
+        .limit(1));
 
       if (!target) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Member not found' });

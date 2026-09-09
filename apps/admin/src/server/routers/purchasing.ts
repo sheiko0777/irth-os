@@ -8,11 +8,11 @@ import { TRPCError } from '@trpc/server';
 export const purchasingRouter = router({
   suppliers: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      const data = await ctx.db
+      const data = await ctx.withOrg(async (tx) => tx
         .select()
         .from(suppliers)
         .where(eq(suppliers.orgId, ctx.orgId))
-        .orderBy(desc(suppliers.createdAt));
+        .orderBy(desc(suppliers.createdAt)));
       return { data, error: null, meta: null };
     }),
 
@@ -111,10 +111,10 @@ export const purchasingRouter = router({
         // no ON DELETE action, so a purchase order created concurrently makes
         // the DELETE fail on the foreign key rather than orphan anything. This
         // check only turns that 500 into a message the caller can act on.
-        const [linkedPo] = await ctx.db
+        const [linkedPo] = await ctx.withOrg(async (tx) => tx
             .select({ count: count() })
             .from(purchaseOrders)
-            .where(and(eq(purchaseOrders.supplierId, input.id), eq(purchaseOrders.orgId, ctx.orgId)));
+            .where(and(eq(purchaseOrders.supplierId, input.id), eq(purchaseOrders.orgId, ctx.orgId))));
 
         if (linkedPo && linkedPo.count > 0) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete supplier with linked purchase orders' });
@@ -155,8 +155,8 @@ export const purchasingRouter = router({
         const offset = (input.page - 1) * input.pageSize;
 
         // ⚡ Bolt: Execute list and count queries concurrently to reduce max latency
-        const [data, totalResult] = await Promise.all([
-          ctx.db
+        const [data, totalResult] = await ctx.withOrg(async (tx) => Promise.all([
+          tx
             .select({
               id: purchaseOrders.id,
               poNumber: purchaseOrders.poNumber,
@@ -176,11 +176,11 @@ export const purchasingRouter = router({
             .orderBy(desc(purchaseOrders.createdAt))
             .limit(input.pageSize)
             .offset(offset),
-          ctx.db
+          tx
             .select({ count: count() })
             .from(purchaseOrders)
             .where(eq(purchaseOrders.orgId, ctx.orgId))
-        ]);
+        ]));
 
         const total = totalResult[0]?.count ?? 0;
 
@@ -190,15 +190,15 @@ export const purchasingRouter = router({
     get: protectedProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
-        const order = await ctx.db.query.purchaseOrders.findFirst({
+        const order = await ctx.withOrg(async (tx) => tx.query.purchaseOrders.findFirst({
           where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)),
           with: {
             supplier: true, // Assuming relation exists, but since not defined in schema relation we need left join or separate query
           }
-        });
+        }));
 
         // Since no relations object is created in schema, query separately:
-        const poRows = await ctx.db
+        const poRows = await ctx.withOrg(async (tx) => tx
             .select({
                 order: purchaseOrders,
                 supplier: suppliers
@@ -206,15 +206,15 @@ export const purchasingRouter = router({
             .from(purchaseOrders)
             .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
             .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
-            .limit(1);
+            .limit(1));
 
         const po = poRows[0];
         if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
-        const items = await ctx.db
+        const items = await ctx.withOrg(async (tx) => tx
           .select()
           .from(purchaseOrderItems)
-          .where(eq(purchaseOrderItems.poId, po.order.id));
+          .where(eq(purchaseOrderItems.poId, po.order.id)));
 
         return { data: { ...po.order, supplier: po.supplier, items }, error: null, meta: null };
       }),
@@ -326,9 +326,9 @@ export const purchasingRouter = router({
         // from here — it is the UPDATE's own result below, so a PO deleted
         // between the two statements reports NOT_FOUND instead of succeeding
         // with an undefined row.
-        const po = await ctx.db.query.purchaseOrders.findFirst({
+        const po = await ctx.withOrg(async (tx) => tx.query.purchaseOrders.findFirst({
             where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId))
-        });
+        }));
 
         const updateData: {
           status: typeof input.status;
@@ -383,9 +383,9 @@ export const purchasingRouter = router({
       )
       .mutation(async ({ ctx, input }) =>
         ctx.idempotent('purchasing.receive', input.idempotencyKey, input, async () => {
-        const po = await ctx.db.query.purchaseOrders.findFirst({
+        const po = await ctx.withOrg(async (tx) => tx.query.purchaseOrders.findFirst({
             where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId))
-        });
+        }));
         if (!po) throw new TRPCError({ code: 'NOT_FOUND' });
 
         const result = await ctx.withOrg(async (tx) => {

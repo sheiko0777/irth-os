@@ -27,8 +27,8 @@ export const productsRouter = router({
             }
 
             // Execute list and count queries concurrently to reduce latency
-            const [data, totalQuery] = await Promise.all([
-                ctx.db
+            const [data, totalQuery] = await ctx.withOrg(async (tx) => Promise.all([
+                tx
                     .select({
                         id: products.id,
                         name: products.name,
@@ -45,11 +45,11 @@ export const productsRouter = router({
                     .orderBy(desc(products.createdAt))
                     .limit(pageSize)
                     .offset(offset),
-                ctx.db
+                tx
                     .select({ count: count() })
                     .from(products)
                     .where(and(...conditions))
-            ]);
+            ]));
 
             return {
                 data,
@@ -67,21 +67,21 @@ export const productsRouter = router({
             id: z.string().uuid()
         }))
         .query(async ({ ctx, input }) => {
-            const product = await ctx.db.query.products.findFirst({
+            const product = await ctx.withOrg(async (tx) => tx.query.products.findFirst({
                 where: and(
                     eq(products.id, input.id),
                     eq(products.orgId, ctx.orgId)
                 )
-            });
+            }));
 
             if (!product) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
             }
 
-            const variants = await ctx.db
+            const variants = await ctx.withOrg(async (tx) => tx
                 .select()
                 .from(productVariants)
-                .where(eq(productVariants.productId, product.id));
+                .where(eq(productVariants.productId, product.id)));
 
             return {
                 data: { product, variants },
@@ -157,12 +157,12 @@ export const productsRouter = router({
             status: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const product = await ctx.db.query.products.findFirst({
+            const product = await ctx.withOrg(async (tx) => tx.query.products.findFirst({
                 where: and(
                     eq(products.id, input.id),
                     eq(products.orgId, ctx.orgId)
                 )
-            });
+            }));
 
             if (!product) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
