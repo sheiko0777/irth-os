@@ -4,17 +4,14 @@ import { db } from '../db';
 import { notifications, activityLog, jsonSafe } from '@irth/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireOrgId } from '../middlewares/requireOrgId';
 
 export const notificationsRouter = new Hono();
 
 // GET / - List unread notifications for current user
-notificationsRouter.get('/', async (c) => {
-  const orgId = c.get('orgId') as string | undefined;
+notificationsRouter.get('/', requireOrgId(), async (c) => {
+  const orgId = c.get('orgId') as string;
   const userId = (c.get('userId') as string | undefined) ?? 'system';
-
-  if (!orgId) {
-    return c.json({ error: 'Missing org_id header', data: null, meta: null }, 401);
-  }
 
   try {
     const data = await db
@@ -34,14 +31,10 @@ notificationsRouter.get('/', async (c) => {
 });
 
 // PATCH /:id/read - Mark single notification as read
-notificationsRouter.patch('/:id/read', async (c) => {
-  const orgId = c.get('orgId') as string | undefined;
+notificationsRouter.patch('/:id/read', requireOrgId(), async (c) => {
+  const orgId = c.get('orgId') as string;
   const userId = (c.get('userId') as string | undefined) ?? 'system';
   const notificationId = c.req.param('id');
-
-  if (!orgId) {
-    return c.json({ error: 'Missing org_id header', data: null, meta: null }, 401);
-  }
 
   try {
     const result = await db
@@ -65,13 +58,9 @@ notificationsRouter.patch('/:id/read', async (c) => {
 });
 
 // PATCH /read-all - Mark all unread as read
-notificationsRouter.patch('/read-all', async (c) => {
-  const orgId = c.get('orgId') as string | undefined;
+notificationsRouter.patch('/read-all', requireOrgId(), async (c) => {
+  const orgId = c.get('orgId') as string;
   const userId = (c.get('userId') as string | undefined) ?? 'system';
-
-  if (!orgId) {
-    return c.json({ error: 'Missing org_id header', data: null, meta: null }, 401);
-  }
 
   try {
     await db
@@ -95,12 +84,8 @@ const activityQuerySchema = z.object({
 });
 
 // GET /activity - List activity log entries (paginated)
-notificationsRouter.get('/activity', async (c) => {
-  const orgId = c.get('orgId') as string | undefined;
-
-  if (!orgId) {
-    return c.json({ error: 'Missing org_id header', data: null, meta: null }, 401);
-  }
+notificationsRouter.get('/activity', requireOrgId(), async (c) => {
+  const orgId = c.get('orgId') as string;
 
   try {
     const query = activityQuerySchema.parse(c.req.query());
