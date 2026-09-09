@@ -100,6 +100,34 @@ describe('PATCH /api/orders/:id/status', () => {
   });
 });
 
+describe('GET /api/orders', () => {
+  it('returns distinct pages with an org-scoped total for all matching orders', async () => {
+    const page1Query = chainable([{ id: 'order-1', orgId: 'org-1' }]);
+    const page1Count = chainable([{ count: 3 }]);
+    const page2Query = chainable([{ id: 'order-2', orgId: 'org-1' }]);
+    const page2Count = chainable([{ count: 3 }]);
+    vi.mocked(db.select)
+      .mockReturnValueOnce(page1Query as never)
+      .mockReturnValueOnce(page1Count as never)
+      .mockReturnValueOnce(page2Query as never)
+      .mockReturnValueOnce(page2Count as never);
+
+    const app = buildApp({ orgId: 'org-1', userId: 'user-1', role: 'member' });
+    const page1 = await app.request('/api/orders?page=1&limit=1');
+    const page2 = await app.request('/api/orders?page=2&limit=1');
+    const body1 = await page1.json() as { data: unknown[]; meta: { total: number; page: number; limit: number } };
+    const body2 = await page2.json() as { data: unknown[]; meta: { total: number; page: number; limit: number } };
+
+    expect(body1.data).not.toEqual(body2.data);
+    expect(body1.meta).toEqual({ total: 3, page: 1, limit: 1 });
+    expect(body2.meta).toEqual({ total: 3, page: 2, limit: 1 });
+    expect(page1Query.limit).toHaveBeenCalledWith(1);
+    expect(page1Query.offset).toHaveBeenCalledWith(0);
+    expect(page2Query.limit).toHaveBeenCalledWith(1);
+    expect(page2Query.offset).toHaveBeenCalledWith(1);
+  });
+});
+
 describe('PATCH order status — atomic transition wiring', () => {
   const orgId = 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33';
 
