@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { db, withOrg } from '../db';
 import {
   organizations, orgMembers, orgInvites, withAudit, jsonSafe, setActiveOrg, NotAMemberError,
-  emitOutboxEvent, generateInviteOtp, acceptOrgInvite,
+  emitOutboxEvent, generateInviteOtp, acceptOrgInvite, canAssignRole, type Role,
 } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
@@ -69,8 +69,8 @@ orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context)
     const body = await c.req.json();
     const { email, role } = inviteSchema.parse(body);
 
-    const userRole = c.get('role') as string;
-    if (userRole === 'admin' && role === 'owner') {
+    const userRole = c.get('role') as Role;
+    if (!canAssignRole(userRole, role)) {
       return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
     }
 

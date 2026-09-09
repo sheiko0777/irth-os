@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { requirePermission, router } from '../trpc';
 import { eq, and, desc } from 'drizzle-orm';
-import { orgMembers, orgInvites, organizations, user, withAudit, emitOutboxEvent, generateInviteOtp } from '@irth/db';
+import { orgMembers, orgInvites, organizations, user, withAudit, canAssignRole, emitOutboxEvent, generateInviteOtp } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -65,7 +65,7 @@ export const membersRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Mirrors apps/api's own check: an admin may invite members and other
       // admins, but only an owner may invite a new owner.
-      if (ctx.role === 'admin' && input.role === 'owner') {
+      if (!canAssignRole(ctx.role, input.role)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Only an owner can invite another owner.' });
       }
 
@@ -206,7 +206,7 @@ export const membersRouter = router({
       role: z.enum(['owner', 'admin', 'member']).default('member'),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.role === 'admin' && input.role === 'owner') {
+      if (!canAssignRole(ctx.role, input.role)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Only an owner can invite another owner.' });
       }
 
