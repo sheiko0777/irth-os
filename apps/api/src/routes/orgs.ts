@@ -40,7 +40,7 @@ orgsRouter.post('/switch', async (c: Context) => {
   }
 });
 
-orgsRouter.get('/:id/members', async (c: Context) => {
+orgsRouter.get('/:id/members', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const id = c.req.param('id');
     const orgId = c.get('orgId') as string | undefined;
