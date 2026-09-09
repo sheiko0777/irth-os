@@ -7,6 +7,7 @@ import { withAudit, transitionOrderStatus } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
 import { requirePermission } from '../middlewares/requirePermission';
+import { requireOrgId } from '../middlewares/requireOrgId';
 
 /** Thrown inside the order transaction so the whole thing rolls back. */
 class InsufficientStockError extends Error {
@@ -18,8 +19,7 @@ class InsufficientStockError extends Error {
 
 const ordersRoute = new Hono();
 
-const getOrgId = (c: Context): string | undefined => c.get('orgId') as string | undefined;
-const getUserId = (c: Context): string | undefined => c.get('userId') as string | undefined;
+const getUserId = (c: Context): string => c.get('userId') as string;
 
 const createOrderSchema = z.object({
   // Optional so existing callers keep working; a client opts in by sending one.
@@ -33,12 +33,9 @@ const createOrderSchema = z.object({
   }))
 });
 
-ordersRoute.post('/', async (c: Context) => {
-  const orgId = getOrgId(c);
+ordersRoute.post('/', requireOrgId(), async (c: Context) => {
+  const orgId = c.get('orgId') as string;
   const userId = getUserId(c);
-  if (!orgId || !userId) {
-    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
-  }
   const body = await c.req.json();
 
   const data = createOrderSchema.parse(body);
@@ -239,9 +236,8 @@ ordersRoute.post('/', async (c: Context) => {
   return c.json({ data: jsonSafe(newOrder), error: null, meta: null });
 });
 
-ordersRoute.get('/', async (c: Context) => {
-  const orgId = getOrgId(c);
-  if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+ordersRoute.get('/', requireOrgId(), async (c: Context) => {
+  const orgId = c.get('orgId') as string;
   
   const [list, countResult] = await Promise.all([
     db.select().from(orders).where(eq(orders.orgId, orgId)).orderBy(desc(orders.createdAt)),
@@ -253,9 +249,8 @@ ordersRoute.get('/', async (c: Context) => {
   return c.json({ data: jsonSafe(list), error: null, meta: { total: totalCount } });
 });
 
-ordersRoute.get('/:id', async (c: Context) => {
-  const orgId = getOrgId(c);
-  if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+ordersRoute.get('/:id', requireOrgId(), async (c: Context) => {
+  const orgId = c.get('orgId') as string;
   const id = c.req.param('id');
   const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
   
@@ -278,11 +273,8 @@ const updateStatusSchema = z.object({
 // this route had no role guard at all — any authenticated member could
 // trigger both side effects.
 ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c: Context) => {
-  const orgId = getOrgId(c);
+  const orgId = c.get('orgId') as string;
   const userId = getUserId(c);
-  if (!orgId || !userId) {
-    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
-  }
   const id = c.req.param('id');
   const body = await c.req.json();
   

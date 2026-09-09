@@ -9,6 +9,7 @@ import {
 } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
+import { requireOrgId } from '../middlewares/requireOrgId';
 import { envVar } from '../utils/env';
 
 export const orgsRouter = new Hono();
@@ -40,11 +41,10 @@ orgsRouter.post('/switch', async (c: Context) => {
   }
 });
 
-orgsRouter.get('/:id/members', async (c: Context) => {
+orgsRouter.get('/:id/members', requireOrgId(), async (c: Context) => {
   try {
     const id = c.req.param('id');
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
     if (id !== orgId) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
 
     const members = await db.select().from(orgMembers).where(eq(orgMembers.orgId, orgId));
@@ -62,8 +62,7 @@ const inviteSchema = z.object({
 orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const id = c.req.param('id');
-    const orgId = c.get('orgId') as string | undefined;
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
+    const orgId = c.get('orgId') as string;
     if (id !== orgId) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
 
     const body = await c.req.json();
@@ -153,9 +152,8 @@ const updateRoleSchema = z.object({
 
 orgsRouter.patch('/members/:memberId/role', requireRole('owner'), async (c: Context) => {
   try {
-    const orgId = c.get('orgId') as string | undefined;
+    const orgId = c.get('orgId') as string;
     const memberId = c.req.param('memberId');
-    if (!orgId) return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
 
     const body = await c.req.json();
     const { role } = updateRoleSchema.parse(body);
