@@ -1,5 +1,6 @@
+import { safeEqual } from '@irth/db';
 import { MiddlewareHandler } from 'hono';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { getEnv } from '../db';
 
 /**
@@ -26,13 +27,7 @@ export function verifyShopifyWebhook(): MiddlewareHandler {
     const body = await c.req.text();
     const expected = createHmac('sha256', secret).update(body, 'utf8').digest('base64');
 
-    // Lengths can legitimately differ (a forged header of different length),
-    // and timingSafeEqual throws rather than returning false on a length
-    // mismatch — so that case is rejected directly instead of reaching it.
-    const sigBuf = Buffer.from(signature, 'base64');
-    const expBuf = Buffer.from(expected, 'base64');
-
-    if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+    if (!safeEqual(signature, expected, 'base64')) {
       return c.json({ data: null, error: 'Invalid signature', meta: null }, 401);
     }
 

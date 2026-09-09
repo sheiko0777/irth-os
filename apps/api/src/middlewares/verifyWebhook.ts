@@ -1,5 +1,6 @@
+import { safeEqual } from '@irth/db';
 import { MiddlewareHandler } from 'hono';
-import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { envVar } from '../utils/env';
 
 export function verifyHmac(secretEnvKey: string, headerName: string): MiddlewareHandler {
@@ -15,13 +16,7 @@ export function verifyHmac(secretEnvKey: string, headerName: string): Middleware
     const body = await c.req.text();
     const expected = createHmac('sha512', secret).update(body).digest('hex');
 
-    const sigBuf = Buffer.from(signature.replace('sha512=', ''), 'hex');
-    const expBuf = Buffer.from(expected, 'hex');
-
-    const hashedSig = createHash('sha256').update(sigBuf).digest();
-    const hashedExp = createHash('sha256').update(expBuf).digest();
-
-    if (!timingSafeEqual(hashedSig, hashedExp)) {
+    if (!safeEqual(signature.replace('sha512=', ''), expected, 'hex')) {
       return c.json({ data: null, error: 'Invalid signature', meta: null }, 401);
     }
 
