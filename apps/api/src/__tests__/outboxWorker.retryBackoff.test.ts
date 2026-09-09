@@ -43,6 +43,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(baseTime);
   vi.mocked(sendTransactionalEmail).mockReset();
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
 });
 
 describe('processOutbox — shared retry backoff', () => {
@@ -65,5 +66,20 @@ describe('processOutbox — shared retry backoff', () => {
 
     expect(sendTransactionalEmail).toHaveBeenCalledTimes(2);
     expect(event.processed).toBe(true);
+  });
+
+  it('jitters retry times for failures with the same attempt count', async () => {
+    const first = retryDatabase();
+    const second = retryDatabase();
+    vi.mocked(sendTransactionalEmail).mockRejectedValue(new Error('shared outage'));
+    vi.mocked(Math.random).mockReturnValueOnce(0).mockReturnValueOnce(1);
+
+    await processOutbox(first.database as never);
+    await processOutbox(second.database as never);
+
+    expect(first.event.attempts).toBe(1);
+    expect(second.event.attempts).toBe(1);
+    expect(first.event.nextRetryAt).not.toEqual(second.event.nextRetryAt);
+    expect(first.event.nextRetryAt?.getTime()).toBeLessThan(second.event.nextRetryAt?.getTime() ?? 0);
   });
 });

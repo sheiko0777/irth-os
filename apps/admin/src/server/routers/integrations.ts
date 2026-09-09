@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { randomBytes, createHash } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure, requirePermission } from '../trpc';
-import { outboxEvents, SHOPIFY_API_VERSION, shopifyConnections, shopifyOAuthStates } from '@irth/db';
+import { router, protectedProcedure, adminProcedure, requirePermission } from '../trpc';
+import { outboxEvents, SHOPIFY_API_VERSION, shopifyConnections, shopifyOAuthStates, withAudit } from '@irth/db';
 import { desc, eq, and } from 'drizzle-orm';
 
 const SHOPIFY_SCOPES = [
@@ -47,6 +47,43 @@ export const integrationsRouter = router({
                 .limit(50);
 
             return { data: events, error: null, meta: null };
+        }),
+
+    outboxRetry: adminProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .mutation(async ({ ctx, input }) => {
+            const event = await ctx.withOrg((tx) => withAudit(
+                tx,
+                async () => {
+                    const [retried] = await tx
+                        .update(outboxEvents)
+                        .set({
+                            attempts: 0,
+                            lastError: null,
+                            nextRetryAt: null,
+                            claimedAt: null,
+                        })
+                        .where(and(
+                            eq(outboxEvents.id, input.id),
+                            eq(outboxEvents.orgId, ctx.orgId),
+                            eq(outboxEvents.processed, false),
+                        ))
+                        .returning();
+                    if (!retried) {
+                        throw new TRPCError({ code: 'NOT_FOUND', message: 'حدث الصندوق غير موجود' });
+                    }
+                    return retried;
+                },
+                {
+                    orgId: ctx.orgId,
+                    userId: ctx.userId,
+                    action: 'RETRY_OUTBOX_EVENT',
+                    tableName: 'outbox_events',
+                    changes: { id: input.id, triggeredBy: ctx.userId },
+                },
+            ));
+
+            return { data: event, error: null, meta: null };
         }),
 
     shopifyStatus: protectedProcedure.query(async ({ ctx }) => {

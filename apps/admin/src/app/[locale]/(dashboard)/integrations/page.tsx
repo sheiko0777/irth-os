@@ -4,6 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ShopifyConnectionCard } from './ShopifyConnectionCard';
+import { Button } from '@/components/ui/button';
+import { revalidatePath } from 'next/cache';
+
+async function retryOutboxEvent(id: string) {
+    'use server';
+    const trpc = await serverCaller();
+    await trpc.integrations.outboxRetry({ id });
+    revalidatePath('/[locale]/integrations', 'page');
+}
 
 interface OutboxEvent {
     id: string;
@@ -42,18 +51,19 @@ export default async function IntegrationsPage({
                                     <TableHead className="text-start text-[var(--t2)]">{t('columns.type')}</TableHead>
                                     <TableHead className="text-start text-[var(--t2)]">{t('columns.attempts')}</TableHead>
                                     <TableHead className="text-start text-[var(--t2)]">{t('columns.date')}</TableHead>
+                                    <TableHead className="text-start text-[var(--t2)]">إجراء</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {events.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="h-24 text-center text-[var(--t3)]">
+                                        <TableCell colSpan={5} className="h-24 text-center text-[var(--t3)]">
                                             {t('empty')}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     events.map((event) => (
-                                        <TableRow key={event.id} className="border-b-[var(--rim1)] hover:bg-[var(--rim1)]">
+                                        <TableRow key={event.id} className={event.attempts >= 5 ? "border-b border-[var(--crimson)] bg-[var(--crimson)]/10" : "border-b-[var(--rim1)] hover:bg-[var(--rim1)]"}>
                                             <TableCell className="font-medium text-[var(--t1)]">
                                                 {event.id.substring(0, 8)}
                                             </TableCell>
@@ -69,6 +79,17 @@ export default async function IntegrationsPage({
                                             </TableCell>
                                             <TableCell className="text-[var(--t2)]">
                                                 {new Date(event.createdAt).toLocaleString('ar-EG')}
+                                            </TableCell>
+                                            <TableCell>
+                                                {event.attempts >= 5 ? (
+                                                    <form action={retryOutboxEvent.bind(null, event.id)}>
+                                                        <Button type="submit" size="sm" variant="outline" className="border-[var(--crimson)] text-[var(--crimson)]">
+                                                            إعادة المحاولة
+                                                        </Button>
+                                                    </form>
+                                                ) : (
+                                                    <span className="text-xs text-[var(--t3)]">قيد الانتظار</span>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))
