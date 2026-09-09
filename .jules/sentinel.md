@@ -17,3 +17,8 @@
 **Vulnerability:** The `generateCode` function in `apps/admin/src/server/routers/giftCards.ts` used `Math.random()` to generate characters for gift card codes.
 **Learning:** `Math.random()` is not cryptographically secure, and its outputs can be predicted if the internal state of the PRNG is known or deduced over time. This makes financial artifacts like gift cards vulnerable to being guessed and stolen by malicious actors.
 **Prevention:** Always use cryptographically secure pseudo-random number generators (CSPRNG) such as `crypto.getRandomValues` or Node's `crypto.randomBytes` / `crypto.randomInt` for generating security-sensitive, financial, or authentication codes.
+
+## 2025-02-24 - Broken Access Control in Org Members List
+**Vulnerability:** The `/orgs/:id/members` GET endpoint in `apps/api/src/routes/orgs.ts` lacked any RBAC middleware, allowing any member of an organization to list all other members, bypassing the `members.view` permission intended for owners and admins only.
+**Learning:** Missing `requireRole` or `requirePermission` middleware on API routes leads to authorization bypasses, even if the tenant (`orgId`) filter is correctly applied. The API layer's RBAC matrix must precisely match the admin panel's trpc router matrix.
+**Prevention:** Always apply the appropriate role or permission checking middleware (e.g., `requireRole` or `requirePermission`) to all endpoints exposing organization-level data, matching the security matrix in `packages/db/src/permissions.ts`.
