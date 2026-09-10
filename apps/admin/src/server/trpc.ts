@@ -136,7 +136,15 @@ export type Context = Awaited<ReturnType<typeof createContext>>;
 // from a procedure throws "Do not know how to serialize a BigInt" at runtime,
 // not at compile time. Must match the transformer on the client link in
 // src/components/providers/TrpcProvider.tsx.
-const t = initTRPC.context<Context>().create({ transformer: superjson });
+const t = initTRPC.context<Context>().create({
+    transformer: superjson,
+    errorFormatter({ shape, error }) {
+        if (error.code === 'INTERNAL_SERVER_ERROR' && process.env.NODE_ENV === 'production') {
+            return { ...shape, message: 'internal_server_error' };
+        }
+        return shape;
+    },
+});
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
