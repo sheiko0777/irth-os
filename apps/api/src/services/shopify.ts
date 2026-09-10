@@ -1,18 +1,5 @@
-import { getEnv } from '../db';
+import { envVar } from '../utils/env';
 import { SHOPIFY_API_VERSION } from './shopifyApi';
-
-/**
- * `process.env` is empty on Workers even inside a handler — see db.ts's
- * file-header comment, proven there for DATABASE_URL and true for every
- * secret, not just that one. `getEnv()` reads the request's actual `env`
- * binding, captured by `dbContext()` (or `captureEnv` on the scheduled/cron
- * path); `process.env` stays as the fallback so this keeps working unchanged
- * in Node contexts (tests, the webhook-registration script).
- */
-function envVar(key: string): string | undefined {
-  const captured = getEnv();
-  return (captured?.[key] as string | undefined) ?? process.env[key];
-}
 
 // Shopify Admin API client.
 //
