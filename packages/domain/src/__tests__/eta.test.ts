@@ -5,6 +5,8 @@ import {
   resolveSigner,
   toEtaAmountString,
   issueInvoice,
+  getInvoiceStatus,
+  cancelInvoice,
   type EtaConfig,
   type EtaOrderInput,
 } from '../eta';
@@ -159,5 +161,79 @@ describe('issueInvoice — typed result', () => {
 
     const result = await issueInvoice(oneItemOrder, withCreds());
     expect(result).toMatchObject({ ok: false, retryable: true, code: 'http_error' });
+  });
+});
+
+
+describe('getInvoiceStatus — typed result', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('returns not_configured, non-retryable, when credentials are missing', async () => {
+    const result = await getInvoiceStatus('uuid-1', baseConfig);
+    expect(result).toMatchObject({ ok: false, retryable: false, code: 'not_configured' });
+  });
+
+  it('returns network_error, retryable, when auth fails', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('DNS lookup failed'));
+    const result = await getInvoiceStatus('uuid-1', withCreds());
+    expect(result).toMatchObject({ ok: false, retryable: true, code: 'network_error' });
+  });
+
+  it('returns http_error, retryable, when status fetch fails', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'tok' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 500 }));
+
+    const result = await getInvoiceStatus('uuid-1', withCreds());
+    expect(result).toMatchObject({ ok: false, retryable: true, code: 'http_error' });
+  });
+});
+
+describe('cancelInvoice — typed result & token fetch count', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('fetches the auth token exactly once for normal cancellation flow', async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'tok' }), { status: 200 })) // auth
+      .mockResolvedValueOnce(new Response(JSON.stringify({ workflowParameters: [{ parameter: 'cancel', value: 72 }] }), { status: 200 })) // window check
+      .mockResolvedValueOnce(new Response(null, { status: 200 })); // cancel
+
+    global.fetch = mockFetch;
+    const configWithDocType = withCreds({ documentTypeId: 'doc-type-1' });
+
+    const result = await cancelInvoice('uuid-1', 'wrong amount', null, configWithDocType);
+    expect(result.ok).toBe(true);
+
+    // Auth is exactly the first call (out of 3 total fetches).
+    // Ensure getAuthToken is not called again for the cancel endpoint.
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    const authCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('connect/token'));
+    expect(authCalls.length).toBe(1);
+  });
+
+  it('returns network_error, retryable, when auth fails', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('DNS lookup failed'));
+    const result = await cancelInvoice('uuid-1', 'reason', null, withCreds());
+    expect(result).toMatchObject({ ok: false, retryable: true, code: 'network_error' });
+  });
+
+  it('returns cancellation_window_expired, non-retryable, when outside window limit', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'tok' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ workflowParameters: [{ parameter: 'cancel', value: 24 }] }), { status: 200 }));
+
+    const configWithDocType = withCreds({ documentTypeId: 'doc-type-1' });
+
+    // submitted 48 hours ago
+    const pastDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+    const result = await cancelInvoice('uuid-1', 'reason', pastDate, configWithDocType);
+    expect(result).toMatchObject({ ok: false, retryable: false, code: 'cancellation_window_expired' });
   });
 });

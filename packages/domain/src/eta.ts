@@ -90,6 +90,16 @@ export type IssueInvoiceResult =
         message: string;
     };
 
+export type InvoiceStatusResult =
+    | { ok: true; status: string; qrCodeData?: string; longId?: string }
+    | { ok: false; retryable: true; status: string; code: 'auth_failed' | 'http_error' | 'network_error'; message: string }
+    | { ok: false; retryable: false; status: string; code: 'not_configured'; message: string };
+
+export type CancelInvoiceResult =
+    | { ok: true; error?: undefined }
+    | { ok: false; retryable: true; error: string; code: 'auth_failed' | 'http_error' | 'network_error'; message: string }
+    | { ok: false; retryable: false; error: string; code: 'not_configured' | 'cancellation_window_unknown' | 'cancellation_window_expired'; message: string };
+
 /**
  * ETA rejects a document whose declared national ID is missing when the
  * amount exceeds this threshold (verified: search result on Egypt's B2C
@@ -459,18 +469,35 @@ export async function issueInvoice(order: EtaOrderInput, config: EtaConfig): Pro
 // ─────────────────────────────────────────────────────────────────────────
 // STATUS / CANCEL
 // ─────────────────────────────────────────────────────────────────────────
-export async function getInvoiceStatus(uuid: string, config: EtaConfig): Promise<{ status: string; qrCodeData?: string; longId?: string }> {
-    if (!config.clientId || !config.clientSecret) return { status: 'Unknown' };
+export async function getInvoiceStatus(uuid: string, config: EtaConfig): Promise<InvoiceStatusResult> {
+    if (!config.clientId || !config.clientSecret) {
+        return { ok: false, retryable: false, code: 'not_configured', message: 'ETA credentials not configured', status: 'Unknown' };
+    }
+
+    let token: string;
     try {
-        const token = await getAuthToken(config);
+        token = await getAuthToken(config);
+    } catch (err) {
+        if (err instanceof EtaAuthError) {
+            return { ok: false, retryable: true, code: err.kind, message: err.message, status: 'Error' };
+        }
+        return { ok: false, retryable: true, code: 'network_error', message: err instanceof Error ? err.message : 'Unknown auth error', status: 'Error' };
+    }
+
+    try {
         const res = await fetch(`${etaApiUrl(config.env)}/documents/${uuid}/details`, {
             headers: { Authorization: `Bearer ${token}` },
         });
+
+        if (!res.ok) {
+            return { ok: false, retryable: true, code: 'http_error', message: `ETA status check failed: ${res.status}`, status: 'Error' };
+        }
+
         const data = await res.json() as EtaStatusResponse;
-        return { status: data.status ?? 'Valid', qrCodeData: data.qrCodeData, longId: data.longId };
+        return { ok: true, status: data.status ?? 'Valid', qrCodeData: data.qrCodeData, longId: data.longId };
     } catch (err) {
         console.error('ETA getInvoiceStatus error:', err);
-        return { status: 'Error' };
+        return { ok: false, retryable: true, code: 'network_error', message: err instanceof Error ? err.message : 'ETA status request failed', status: 'Error' };
     }
 }
 
@@ -492,12 +519,12 @@ export async function getInvoiceStatus(uuid: string, config: EtaConfig): Promise
  * integrations) — callers must supply the id from their own ETA registration,
  * via `ETA_INVOICE_DOCUMENT_TYPE_ID`.
  */
-export async function getCancellationWindowHours(config: EtaConfig): Promise<number | null> {
+export async function getCancellationWindowHours(config: EtaConfig, preFetchedToken?: string): Promise<number | null> {
     const { documentTypeId } = config;
     if (!config.clientId || !config.clientSecret || !documentTypeId) return null;
 
     try {
-        const token = await getAuthToken(config);
+        const token = preFetchedToken ?? await getAuthToken(config);
         const res = await fetch(`${etaApiUrl(config.env)}/documenttypes/${documentTypeId}`, {
             headers: { Authorization: `Bearer ${token}` },
         });
@@ -524,35 +551,51 @@ export async function getCancellationWindowHours(config: EtaConfig): Promise<num
     }
 }
 
-export async function cancelInvoice(uuid: string, reason: string, submittedAt: Date | null, config: EtaConfig): Promise<{ ok: boolean; error?: string }> {
-    if (!config.clientId || !config.clientSecret) return { ok: false, error: 'not_configured' };
+export async function cancelInvoice(uuid: string, reason: string, submittedAt: Date | null, config: EtaConfig): Promise<CancelInvoiceResult> {
+    if (!config.clientId || !config.clientSecret) {
+        return { ok: false, retryable: false, code: 'not_configured', error: 'not_configured', message: 'ETA credentials not configured' };
+    }
+
+    let token: string;
+    try {
+        token = await getAuthToken(config);
+    } catch (err) {
+        if (err instanceof EtaAuthError) {
+            return { ok: false, retryable: true, code: err.kind, message: err.message, error: err.kind };
+        }
+        return { ok: false, retryable: true, code: 'network_error', message: err instanceof Error ? err.message : 'Unknown auth error', error: 'network_error' };
+    }
 
     // Read from ETA rather than hardcode. `null` (the API call itself failed,
     // or ETA_INVOICE_DOCUMENT_TYPE_ID is not set) means the window is UNKNOWN
     // — that is refused rather than treated as "no limit", since submitting
     // past an unknown-but-real window would be rejected by ETA anyway, and
     // silently allowing it here would hide the actual reason for that failure.
-    const windowHours = await getCancellationWindowHours(config);
+    const windowHours = await getCancellationWindowHours(config, token);
     if (windowHours === null) {
-        return { ok: false, error: 'cancellation_window_unknown' };
+        return { ok: false, retryable: false, code: 'cancellation_window_unknown', error: 'cancellation_window_unknown', message: 'ETA cancellation window limit could not be verified' };
     }
     if (submittedAt) {
         const hoursSinceSubmission = (Date.now() - submittedAt.getTime()) / (1000 * 60 * 60);
         if (hoursSinceSubmission > windowHours) {
-            return { ok: false, error: `cancellation_window_expired (${windowHours}h)` };
+            return { ok: false, retryable: false, code: 'cancellation_window_expired', error: `cancellation_window_expired (${windowHours}h)`, message: `Submission is past the ETA ${windowHours}h limit` };
         }
     }
 
     try {
-        const token = await getAuthToken(config);
         const res = await fetch(`${etaApiUrl(config.env)}/documents/state/${uuid}/state`, {
             method: 'PUT',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'cancelled', reason }),
         });
-        return { ok: res.ok, error: res.ok ? undefined : `http_${res.status}` };
+
+        if (!res.ok) {
+            return { ok: false, retryable: true, code: 'http_error', error: `http_${res.status}`, message: `ETA cancellation request failed: ${res.status}` };
+        }
+
+        return { ok: true };
     } catch (err) {
         console.error('ETA cancelInvoice error:', err);
-        return { ok: false, error: 'request_failed' };
+        return { ok: false, retryable: true, code: 'network_error', error: 'request_failed', message: err instanceof Error ? err.message : 'ETA cancellation request failed' };
     }
 }
