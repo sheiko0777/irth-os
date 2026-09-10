@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
 import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification, safeEqual } from '@irth/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { envVar } from '../../utils/env';
 import { resolveCourierShipmentByTracking } from './resolveCourierShipmentByTracking';
 
@@ -167,12 +167,10 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   } else if (data.businessReference) {
     // Attempt to parse businessReference as order_id
     // Need to get orgId from somewhere, let's look up the order
-    const { orders } = await import('@irth/db');
     const [order] = await db.select().from(orders).where(eq(orders.id, data.businessReference));
 
     if (order) {
         const isDeliveredAndCod = state === 'DELIVERED' && codMinor > 0n;
-        const { sql } = await import('drizzle-orm');
         await db.insert(courierShipments).values({
             orgId: order.orgId,
             orderId: order.id,

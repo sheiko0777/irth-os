@@ -14,10 +14,6 @@ export const ShippingProviderSchema = z.enum([
 ]);
 export type ShippingProvider = z.infer<typeof ShippingProviderSchema>;
 
-// Money Type (Decimal as string)
-export const MoneySchema = z.string().regex(/^\d+(\.\d+)?$/);
-export type Money = z.infer<typeof MoneySchema>;
-
 // Pagination Envelope Type
 export const PaginationMetaSchema = z.object({
   total: z.number(),

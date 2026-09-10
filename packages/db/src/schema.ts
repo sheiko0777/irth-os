@@ -82,7 +82,7 @@ export const products = pgTable('products', {
   stock: integer('stock').notNull().default(0),
   status: text('status').notNull().default('active'), // 'active' | 'draft' | 'archived'
   images: jsonb('images').default([]),
-  brand: brandEnum('brand').default('irth').notNull(), // Keeping brand to not break existing tests/code without need, or maybe we drop it? The spec didn't mention it. I will keep it for safety unless told otherwise. Actually I will just keep it since it's an enum we have.
+  brand: brandEnum('brand').default('irth').notNull(), // Single-tenant brand enum; always 'irth' today.
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
