@@ -9,6 +9,8 @@ import { ProductSchema } from '@irth/types';
 import { formatMoney, fromMinor, EGP } from '@irth/domain';
 import { apiFetchWithMeta } from '../../../lib/api';
 import { Card } from '../../../components/ui/Card';
+import { LoadingView } from '../../../components/ui/LoadingView';
+import { ErrorView } from '../../../components/ui/ErrorView';
 
 const PAGE_SIZE = 20;
 const productsPageSchema = z.object({
@@ -72,20 +74,11 @@ export default function ProductsScreen() {
   const products = useMemo(() => data?.pages.flatMap((page) => page.data) ?? [], [data]);
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-        <Text>{t('common.loading')}</Text>
-      </View>
-    );
+    return <LoadingView />;
   }
 
   if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{t('common.error')}</Text>
-      </View>
-    );
+    return <ErrorView />;
   }
 
   return (
@@ -136,14 +129,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f3f4f6',
     padding: 16,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: 'red',
   },
   emptyText: {
     textAlign: 'center',
