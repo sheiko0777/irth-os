@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, orgInvites, organizations, outboxEvents, generateInviteOtp, jsonSafe } from '@irth/db';
 import { eq } from 'drizzle-orm';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 // See apps/admin/src/server/routers/members.ts's identical constant for why
 // this isn't imported from i18n/routing.ts (that module also runs
@@ -29,6 +30,18 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const token = typeof body?.token === 'string' ? body.token : null;
   if (!token) return NextResponse.json({ error: 'Token required' }, { status: 400 });
+
+  // Next 15 dropped NextRequest.ip; on Vercel the client address arrives in
+  // x-forwarded-for. The cast keeps the older runtime path working without a
+  // load-bearing @ts-expect-error that breaks if the type ever comes back.
+  const ip =
+    (req as unknown as { ip?: string }).ip ??
+    req.headers.get('x-forwarded-for') ??
+    'unknown';
+  const rl = checkRateLimit(`${token}:${ip}`, 1, 30_000);
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
+  }
 
   const [invite] = await db.select().from(orgInvites).where(eq(orgInvites.token, token)).limit(1);
   if (!invite) return NextResponse.json({ error: 'Invalid invite token' }, { status: 404 });
