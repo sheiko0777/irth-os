@@ -53,9 +53,17 @@ export interface FormatOptions {
   hideFraction?: boolean;
 }
 
-function numberFormat(c: Currency, options: FormatOptions): Intl.NumberFormat {
+/**
+ * BCP 47 tag from FormatOptions: the caller's `locale` (default `ar-EG`), with
+ * the `-u-nu-latn` Unicode extension appended when latin digits are requested.
+ */
+function resolveLocale(options: FormatOptions): string {
   const base = options.locale ?? 'ar-EG';
-  const locale = options.digits === 'latin' ? `${base}-u-nu-latn` : base;
+  return options.digits === 'latin' ? `${base}-u-nu-latn` : base;
+}
+
+function numberFormat(c: Currency, options: FormatOptions): Intl.NumberFormat {
+  const locale = resolveLocale(options);
   const digits = options.hideFraction ? 0 : exponentOf(c);
 
   return new Intl.NumberFormat(locale, {
@@ -91,8 +99,7 @@ export function formatMoney(m: Money, options: FormatOptions = {}): string {
 
 /** Basis points as a percentage, e.g. 1400 -> "١٤٪". */
 export function formatRate(basisPoints: number, options: FormatOptions = {}): string {
-  const base = options.locale ?? 'ar-EG';
-  const locale = options.digits === 'latin' ? `${base}-u-nu-latn` : base;
+  const locale = resolveLocale(options);
   const percent = basisPoints / 100;
 
   return new Intl.NumberFormat(locale, {
