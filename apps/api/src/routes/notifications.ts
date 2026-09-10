@@ -26,7 +26,7 @@ notificationsRouter.get('/', requireOrgId(), async (c) => {
 
     return c.json({ data: jsonSafe(data), error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ error: handleError(error), data: null, meta: null }, 500);
+    return c.json({ error: handleError(error), data: null, meta: null }, 400);
   }
 });
 
@@ -53,7 +53,7 @@ notificationsRouter.patch('/:id/read', requireOrgId(), async (c) => {
 
     return c.json({ data: jsonSafe(result[0]), error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ error: handleError(error), data: null, meta: null }, 500);
+    return c.json({ error: handleError(error), data: null, meta: null }, 400);
   }
 });
 
@@ -74,7 +74,7 @@ notificationsRouter.patch('/read-all', requireOrgId(), async (c) => {
 
     return c.json({ data: jsonSafe({ success: true }), error: null, meta: null });
   } catch (error: unknown) {
-    return c.json({ error: handleError(error), data: null, meta: null }, 500);
+    return c.json({ error: handleError(error), data: null, meta: null }, 400);
   }
 });
 
@@ -105,6 +105,6 @@ notificationsRouter.get('/activity', requireOrgId(), async (c) => {
       meta: { page: query.page, limit: query.limit }
     });
   } catch (error: unknown) {
-    return c.json({ error: handleError(error), data: null, meta: null }, 500);
+    return c.json({ error: handleError(error), data: null, meta: null }, 400);
   }
 });
