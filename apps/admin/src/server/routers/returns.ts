@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput } from '@irth/db';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { EGYPT_VAT_BP, add, assertSupportedCurrency, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
@@ -89,7 +89,7 @@ export const returnsRouter = router({
       // concurrent processing of one EXISTING return via an atomic claim,
       // this would otherwise create a second, entirely separate return row
       // for the same customer intent.
-      idempotencyKey: z.string().min(1).max(255).optional(),
+      idempotencyKey: z.string().min(1).max(MAX_IDEMPOTENCY_KEY_LENGTH).optional(),
     }))
     .mutation(async ({ ctx, input }) =>
       ctx.idempotent('returns.create', input.idempotencyKey, input, async () => {

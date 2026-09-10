@@ -4,6 +4,13 @@ import { idempotencyKeys } from './schema/idempotency';
 import { jsonSafe } from './json';
 import type { DbInstance, DbTx } from './index';
 
+/**
+ * Length bound on an idempotency key. `withIdempotency` rejects anything
+ * outside `[1, MAX_IDEMPOTENCY_KEY_LENGTH]`; the router zod schemas bound their
+ * `idempotencyKey` field to the same number so the two cannot drift.
+ */
+export const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
+
 /** Raised when a request must not proceed. `code` maps to an HTTP/tRPC status. */
 export class IdempotencyError extends Error {
     constructor(
@@ -94,9 +101,9 @@ export async function withIdempotency<T>(
     // Opt-in: no key, no bookkeeping.
     if (key === undefined) return operation();
 
-    if (key.length === 0 || key.length > 255) {
+    if (key.length === 0 || key.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
         throw new IdempotencyError(
-            'Idempotency key must be between 1 and 255 characters.',
+            `Idempotency key must be between 1 and ${MAX_IDEMPOTENCY_KEY_LENGTH} characters.`,
             'BAD_REQUEST',
         );
     }

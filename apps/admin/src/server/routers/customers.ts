@@ -1,7 +1,7 @@
 import { router, protectedProcedure, adminProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count, ilike, or, gte } from 'drizzle-orm';
-import { customers, loyaltyTransactions, paginationMeta, paginationOffset, withAudit } from '@irth/db';
+import { customers, loyaltyTransactions, paginationMeta, paginationOffset, withAudit, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { TRPCError } from '@trpc/server';
 import { EGP, parseDecimal } from '@irth/domain';
@@ -163,7 +163,7 @@ export const customersRouter = router({
         note: z.string().optional(),
         // Granting the same customer the same points twice in a minute is
         // legitimate, so only the caller's required key can identify a retry.
-        idempotencyKey: z.string().min(1).max(255),
+        idempotencyKey: z.string().min(1).max(MAX_IDEMPOTENCY_KEY_LENGTH),
       })
     )
     .mutation(async ({ ctx, input }) =>

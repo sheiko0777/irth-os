@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
-import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
+import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
 import { eq, and, desc, sql, ne } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { assertSupportedCurrency, currency, fromMinor, parseDecimal } from '@irth/domain';
@@ -144,7 +144,7 @@ export const giftCardsRouter = router({
       amount: moneyInput,
       // Only the caller can distinguish a retry from a second genuine request
       // — doing this twice in a minute is legitimate, so the key is required.
-      idempotencyKey: z.string().min(1).max(255),
+      idempotencyKey: z.string().min(1).max(MAX_IDEMPOTENCY_KEY_LENGTH),
     }))
     .mutation(async ({ ctx, input }) =>
       ctx.idempotent('giftCards.topup', input.idempotencyKey, input, async () => {
@@ -228,7 +228,7 @@ export const giftCardsRouter = router({
       // a card can be redeemed as a standalone credit with nothing else on
       // this schema recording which order it went toward.
       orderId: z.string().uuid().optional(),
-      idempotencyKey: z.string().min(1).max(255),
+      idempotencyKey: z.string().min(1).max(MAX_IDEMPOTENCY_KEY_LENGTH),
     }))
     .mutation(async ({ ctx, input }) =>
       ctx.idempotent('giftCards.redeem', input.idempotencyKey, input, async () => {
