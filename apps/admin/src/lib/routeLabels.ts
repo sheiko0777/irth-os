@@ -1,33 +1,34 @@
+import { buildNavGroups } from './navigation';
+
+/**
+ * Legacy overrides to preserve exact string matches for routes where
+ * the hand-maintained map historically drifted from navigation.ts.
+ */
+const LEGACY_OVERRIDES: Record<string, string> = {
+  finance: 'المالية والتقارير',
+  stocktaking: 'الجرد',
+  'platform-admin': 'إدارة المنصة',
+};
+
 /**
  * Canonical dashboard route → Arabic label map.
+ * Derived from the single source of truth in navigation.ts.
  * Consumed by Header breadcrumbs and the ChatBot navigator — do not
  * redeclare route label maps in components.
  */
-export const routeLabels: Record<string, string> = {
-  orders:        'الطلبات',
-  products:      'المنتجات',
-  inventory:     'المخزون',
-  customers:     'العملاء',
-  purchasing:    'المشتريات',
-  integrations:  'التكاملات',
-  finance:       'المالية والتقارير',
-  analytics:     'التحليلات',
-  coupons:       'الكوبونات',
-  categories:    'التصنيفات',
-  notifications: 'الإشعارات',
-  settings:      'الإعدادات',
-  members:       'الأعضاء',
-  eta:           'الفواتير الإلكترونية',
-  courier:       'الشحن والتسوية',
-  returns:       'المرتجعات',
-  campaigns:     'الحملات',
-  stocktaking:   'الجرد',
-  pricelists:    'قوائم الأسعار',
-  shipping:      'مناطق الشحن',
-  'gift-cards':  'بطاقات الهدايا',
-  'customer-segments': 'شرائح العملاء',
-  'platform-admin':    'إدارة المنصة',
-};
+export const routeLabels: Record<string, string> = { ...LEGACY_OVERRIDES };
+
+for (const group of buildNavGroups('ar')) {
+  for (const item of group.items) {
+    const parts = item.href.split('/').filter(Boolean);
+    if (parts.length > 1) {
+      const segment = parts[parts.length - 1];
+      if (!routeLabels[segment]) {
+        routeLabels[segment] = item.label;
+      }
+    }
+  }
+}
 
 export function routeLabel(segment: string): string {
   return routeLabels[segment] ?? segment;
