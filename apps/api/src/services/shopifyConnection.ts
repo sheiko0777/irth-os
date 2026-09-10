@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type { InferSelectModel } from 'drizzle-orm';
 import { shopifyConnections, safeEqual } from '@irth/db';
-import { getEnv } from '../db';
+import { envVar } from '../utils/env';
 import { minorToDecimalString } from './shopify';
 import { SHOPIFY_API_VERSION } from './shopifyApi';
 
@@ -11,10 +11,6 @@ export const SHOPIFY_SCOPES = [
 ].join(',');
 
 type ShopifyConnection = InferSelectModel<typeof shopifyConnections>;
-
-function envVar(key: string): string | undefined {
-  return (getEnv()?.[key] as string | undefined) ?? process.env[key];
-}
 
 async function aesKey(usages: Array<'encrypt' | 'decrypt'>): Promise<CryptoKey> {
   const encoded = envVar('SHOPIFY_TOKEN_ENCRYPTION_KEY');
