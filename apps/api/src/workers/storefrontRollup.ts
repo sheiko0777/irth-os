@@ -34,22 +34,34 @@ export async function rollupStorefrontMetrics(database: typeof DbType, dayStart:
     GROUP BY org_id, event_name
   `);
 
-  for (const row of sessionRows) {
-    await database.insert(storefrontDailyMetrics).values({
-      orgId: row.org_id, metricDate: dayStart, metric: 'sessions', dimensions: {}, value: row.value, updatedAt: new Date(),
-    }).onConflictDoUpdate({
-      target: [storefrontDailyMetrics.orgId, storefrontDailyMetrics.metricDate, storefrontDailyMetrics.metric],
-      set: { value: row.value, updatedAt: new Date() },
-    });
+  const allRows = [
+    ...sessionRows.map(row => ({
+      orgId: row.org_id,
+      metricDate: dayStart,
+      metric: 'sessions',
+      dimensions: {},
+      value: row.value,
+      updatedAt: new Date(),
+    })),
+    ...eventRows.map(row => ({
+      orgId: row.org_id,
+      metricDate: dayStart,
+      metric: `events:${row.event_name}`,
+      dimensions: { eventName: row.event_name },
+      value: row.value,
+      updatedAt: new Date(),
+    })),
+  ];
+
+  if (allRows.length === 0) {
+    return;
   }
 
-  for (const row of eventRows) {
-    await database.insert(storefrontDailyMetrics).values({
-      orgId: row.org_id, metricDate: dayStart, metric: `events:${row.event_name}`,
-      dimensions: { eventName: row.event_name }, value: row.value, updatedAt: new Date(),
-    }).onConflictDoUpdate({
-      target: [storefrontDailyMetrics.orgId, storefrontDailyMetrics.metricDate, storefrontDailyMetrics.metric],
-      set: { value: row.value, updatedAt: new Date() },
-    });
-  }
+  await database.insert(storefrontDailyMetrics).values(allRows).onConflictDoUpdate({
+    target: [storefrontDailyMetrics.orgId, storefrontDailyMetrics.metricDate, storefrontDailyMetrics.metric],
+    set: {
+      value: sql`EXCLUDED.value`,
+      updatedAt: sql`EXCLUDED.updated_at`,
+    },
+  });
 }
