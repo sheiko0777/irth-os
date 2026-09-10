@@ -1,7 +1,7 @@
 import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset } from '@irth/db';
+import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { parseDecimal, assertSupportedCurrency } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
@@ -378,7 +378,7 @@ export const purchasingRouter = router({
           // The highest-consequence of the three: receiving twice adds the
           // quantity to stock twice, and nothing downstream can tell the
           // difference between that and a genuine second delivery.
-          idempotencyKey: z.string().min(1).max(255),
+          idempotencyKey: z.string().min(1).max(MAX_IDEMPOTENCY_KEY_LENGTH),
         })
       )
       .mutation(async ({ ctx, input }) =>
