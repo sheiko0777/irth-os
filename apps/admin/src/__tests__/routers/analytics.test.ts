@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
-import { analyticsRouter } from '@/server/routers/analytics';
+import { analyticsRouter, daysAgoIso } from '@/server/routers/analytics';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
@@ -34,6 +34,34 @@ beforeEach(() => {
   mockDb._reset();
   // analytics uses db.execute mostly
   (mockDb as any).execute = vi.fn(() => Promise.resolve([]));
+});
+
+describe('daysAgoIso helper', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-05-15T14:30:45.123Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns today at UTC midnight for days=0', () => {
+    const iso = daysAgoIso(0);
+    expect(iso).toBe('2024-05-15T00:00:00.000Z');
+  });
+
+  it('returns 30 days back at UTC midnight for days=30', () => {
+    const iso = daysAgoIso(30);
+    // 30 days before May 15 is April 15
+    expect(iso).toBe('2024-04-15T00:00:00.000Z');
+  });
+
+  it('handles month wrapping correctly (days=45)', () => {
+    const iso = daysAgoIso(45);
+    // 45 days before May 15: 15 days in May, 30 days in April -> March 31
+    expect(iso).toBe('2024-03-31T00:00:00.000Z');
+  });
 });
 
 describe('analytics router', () => {

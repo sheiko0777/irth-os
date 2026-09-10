@@ -4,6 +4,13 @@ import { eq, and, desc, sql, count, sum, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
+export function daysAgoIso(days: number): string {
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - days);
+  since.setUTCHours(0, 0, 0, 0);
+  return since.toISOString();
+}
+
 export const analyticsRouter = router({
   /**
    * Daily revenue (delivered orders) for last N days.
@@ -11,17 +18,13 @@ export const analyticsRouter = router({
   revenue: protectedProcedure
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
-      const since = new Date();
-      since.setDate(since.getDate() - input.days);
-      since.setHours(0, 0, 0, 0);
-
       // Bound as an ISO string, not a Date. The query builder converts Date
       // params for you; `db.execute` with a raw sql`` template does not, and
       // postgres-js rejects the object with "The string argument must be of
       // type string... Received an instance of Date". This threw on every
       // request, so the analytics page had never rendered — it 500'd for
       // everyone, always.
-      const sinceIso = since.toISOString();
+      const sinceIso = daysAgoIso(input.days);
 
       const rows = await ctx.db.execute(sql`
         SELECT
@@ -85,10 +88,8 @@ export const analyticsRouter = router({
   inventoryTurnover: protectedProcedure
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
-      const since = new Date();
-      since.setDate(since.getDate() - input.days);
       // Same raw-execute Date binding trap as `revenue` above.
-      const sinceIso = since.toISOString();
+      const sinceIso = daysAgoIso(input.days);
 
       const rows = await ctx.db.execute(sql`
         SELECT
@@ -220,10 +221,7 @@ export const analyticsRouter = router({
   storefrontOverview: protectedProcedure
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
-      const since = new Date();
-      since.setUTCDate(since.getUTCDate() - input.days);
-      since.setUTCHours(0, 0, 0, 0);
-      const sinceIso = since.toISOString();
+      const sinceIso = daysAgoIso(input.days);
 
       // Daily rollup, not the raw event table — this is meant to be cheap
       // enough for a dashboard card even on an org with millions of raw
@@ -256,9 +254,7 @@ export const analyticsRouter = router({
   storefrontSources: protectedProcedure
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
-      const since = new Date();
-      since.setUTCDate(since.getUTCDate() - input.days);
-      const sinceIso = since.toISOString();
+      const sinceIso = daysAgoIso(input.days);
 
       const rows = await ctx.db.execute(sql`
         SELECT
@@ -280,9 +276,7 @@ export const analyticsRouter = router({
   storefrontTopPages: protectedProcedure
     .input(z.object({ days: z.number().min(7).max(90).default(30), limit: z.number().min(5).max(30).default(10) }))
     .query(async ({ ctx, input }) => {
-      const since = new Date();
-      since.setUTCDate(since.getUTCDate() - input.days);
-      const sinceIso = since.toISOString();
+      const sinceIso = daysAgoIso(input.days);
 
       const rows = await ctx.db.execute(sql`
         SELECT path, COUNT(*)::int AS views
