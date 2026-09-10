@@ -256,6 +256,205 @@ function mapFinancialStatusToOrderStatus(financialStatus: string | null, cancell
   return 'pending';
 }
 
+type ShopifyWebhookTx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+
+/**
+ * Shopify sends money as a decimal string ("1234.56") in the order's own
+ * currency. Parse as fixed-point minor units — never through a float, per
+ * CLAUDE.md rule 1.
+ */
+function shopifyMoneyToMinor(decimal: string): bigint {
+  const [whole, fraction = '0'] = decimal.split('.');
+  return BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
+}
+
+interface AppliedOrderLines {
+  /** Lines that resolved to a local variant, for the order_items insert. */
+  resolvedItems: Array<{ variantId: string; quantity: number; priceMinor: bigint }>;
+  /** SKUs (or variant ids) with no local variant — recorded on the audit trail. */
+  unmatchedSkus: string[];
+  /** Lines where stock was floored below what the sale asked for. */
+  discrepancies: Array<{
+    variantId: string;
+    requestedQuantity: number;
+    appliedQuantity: number;
+    shortfallQuantity: number;
+    movementId: string | null;
+  }>;
+}
+
+/**
+ * Resolves each Shopify line to a local variant and decrements inventory for
+ * it. The webhook cannot reject the sale on a stock miss the way the
+ * dashboard's own order path does — Shopify already took the money — so it
+ * applies what is on hand, floors at zero, and records the shortfall.
+ *
+ * Lines are locked in an order that is stable ACROSS requests (Shopify's
+ * variant id, then sku) so two concurrent deliveries sharing variants can't
+ * deadlock by taking row locks in opposite orders. See the inline notes on
+ * the guarded UPDATE and the FOR UPDATE fallback for why the slow path needs
+ * an explicit row lock.
+ */
+async function applyShopifyOrderLines(
+  tx: ShopifyWebhookTx,
+  orgId: string,
+  payload: ShopifyOrderPayload,
+): Promise<AppliedOrderLines> {
+  const unmatchedSkus: string[] = [];
+  const resolvedItems: AppliedOrderLines['resolvedItems'] = [];
+  const discrepancies: AppliedOrderLines['discrepancies'] = [];
+
+  // Deterministic lock order across concurrent deliveries.
+  //
+  // Every iteration below takes a row lock on inventory_items — the guarded
+  // UPDATE takes one, and the FOR UPDATE on the shortfall path holds one for
+  // longer. Shopify decides the order of `line_items`, so two orders sharing
+  // variants X and Y can arrive as [X,Y] and [Y,X]; one transaction then
+  // holds X waiting for Y while the other holds Y waiting for X, and
+  // Postgres kills one with a deadlock. Sorting by a key that is stable
+  // ACROSS requests — Shopify's own variant id, falling back to sku — makes
+  // every transaction acquire the same rows in the same sequence, which is
+  // the standard and complete answer to that class of deadlock.
+  //
+  // Sorted before the loop rather than after resolution because the lock
+  // order is what matters, and our variant id is not known until the lookup
+  // inside the loop has already run. resolvedItems and unmatchedSkus are
+  // order-insensitive (a set of rows and a set of labels), so nothing else
+  // changes.
+  const orderedLines = [...payload.line_items].sort((a, b) => {
+    const ka = String(a.variant_id ?? a.sku ?? '');
+    const kb = String(b.variant_id ?? b.sku ?? '');
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+
+  for (const line of orderedLines) {
+    const shopifyVariantId = line.variant_id ? shopifyGid('ProductVariant', line.variant_id) : null;
+    const [variant] = shopifyVariantId
+      ? await tx.select().from(productVariants)
+          .where(and(eq(productVariants.orgId, orgId), eq(productVariants.shopifyVariantId, shopifyVariantId)))
+      : [];
+
+    if (!variant) {
+      unmatchedSkus.push(line.sku ?? String(line.variant_id ?? 'unknown'));
+      continue;
+    }
+
+    // Shopify's price is a decimal string already, in the same currency as
+    // the order — parsed as fixed-point cents, never through a float.
+    const priceMinor = shopifyMoneyToMinor(line.price);
+
+    resolvedItems.push({ variantId: variant.id, quantity: line.quantity, priceMinor });
+
+    // Same atomic `quantity >= n` guard the dashboard's own order-creation
+    // path uses (apps/api/src/routes/orders.ts) — but on a miss, this
+    // cannot reject the sale the way that path does (throw, roll back):
+    // Shopify already took the money. Apply what's actually on hand, floor
+    // at zero, and record the shortfall — the previous behaviour here was
+    // an unconditional decrement with no floor at all, which could drive
+    // quantity negative.
+    const guarded = await tx.update(inventoryItems)
+      .set({ quantity: sql`${inventoryItems.quantity} - ${line.quantity}`, updatedAt: new Date() })
+      .where(and(
+        eq(inventoryItems.orgId, orgId),
+        eq(inventoryItems.variantId, variant.id),
+        sql`${inventoryItems.quantity} >= ${line.quantity}`,
+      ))
+      .returning({ id: inventoryItems.id });
+
+    if (guarded.length > 0) {
+      await tx.insert(inventoryMovements).values({
+        orgId,
+        itemId: guarded[0].id,
+        type: 'out',
+        quantity: line.quantity,
+        note: `Shopify order ${payload.name}`,
+      });
+      continue;
+    }
+
+    // Either no inventory_items row exists for this variant, or not enough
+    // is on hand. Read the real current quantity (0 if no row at all) and
+    // apply the most this sale can take without going negative; the rest
+    // is a genuine shortfall, recorded below rather than hidden.
+    //
+    // FOR UPDATE is what makes the sentence above true. The guarded UPDATE
+    // that failed through to here is atomic, but this path is a read, a
+    // decision in JavaScript, and then a write — CLAUDE.md rule 5's "if
+    // above the query", and the UPDATE below cannot carry a `quantity >=`
+    // guard because the whole point is to take LESS than was asked for.
+    // Two concurrent orders/create deliveries for one variant therefore both
+    // read the same quantity and both subtract it. Measured against real
+    // Postgres, five concurrent takes of 2 against 5 on hand:
+    //
+    //   without FOR UPDATE   2/40 runs ended negative, as low as -2
+    //   with FOR UPDATE      0/40, always exactly 0
+    //
+    // Locking the row serialises the read-modify-write, so the second caller
+    // re-reads what the first left behind and floors correctly. Found when
+    // this repository's own idempotency integration test caught it on a
+    // contended database (-1 on hand) after passing by luck until then.
+    const [item] = await tx.select({ id: inventoryItems.id, quantity: inventoryItems.quantity })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)))
+      .for('update');
+
+    const appliedQuantity = item ? Math.max(0, Math.min(item.quantity, line.quantity)) : 0;
+    let movementId: string | null = null;
+
+    if (item && appliedQuantity > 0) {
+      await tx.update(inventoryItems)
+        .set({ quantity: sql`${inventoryItems.quantity} - ${appliedQuantity}`, updatedAt: new Date() })
+        .where(and(eq(inventoryItems.id, item.id), eq(inventoryItems.orgId, orgId)));
+
+      const [movement] = await tx.insert(inventoryMovements).values({
+        orgId,
+        itemId: item.id,
+        type: 'adjustment',
+        quantity: -appliedQuantity,
+        note: `Shopify order ${payload.name}: requested ${line.quantity}, only ${appliedQuantity} on hand — floored, see inventory_discrepancies`,
+      }).returning({ id: inventoryMovements.id });
+      movementId = movement.id;
+    }
+
+    discrepancies.push({
+      variantId: variant.id,
+      requestedQuantity: line.quantity,
+      appliedQuantity,
+      shortfallQuantity: line.quantity - appliedQuantity,
+      movementId,
+    });
+  }
+
+  return { resolvedItems, unmatchedSkus, discrepancies };
+}
+
+/**
+ * Fan out one in-app notification per owner/admin that a Shopify order shorted
+ * stock. This webhook has no authenticated caller (notifications.user_id is
+ * NOT NULL, and there is no org-wide broadcast variant of this table), and a
+ * stock shortfall is exactly the kind of thing whoever runs this org needs to
+ * see promptly, not discover later as a mysteriously short shelf.
+ */
+async function notifyAdminsOfStockShortfall(
+  tx: ShopifyWebhookTx,
+  orgId: string,
+  orderName: string,
+  discrepancyCount: number,
+): Promise<void> {
+  const admins = await tx.select({ userId: orgMembers.userId }).from(orgMembers)
+    .where(and(eq(orgMembers.orgId, orgId), inArray(orgMembers.role, ['owner', 'admin'])));
+  for (const { userId } of admins) {
+    await tx.insert(notifications).values({
+      orgId,
+      userId,
+      type: 'stock_discrepancy',
+      title: `نقص في المخزون — طلب Shopify ${orderName}`,
+      body: `${discrepancyCount} صنف/أصناف لم يتوفر لها مخزون كافٍ لتلبية الطلب بالكامل، وتم تطبيق الكمية المتاحة فقط.`,
+      read: false,
+    });
+  }
+}
+
 shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Context) => {
   const db = getDb();
   const resolved = await resolveWebhookOrg(c, db);
@@ -306,150 +505,16 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
     result = await withOrgContext(db, orgId, async (tx) => {
     const customerId = await findOrCreateCustomer(tx, orgId, payload.customer);
 
-    // Resolve each Shopify line to a local variant. A line with no match
-    // (never pushed from the dashboard, or pushed to a different org) is
-    // recorded on the order's audit trail rather than silently dropped or
-    // used to block the whole order — the sale on Shopify already happened
-    // and cannot be undone by a sync gap on this side.
-    const unmatchedSkus: string[] = [];
-    const resolvedItems: Array<{ variantId: string; quantity: number; priceMinor: bigint }> = [];
-    const discrepancies: Array<{
-      variantId: string;
-      requestedQuantity: number;
-      appliedQuantity: number;
-      shortfallQuantity: number;
-      movementId: string | null;
-    }> = [];
-
-    // Deterministic lock order across concurrent deliveries.
-    //
-    // Every iteration below takes a row lock on inventory_items — the guarded
-    // UPDATE takes one, and the FOR UPDATE on the shortfall path holds one for
-    // longer. Shopify decides the order of `line_items`, so two orders sharing
-    // variants X and Y can arrive as [X,Y] and [Y,X]; one transaction then
-    // holds X waiting for Y while the other holds Y waiting for X, and
-    // Postgres kills one with a deadlock. Sorting by a key that is stable
-    // ACROSS requests — Shopify's own variant id, falling back to sku — makes
-    // every transaction acquire the same rows in the same sequence, which is
-    // the standard and complete answer to that class of deadlock.
-    //
-    // Sorted before the loop rather than after resolution because the lock
-    // order is what matters, and our variant id is not known until the lookup
-    // inside the loop has already run. resolvedItems and unmatchedSkus are
-    // order-insensitive (a set of rows and a set of labels), so nothing else
-    // changes.
-    const orderedLines = [...payload.line_items].sort((a, b) => {
-      const ka = String(a.variant_id ?? a.sku ?? '');
-      const kb = String(b.variant_id ?? b.sku ?? '');
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
-    });
-
-    for (const line of orderedLines) {
-      const shopifyVariantId = line.variant_id ? shopifyGid('ProductVariant', line.variant_id) : null;
-      const [variant] = shopifyVariantId
-        ? await tx.select().from(productVariants)
-            .where(and(eq(productVariants.orgId, orgId), eq(productVariants.shopifyVariantId, shopifyVariantId)))
-        : [];
-
-      if (!variant) {
-        unmatchedSkus.push(line.sku ?? String(line.variant_id ?? 'unknown'));
-        continue;
-      }
-
-      // Shopify's price is a decimal string already, in the same currency as
-      // the order — parsed as fixed-point cents, never through a float.
-      const [whole, fraction = '0'] = line.price.split('.');
-      const priceMinor = BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
-
-      resolvedItems.push({ variantId: variant.id, quantity: line.quantity, priceMinor });
-
-      // Same atomic `quantity >= n` guard the dashboard's own order-creation
-      // path uses (apps/api/src/routes/orders.ts) — but on a miss, this
-      // cannot reject the sale the way that path does (throw, roll back):
-      // Shopify already took the money. Apply what's actually on hand, floor
-      // at zero, and record the shortfall — the previous behaviour here was
-      // an unconditional decrement with no floor at all, which could drive
-      // quantity negative.
-      const guarded = await tx.update(inventoryItems)
-        .set({ quantity: sql`${inventoryItems.quantity} - ${line.quantity}`, updatedAt: new Date() })
-        .where(and(
-          eq(inventoryItems.orgId, orgId),
-          eq(inventoryItems.variantId, variant.id),
-          sql`${inventoryItems.quantity} >= ${line.quantity}`,
-        ))
-        .returning({ id: inventoryItems.id });
-
-      if (guarded.length > 0) {
-        await tx.insert(inventoryMovements).values({
-          orgId,
-          itemId: guarded[0].id,
-          type: 'out',
-          quantity: line.quantity,
-          note: `Shopify order ${payload.name}`,
-        });
-        continue;
-      }
-
-      // Either no inventory_items row exists for this variant, or not enough
-      // is on hand. Read the real current quantity (0 if no row at all) and
-      // apply the most this sale can take without going negative; the rest
-      // is a genuine shortfall, recorded below rather than hidden.
-      //
-      // FOR UPDATE is what makes the sentence above true. The guarded UPDATE
-      // that failed through to here is atomic, but this path is a read, a
-      // decision in JavaScript, and then a write — CLAUDE.md rule 5's "if
-      // above the query", and the UPDATE below cannot carry a `quantity >=`
-      // guard because the whole point is to take LESS than was asked for.
-      // Two concurrent orders/create deliveries for one variant therefore both
-      // read the same quantity and both subtract it. Measured against real
-      // Postgres, five concurrent takes of 2 against 5 on hand:
-      //
-      //   without FOR UPDATE   2/40 runs ended negative, as low as -2
-      //   with FOR UPDATE      0/40, always exactly 0
-      //
-      // Locking the row serialises the read-modify-write, so the second caller
-      // re-reads what the first left behind and floors correctly. Found when
-      // this repository's own idempotency integration test caught it on a
-      // contended database (-1 on hand) after passing by luck until then.
-      const [item] = await tx.select({ id: inventoryItems.id, quantity: inventoryItems.quantity })
-        .from(inventoryItems)
-        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, variant.id)))
-        .for('update');
-
-      const appliedQuantity = item ? Math.max(0, Math.min(item.quantity, line.quantity)) : 0;
-      let movementId: string | null = null;
-
-      if (item && appliedQuantity > 0) {
-        await tx.update(inventoryItems)
-          .set({ quantity: sql`${inventoryItems.quantity} - ${appliedQuantity}`, updatedAt: new Date() })
-          .where(and(eq(inventoryItems.id, item.id), eq(inventoryItems.orgId, orgId)));
-
-        const [movement] = await tx.insert(inventoryMovements).values({
-          orgId,
-          itemId: item.id,
-          type: 'adjustment',
-          quantity: -appliedQuantity,
-          note: `Shopify order ${payload.name}: requested ${line.quantity}, only ${appliedQuantity} on hand — floored, see inventory_discrepancies`,
-        }).returning({ id: inventoryMovements.id });
-        movementId = movement.id;
-      }
-
-      discrepancies.push({
-        variantId: variant.id,
-        requestedQuantity: line.quantity,
-        appliedQuantity,
-        shortfallQuantity: line.quantity - appliedQuantity,
-        movementId,
-      });
-    }
+    // Resolve every line to a local variant, decrement stock (floored at
+    // zero, shortfall recorded), and collect the unmatched SKUs for the
+    // audit trail. See applyShopifyOrderLines for the deadlock-safe lock
+    // ordering and the FOR UPDATE floor path.
+    const { resolvedItems, unmatchedSkus, discrepancies } = await applyShopifyOrderLines(tx, orgId, payload);
 
     const seq = await nextDocumentNumber(tx, orgId, 'order');
     const orderNumber = formatDocumentNumber('order', seq);
 
-    const totalMinor = (() => {
-      const [whole, fraction = '0'] = payload.total_price.split('.');
-      return BigInt(whole) * 100n + BigInt((fraction + '00').slice(0, 2));
-    })();
+    const totalMinor = shopifyMoneyToMinor(payload.total_price);
 
     const paymentMethod = payload.payment_gateway_names?.some(name => /cash on delivery|\bcod\b/i.test(name)) ? 'cod' : 'online';
 
@@ -500,23 +565,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
         })),
       );
 
-      // Fan out one notification per owner/admin — this webhook has no
-      // authenticated caller (notifications.user_id is NOT NULL, and there
-      // is no org-wide broadcast variant of this table), and a stock
-      // shortfall is exactly the kind of thing whoever runs this org needs
-      // to see promptly, not discover later as a mysteriously short shelf.
-      const admins = await tx.select({ userId: orgMembers.userId }).from(orgMembers)
-        .where(and(eq(orgMembers.orgId, orgId), inArray(orgMembers.role, ['owner', 'admin'])));
-      for (const { userId } of admins) {
-        await tx.insert(notifications).values({
-          orgId,
-          userId,
-          type: 'stock_discrepancy',
-          title: `نقص في المخزون — طلب Shopify ${payload.name}`,
-          body: `${discrepancies.length} صنف/أصناف لم يتوفر لها مخزون كافٍ لتلبية الطلب بالكامل، وتم تطبيق الكمية المتاحة فقط.`,
-          read: false,
-        });
-      }
+      await notifyAdminsOfStockShortfall(tx, orgId, payload.name, discrepancies.length);
     }
 
     const eventType = OUTBOX_EVENT_BY_STATUS[status];
