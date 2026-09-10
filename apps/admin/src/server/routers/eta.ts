@@ -108,12 +108,16 @@ export const etaRouter = router({
             if (!invoice?.etaUuid) return { data: null, error: 'No ETA invoice found', meta: null };
 
             const statusResult = await getInvoiceStatus(invoice.etaUuid, etaConfig());
+
+            const qrCodeData = statusResult.ok ? statusResult.qrCodeData : undefined;
+            const longId = statusResult.ok ? statusResult.longId : undefined;
+
             await ctx.withOrg(async (tx) => tx
                 .update(etaInvoices)
                 .set({
                     status: statusResult.status.toLowerCase(),
-                    qrCodeData: statusResult.qrCodeData ?? invoice.qrCodeData,
-                    longId: statusResult.longId ?? invoice.longId,
+                    qrCodeData: qrCodeData ?? invoice.qrCodeData,
+                    longId: longId ?? invoice.longId,
                 })
                 .where(eq(etaInvoices.id, invoice.id)));
 
