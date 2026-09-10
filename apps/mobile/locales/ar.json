@@ -13,8 +13,8 @@
     },
     "status": {
       "pending": "معلق",
-      "processing": "جاري التجهيز",
       "confirmed": "مؤكد",
+      "payment_failed": "فشل الدفع",
       "shipped": "مشحون",
       "delivered": "تم التسليم",
       "cancelled": "ملغى"
