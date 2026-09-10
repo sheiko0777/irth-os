@@ -9,7 +9,6 @@ import {
 } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
-import { requireOrgId } from '../middlewares/requireOrgId';
 import { envVar } from '../utils/env';
 
 export const orgsRouter = new Hono();
@@ -41,7 +40,7 @@ orgsRouter.post('/switch', async (c: Context) => {
   }
 });
 
-orgsRouter.get('/:id/members', requireOrgId(), async (c: Context) => {
+orgsRouter.get('/:id/members', requireRole('owner', 'admin'), async (c: Context) => {
   try {
     const id = c.req.param('id');
     const orgId = c.get('orgId') as string;
