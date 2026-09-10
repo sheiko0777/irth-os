@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, bigint, boolean, timestamp, jsonb, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, bigint, boolean, timestamp, jsonb, integer, index } from 'drizzle-orm/pg-core';
 import { organizations, orders } from '../schema';
 
 export const courierShipments = pgTable('courier_shipments', {
