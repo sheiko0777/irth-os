@@ -167,6 +167,17 @@ export async function emitOutboxEvent(
     });
 }
 
+export async function emitOutboxEvents(
+    tx: OutboxWriter,
+    events: Array<{ orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload | ShopifyProductPushPayload | CampaignRecipientSendPayload }>,
+): Promise<void> {
+    await tx.insert(outboxEvents).values(events.map((event) => ({
+        orgId: event.orgId,
+        eventType: event.eventType,
+        payload: JSON.stringify(jsonSafe(event.payload)),
+    })));
+}
+
 /**
  * Builds the payload the worker expects, or `undefined` when the event has no
  * channel it could act on.
