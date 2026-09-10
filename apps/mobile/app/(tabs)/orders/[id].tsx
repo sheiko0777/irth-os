@@ -1,6 +1,6 @@
 export { ErrorBoundary } from "expo-router";
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -9,6 +9,8 @@ import { currency, formatMoney, fromMinor } from '@irth/domain';
 import { apiFetch } from '../../../lib/api';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
+import { LoadingView } from '../../../components/ui/LoadingView';
+import { ErrorView } from '../../../components/ui/ErrorView';
 
 export default function OrderDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -20,20 +22,11 @@ export default function OrderDetailsScreen() {
   });
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-        <Text>{t('common.loading')}</Text>
-      </View>
-    );
+    return <LoadingView />;
   }
 
   if (error || !data) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{t('common.error')}</Text>
-      </View>
-    );
+    return <ErrorView />;
   }
 
   return (
@@ -60,14 +53,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     backgroundColor: '#f3f4f6',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: 'red',
   },
   header: {
     flexDirection: 'row',
