@@ -105,39 +105,45 @@ export const ordersRouter = router({
             id: z.string().uuid()
         }))
         .query(async ({ ctx, input }) => {
-            const order = await ctx.withOrg(async (tx) => tx.query.orders.findFirst({
-                where: and(
-                    eq(orders.id, input.id),
-                    eq(orders.orgId, ctx.orgId)
-                )
-            }));
+            // order, items and history are all keyed by input.id (the order id
+            // in the where clause is `eq(orders.id, input.id)`), so none of the
+            // three reads depends on the others' results — run them in one
+            // org-scoped transaction concurrently instead of three sequential
+            // round-trips, matching the `list` procedure above. On the rare
+            // not-found path the two extra queries just return empty.
+            const [order, items, history] = await ctx.withOrg(async (tx) => Promise.all([
+                tx.query.orders.findFirst({
+                    where: and(
+                        eq(orders.id, input.id),
+                        eq(orders.orgId, ctx.orgId)
+                    )
+                }),
+                tx
+                    .select({
+                        id: orderItems.id,
+                        quantity: orderItems.quantity,
+                        priceMinor: orderItems.priceMinor,
+                        sku: productVariants.sku,
+                    })
+                    .from(orderItems)
+                    .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
+                    .where(and(
+                        eq(orderItems.orderId, input.id),
+                        eq(orderItems.orgId, ctx.orgId)
+                    )),
+                tx
+                    .select()
+                    .from(shipmentTracking)
+                    .where(and(
+                        eq(shipmentTracking.orderId, input.id),
+                        eq(shipmentTracking.orgId, ctx.orgId)
+                    ))
+                    .orderBy(desc(shipmentTracking.createdAt)),
+            ]));
 
             if (!order) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
             }
-
-            const items = await ctx.withOrg(async (tx) => tx
-                .select({
-                    id: orderItems.id,
-                    quantity: orderItems.quantity,
-                    priceMinor: orderItems.priceMinor,
-                    sku: productVariants.sku,
-                })
-                .from(orderItems)
-                .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-                .where(and(
-                    eq(orderItems.orderId, order.id),
-                    eq(orderItems.orgId, ctx.orgId)
-                )));
-            
-            const history = await ctx.withOrg(async (tx) => tx
-                .select()
-                .from(shipmentTracking)
-                .where(and(
-                    eq(shipmentTracking.orderId, order.id),
-                    eq(shipmentTracking.orgId, ctx.orgId)
-                ))
-                .orderBy(desc(shipmentTracking.createdAt)));
 
             return {
                 data: { order, items, history },
