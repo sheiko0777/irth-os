@@ -33,7 +33,7 @@ const createOrderSchema = z.object({
   }))
 });
 
-ordersRoute.post('/', requireOrgId(), async (c: Context) => {
+ordersRoute.post('/', requirePermission('orders', 'write'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const userId = getUserId(c);
   const body = await c.req.json();
@@ -236,7 +236,7 @@ ordersRoute.post('/', requireOrgId(), async (c: Context) => {
   return c.json({ data: jsonSafe(newOrder), error: null, meta: null });
 });
 
-ordersRoute.get('/', requireOrgId(), async (c: Context) => {
+ordersRoute.get('/', requirePermission('orders', 'view'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
 
   const page = parseInt(c.req.query('page') || '1', 10);
@@ -253,7 +253,7 @@ ordersRoute.get('/', requireOrgId(), async (c: Context) => {
   return c.json({ data: jsonSafe(list), error: null, meta: { total: totalCount, page, limit } });
 });
 
-ordersRoute.get('/:id', requireOrgId(), async (c: Context) => {
+ordersRoute.get('/:id', requirePermission('orders', 'view'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const id = c.req.param('id');
   const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
