@@ -1,4 +1,4 @@
-import { formatMoney, fromMinor } from "@irth/domain";
+import { formatDate, formatMoney, fromMinor } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -76,11 +76,8 @@ export default async function DashboardPage({
           </h1>
           <p className="text-sm text-[var(--t3)] mt-1">
             مرحباً بك في نظام إرث — اليوم{" "}
-            {new Date().toLocaleDateString("ar-EG", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
+            {formatDate(new Date(), {
+              dateTimeOptions: { weekday: "long", year: "numeric", month: "long", day: "numeric" },
             })}
           </p>
         </div>
@@ -211,11 +208,8 @@ export default async function DashboardPage({
                   </td>
                   <td className="px-5 py-3.5 text-[var(--t3)] text-xs">
                     {order.createdAt
-                      ? new Date(order.createdAt).toLocaleDateString("ar-EG", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
+                      ? formatDate(order.createdAt, {
+                          dateTimeOptions: { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" },
                         })
                       : "—"}
                   </td>

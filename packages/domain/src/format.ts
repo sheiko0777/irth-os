@@ -97,6 +97,33 @@ export function formatMoney(m: Money, options: FormatOptions = {}): string {
   return options.symbol === false ? rendered : `${rendered} ${symbolOf(m.currency)}`;
 }
 
+/**
+ * Renders a date/time in the admin's locale -- the one place that turns a
+ * Date into text, replacing ~21 independent `new Date(x).toLocaleDateString
+ * ('ar-EG')`/`.toLocaleString('ar-EG')` call sites across the admin app.
+ * One of those (orders/[id]/page.tsx) carries a comment recording a real bug
+ * a developer hit and fixed only at that one call site: `toLocaleString()`
+ * with no locale argument renders in the server's locale, not the user's --
+ * every other bare call site had the same shape with no way to know whether
+ * it already accounted for that.
+ *
+ * Defaults to date-only (`toLocaleDateString`, matching most call sites).
+ * Pass `withTime: true` for the plain date+time sites (`toLocaleString`).
+ * Pass `dateTimeOptions` for the handful of sites with a custom part set
+ * (a full weekday/year/month/day greeting, a compact month/day/hour/minute
+ * timestamp) -- `toLocaleDateString`/`toLocaleString` resolve identically
+ * once explicit parts are given, so one code path covers both.
+ */
+export function formatDate(
+  value: Date | string | number,
+  options: FormatOptions & { withTime?: boolean; dateTimeOptions?: Intl.DateTimeFormatOptions } = {},
+): string {
+  const locale = resolveLocale(options);
+  const date = value instanceof Date ? value : new Date(value);
+  if (options.dateTimeOptions) return date.toLocaleDateString(locale, options.dateTimeOptions);
+  return options.withTime ? date.toLocaleString(locale) : date.toLocaleDateString(locale);
+}
+
 /** Basis points as a percentage, e.g. 1400 -> "١٤٪". */
 export function formatRate(basisPoints: number, options: FormatOptions = {}): string {
   const locale = resolveLocale(options);

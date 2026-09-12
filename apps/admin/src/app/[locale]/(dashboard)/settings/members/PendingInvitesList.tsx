@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
+import { formatDate } from '@irth/domain';
 
 const ROLE_LABEL: Record<string, string> = { owner: 'مالك', admin: 'مدير', member: 'عضو' };
 
@@ -53,7 +54,7 @@ export function PendingInvitesList() {
                   <p className="truncate text-sm text-[var(--t1)]" dir="ltr">{invite.email}</p>
                   <p className="text-xs text-[var(--t3)]">
                     {ROLE_LABEL[invite.role] ?? invite.role} · تنتهي في{' '}
-                    {new Date(invite.expiresAt).toLocaleDateString('ar-EG')}
+                    {formatDate(invite.expiresAt)}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { formatMoney, fromMinor } from "@irth/domain";
+import { formatDate, formatMoney, fromMinor } from "@irth/domain";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { serverCaller } from "@/server/caller";
 import { AiQueryForm } from "./AiQueryForm";
@@ -36,7 +36,7 @@ export default async function FinancePage() {
     return (
         <div className="space-y-8">
             <h1 className="text-3xl font-bold text-[var(--t1)]">{t("title")}</h1>
-            <p className="text-[var(--t2)]">الفترة: {firstDayOfMonth.toLocaleDateString('ar-EG')} - {today.toLocaleDateString('ar-EG')}</p>
+            <p className="text-[var(--t2)]">الفترة: {formatDate(firstDayOfMonth)} - {formatDate(today)}</p>
 
             {/* P&L Summary */}
             <section className="space-y-4">
@@ -147,7 +147,7 @@ export default async function FinancePage() {
                                     <TableRow key={row.orderId} className="border-[var(--rim1)] hover:bg-[var(--rim1)]/50">
                                         <TableCell className="font-mono">{row.orderNumber}</TableCell>
                                         <TableCell>{formatMoney(fromMinor(row.amount))}</TableCell>
-                                        <TableCell>{new Date(row.createdAt).toLocaleDateString('ar-EG')}</TableCell>
+                                        <TableCell>{formatDate(row.createdAt)}</TableCell>
                                         <TableCell>
                                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[var(--emerald)]/10 text-[var(--emerald)]">
                                                 {row.status === 'delivered' ? 'تم التوصيل' : row.status}

@@ -6,6 +6,7 @@ import { trpc } from '@/lib/trpc';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { formatDate } from '@irth/domain';
 
 export interface EtaInvoice {
     id: string;
@@ -162,7 +163,7 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
                                             {inv.etaUuid ? inv.etaUuid.slice(0, 8) : '—'}
                                         </TableCell>
                                         <TableCell className="text-[var(--t2)] text-sm">
-                                            {inv.submittedAt ? new Date(inv.submittedAt).toLocaleDateString('ar-EG') : '—'}
+                                            {inv.submittedAt ? formatDate(inv.submittedAt) : '—'}
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex gap-2">

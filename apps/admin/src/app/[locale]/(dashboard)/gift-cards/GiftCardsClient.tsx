@@ -1,5 +1,5 @@
 'use client';
-import { currency, formatMoney, fromMinor, type Money } from '@irth/domain';
+import { currency, formatDate, formatMoney, fromMinor, type Money } from '@irth/domain';
 
 import { useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -178,7 +178,7 @@ export default function GiftCardsClient({
                     <StatusBadge status={card.status} domain="giftCard" />
                   </td>
                   <td className='px-4 py-3 text-[var(--t2)] text-xs'>
-                    {new Date(card.createdAt).toLocaleDateString('ar-EG')}
+                    {formatDate(card.createdAt)}
                   </td>
                   <td className='px-4 py-3'>
                     {card.status === 'active' && (
