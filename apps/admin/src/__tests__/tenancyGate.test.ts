@@ -67,7 +67,7 @@ const UNSCOPED_READ_BASELINE = [
   'analytics.ts:281',
   'bulk.ts:149',
   'bulk.ts:168',
-  'bulk.ts:187',
+  'bulk.ts:188',
   'campaigns.ts:11',
   'campaigns.ts:23',
   'campaigns.ts:105',
