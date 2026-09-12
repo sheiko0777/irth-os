@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type { InferSelectModel } from 'drizzle-orm';
 import { shopifyConnections, safeEqual } from '@irth/db';
+import { fetchWithTimeout } from '@irth/domain';
 import { envVar } from '../utils/env';
 import { minorToDecimalString } from './shopify';
 import { SHOPIFY_API_VERSION } from './shopifyApi';
@@ -79,7 +80,7 @@ export async function exchangeShopifyAuthorizationCode(shopDomain: string, code:
   const clientId = envVar('SHOPIFY_APP_CLIENT_ID');
   const clientSecret = envVar('SHOPIFY_APP_CLIENT_SECRET');
   if (!clientId || !clientSecret) throw new Error('Shopify OAuth credentials are not configured');
-  const response = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
+  const response = await fetchWithTimeout(`https://${shopDomain}/admin/oauth/access_token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
@@ -92,7 +93,7 @@ export async function exchangeShopifyAuthorizationCode(shopDomain: string, code:
 
 export async function shopifyGraphQL<T>(connection: Pick<ShopifyConnection, 'shopDomain' | 'accessTokenCiphertext' | 'accessTokenIv'>, query: string, variables?: Record<string, unknown>): Promise<T> {
   const accessToken = await decryptShopifyToken(connection);
-  const response = await fetch(`https://${connection.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+  const response = await fetchWithTimeout(`https://${connection.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
     body: JSON.stringify({ query, variables }),
