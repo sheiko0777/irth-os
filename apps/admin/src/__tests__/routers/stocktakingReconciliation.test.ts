@@ -187,7 +187,7 @@ describe('Stocktaking Reconciliation', () => {
             innerJoin: vi.fn().mockReturnThis(),
             where: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
-            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'var-2' }]).then(res)
+            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'var-2', sku: 'SKU2' }]).then(res)
         } as unknown as Record<string, unknown>);
 
         // Inventory lookup
