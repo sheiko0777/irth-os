@@ -316,23 +316,41 @@ async function applyShopifyOrderLines(
   // every transaction acquire the same rows in the same sequence, which is
   // the standard and complete answer to that class of deadlock.
   //
-  // Sorted before the loop rather than after resolution because the lock
-  // order is what matters, and our variant id is not known until the lookup
-  // inside the loop has already run. resolvedItems and unmatchedSkus are
-  // order-insensitive (a set of rows and a set of labels), so nothing else
-  // changes.
+  // Sorted before resolution because the lock order is what matters, and our
+  // internal variant id is not known until the batched lookup below has run.
+  // resolvedItems and unmatchedSkus are order-insensitive (a set of rows and
+  // a set of labels), so nothing else changes.
   const orderedLines = [...payload.line_items].sort((a, b) => {
     const ka = String(a.variant_id ?? a.sku ?? '');
     const kb = String(b.variant_id ?? b.sku ?? '');
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   });
 
+  // One batched lookup for every line's variant instead of a SELECT per line
+  // (previously N sequential round-trips for an N-line order). Safe to pull
+  // out of the loop below: resolving a variant id to a row has no ordering
+  // requirement, unlike the inventory_items row locks the loop takes next —
+  // those still walk `orderedLines` one at a time, in the same
+  // across-request-stable order, exactly as before.
+  const shopifyVariantIds = [
+    ...new Set(
+      orderedLines
+        .map((line) => (line.variant_id ? shopifyGid('ProductVariant', line.variant_id) : null))
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const variantsByShopifyId = new Map<string, typeof productVariants.$inferSelect>();
+  if (shopifyVariantIds.length > 0) {
+    const variantRows = await tx.select().from(productVariants)
+      .where(and(eq(productVariants.orgId, orgId), inArray(productVariants.shopifyVariantId, shopifyVariantIds)));
+    for (const row of variantRows) {
+      if (row.shopifyVariantId) variantsByShopifyId.set(row.shopifyVariantId, row);
+    }
+  }
+
   for (const line of orderedLines) {
     const shopifyVariantId = line.variant_id ? shopifyGid('ProductVariant', line.variant_id) : null;
-    const [variant] = shopifyVariantId
-      ? await tx.select().from(productVariants)
-          .where(and(eq(productVariants.orgId, orgId), eq(productVariants.shopifyVariantId, shopifyVariantId)))
-      : [];
+    const variant = shopifyVariantId ? variantsByShopifyId.get(shopifyVariantId) : undefined;
 
     if (!variant) {
       unmatchedSkus.push(line.sku ?? String(line.variant_id ?? 'unknown'));
