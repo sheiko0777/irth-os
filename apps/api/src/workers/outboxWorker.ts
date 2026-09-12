@@ -3,6 +3,7 @@ import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInpu
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
+import { renderCampaignEmail, renderOrgInviteEmail, renderOrderConfirmedEmail } from '@irth/emails';
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
 import { envVar } from '../utils/env';
@@ -246,7 +247,10 @@ async function handleCampaignRecipientSend(database: typeof db, event: OutboxEve
         const res = await sendTransactionalEmail({
             to: recipient.customers.email,
             subject: recipient.campaigns.name,
-            html: `<h1>مرحباً ${recipient.customers.name || 'عميلنا العزيز'}</h1><p>${recipient.campaigns.message}</p>`
+            html: await renderCampaignEmail({
+                customerName: recipient.customers.name || 'عميلنا العزيز',
+                message: recipient.campaigns.message,
+            }),
         }) as { id?: string };
         providerMessageId = res?.id ?? null;
     } else {
@@ -289,7 +293,12 @@ async function handleOrgInviteSent(database: typeof db, event: OutboxEvent): Pro
     await sendTransactionalEmail({
         to: payload.email,
         subject: `دعوة للانضمام إلى ${payload.orgName}`,
-        html: `<h1>مرحباً</h1><p>تمت دعوتك للانضمام إلى <strong>${payload.orgName}</strong> بصفة ${roleLabel}.</p><p><a href="${payload.joinUrl}">اضغط هنا لقبول الدعوة</a></p><p>رمز التأكيد: <strong style="font-size:20px;letter-spacing:2px">${payload.otpCode}</strong></p><p>سيُطلب منك إدخال هذا الرمز عند قبول الدعوة. صالح لمدة ١٥ دقيقة.</p>`,
+        html: await renderOrgInviteEmail({
+            orgName: payload.orgName,
+            roleLabel,
+            joinUrl: payload.joinUrl,
+            otpCode: payload.otpCode,
+        }),
     });
     await markProcessed(database, event.id);
 }
@@ -314,7 +323,10 @@ async function handleOrderNotification(database: typeof db, event: OutboxEvent):
             await sendTransactionalEmail({
                 to: payload.customerEmail,
                 subject: `تم تأكيد طلبك رقم ${payload.orderNumber}`,
-                html: `<h1>مرحباً ${payload.customerName || 'عميلنا العزيز'}</h1><p>تم تأكيد طلبك رقم ${payload.orderNumber} بنجاح.</p>`
+                html: await renderOrderConfirmedEmail({
+                    customerName: payload.customerName || 'عميلنا العزيز',
+                    orderNumber: payload.orderNumber,
+                }),
             });
         }
     } else if (event.eventType === 'order.shipped') {
