@@ -177,7 +177,8 @@ export const bulkRouter = router({
                 .from(inventoryItems)
                 .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
                 .innerJoin(products, eq(productVariants.productId, products.id))
-                .where(eq(inventoryItems.orgId, ctx.orgId));
+                .where(eq(inventoryItems.orgId, ctx.orgId))
+                .limit(5000);
 
             return { data: rows, error: null, meta: null };
         }),
