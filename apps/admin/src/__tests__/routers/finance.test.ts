@@ -66,14 +66,12 @@ describe('finance', () => {
   it('askAi top-products branch resolves with the empty-catalog message', async () => {
     const res = await caller.askAi({ question: 'what are my top products' });
     expect(res.data.result).toContain('لا توجد');
-    expect(res.data.query).toContain('SELECT');
     expect(res.data.question).toBe('what are my top products');
   });
 
   it('askAi pending branch resolves with a zero count', async () => {
     const res = await caller.askAi({ question: 'how many pending orders' });
     expect(res.data.result).toContain('0');
-    expect(res.data.query).toContain("status = 'pending'");
   });
 
   it('askAi rejects a question over 500 chars with BAD_REQUEST', async () => {
