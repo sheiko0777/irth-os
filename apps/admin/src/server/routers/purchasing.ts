@@ -303,13 +303,6 @@ export const purchasingRouter = router({
     get: requirePermission('purchasing', 'view')
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
-        const order = await ctx.withOrg(async (tx) => tx.query.purchaseOrders.findFirst({
-          where: and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)),
-          with: {
-            supplier: true, // Assuming relation exists, but since not defined in schema relation we need left join or separate query
-          }
-        }));
-
         // Since no relations object is created in schema, query separately:
         const poRows = await ctx.withOrg(async (tx) => tx
             .select({
