@@ -1,5 +1,11 @@
+import { fetchWithTimeout } from '@irth/domain';
 import { envVar } from '../../utils/env';
 import type { AiCompletion, AiMessage, AiProvider, AiToolDefinition } from '../types';
+
+// Chat completions can legitimately take longer than a typical REST call —
+// longer than the shared helper's default timeout, so this call names its
+// own budget rather than relying on it.
+const GROQ_TIMEOUT_MS = 30_000;
 
 type GroqToolCall = {
   id?: string;
@@ -68,7 +74,7 @@ export function createGroqProvider(): AiProvider {
         throw new Error('GROQ_API_KEY is not configured');
       }
 
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const res = await fetchWithTimeout('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           authorization: `Bearer ${apiKey}`,
@@ -88,7 +94,7 @@ export function createGroqProvider(): AiProvider {
           })),
           tool_choice: tools.length > 0 ? 'auto' : 'none',
         }),
-      });
+      }, GROQ_TIMEOUT_MS);
 
       if (!res.ok) {
         const detail = await res.text();

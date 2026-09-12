@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from '@irth/domain';
 import { envVar } from '../utils/env';
 
 export interface WhatsAppTemplateComponent {
@@ -31,7 +32,7 @@ export async function sendWhatsAppTemplate(to: string, templateName: string, com
         }
     };
 
-    const response = await fetch('https://waba.360dialog.io/v1/messages', {
+    const response = await fetchWithTimeout('https://waba.360dialog.io/v1/messages', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -69,7 +70,7 @@ export async function sendTransactionalEmail(opts: SendEmailOptions): Promise<un
         html: opts.html
     };
 
-    const response = await fetch('https://api.resend.com/emails', {
+    const response = await fetchWithTimeout('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
