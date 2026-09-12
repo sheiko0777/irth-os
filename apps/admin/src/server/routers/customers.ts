@@ -1,4 +1,4 @@
-import { router, protectedProcedure, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count, ilike, or, gte } from 'drizzle-orm';
 import { customers, loyaltyTransactions, paginationMeta, paginationOffset, withAudit, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
@@ -7,7 +7,7 @@ import { TRPCError } from '@trpc/server';
 import { EGP, parseDecimal } from '@irth/domain';
 
 export const customersRouter = router({
-  list: protectedProcedure
+  list: requirePermission('customers', 'view')
     .input(
       z.object({
         ...paginationInputSchema(50),
@@ -52,7 +52,7 @@ export const customersRouter = router({
       };
     }),
 
-  get: protectedProcedure
+  get: requirePermission('customers', 'view')
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const customer = await ctx.withOrg(async (tx) => tx.query.customers.findFirst({
@@ -71,7 +71,7 @@ export const customersRouter = router({
       return { data: { ...customer, transactions }, error: null, meta: null };
     }),
 
-  create: adminProcedure
+  create: requirePermission('customers', 'write')
     .input(
       z.object({
         name: z.string().min(1),
@@ -109,7 +109,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  update: adminProcedure
+  update: requirePermission('customers', 'write')
     .input(
       z.object({
         id: z.string().uuid(),
@@ -155,7 +155,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  addPoints: adminProcedure
+  addPoints: requirePermission('customers', 'write')
     .input(
       z.object({
         id: z.string().uuid(),
@@ -198,7 +198,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     })),
 
-  redeemPoints: adminProcedure
+  redeemPoints: requirePermission('customers', 'write')
     .input(
       z.object({
         id: z.string().uuid(),
@@ -253,7 +253,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  linkOrder: adminProcedure
+  linkOrder: requirePermission('customers', 'write')
     .input(
       z.object({
         customerId: z.string().uuid(),
@@ -304,7 +304,7 @@ export const customersRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  summary: protectedProcedure.query(async ({ ctx }) => {
+  summary: requirePermission('customers', 'view').query(async ({ ctx }) => {
     const [totals] = await ctx.withOrg(async (tx) => tx
       .select({
         totalCustomers: count(),

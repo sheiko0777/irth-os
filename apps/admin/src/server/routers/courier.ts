@@ -1,4 +1,4 @@
-import { router, protectedProcedure, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { z } from 'zod';
 import { courierShipments, courierRemittances, paginationMeta, paginationOffset, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { assertSupportedCurrency, fromMinor, parseDecimal } from '@irth/domain';
@@ -8,7 +8,7 @@ import { paginationInputSchema } from '../pagination';
 
 export const courierRouter = router({
   shipments: router({
-    list: protectedProcedure
+    list: requirePermission('courier', 'view')
       .input(z.object({
         ...paginationInputSchema(20),
         courier: z.string().optional(),
@@ -46,7 +46,7 @@ export const courierRouter = router({
         };
       }),
 
-    markRemitted: adminProcedure
+    markRemitted: requirePermission('courier', 'write')
       .input(z.object({
         shipmentId: z.string().uuid(),
         remittanceId: z.string(),
@@ -79,7 +79,7 @@ export const courierRouter = router({
   }),
 
   remittances: router({
-    list: protectedProcedure
+    list: requirePermission('courier', 'view')
       .input(z.object({
         ...paginationInputSchema(20),
         status: z.string().optional(),
@@ -113,7 +113,7 @@ export const courierRouter = router({
         };
       }),
 
-    create: adminProcedure
+    create: requirePermission('courier', 'write')
       .input(z.object({
         courier: z.string(),
         reference: z.string(),
@@ -154,7 +154,7 @@ export const courierRouter = router({
         return { data: newRemittance, error: null, meta: null };
       }),
 
-    reconcile: adminProcedure
+    reconcile: requirePermission('courier', 'write')
       .input(z.object({
         remittanceId: z.string().uuid(),
       }))
@@ -253,7 +253,7 @@ export const courierRouter = router({
       }),
   }),
 
-  summary: protectedProcedure.query(async ({ ctx }) => {
+  summary: requirePermission('courier', 'view').query(async ({ ctx }) => {
     // We will run the aggregations using Promise.all per the memory guidelines
     const [collectedRes, remittedRes, unremittedRes, statusesRes] = await ctx.withOrg(async (tx) => Promise.all([
       // The CAST is gone with the column: cod_amount_minor is already bigint,

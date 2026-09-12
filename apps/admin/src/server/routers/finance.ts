@@ -1,4 +1,4 @@
-import { router, protectedProcedure, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { orders, orderItems, products, productVariants, journalLines, journalEntries, accounts, ACCOUNT_CODES } from '@irth/db';
 import { eq, and, desc, count, sum, gte, lte } from 'drizzle-orm';
 import { EGYPT_VAT_BP, divideRoundHalfEven, formatMoney, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
@@ -12,7 +12,7 @@ function accountBalanceMinor(row: { normalBalance: 'debit' | 'credit'; debit: st
 }
 
 export const financeRouter = router({
-    pnl: adminProcedure
+    pnl: requirePermission('finance', 'view')
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
@@ -126,7 +126,7 @@ export const financeRouter = router({
             };
         }),
 
-    codReconciliation: adminProcedure
+    codReconciliation: requirePermission('finance', 'view')
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
@@ -161,7 +161,7 @@ export const financeRouter = router({
             };
         }),
 
-    vatReport: adminProcedure
+    vatReport: requirePermission('finance', 'view')
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
@@ -203,7 +203,7 @@ export const financeRouter = router({
             };
         }),
 
-    askAi: adminProcedure
+    askAi: requirePermission('finance', 'view')
         .input(z.object({
             question: z.string().max(500),
         }))

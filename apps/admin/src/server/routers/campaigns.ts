@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { campaigns, campaignRecipients, snapshotAndEnqueueCampaign, UnresolvedSegmentError } from '@irth/db';
 import { eq, and, desc, count, sql, or, ne } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const campaignsRouter = router({
-  list: protectedProcedure
+  list: requirePermission('campaigns', 'view')
     .input(z.object({}).optional())
     .query(async ({ ctx }) => {
       const rows = await ctx.db
@@ -17,7 +17,7 @@ export const campaignsRouter = router({
       return { data: rows, error: null };
     }),
 
-  summary: protectedProcedure.query(async ({ ctx }) => {
+  summary: requirePermission('campaigns', 'view').query(async ({ ctx }) => {
     // ⚡ Bolt: Replaced O(N) memory allocation and array methods with a single database aggregate query
     // This resolves potential OOM errors and reduces CPU load when returning many campaigns.
     const [result] = await ctx.db
@@ -41,7 +41,7 @@ export const campaignsRouter = router({
     };
   }),
 
-  create: adminProcedure
+  create: requirePermission('campaigns', 'write')
     .input(
       z.object({
         name: z.string().min(1),
@@ -67,7 +67,7 @@ export const campaignsRouter = router({
       return { data: campaign, error: null };
     }),
 
-  send: adminProcedure
+  send: requirePermission('campaigns', 'write')
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       // The draft/scheduled guard lives in the WHERE clause: checking first and
@@ -114,7 +114,7 @@ export const campaignsRouter = router({
       return { data: campaign, error: null };
     }),
 
-  cancel: adminProcedure
+  cancel: requirePermission('campaigns', 'write')
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [campaign] = await ctx.withOrg(async (tx) => {
@@ -148,7 +148,7 @@ export const campaignsRouter = router({
       return { data: campaign, error: null };
     }),
 
-  delete: ownerProcedure
+  delete: requirePermission('campaigns', 'delete')
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [existing] = await ctx.db

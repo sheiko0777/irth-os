@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { db, coupons, withAudit } from '@irth/db';
 import { eq, and, desc, sql, or, isNull, lt, gt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -38,7 +38,7 @@ function discountColumns(type: 'percentage' | 'fixed' | 'free_shipping', value: 
 }
 
 export const couponsRouter = router({
-    list: protectedProcedure
+    list: requirePermission('coupons', 'view')
         .input(z.object({
             page: z.number().min(1).default(1),
             pageSize: z.number().min(1).max(100).default(10),
@@ -66,7 +66,7 @@ export const couponsRouter = router({
             };
         }),
 
-    get: protectedProcedure
+    get: requirePermission('coupons', 'view')
         .input(z.object({ id: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
             const result = await db.select()
@@ -79,7 +79,7 @@ export const couponsRouter = router({
             return result[0];
         }),
 
-    create: adminProcedure
+    create: requirePermission('coupons', 'write')
         .input(z.object({
             code: z.string().min(1).transform(s => s.toUpperCase()),
             type: z.enum(['percentage', 'fixed', 'free_shipping']),
@@ -113,7 +113,7 @@ export const couponsRouter = router({
             }));
         }),
 
-    update: adminProcedure
+    update: requirePermission('coupons', 'write')
         .input(z.object({
             id: z.string().uuid(),
             code: z.string().min(1).transform(s => s.toUpperCase()).optional(),
@@ -156,7 +156,7 @@ export const couponsRouter = router({
             }));
         }),
 
-    toggleActive: adminProcedure
+    toggleActive: requirePermission('coupons', 'write')
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             return ctx.withOrg((tx) => withAudit(tx, async () => {
@@ -183,7 +183,7 @@ export const couponsRouter = router({
             }));
         }),
 
-    delete: ownerProcedure
+    delete: requirePermission('coupons', 'delete')
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             return ctx.withOrg((tx) => withAudit(tx, async () => {
@@ -203,7 +203,7 @@ export const couponsRouter = router({
             }));
         }),
 
-    validate: protectedProcedure
+    validate: requirePermission('coupons', 'view')
         .input(z.object({
             code: z.string().transform(s => s.toUpperCase()),
             orderAmount: moneyInput,
@@ -256,7 +256,7 @@ export const couponsRouter = router({
 
     // Named `redeem` — `apply` is a reserved word in tRPC v11 router({})
     // and made the whole appRouter throw at import.
-    redeem: adminProcedure
+    redeem: requirePermission('coupons', 'write')
         .input(z.object({
             couponId: z.string().uuid(),
             orderId: z.string().uuid().optional(), // For auditing if needed

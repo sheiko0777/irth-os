@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { protectedProcedure, router, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { EGYPT_VAT_BP, add, assertSupportedCurrency, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
 
 export const returnsRouter = router({
-  list: protectedProcedure
+  list: requirePermission('returns', 'view')
     .input(z.object({
       ...paginationInputSchema(10),
       status: z.enum(['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged']).optional(),
@@ -52,7 +52,7 @@ export const returnsRouter = router({
       };
     }),
 
-  get: protectedProcedure
+  get: requirePermission('returns', 'view')
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
@@ -73,7 +73,7 @@ export const returnsRouter = router({
       return { data, error: null, meta: null };
     }),
 
-  create: adminProcedure
+  create: requirePermission('returns', 'write')
     .input(z.object({
       orderId: z.string(),
       reason: z.enum(['damaged', 'wrong_item', 'not_as_described', 'changed_mind', 'other']),
@@ -164,7 +164,7 @@ export const returnsRouter = router({
       return { data: createdReturn, error: null, meta: null };
     })),
 
-  updateStatus: adminProcedure
+  updateStatus: requirePermission('returns', 'write')
     .input(z.object({
       id: z.string(),
       status: z.enum(['requested', 'approved', 'rejected', 'received', 'restocked', 'refunded', 'exchanged']),
@@ -296,7 +296,7 @@ export const returnsRouter = router({
       return { data: updated, error: null, meta: null };
     }),
 
-  restock: adminProcedure
+  restock: requirePermission('returns', 'write')
     .input(z.object({
       returnId: z.string(),
       itemId: z.string(),
@@ -391,7 +391,7 @@ export const returnsRouter = router({
       return { data: result, error: null, meta: null };
     }),
 
-  summary: protectedProcedure
+  summary: requirePermission('returns', 'view')
     .query(async ({ ctx }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
