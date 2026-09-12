@@ -1,20 +1,33 @@
 import { z } from 'zod';
 import { router, requirePermission } from '../trpc';
-import { campaigns, campaignRecipients, snapshotAndEnqueueCampaign, UnresolvedSegmentError } from '@irth/db';
+import { campaigns, campaignRecipients, snapshotAndEnqueueCampaign, UnresolvedSegmentError, paginationOffset, paginationMeta } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, count, sql, or, ne } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const campaignsRouter = router({
   list: requirePermission('campaigns', 'view')
-    .input(z.object({}).optional())
-    .query(async ({ ctx }) => {
-      const rows = await ctx.db
-        .select()
-        .from(campaigns)
-        .where(eq(campaigns.orgId, ctx.orgId))
-        .orderBy(desc(campaigns.createdAt))
-        .limit(100);
-      return { data: rows, error: null };
+    .input(z.object(paginationInputSchema(100)))
+    .query(async ({ ctx, input }) => {
+      const offset = paginationOffset(input.page, input.pageSize);
+      const [rows, totalResult] = await Promise.all([
+        ctx.db
+          .select()
+          .from(campaigns)
+          .where(eq(campaigns.orgId, ctx.orgId))
+          .orderBy(desc(campaigns.createdAt))
+          .limit(input.pageSize)
+          .offset(offset),
+        ctx.db
+          .select({ count: count() })
+          .from(campaigns)
+          .where(eq(campaigns.orgId, ctx.orgId)),
+      ]);
+      return {
+        data: rows,
+        error: null,
+        meta: paginationMeta(input.page, input.pageSize, totalResult[0]?.count ?? 0),
+      };
     }),
 
   summary: requirePermission('campaigns', 'view').query(async ({ ctx }) => {

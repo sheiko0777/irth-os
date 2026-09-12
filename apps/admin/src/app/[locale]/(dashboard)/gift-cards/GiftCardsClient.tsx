@@ -55,7 +55,7 @@ export default function GiftCardsClient({
   const [expiresAt, setExpiresAt] = useState('');
   const [createErr, setCreateErr] = useState('');
 
-  const listQuery = trpc.giftCards.list.useQuery(undefined, { enabled: false });
+  const listQuery = trpc.giftCards.list.useQuery({}, { enabled: false });
   const summaryQuery = trpc.giftCards.summary.useQuery(undefined, { enabled: false });
 
   const refresh = async () => {
