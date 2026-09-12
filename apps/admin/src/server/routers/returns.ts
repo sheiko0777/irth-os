@@ -31,7 +31,7 @@ async function refundReturn(
   tx: DbTx,
   orgId: string,
   userId: string,
-  input: { id: string; refundAmountMinor: bigint; setValues: { status: string; adminNotes: string | undefined; resolvedAt: Date | undefined } },
+  input: { id: string; refundAmountMinor: bigint; setValues: { status: typeof orderReturns.$inferSelect['status']; adminNotes: string | undefined; resolvedAt: Date | undefined } },
 ): Promise<RefundReturnResult> {
   const [target] = await tx.select({ orderId: orderReturns.orderId }).from(orderReturns)
     .where(and(eq(orderReturns.id, input.id), eq(orderReturns.orgId, orgId)));
