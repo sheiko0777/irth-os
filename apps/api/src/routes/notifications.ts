@@ -5,6 +5,7 @@ import { notifications, activityLog, jsonSafe } from '@irth/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireOrgId } from '../middlewares/requireOrgId';
+import { requireRole } from '../middlewares/requireRole';
 
 export const notificationsRouter = new Hono();
 
@@ -84,7 +85,7 @@ const activityQuerySchema = z.object({
 });
 
 // GET /activity - List activity log entries (paginated)
-notificationsRouter.get('/activity', requireOrgId(), async (c) => {
+notificationsRouter.get('/activity', requireOrgId(), requireRole('owner', 'admin'), async (c) => {
   const orgId = c.get('orgId') as string;
 
   try {

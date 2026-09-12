@@ -22,3 +22,8 @@
 **Vulnerability:** The `/orgs/:id/members` GET endpoint in `apps/api/src/routes/orgs.ts` lacked any RBAC middleware, allowing any member of an organization to list all other members, bypassing the `members.view` permission intended for owners and admins only.
 **Learning:** Missing `requireRole` or `requirePermission` middleware on API routes leads to authorization bypasses, even if the tenant (`orgId`) filter is correctly applied. The API layer's RBAC matrix must precisely match the admin panel's trpc router matrix.
 **Prevention:** Always apply the appropriate role or permission checking middleware (e.g., `requireRole` or `requirePermission`) to all endpoints exposing organization-level data, matching the security matrix in `packages/db/src/permissions.ts`.
+
+## 2024-10-18 - Authorization Bypass in Activity Log
+**Vulnerability:** The `GET /activity` endpoint in `apps/api/src/routes/notifications.ts` used `requireOrgId()` to enforce tenant isolation but lacked any RBAC middleware (such as `requireRole('owner', 'admin')`).
+**Learning:** Tenant isolation (`requireOrgId`) prevents users from reading cross-tenant data, but it does not prevent horizontal privilege escalation. Any authenticated user in an organization could read its entire audit history (`activityLog`).
+**Prevention:** Sensitive organization endpoints, especially those dealing with audit logs, financial records, or configuration, must always have role-based authorization explicitly enforced (e.g., `requireRole('owner', 'admin')`) in addition to tenant scoping.
