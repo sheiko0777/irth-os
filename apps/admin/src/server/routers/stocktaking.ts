@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure } from '../trpc';
 import { stocktakingSessions, stocktakingItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
-import { eq, and, desc, count, sql, ne, isNotNull, getTableColumns } from 'drizzle-orm';
+import { eq, and, desc, count, sql, ne, isNotNull, inArray, getTableColumns } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { assertSupportedCurrency } from '@irth/domain';
 
@@ -113,6 +113,45 @@ export const stocktakingRouter = router({
           let varianceLinesUncosted = 0;
           const itemsSkipped: Array<{ sku: string; reason: string }> = [];
 
+          // Batch-resolve the two per-line lookups the loop below used to run
+          // once per item: sku->variant (only for lines with no variantId
+          // already recorded) and variant->inventory_item. One inArray() SELECT
+          // each instead of up to 2*N round-trips for an N-line stocktake.
+          // Scoped through products: `sku` is unique per org (0040), so an
+          // unscoped lookup can resolve another tenant's variant.
+          const unresolvedSkus = [...new Set(items.filter((i) => !i.variantId).map((i) => i.sku))];
+          const variantIdBySku = new Map<string, string>();
+          if (unresolvedSkus.length > 0) {
+            const variantRows = await tx
+              .select({ id: productVariants.id, sku: productVariants.sku })
+              .from(productVariants)
+              .innerJoin(products, eq(productVariants.productId, products.id))
+              .where(and(
+                inArray(productVariants.sku, unresolvedSkus),
+                eq(products.orgId, ctx.orgId)
+              ));
+            for (const row of variantRows) variantIdBySku.set(row.sku, row.id);
+          }
+
+          const resolvedVariantIdByItemId = new Map<string, string>();
+          for (const item of items) {
+            const resolved = item.variantId ?? variantIdBySku.get(item.sku) ?? null;
+            if (resolved) resolvedVariantIdByItemId.set(item.id, resolved);
+          }
+
+          const allResolvedVariantIds = [...new Set(resolvedVariantIdByItemId.values())];
+          const invItemByVariantId = new Map<string, typeof inventoryItems.$inferSelect>();
+          if (allResolvedVariantIds.length > 0) {
+            const invRows = await tx
+              .select()
+              .from(inventoryItems)
+              .where(and(
+                inArray(inventoryItems.variantId, allResolvedVariantIds),
+                eq(inventoryItems.orgId, ctx.orgId)
+              ));
+            for (const row of invRows) invItemByVariantId.set(row.variantId, row);
+          }
+
           for (const item of items) {
             itemsCounted++;
             const counted = item.actualQuantity ?? 0;
@@ -120,21 +159,7 @@ export const stocktakingRouter = router({
             netVariance += variance;
             absVariance += Math.abs(variance);
 
-            let resolvedVariantId = item.variantId;
-            if (!resolvedVariantId) {
-              // Scoped through products: `sku` is unique per org (0040), so an
-              // unscoped lookup can resolve another tenant's variant.
-              const [variant] = await tx
-                .select({ id: productVariants.id })
-                .from(productVariants)
-                .innerJoin(products, eq(productVariants.productId, products.id))
-                .where(and(
-                  eq(productVariants.sku, item.sku),
-                  eq(products.orgId, ctx.orgId)
-                ))
-                .limit(1);
-              if (variant) resolvedVariantId = variant.id;
-            }
+            const resolvedVariantId = resolvedVariantIdByItemId.get(item.id) ?? null;
 
             // Unresolvable lines still record their variance — the count did
             // happen — but appliedQuantity stays NULL, because nothing was
@@ -147,14 +172,7 @@ export const stocktakingRouter = router({
               continue;
             }
 
-            const [invItem] = await tx
-              .select()
-              .from(inventoryItems)
-              .where(and(
-                eq(inventoryItems.variantId, resolvedVariantId),
-                eq(inventoryItems.orgId, ctx.orgId)
-              ))
-              .limit(1);
+            const invItem = invItemByVariantId.get(resolvedVariantId);
 
             if (!invItem) {
               itemsSkipped.push({ sku: item.sku, reason: 'inventory_record_not_found' });

@@ -140,8 +140,8 @@ const UNSCOPED_READ_BASELINE = [
   'shipping.ts:13',
   'shipping.ts:67',
   'stocktaking.ts:13',
-  'stocktaking.ts:280',
-  'stocktaking.ts:295',
+  'stocktaking.ts:298',
+  'stocktaking.ts:313',
 ];
 
 /** `withAudit(ctx.db, …)` — the audit row lands outside the transaction. */
