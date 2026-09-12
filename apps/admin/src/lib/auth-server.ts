@@ -41,25 +41,32 @@ import { resolveAppBaseUrl } from './appUrl';
  * time — so deferring construction here is enough on its own; the `db`
  * Proxy's own laziness stays intact once nothing forces it open early.
  */
-let _authInstance: ReturnType<typeof betterAuth> | null = null;
-function getAuthInstance() {
-  if (!_authInstance) {
-    _authInstance = betterAuth({
-      database: drizzleAdapter(db, {
-        provider: 'pg',
-        schema: authSchema,
-      }),
-      emailAndPassword: {
-        enabled: true,
-      },
-      secret: process.env.BETTER_AUTH_SECRET,
-      baseURL: resolveAppBaseUrl(),
-    });
-  }
-  return _authInstance;
+// A named function (not an inline `betterAuth({...})` call reused at two
+// type positions) so `ReturnType<typeof createAuth>` below matches this
+// exact call's inferred options type — `ReturnType<typeof betterAuth>`
+// itself resolves to the library's generic `Auth<BetterAuthOptions>`
+// shape, which this specific options object's narrower `database`/`secret`
+// types are not assignable to (a real tsc error, not a lint nit).
+function createAuth() {
+  return betterAuth({
+    database: drizzleAdapter(db, {
+      provider: 'pg',
+      schema: authSchema,
+    }),
+    emailAndPassword: {
+      enabled: true,
+    },
+    secret: process.env.BETTER_AUTH_SECRET,
+    baseURL: resolveAppBaseUrl(),
+  });
 }
 
-export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
+let _authInstance: ReturnType<typeof createAuth> | undefined;
+function getAuthInstance() {
+  return (_authInstance ??= createAuth());
+}
+
+export const auth = new Proxy({} as ReturnType<typeof createAuth>, {
   get(_target, prop, _receiver) {
     const instance = getAuthInstance();
     const value = Reflect.get(instance as object, prop, instance);
