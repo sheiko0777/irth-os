@@ -1,3 +1,9 @@
+/** @jsxImportSource react */
+// apps/api (a consumer of this package) sets a global `jsxImportSource:
+// "hono/jsx"` in its own tsconfig, which -- since TS jsx settings apply to
+// every .tsx file in one compiled program, not per-package -- would
+// otherwise get applied to these files too when apps/api's typecheck
+// transitively pulls them in. This pragma pins it back to react per-file.
 import * as React from 'react';
 import { Body, Container, Head, Html, Section, Text } from '@react-email/components';
 

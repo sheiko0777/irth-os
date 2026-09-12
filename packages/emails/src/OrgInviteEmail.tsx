@@ -1,3 +1,6 @@
+/** @jsxImportSource react */
+// See Layout.tsx for why this pragma is needed (apps/api's tsconfig sets
+// a conflicting global jsxImportSource).
 import * as React from 'react';
 import { Button, Heading, Section, Text } from '@react-email/components';
 import { EmailLayout } from './Layout';
