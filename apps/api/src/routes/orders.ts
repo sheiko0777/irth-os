@@ -6,6 +6,7 @@ import { orders, orderItems, productVariants, products, nextDocumentNumber, form
 import { withAudit, transitionOrderStatus } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
+import { OrderStatusSchema } from '@irth/types';
 import { requirePermission } from '../middlewares/requirePermission';
 import { requireOrgId } from '../middlewares/requireOrgId';
 
@@ -265,7 +266,7 @@ ordersRoute.get('/:id', requireOrgId(), async (c: Context) => {
 });
 
 const updateStatusSchema = z.object({
-  status: z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'])
+  status: OrderStatusSchema
 });
 
 // requirePermission, not just the generic orgId/userId presence check every

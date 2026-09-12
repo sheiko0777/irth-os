@@ -17,6 +17,11 @@ const tone = {
   neutral: { color: 'var(--t2)',      bg: 'var(--rim1)' },
 } as const;
 
+// Keys match packages/types's OrderStatusSchema exactly (also the actual
+// orders.status DB enum) -- 'returned' is not a real order status (a return
+// is tracked on its own orderReturns row, not as an order-status value; see
+// orderStatusEnum in packages/db/src/schema.ts) and was removed from here
+// after drifting in independently.
 export const orderStatusMap: StatusMap = {
   pending:        { label: 'قيد الانتظار', ...tone.amber },
   confirmed:      { label: 'مؤكد',         ...tone.azure },
@@ -24,7 +29,6 @@ export const orderStatusMap: StatusMap = {
   shipped:        { label: 'تم الشحن',     ...tone.gold },
   delivered:      { label: 'تم التسليم',   ...tone.emerald },
   cancelled:      { label: 'ملغي',         ...tone.muted },
-  returned:       { label: 'مرتجع',        ...tone.crimson },
 };
 
 export const paymentStatusMap: StatusMap = {
