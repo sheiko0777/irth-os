@@ -1,4 +1,4 @@
-import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { categories } from '@irth/db';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
@@ -6,7 +6,7 @@ import { TRPCError } from '@trpc/server';
 import { withAudit } from '@irth/db';
 
 export const categoriesRouter = router({
-    list: protectedProcedure
+    list: requirePermission('categories', 'view')
         .query(async ({ ctx }) => {
             const data = await ctx.db
                 .select()
@@ -21,7 +21,7 @@ export const categoriesRouter = router({
             };
         }),
 
-    create: adminProcedure
+    create: requirePermission('categories', 'write')
         .input(z.object({
             name: z.string().min(1),
             slug: z.string().min(1),
@@ -53,7 +53,7 @@ export const categoriesRouter = router({
             return { data: result, error: null, meta: null };
         }),
 
-    delete: ownerProcedure
+    delete: requirePermission('categories', 'delete')
         .input(z.object({
             id: z.string().uuid()
         }))

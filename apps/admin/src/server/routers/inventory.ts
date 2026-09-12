@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { protectedProcedure, router, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
 import { eq, and, desc, asc, lte, gt, sql, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const inventoryRouter = router({
-  list: protectedProcedure
+  list: requirePermission('inventory', 'view')
     .input(z.object({
       /**
        * `out` is stock at or below zero — unsellable right now.
@@ -63,7 +63,7 @@ export const inventoryRouter = router({
       };
     }),
 
-  alerts: protectedProcedure
+  alerts: requirePermission('inventory', 'view')
     .query(async ({ ctx }) => {
       const items = await ctx.db
         .select({
@@ -85,7 +85,7 @@ export const inventoryRouter = router({
       return { data: items, error: null, meta: null };
     }),
 
-  movements: protectedProcedure
+  movements: requirePermission('inventory', 'view')
     .input(z.object({
       itemId: z.string().uuid(),
     }))
@@ -106,7 +106,7 @@ export const inventoryRouter = router({
       return { data: movements, error: null, meta: null };
     }),
 
-  adjust: adminProcedure
+  adjust: requirePermission('inventory', 'write')
     .input(z.object({
       itemId: z.string().uuid(),
       type: z.enum(['in', 'out', 'adjustment']),

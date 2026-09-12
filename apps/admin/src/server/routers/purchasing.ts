@@ -1,4 +1,4 @@
-import { router, protectedProcedure, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
@@ -8,7 +8,7 @@ import { TRPCError } from '@trpc/server';
 
 export const purchasingRouter = router({
   suppliers: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
+    list: requirePermission('purchasing', 'view').query(async ({ ctx }) => {
       const data = await ctx.withOrg(async (tx) => tx
         .select()
         .from(suppliers)
@@ -17,7 +17,7 @@ export const purchasingRouter = router({
       return { data, error: null, meta: null };
     }),
 
-    create: adminProcedure
+    create: requirePermission('purchasing', 'write')
       .input(
         z.object({
           name: z.string().min(1),
@@ -55,7 +55,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    update: adminProcedure
+    update: requirePermission('purchasing', 'write')
       .input(
         z.object({
           id: z.string().uuid(),
@@ -102,7 +102,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    delete: ownerProcedure
+    delete: requirePermission('purchasing', 'delete')
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         // Stays a separate read: the condition is a count over ANOTHER table,
@@ -147,7 +147,7 @@ export const purchasingRouter = router({
   }),
 
   po: router({
-    list: protectedProcedure
+    list: requirePermission('purchasing', 'view')
       .input(z.object({
         ...paginationInputSchema(20),
       }))
@@ -187,7 +187,7 @@ export const purchasingRouter = router({
         return { data, error: null, meta: paginationMeta(input.page, input.pageSize, total) };
       }),
 
-    get: protectedProcedure
+    get: requirePermission('purchasing', 'view')
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
         const order = await ctx.withOrg(async (tx) => tx.query.purchaseOrders.findFirst({
@@ -219,7 +219,7 @@ export const purchasingRouter = router({
         return { data: { ...po.order, supplier: po.supplier, items }, error: null, meta: null };
       }),
 
-    create: adminProcedure
+    create: requirePermission('purchasing', 'write')
       .input(
         z.object({
           supplierId: z.string().uuid().optional(),
@@ -312,7 +312,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    updateStatus: adminProcedure
+    updateStatus: requirePermission('purchasing', 'write')
       .input(
         z.object({
           id: z.string().uuid(),
@@ -364,7 +364,7 @@ export const purchasingRouter = router({
         return { data: result, error: null, meta: null };
       }),
 
-    receive: adminProcedure
+    receive: requirePermission('purchasing', 'write')
       .input(
         z.object({
           id: z.string().uuid(),
