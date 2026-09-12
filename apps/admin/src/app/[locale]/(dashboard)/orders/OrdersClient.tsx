@@ -1,5 +1,5 @@
 'use client';
-import { formatMoney, fromMinor } from '@irth/domain';
+import { formatDate, formatMoney, fromMinor } from '@irth/domain';
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
@@ -120,7 +120,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]">
                                             {order.createdAt
-                                                ? new Date(order.createdAt).toLocaleDateString('ar-EG')
+                                                ? formatDate(order.createdAt)
                                                 : '—'}
                                         </td>
                                         <td className="px-4 py-3 text-sm">

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PermissionGate } from '@/components/PermissionGate';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
+import { formatDate } from '@irth/domain';
 
 const CALLBACK_BANNER: Record<string, { tone: 'good' | 'bad'; message: string }> = {
   connected: { tone: 'good', message: 'تم ربط متجر Shopify بنجاح.' },
@@ -107,7 +108,7 @@ export function ShopifyConnectionCard({ callbackStatus }: { callbackStatus?: str
             </div>
             {connection.lastWebhookAt && (
               <div className="text-[var(--t3)]">
-                آخر webhook: {new Date(connection.lastWebhookAt).toLocaleString('ar-EG')}
+                آخر webhook: {formatDate(connection.lastWebhookAt, { withTime: true })}
               </div>
             )}
             {connection.lastError && (

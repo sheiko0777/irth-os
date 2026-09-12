@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
+import { formatDate } from '@irth/domain';
 
 type ExportType = 'orders' | 'inventory' | 'customers';
 
@@ -26,7 +27,7 @@ function rowToValues(type: ExportType, row: Record<string, unknown>): string[] {
             String(row.customerName ?? ''),
             String(row.status ?? ''),
             String(row.totalAmount ?? ''),
-            row.createdAt ? new Date(row.createdAt as string).toLocaleDateString('ar-EG') : '',
+            row.createdAt ? formatDate(row.createdAt as string) : '',
             String(row.paymentMethod ?? ''),
         ];
     }
@@ -48,7 +49,7 @@ function rowToValues(type: ExportType, row: Record<string, unknown>): string[] {
         String(row.loyaltyPoints ?? ''),
         String(row.totalOrders ?? ''),
         String(row.totalSpent ?? ''),
-        row.createdAt ? new Date(row.createdAt as string).toLocaleDateString('ar-EG') : '',
+        row.createdAt ? formatDate(row.createdAt as string) : '',
     ];
 }
 

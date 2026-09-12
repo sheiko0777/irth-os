@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { ShopifyConnectionCard } from './ShopifyConnectionCard';
 import { Button } from '@/components/ui/button';
 import { revalidatePath } from 'next/cache';
+import { formatDate } from '@irth/domain';
 
 async function retryOutboxEvent(id: string) {
     'use server';
@@ -78,7 +79,7 @@ export default async function IntegrationsPage({
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-[var(--t2)]">
-                                                {new Date(event.createdAt).toLocaleString('ar-EG')}
+                                                {formatDate(event.createdAt, { withTime: true })}
                                             </TableCell>
                                             <TableCell>
                                                 {event.attempts >= 5 ? (
