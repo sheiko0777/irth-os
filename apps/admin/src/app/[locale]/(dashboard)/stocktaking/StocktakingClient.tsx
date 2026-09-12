@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ClipboardList } from 'lucide-react';
+import { formatDate as formatDateShared } from '@irth/domain';
 
 
 export type StocktakingSession = {
@@ -34,7 +35,7 @@ type SessionItem = { productName: string; sku: string; expectedQty: number; coun
 
 function formatDate(d: Date | null): string {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric' });
+  return formatDateShared(d, { dateTimeOptions: { year: 'numeric', month: 'short', day: 'numeric' } });
 }
 
 interface Props { sessions: StocktakingSession[]; summary: StocktakingSummary; }

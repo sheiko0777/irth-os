@@ -2,6 +2,7 @@ import { serverCaller } from '@/server/caller';
 import { statusLabel } from '@/lib/statusMaps';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { BellOff } from 'lucide-react';
+import { formatDate } from '@irth/domain';
 
 export default async function NotificationsPage() {
     const caller = await serverCaller();
@@ -56,7 +57,7 @@ export default async function NotificationsPage() {
                                     </td>
                                     <td className="px-4 py-3 text-sm text-[var(--t2)]" dir="ltr">
                                         {item.createdAt
-                                            ? new Date(item.createdAt).toLocaleString('ar-EG')
+                                            ? formatDate(item.createdAt, { withTime: true })
                                             : 'ـ'}
                                     </td>
                                     <td className="px-4 py-3 text-sm">

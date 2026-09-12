@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from '../trpc';
-import { orders, orderItems, productVariants, products, inventoryItems, inventoryMovements } from '@irth/db';
-import { eq, and, desc, sql, count, sum, gte, lte } from 'drizzle-orm';
+import { orders, products, inventoryItems } from '@irth/db';
+import { eq, and, sql, count, sum, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 

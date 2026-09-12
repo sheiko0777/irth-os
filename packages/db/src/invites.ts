@@ -32,6 +32,30 @@ export type AcceptInviteResult =
         | 'otp_locked';
     };
 
+export type InvitePreviewResult =
+  | { ok: true; invite: typeof orgInvites.$inferSelect }
+  | { ok: false; reason: 'invalid_token' | 'expired' };
+
+/**
+ * Looks up an invite by token and checks it hasn't expired -- the one place
+ * that knows what "expired" means for an org invite. Used by
+ * `acceptOrgInvite` below, by the invite-preview page (`join/page.tsx`), and
+ * by the resend-OTP route -- all three used to re-derive
+ * `invite.expiresAt < new Date()` independently after their own raw
+ * `db.select`, which meant a future change to expiry policy (a grace
+ * period, a shortened TTL) had three places to find and update instead of
+ * one.
+ */
+export async function getValidInvite(
+  db: Pick<DbInstance, 'select'>,
+  token: string,
+): Promise<InvitePreviewResult> {
+  const [invite] = await db.select().from(orgInvites).where(eq(orgInvites.token, token)).limit(1);
+  if (!invite) return { ok: false, reason: 'invalid_token' };
+  if (invite.expiresAt < new Date()) return { ok: false, reason: 'expired' };
+  return { ok: true, invite };
+}
+
 /**
  * The single place both apps accept an org invite.
  *
@@ -55,9 +79,9 @@ export async function acceptOrgInvite(
   db: Pick<DbInstance, 'select' | 'insert' | 'update' | 'delete'>,
   input: { token: string; otpCode: string | undefined; userId: string; userEmail: string | null | undefined },
 ): Promise<AcceptInviteResult> {
-  const [invite] = await db.select().from(orgInvites).where(eq(orgInvites.token, input.token)).limit(1);
-  if (!invite) return { ok: false, reason: 'invalid_token' };
-  if (invite.expiresAt < new Date()) return { ok: false, reason: 'expired' };
+  const preview = await getValidInvite(db, input.token);
+  if (!preview.ok) return preview;
+  const { invite } = preview;
   if (invite.email.toLowerCase() !== (input.userEmail ?? '').toLowerCase()) {
     return { ok: false, reason: 'email_mismatch' };
   }

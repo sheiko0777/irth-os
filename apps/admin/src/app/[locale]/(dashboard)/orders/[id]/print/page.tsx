@@ -1,4 +1,4 @@
-import { formatMoney, fromMinor, multiply } from "@irth/domain";
+import { formatDate, formatMoney, fromMinor, multiply } from "@irth/domain";
 import { serverCaller } from '@/server/caller';
 import { notFound } from 'next/navigation';
 import { PrintButton } from './PrintButton';
@@ -47,7 +47,7 @@ export default async function PrintPage({
                         <p style={{ color: '#666', margin: '4px 0 0' }}>
                             التاريخ:{' '}
                             {order.createdAt
-                                ? new Date(order.createdAt).toLocaleDateString('ar-EG')
+                                ? formatDate(order.createdAt)
                                 : '—'}
                         </p>
                     </div>

@@ -23,6 +23,11 @@
 **Learning:** Missing `requireRole` or `requirePermission` middleware on API routes leads to authorization bypasses, even if the tenant (`orgId`) filter is correctly applied. The API layer's RBAC matrix must precisely match the admin panel's trpc router matrix.
 **Prevention:** Always apply the appropriate role or permission checking middleware (e.g., `requireRole` or `requirePermission`) to all endpoints exposing organization-level data, matching the security matrix in `packages/db/src/permissions.ts`.
 
+## 2024-06-25 - Broken Access Control in API Orders Endpoints
+**Vulnerability:** The `/`, `/:id` GET and `/` POST endpoints in `apps/api/src/routes/orders.ts` only checked for tenant isolation using `requireOrgId()`, lacking any RBAC middleware. This allowed any organization member (even those without 'orders' 'view' or 'write' permissions) to view all orders and create new ones.
+**Learning:** Checking for `orgId` presence provides tenant isolation but does not provide authorization. All API endpoints exposing or modifying resources must explicitly require the appropriate permissions using `requirePermission(resource, action)`.
+**Prevention:** Always replace generic `requireOrgId()` guards with `requirePermission(resource, action)` when the endpoint accesses a resource mapped in the RBAC matrix (`packages/db/src/permissions.ts`), ensuring the API layer's security matches the tRPC routers.
+
 ## 2024-10-18 - Authorization Bypass in Activity Log
 **Vulnerability:** The `GET /activity` endpoint in `apps/api/src/routes/notifications.ts` used `requireOrgId()` to enforce tenant isolation but lacked any RBAC middleware (such as `requireRole('owner', 'admin')`).
 **Learning:** Tenant isolation (`requireOrgId`) prevents users from reading cross-tenant data, but it does not prevent horizontal privilege escalation. Any authenticated user in an organization could read its entire audit history (`activityLog`).

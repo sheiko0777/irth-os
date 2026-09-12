@@ -1,4 +1,4 @@
-import { formatMoney, fromMinor, toDecimalString } from "@irth/domain";
+import { formatDate, formatMoney, fromMinor, toDecimalString } from "@irth/domain";
 import { serverCaller } from '@/server/caller';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -66,7 +66,7 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
           </div>
           <div>
             <h3 className="text-[var(--t2)] text-sm">تاريخ الطلب (Requested Date)</h3>
-            <p className="text-[var(--t1)]">{new Date(returnObj.requestedAt!).toLocaleString('ar-EG')}</p>
+            <p className="text-[var(--t1)]">{formatDate(returnObj.requestedAt!, { withTime: true })}</p>
           </div>
           {returnObj.notes && (
             <div className="col-span-1 md:col-span-2">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { type OrgRow, planOf } from '@/lib/platformPlans';
-import { statusLabel, statusMaps } from '@/lib/statusMaps';
+import { statusMaps } from '@/lib/statusMaps';
 
 interface Props {
   orgs: OrgRow[];

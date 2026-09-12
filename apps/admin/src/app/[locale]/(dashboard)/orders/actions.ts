@@ -2,7 +2,7 @@
 
 import { serverCaller } from '@/server/caller';
 import { revalidatePath } from 'next/cache';
-import { OrderStatus } from '@/lib/orderTypes';
+import type { OrderStatus } from '@irth/types';
 
 export async function updateOrderStatusAction(orderId: string, status: OrderStatus) {
   try {

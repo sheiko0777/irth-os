@@ -1,4 +1,5 @@
 import { EGYPT_VAT_BP, currency, exponentOf, fromMinor, netOfTax, taxIncludedIn, type Money } from './money';
+import { fetchWithTimeout } from './http';
 
 /**
  * Egyptian Tax Authority (ETA) e-invoicing integration.
@@ -273,7 +274,7 @@ async function getAuthToken(config: EtaConfig): Promise<string> {
 
     let res: Response;
     try {
-        res = await fetch(etaIdUrl(config.env), {
+        res = await fetchWithTimeout(etaIdUrl(config.env), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
@@ -436,7 +437,7 @@ export async function issueInvoice(order: EtaOrderInput, config: EtaConfig): Pro
 
         let res: Response;
         try {
-            res = await fetch(`${etaApiUrl(config.env)}/documentsubmissions`, {
+            res = await fetchWithTimeout(`${etaApiUrl(config.env)}/documentsubmissions`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ documents: [signedDoc] }),
@@ -485,7 +486,7 @@ export async function getInvoiceStatus(uuid: string, config: EtaConfig): Promise
     }
 
     try {
-        const res = await fetch(`${etaApiUrl(config.env)}/documents/${uuid}/details`, {
+        const res = await fetchWithTimeout(`${etaApiUrl(config.env)}/documents/${uuid}/details`, {
             headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -525,7 +526,7 @@ export async function getCancellationWindowHours(config: EtaConfig, preFetchedTo
 
     try {
         const token = preFetchedToken ?? await getAuthToken(config);
-        const res = await fetch(`${etaApiUrl(config.env)}/documenttypes/${documentTypeId}`, {
+        const res = await fetchWithTimeout(`${etaApiUrl(config.env)}/documenttypes/${documentTypeId}`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return null;
@@ -583,7 +584,7 @@ export async function cancelInvoice(uuid: string, reason: string, submittedAt: D
     }
 
     try {
-        const res = await fetch(`${etaApiUrl(config.env)}/documents/state/${uuid}/state`, {
+        const res = await fetchWithTimeout(`${etaApiUrl(config.env)}/documents/state/${uuid}/state`, {
             method: 'PUT',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'cancelled', reason }),

@@ -4,7 +4,8 @@ import { useTransition } from "react";
 import { updateOrderStatusAction } from "./actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTranslations } from "next-intl";
-import { OrderStatus, STATUS_COLUMNS } from "@/lib/orderTypes";
+import type { OrderStatus } from "@irth/types";
+import { orderStatusMap } from "@/lib/statusMaps";
 import { toast } from "sonner";
 
 export function StatusUpdater({ orderId, currentStatus }: { orderId: string, currentStatus: string }) {
@@ -30,7 +31,7 @@ export function StatusUpdater({ orderId, currentStatus }: { orderId: string, cur
                     <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                    {STATUS_COLUMNS.map(({ id, label }) => (
+                    {Object.entries(orderStatusMap).map(([id, { label }]) => (
                         <SelectItem key={id} value={id}>{label}</SelectItem>
                     ))}
                 </SelectContent>

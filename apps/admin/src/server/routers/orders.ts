@@ -1,11 +1,10 @@
 import { router, requirePermission } from '../trpc';
-import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum, notifications, customers, orgSettings, paginationMeta, paginationOffset } from '@irth/db';
+import { orders, orderItems, shipmentTracking, productVariants, orderStatusEnum, notifications, paginationMeta, paginationOffset } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
-import { eq, and, desc, sql, count, ilike, gte, lte, isNotNull } from 'drizzle-orm';
+import { eq, and, desc, count, ilike, gte, lte } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { withAudit, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postOrderDeliveredEntry, transitionOrderStatus } from '@irth/db';
-import type { DbTx, OutboxEventType, OrderNotificationPayload } from '@irth/db';
 
 const statusEnum = z.enum(orderStatusEnum.enumValues);
 

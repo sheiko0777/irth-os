@@ -727,21 +727,38 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
     }).from(inventoryDiscrepancies).where(eq(inventoryDiscrepancies.orderId, existing.id));
     const appliedByVariant = new Map(discrepancyRows.map((d) => [d.variantId, d.appliedQuantity]));
 
+    // One batched lookup for every line's inventory_items row instead of a
+    // SELECT per line (previously N sequential round-trips for an N-line
+    // order) — same inArray()+Map pattern orders-create already uses above.
+    const variantIdsToRestock = [
+      ...new Set(
+        items
+          .filter((item) => (appliedByVariant.get(item.variantId) ?? item.quantity) > 0)
+          .map((item) => item.variantId),
+      ),
+    ];
+    const invItemIdByVariant = new Map<string, string>();
+    if (variantIdsToRestock.length > 0) {
+      const invRows = await tx.select({ id: inventoryItems.id, variantId: inventoryItems.variantId })
+        .from(inventoryItems)
+        .where(and(eq(inventoryItems.orgId, orgId), inArray(inventoryItems.variantId, variantIdsToRestock)));
+      for (const row of invRows) invItemIdByVariant.set(row.variantId, row.id);
+    }
+
     for (const item of items) {
       const restockQuantity = appliedByVariant.get(item.variantId) ?? item.quantity;
       if (restockQuantity <= 0) continue;
 
-      const [invItem] = await tx.select({ id: inventoryItems.id }).from(inventoryItems)
-        .where(and(eq(inventoryItems.orgId, orgId), eq(inventoryItems.variantId, item.variantId)));
-      if (!invItem) continue;
+      const invItemId = invItemIdByVariant.get(item.variantId);
+      if (!invItemId) continue;
 
       await tx.update(inventoryItems)
         .set({ quantity: sql`${inventoryItems.quantity} + ${restockQuantity}`, updatedAt: new Date() })
-        .where(eq(inventoryItems.id, invItem.id));
+        .where(eq(inventoryItems.id, invItemId));
 
       await tx.insert(inventoryMovements).values({
         orgId,
-        itemId: invItem.id,
+        itemId: invItemId,
         type: 'in',
         quantity: restockQuantity,
         note: `Shopify order ${existing.orderNumber} cancelled — restocked`,

@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from '@irth/domain';
 import { envVar } from '../utils/env';
 import { SHOPIFY_API_VERSION } from './shopifyApi';
 
@@ -44,7 +45,7 @@ async function fetchAccessToken(): Promise<CachedToken> {
     throw new Error('Missing SHOPIFY_APP_CLIENT_ID / SHOPIFY_APP_CLIENT_SECRET');
   }
 
-  const response = await fetch(`https://${shopDomain()}/admin/oauth/access_token`, {
+  const response = await fetchWithTimeout(`https://${shopDomain()}/admin/oauth/access_token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -82,7 +83,7 @@ interface GraphQLResponse<T> {
 export async function shopifyGraphQL<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
   const token = await getAccessToken();
 
-  const response = await fetch(`https://${shopDomain()}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+  const response = await fetchWithTimeout(`https://${shopDomain()}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

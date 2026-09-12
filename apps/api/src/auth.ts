@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { db, getEnv } from './db';
+import { db } from './db';
 import { envVar, nodeEnv } from './utils/env';
 import * as authSchema from '@irth/db/src/schema/auth';
 

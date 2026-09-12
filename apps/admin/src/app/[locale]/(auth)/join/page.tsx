@@ -1,4 +1,4 @@
-import { db, orgInvites, organizations } from '@irth/db';
+import { db, organizations, getValidInvite } from '@irth/db';
 import { eq } from 'drizzle-orm';
 import JoinClient from './JoinClient';
 
@@ -21,33 +21,19 @@ export default async function JoinPage({ params, searchParams }: Props) {
     );
   }
 
-  const [invite] = await db
-    .select({
-      id: orgInvites.id,
-      email: orgInvites.email,
-      role: orgInvites.role,
-      expiresAt: orgInvites.expiresAt,
-      orgId: orgInvites.orgId,
-    })
-    .from(orgInvites)
-    .where(eq(orgInvites.token, token))
-    .limit(1);
+  const result = await getValidInvite(db, token);
 
-  if (!invite) {
+  if (!result.ok) {
     return (
       <div className="text-center" style={{ color: 'var(--crimson)' }}>
-        الدعوة غير موجودة أو تم استخدامها
+        {result.reason === 'expired'
+          ? 'انتهت صلاحية الدعوة — تواصل مع المسؤول للحصول على دعوة جديدة'
+          : 'الدعوة غير موجودة أو تم استخدامها'}
       </div>
     );
   }
 
-  if (invite.expiresAt < new Date()) {
-    return (
-      <div className="text-center" style={{ color: 'var(--crimson)' }}>
-        انتهت صلاحية الدعوة — تواصل مع المسؤول للحصول على دعوة جديدة
-      </div>
-    );
-  }
+  const { invite } = result;
 
   const [org] = await db
     .select({ name: organizations.name })

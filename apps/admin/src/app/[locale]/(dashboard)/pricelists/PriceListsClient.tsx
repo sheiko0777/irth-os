@@ -7,6 +7,7 @@ import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 
 import { toast } from 'sonner';
+import { formatDate } from '@irth/domain';
 
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -152,8 +153,8 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
                                         </span>
                                     )}
                                 </td>
-                                <td className="p-3">{list.startDate ? new Date(list.startDate).toLocaleDateString('ar-EG') : '-'}</td>
-                                <td className="p-3">{list.endDate ? new Date(list.endDate).toLocaleDateString('ar-EG') : '-'}</td>
+                                <td className="p-3">{list.startDate ? formatDate(list.startDate) : '-'}</td>
+                                <td className="p-3">{list.endDate ? formatDate(list.endDate) : '-'}</td>
                                 <td className="p-3">{list.itemCount}</td>
                                 <td className="p-3 flex gap-2">
                                     <button

@@ -2,13 +2,13 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { aiConversationLogs, jsonSafe, type Role } from '@irth/db';
-import { getDb, withOrg } from '../db';
+import { withOrg } from '../db';
 import { rateLimit } from '../middlewares/rateLimit';
 import { envVar } from '../utils/env';
 import { handleError } from '../utils/errors';
 import { createGroqProvider } from './providers/groq';
 import { allowedAiToolDefinitions, executeAiTool } from './tools';
-import type { AiLocale, AiMessage, AiToolCall, AiToolCard } from './types';
+import type { AiLocale, AiMessage, AiToolCard } from './types';
 
 const MAX_HISTORY = 10;
 const MAX_TOOL_ITERATIONS = 3;

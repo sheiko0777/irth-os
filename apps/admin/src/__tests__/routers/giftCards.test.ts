@@ -26,9 +26,13 @@ async function expectCode(p: Promise<unknown>, code: TRPCError['code']) {
 describe('giftCards router', () => {
   const caller = giftCardsRouter.createCaller(ctx('owner'));
 
-  it('list: empty db yields { data: [], error: null } envelope', async () => {
-    const res = await caller.list();
-    expect(res).toEqual({ data: [], error: null });
+  it('list: empty db yields a paginated envelope', async () => {
+    const res = await caller.list({});
+    expect(res).toEqual({
+      data: [],
+      error: null,
+      meta: { total: 0, page: 1, pageSize: 200 },
+    });
   });
 
   it('summary: empty db yields all-zero totals', async () => {

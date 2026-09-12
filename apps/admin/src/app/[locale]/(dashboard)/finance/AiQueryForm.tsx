@@ -7,7 +7,6 @@ import { askAiAction } from './actions';
 export function AiQueryForm() {
     const [question, setQuestion] = useState('');
     const [result, setResult] = useState<string | null>(null);
-    const [queryStr, setQueryStr] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +17,6 @@ export function AiQueryForm() {
         setIsLoading(true);
         setError(null);
         setResult(null);
-        setQueryStr(null);
 
         const res = await askAiAction(question);
 
@@ -28,7 +26,6 @@ export function AiQueryForm() {
             setError(res.error);
         } else if (res.data) {
             setResult(res.data.result);
-            setQueryStr(res.data.query);
         }
     };
 
@@ -62,14 +59,6 @@ export function AiQueryForm() {
                     <pre className="whitespace-pre-wrap text-[var(--t1)] font-mono text-sm leading-relaxed">
                         {result}
                     </pre>
-                    {queryStr && (
-                        <div className="mt-4 pt-4 border-t border-[var(--rim1)]">
-                            <h4 className="text-[var(--t3)] mb-2 text-xs">استعلام SQL الذي تم تنفيذه:</h4>
-                            <pre className="text-[var(--t2)] font-mono text-xs overflow-x-auto p-2 bg-black/20 rounded-md" dir="ltr">
-                                {queryStr}
-                            </pre>
-                        </div>
-                    )}
                 </div>
             )}
         </div>

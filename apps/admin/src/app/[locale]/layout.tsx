@@ -1,7 +1,6 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { IBM_Plex_Sans_Arabic, Cairo } from 'next/font/google';
 import { ReactNode } from 'react';
 import { Toaster } from 'sonner';

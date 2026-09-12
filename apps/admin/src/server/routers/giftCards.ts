@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
-import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
-import { eq, and, desc, sql, ne } from 'drizzle-orm';
+import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES, MAX_IDEMPOTENCY_KEY_LENGTH, paginationOffset, paginationMeta } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
+import { eq, and, desc, sql, ne, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { assertSupportedCurrency, currency, fromMinor, parseDecimal } from '@irth/domain';
 
@@ -21,15 +22,27 @@ function generateCode(): string {
 
 export const giftCardsRouter = router({
   list: protectedProcedure
-    .input(z.object({}).optional())
-    .query(async ({ ctx }) => {
-      const rows = await ctx.db
-        .select()
-        .from(giftCards)
-        .where(eq(giftCards.orgId, ctx.orgId))
-        .orderBy(desc(giftCards.createdAt))
-        .limit(200);
-      return { data: rows, error: null };
+    .input(z.object(paginationInputSchema(200)))
+    .query(async ({ ctx, input }) => {
+      const offset = paginationOffset(input.page, input.pageSize);
+      const [rows, totalResult] = await Promise.all([
+        ctx.db
+          .select()
+          .from(giftCards)
+          .where(eq(giftCards.orgId, ctx.orgId))
+          .orderBy(desc(giftCards.createdAt))
+          .limit(input.pageSize)
+          .offset(offset),
+        ctx.db
+          .select({ count: count() })
+          .from(giftCards)
+          .where(eq(giftCards.orgId, ctx.orgId)),
+      ]);
+      return {
+        data: rows,
+        error: null,
+        meta: paginationMeta(input.page, input.pageSize, totalResult[0]?.count ?? 0),
+      };
     }),
 
   summary: protectedProcedure.query(async ({ ctx }) => {

@@ -6,6 +6,7 @@ import { orders, orderItems, productVariants, products, nextDocumentNumber, form
 import { withAudit, transitionOrderStatus } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
+import { OrderStatusSchema } from '@irth/types';
 import { requirePermission } from '../middlewares/requirePermission';
 import { requireOrgId } from '../middlewares/requireOrgId';
 
@@ -33,7 +34,7 @@ const createOrderSchema = z.object({
   }))
 });
 
-ordersRoute.post('/', requireOrgId(), async (c: Context) => {
+ordersRoute.post('/', requirePermission('orders', 'write'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const userId = getUserId(c);
   const body = await c.req.json();
@@ -236,7 +237,7 @@ ordersRoute.post('/', requireOrgId(), async (c: Context) => {
   return c.json({ data: jsonSafe(newOrder), error: null, meta: null });
 });
 
-ordersRoute.get('/', requireOrgId(), async (c: Context) => {
+ordersRoute.get('/', requirePermission('orders', 'view'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
 
   const page = parseInt(c.req.query('page') || '1', 10);
@@ -253,7 +254,7 @@ ordersRoute.get('/', requireOrgId(), async (c: Context) => {
   return c.json({ data: jsonSafe(list), error: null, meta: { total: totalCount, page, limit } });
 });
 
-ordersRoute.get('/:id', requireOrgId(), async (c: Context) => {
+ordersRoute.get('/:id', requirePermission('orders', 'view'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const id = c.req.param('id');
   const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
@@ -265,7 +266,7 @@ ordersRoute.get('/:id', requireOrgId(), async (c: Context) => {
 });
 
 const updateStatusSchema = z.object({
-  status: z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'])
+  status: OrderStatusSchema
 });
 
 // requirePermission, not just the generic orgId/userId presence check every

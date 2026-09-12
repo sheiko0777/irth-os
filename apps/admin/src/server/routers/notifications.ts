@@ -1,17 +1,15 @@
 import { router, protectedProcedure } from '../trpc';
-import { notifications } from '@irth/db';
+import { notifications, paginationOffset } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const notificationsRouter = router({
     list: protectedProcedure
-        .input(z.object({
-            page:     z.number().min(1).default(1),
-            pageSize: z.number().min(1).max(50).default(20),
-        }))
+        .input(z.object(paginationInputSchema(20, 50)))
         .query(async ({ ctx, input }) => {
             const { page, pageSize } = input;
-            const offset = (page - 1) * pageSize;
+            const offset = paginationOffset(page, pageSize);
 
             const [rows, totals] = await Promise.all([
                 ctx.db

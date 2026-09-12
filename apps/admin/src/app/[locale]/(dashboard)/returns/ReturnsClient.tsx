@@ -1,5 +1,5 @@
 'use client';
-import type { Money } from '@irth/domain';
+import { formatDate, type Money } from '@irth/domain';
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
@@ -209,7 +209,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
                         <StatusBadge status={ret.status} domain="return" />
                       </td>
                       <td className="px-6 py-4 text-[var(--t2)]">
-                        {ret.createdAt ? new Date(ret.createdAt).toLocaleDateString('ar-EG') : '-'}
+                        {ret.createdAt ? formatDate(ret.createdAt) : '-'}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2 items-center flex-wrap">

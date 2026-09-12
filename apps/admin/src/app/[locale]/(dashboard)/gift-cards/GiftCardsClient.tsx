@@ -1,5 +1,5 @@
 'use client';
-import { currency, formatMoney, fromMinor, type Money } from '@irth/domain';
+import { currency, formatDate, formatMoney, fromMinor, type Money } from '@irth/domain';
 
 import { useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -27,15 +27,7 @@ export type GiftCardSummary = {
 };
 
 import { StatusBadge } from '@/components/ui/StatusBadge';
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className='rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-5'>
-      <div className='text-sm text-[var(--t2)] mb-1'>{label}</div>
-      <div className='text-2xl font-bold text-[var(--t1)]'>{value}</div>
-    </div>
-  );
-}
+import { StatBox } from '@/components/ui/StatBox';
 
 // Was a local parseFloat formatter. The shared one renders ج.م rather than the
 // raw currency code and groups the digits the same way every other screen does.
@@ -63,7 +55,7 @@ export default function GiftCardsClient({
   const [expiresAt, setExpiresAt] = useState('');
   const [createErr, setCreateErr] = useState('');
 
-  const listQuery = trpc.giftCards.list.useQuery(undefined, { enabled: false });
+  const listQuery = trpc.giftCards.list.useQuery({}, { enabled: false });
   const summaryQuery = trpc.giftCards.summary.useQuery(undefined, { enabled: false });
 
   const refresh = async () => {
@@ -123,10 +115,10 @@ export default function GiftCardsClient({
 
       {/* Stats */}
       <div className='grid grid-cols-2 gap-4 md:grid-cols-4 mb-6'>
-        <StatCard label='إجمالي البطاقات' value={sum.total} />
-        <StatCard label='البطاقات النشطة' value={sum.active} />
-        <StatCard label='إجمالي المُصدر' value={formatAmount(sum.totalIssued)} />
-        <StatCard label='الرصيد النشط' value={formatAmount(sum.activeBalance)} />
+        <StatBox label='إجمالي البطاقات' value={sum.total} />
+        <StatBox label='البطاقات النشطة' value={sum.active} />
+        <StatBox label='إجمالي المُصدر' value={formatAmount(sum.totalIssued)} />
+        <StatBox label='الرصيد النشط' value={formatAmount(sum.activeBalance)} />
       </div>
 
       {/* Table */}
@@ -178,7 +170,7 @@ export default function GiftCardsClient({
                     <StatusBadge status={card.status} domain="giftCard" />
                   </td>
                   <td className='px-4 py-3 text-[var(--t2)] text-xs'>
-                    {new Date(card.createdAt).toLocaleDateString('ar-EG')}
+                    {formatDate(card.createdAt)}
                   </td>
                   <td className='px-4 py-3'>
                     {card.status === 'active' && (

@@ -1,6 +1,7 @@
 import { router, requirePermission } from '../trpc';
-import { products, productVariants, categories, brandEnum } from '@irth/db';
-import { eq, and, desc, sql, count, ilike } from 'drizzle-orm';
+import { products, productVariants, categories, brandEnum, paginationOffset, paginationMeta } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
+import { eq, and, desc, count, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { withAudit, emitOutboxEvent } from '@irth/db';
@@ -9,14 +10,13 @@ import { EGP, parseDecimal } from '@irth/domain';
 export const productsRouter = router({
     list: requirePermission('products', 'view')
         .input(z.object({
-            page: z.number().default(1),
-            pageSize: z.number().default(20),
+            ...paginationInputSchema(20),
             q: z.string().optional(),
             status: z.string().optional()
         }))
         .query(async ({ ctx, input }) => {
             const { page, pageSize, q, status } = input;
-            const offset = (page - 1) * pageSize;
+            const offset = paginationOffset(page, pageSize);
 
             const conditions = [eq(products.orgId, ctx.orgId)];
             if (q) {
@@ -54,11 +54,7 @@ export const productsRouter = router({
             return {
                 data,
                 error: null,
-                meta: {
-                    total: totalQuery[0].count,
-                    page,
-                    pageSize,
-                }
+                meta: paginationMeta(page, pageSize, totalQuery[0].count),
             };
         }),
 

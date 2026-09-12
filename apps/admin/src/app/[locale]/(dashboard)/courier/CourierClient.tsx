@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatDate } from '@irth/domain';
 
 export type CourierShipment = {
     id: string;
@@ -366,7 +367,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                                             <TableCell className="text-sm text-[var(--t2)]">{rem.shipmentCount}</TableCell>
                                             <TableCell className="text-sm text-[var(--t2)]">
                                                 {rem.expectedDate
-                                                    ? new Date(rem.expectedDate).toLocaleDateString('ar-EG')
+                                                    ? formatDate(rem.expectedDate)
                                                     : '—'}
                                             </TableCell>
                                             <TableCell>

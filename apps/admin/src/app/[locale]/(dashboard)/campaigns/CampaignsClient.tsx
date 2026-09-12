@@ -6,6 +6,7 @@ import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { formatDate } from '@irth/domain';
 
 export type Campaign = {
   id: string;
@@ -156,7 +157,7 @@ export default function CampaignsClient({
                   <StatusBadge status={c.status} domain="campaign" />
                 </td>
                 <td className="px-4 py-3 text-center">{c.totalRecipients > 0 ? c.deliveredCount + '/' + c.totalRecipients : '—'}</td>
-                <td className="px-4 py-3" style={{ color: 'var(--t2)' }}>{c.sentAt ? new Date(c.sentAt).toLocaleDateString('ar-EG') : '—'}</td>
+                <td className="px-4 py-3" style={{ color: 'var(--t2)' }}>{c.sentAt ? formatDate(c.sentAt) : '—'}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2 justify-end">
                     {(c.status === 'draft' || c.status === 'scheduled') && (

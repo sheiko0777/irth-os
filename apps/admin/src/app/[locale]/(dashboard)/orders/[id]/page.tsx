@@ -1,4 +1,4 @@
-import { formatMoney, fromMinor, multiply, sum } from "@irth/domain";
+import { formatDate, formatMoney, fromMinor, multiply, sum } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { ArrowRight, PackageSearch } from "lucide-react";
@@ -141,10 +141,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                                                 {record.trackingNumber || "—"}
                                             </TableCell>
                                             <TableCell>{record.status || "—"}</TableCell>
-                                            {/* toLocaleString() with no locale renders in the
-                                                server's locale, not the user's. */}
                                             <TableCell className="tabular-nums" dir="ltr">
-                                                {new Date(record.createdAt).toLocaleString("ar-EG")}
+                                                {formatDate(record.createdAt, { withTime: true })}
                                             </TableCell>
                                         </TableRow>
                                     ))}
