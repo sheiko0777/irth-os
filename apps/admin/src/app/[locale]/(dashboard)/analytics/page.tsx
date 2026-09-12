@@ -3,6 +3,7 @@ import { BarChart } from '@/components/charts/BarChart';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { StatBox } from '@/components/ui/StatBox';
 import { TrendingUp, Box, Warehouse } from 'lucide-react';
 
 function fmt(n: number) {
@@ -57,27 +58,19 @@ export default async function AnalyticsPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-4 space-y-1">
-          <p className="text-sm text-[var(--t2)]">طلبات اليوم</p>
-          <p className="text-2xl font-bold text-[var(--t1)]">{fmt(kpiData.ordersToday)}</p>
-        </div>
-        <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-4 space-y-1">
-          <p className="text-sm text-[var(--t2)]">إيرادات اليوم</p>
-          <p className="text-2xl font-bold text-[var(--gold)]">{fmtCurrency(kpiData.revenueToday)}</p>
-        </div>
-        <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-4 space-y-1">
-          <p className="text-sm text-[var(--t2)]">إيرادات الشهر</p>
-          <div className="flex items-center gap-2">
-            <p className="text-2xl font-bold text-[var(--gold)]">{fmtCurrency(kpiData.revenueThisMonth)}</p>
-            <GrowthBadge pct={kpiData.revenueGrowth} />
-          </div>
-        </div>
-        <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-4 space-y-1">
-          <p className="text-sm text-[var(--t2)]">منتجات منخفضة المخزون</p>
-          <p className={`text-2xl font-bold ${lowStockCount > 0 ? 'text-[var(--crimson)]' : 'text-[var(--t1)]'}`}>
-            {fmt(lowStockCount)}
-          </p>
-        </div>
+        <StatBox label="طلبات اليوم" value={fmt(kpiData.ordersToday)} />
+        <StatBox label="إيرادات اليوم" value={fmtCurrency(kpiData.revenueToday)} valueClassName="text-[var(--gold)]" />
+        <StatBox
+          label="إيرادات الشهر"
+          value={fmtCurrency(kpiData.revenueThisMonth)}
+          valueClassName="text-[var(--gold)]"
+          trailing={<GrowthBadge pct={kpiData.revenueGrowth} />}
+        />
+        <StatBox
+          label="منتجات منخفضة المخزون"
+          value={fmt(lowStockCount)}
+          valueClassName={lowStockCount > 0 ? 'text-[var(--crimson)]' : 'text-[var(--t1)]'}
+        />
       </div>
 
       {/* Revenue Chart */}

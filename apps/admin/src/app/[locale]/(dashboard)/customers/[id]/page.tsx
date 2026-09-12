@@ -2,6 +2,7 @@ import { serverCaller } from "@/server/caller";
 import { formatMoney, fromMinor } from "@irth/domain";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatBox } from "@/components/ui/StatBox";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -52,18 +53,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border bg-[var(--surface)] p-4">
-          <p className="text-sm text-[var(--t2)]">نقاط الولاء</p>
-          <p className="text-2xl font-bold text-[var(--gold)]">{customer.loyaltyPoints ?? 0}</p>
-        </div>
-        <div className="rounded-lg border bg-[var(--surface)] p-4">
-          <p className="text-sm text-[var(--t2)]">إجمالي الطلبات</p>
-          <p className="text-2xl font-bold text-[var(--t1)]">{customer.totalOrders ?? 0}</p>
-        </div>
-        <div className="rounded-lg border bg-[var(--surface)] p-4">
-          <p className="text-sm text-[var(--t2)]">إجمالي الإنفاق</p>
-          <p className="text-2xl font-bold text-[var(--t1)]">{formatMoney(fromMinor(customer.totalSpentMinor ?? 0n))}</p>
-        </div>
+        <StatBox label="نقاط الولاء" value={customer.loyaltyPoints ?? 0} valueClassName="text-[var(--gold)]" />
+        <StatBox label="إجمالي الطلبات" value={customer.totalOrders ?? 0} />
+        <StatBox label="إجمالي الإنفاق" value={formatMoney(fromMinor(customer.totalSpentMinor ?? 0n))} />
       </div>
 
       <div className="rounded-lg border bg-[var(--surface)] p-6 space-y-3">
