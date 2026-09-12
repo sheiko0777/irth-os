@@ -7,6 +7,7 @@ import CustomerActions from "./CustomerActions";
 import { ExportButton } from "@/components/ExportButton";
 import { PaginationNav } from "@/components/ui/PaginationNav";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { StatBox } from "@/components/ui/StatBox";
 
 const PAGE_SIZE = 50;
 
@@ -40,14 +41,8 @@ export default async function CustomersPage({
 
       {summary.data && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border bg-[var(--surface)] p-4">
-            <p className="text-sm text-[var(--t2)]">إجمالي العملاء</p>
-            <p className="text-2xl font-bold text-[var(--t1)]">{summary.data.totalCustomers}</p>
-          </div>
-          <div className="rounded-lg border bg-[var(--surface)] p-4">
-            <p className="text-sm text-[var(--t2)]">نقاط الولاء المتراكمة</p>
-            <p className="text-2xl font-bold text-[var(--gold)]">{summary.data.totalLoyaltyPoints}</p>
-          </div>
+          <StatBox label="إجمالي العملاء" value={summary.data.totalCustomers} />
+          <StatBox label="نقاط الولاء المتراكمة" value={summary.data.totalLoyaltyPoints} valueClassName="text-[var(--gold)]" />
         </div>
       )}
 
