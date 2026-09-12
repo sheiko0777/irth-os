@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, requirePermission } from '../trpc';
-import { db, coupons, withAudit } from '@irth/db';
+import { db, coupons, withAudit, paginationOffset } from '@irth/db';
+import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, sql, or, isNull, lt, gt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { EGP, applyRate, compare, fromMinor, min, parseDecimal, zero } from '@irth/domain';
@@ -39,13 +40,10 @@ function discountColumns(type: 'percentage' | 'fixed' | 'free_shipping', value: 
 
 export const couponsRouter = router({
     list: requirePermission('coupons', 'view')
-        .input(z.object({
-            page: z.number().min(1).default(1),
-            pageSize: z.number().min(1).max(100).default(10),
-        }))
+        .input(z.object(paginationInputSchema(10, 100)))
         .query(async ({ ctx, input }) => {
             const limit = input.pageSize;
-            const offset = (input.page - 1) * input.pageSize;
+            const offset = paginationOffset(input.page, input.pageSize);
 
             // Execute list and count queries concurrently to reduce latency
             const [results, totalResult] = await Promise.all([

@@ -7,9 +7,11 @@ import { z } from 'zod';
 // schema") since v4 doesn't recognize a v3 schema instance's shape. Sharing
 // the pure offset/meta math (packages/db/src/pagination.ts) is safe; sharing
 // an actual Zod schema fragment across this specific boundary is not.
-export function paginationInputSchema(defaultPageSize = 20) {
+export function paginationInputSchema(defaultPageSize = 20, maxPageSize?: number) {
   return {
-    page: z.number().default(1),
-    pageSize: z.number().default(defaultPageSize),
+    page: z.number().min(1).default(1),
+    pageSize: maxPageSize
+      ? z.number().min(1).max(maxPageSize).default(defaultPageSize)
+      : z.number().default(defaultPageSize),
   };
 }

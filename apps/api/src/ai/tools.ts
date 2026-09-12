@@ -11,6 +11,7 @@ import {
   type Resource,
   type Role,
 } from '@irth/db';
+import { OrderStatusSchema } from '@irth/types';
 import type { AiRequestContext, AiToolDefinition, AiToolResult } from './types';
 
 type ToolPermission = { resource: Resource; action: ActionFor<Resource> };
@@ -23,7 +24,7 @@ type AiTool = {
   execute(ctx: ToolExecuteContext, input: unknown): Promise<AiToolResult>;
 };
 
-const orderStatusSchema = z.enum(['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
+const orderStatusSchema = OrderStatusSchema;
 const limitSchema = z.number().int().min(1).max(10).default(5);
 
 function stateOf(quantity: number, reorderPoint: number): 'out' | 'low' | 'ok' {
