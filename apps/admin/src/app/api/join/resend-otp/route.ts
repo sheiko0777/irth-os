@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, orgInvites, organizations, outboxEvents, generateInviteOtp, jsonSafe } from '@irth/db';
+import { db, orgInvites, organizations, outboxEvents, generateInviteOtp, jsonSafe, getValidInvite } from '@irth/db';
 import { eq } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rateLimit';
 
@@ -43,9 +43,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too Many Requests' }, { status: 429 });
   }
 
-  const [invite] = await db.select().from(orgInvites).where(eq(orgInvites.token, token)).limit(1);
-  if (!invite) return NextResponse.json({ error: 'Invalid invite token' }, { status: 404 });
-  if (invite.expiresAt < new Date()) return NextResponse.json({ error: 'Invite has expired' }, { status: 410 });
+  const result = await getValidInvite(db, token);
+  if (!result.ok) {
+    return result.reason === 'expired'
+      ? NextResponse.json({ error: 'Invite has expired' }, { status: 410 })
+      : NextResponse.json({ error: 'Invalid invite token' }, { status: 404 });
+  }
+  const { invite } = result;
 
   const { code, expiresAt } = generateInviteOtp();
   await db.update(orgInvites).set({ otpCode: code, otpExpiresAt: expiresAt }).where(eq(orgInvites.id, invite.id));
