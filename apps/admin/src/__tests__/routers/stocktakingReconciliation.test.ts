@@ -109,7 +109,7 @@ describe('Stocktaking Reconciliation', () => {
             from: vi.fn().mockReturnThis(),
             where: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
-            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'inv-1', quantity: 5 }]).then(res)
+            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'inv-1', variantId: 'var-1', quantity: 5 }]).then(res)
         } as unknown as Record<string, unknown>);
         
         // stocktaking items update
@@ -144,7 +144,7 @@ describe('Stocktaking Reconciliation', () => {
             from: vi.fn().mockReturnThis(),
             where: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
-            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'inv-1', quantity: 5 }]).then(res)
+            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'inv-1', variantId: 'var-1', quantity: 5 }]).then(res)
         } as unknown as Record<string, unknown>);
         
         const updateSpy = vi.fn().mockReturnThis();
@@ -187,7 +187,7 @@ describe('Stocktaking Reconciliation', () => {
             innerJoin: vi.fn().mockReturnThis(),
             where: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
-            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'var-2' }]).then(res)
+            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'var-2', sku: 'SKU2' }]).then(res)
         } as unknown as Record<string, unknown>);
 
         // Inventory lookup
@@ -195,7 +195,7 @@ describe('Stocktaking Reconciliation', () => {
             from: vi.fn().mockReturnThis(),
             where: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
-            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'inv-2', quantity: 10 }]).then(res)
+            then: (res: (val: unknown) => void) => Promise.resolve([{ id: 'inv-2', variantId: 'var-2', quantity: 10 }]).then(res)
         } as unknown as Record<string, unknown>);
         
         mockDb.update.mockReturnValue({
