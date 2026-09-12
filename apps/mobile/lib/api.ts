@@ -1,5 +1,6 @@
 import type { z } from 'zod';
-import { getSessionToken } from './auth';
+import { router } from 'expo-router';
+import { clearSession, getSessionToken } from './auth';
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -15,6 +16,14 @@ interface ApiEnvelope<T> {
   data: T;
   error: string | null;
   meta: unknown;
+}
+
+/** Carries the HTTP status so callers can special-case 401 without re-parsing. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
 }
 
 async function rawFetch(endpoint: string, options: FetchOptions = {}): Promise<unknown> {
@@ -37,10 +46,23 @@ async function rawFetch(endpoint: string, options: FetchOptions = {}): Promise<u
   });
 
   if (!response.ok) {
-    throw new Error(`API call failed: ${response.statusText}`);
+    throw new ApiError(`API call failed: ${response.statusText}`, response.status);
   }
 
   return response.json();
+}
+
+/**
+ * The stored token is gone or the server no longer honours it (expired,
+ * revoked, or the account was signed out elsewhere) — clear it locally and
+ * send the user back to login. Before this, a 401 from any screen surfaced
+ * as the same generic "an error occurred" every other failure did, with no
+ * way out: nothing cleared the stale token, so a retry (or the next launch)
+ * hit the exact same 401 forever.
+ */
+async function handleSessionExpired(): Promise<void> {
+  await clearSession();
+  router.replace('/(auth)/login');
 }
 
 export async function apiFetch<S extends z.ZodTypeAny>(
@@ -48,7 +70,13 @@ export async function apiFetch<S extends z.ZodTypeAny>(
   schema: S,
   options: FetchOptions = {},
 ): Promise<z.infer<S>> {
-  const body = (await rawFetch(endpoint, options)) as ApiEnvelope<unknown>;
+  let body: ApiEnvelope<unknown>;
+  try {
+    body = (await rawFetch(endpoint, options)) as ApiEnvelope<unknown>;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) await handleSessionExpired();
+    throw err;
+  }
 
   if (body.error) {
     throw new Error(body.error);
@@ -66,7 +94,13 @@ export async function apiFetchWithMeta<
   metaSchema: M,
   options: FetchOptions = {},
 ): Promise<{ data: z.infer<S>; meta: z.infer<M> }> {
-  const body = (await rawFetch(endpoint, options)) as ApiEnvelope<unknown>;
+  let body: ApiEnvelope<unknown>;
+  try {
+    body = (await rawFetch(endpoint, options)) as ApiEnvelope<unknown>;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) await handleSessionExpired();
+    throw err;
+  }
 
   if (body.error) {
     throw new Error(body.error);
