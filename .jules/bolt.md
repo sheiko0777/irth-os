@@ -7,3 +7,4 @@
 ## 2025-02-14 - Refactoring N+1 mapping to GROUP BY count()
 **Learning:** Found sequential independent count queries using Promise.all inside a mapping loop which executes n queries against the database for every fetched item.
 **Action:** Refactor N+1 mapping loop queries by pushing the logic down to the database level through a single grouped query utilizing left joins, GROUP BY, and aggregate functions (like count()) to eliminate database roundtrips.
+## 2026-09-12 - Prevent concurrent queries on single transaction\n**Learning:** In Postgres, executing concurrent queries using `Promise.all` on a single Drizzle transaction object (e.g., `tx`) causes race conditions or crashes since a single connection cannot multiplex queries.\n**Action:** Never use `Promise.all` with `tx.select()` or mutations inside a transaction. Keep queries sequential, or pull independent reads outside the transaction if they don't need its consistency guarantee.
