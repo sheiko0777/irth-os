@@ -1,10 +1,123 @@
 import { router, requirePermission } from '../trpc';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
+import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { parseDecimal, assertSupportedCurrency } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
+
+type ReceivedLineInput = { id: string; receivedQuantity: number; updateInventory: boolean };
+type ReceivedLineResult = { matched: false } | { matched: true; costMinor: bigint };
+
+/**
+ * Applies one PO line's receipt: increments its receivedQuantity, and (when
+ * requested and the SKU resolves to a tracked inventory item) records the
+ * stock movement -- costed via recordCostedReceipt when the line has a unit
+ * cost, a plain movement otherwise -- and bumps inventory_items.quantity.
+ *
+ * Extracted from po.receive's per-item loop, which nested 7 levels deep
+ * (mutation -> idempotent -> withOrg -> for -> if(updateInventory) ->
+ * if(variant) -> if(invItem) -> if(unitCostMinor)/else) with the costing
+ * decision, the accounting, and the audit/status logic that follows the
+ * loop all sharing one function body. Returns `{ matched: false }` for a
+ * line that doesn't belong to this PO/org (the caller records it in
+ * invalidItemIds) and `{ matched: true, costMinor }` otherwise --
+ * costMinor is 0n when nothing was costed this line (uncosted receipt, no
+ * SKU, or updateInventory not requested), so the caller can sum it
+ * unconditionally into the goods-received ledger total.
+ */
+async function applyReceivedLine(
+  tx: DbTx,
+  orgId: string,
+  po: { id: string; poNumber: string },
+  itemInput: ReceivedLineInput,
+): Promise<ReceivedLineResult> {
+  // One statement does the lot: the "line belongs to this PO and this org"
+  // check is the UPDATE's own WHERE, and the quantity is incremented in
+  // SQL. Reading the line first, adding in JS and writing back an absolute
+  // total let two concurrent receipts both read the same figure and the
+  // second overwrite the first — stock credited, but the line still short.
+  // RETURNING then supplies the sku and the total the database actually
+  // holds.
+  const [poItem] = await tx.update(purchaseOrderItems)
+    .set({
+      receivedQuantity: sql`COALESCE(${purchaseOrderItems.receivedQuantity}, 0) + ${itemInput.receivedQuantity}`,
+    })
+    .where(and(
+      eq(purchaseOrderItems.id, itemInput.id),
+      eq(purchaseOrderItems.orgId, orgId),
+      eq(purchaseOrderItems.poId, po.id),
+    ))
+    .returning();
+  if (!poItem) return { matched: false };
+
+  if (!(itemInput.updateInventory && poItem.sku && itemInput.receivedQuantity > 0)) {
+    return { matched: true, costMinor: 0n };
+  }
+
+  // Scope the SKU lookup to this org by joining through products: `sku` is
+  // unique per org (0040), so an unscoped lookup can match another
+  // tenant's variant and the org-scoped inventory read below then finds
+  // nothing — received stock would vanish with no error.
+  const [variant] = await tx.select({ id: productVariants.id })
+    .from(productVariants)
+    .innerJoin(products, eq(productVariants.productId, products.id))
+    .where(and(eq(productVariants.sku, poItem.sku), eq(products.orgId, orgId)))
+    .limit(1);
+  if (!variant) return { matched: true, costMinor: 0n };
+
+  const [invItem] = await tx.select().from(inventoryItems)
+    .where(and(eq(inventoryItems.variantId, variant.id), eq(inventoryItems.orgId, orgId)))
+    .limit(1);
+  if (!invItem) return { matched: true, costMinor: 0n };
+
+  // recordCostedReceipt MUST run before the quantity increment below, not
+  // after: it reads inventory_items.quantity to compute the weighted
+  // average, and that read has to see the count as it stood BEFORE this
+  // receipt. Reversing the order would have it average against a total
+  // that already includes the units being priced, understating the new
+  // average every time.
+  //
+  // unitCostMinor is nullable — a PO line entered with no cost has no
+  // basis to average against. Recording it as zero would drag the item's
+  // weighted average toward zero, valuing every unit already held as if
+  // this batch arrived free. Skip the cost update and fall back to a
+  // plain (uncosted) movement, matching what this line did before costing
+  // existed at all.
+  let costMinor = 0n;
+  if (poItem.unitCostMinor != null) {
+    costMinor = poItem.unitCostMinor * BigInt(itemInput.receivedQuantity);
+    await recordCostedReceipt(tx, {
+      orgId,
+      itemId: invItem.id,
+      quantity: itemInput.receivedQuantity,
+      totalCostMinor: costMinor,
+      note: `PO ${po.poNumber} receipt`,
+    });
+  } else {
+    await tx.insert(inventoryMovements).values({
+      orgId,
+      itemId: invItem.id,
+      type: 'in',
+      quantity: itemInput.receivedQuantity,
+      note: `PO ${po.poNumber} receipt`,
+    });
+  }
+
+  // Increment in SQL — reading the quantity and writing back an absolute
+  // value loses concurrent receipts.
+  await tx.update(inventoryItems)
+    .set({
+      quantity: sql`${inventoryItems.quantity} + ${itemInput.receivedQuantity}`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(inventoryItems.id, invItem.id),
+      eq(inventoryItems.orgId, orgId),
+    ));
+
+  return { matched: true, costMinor };
+}
 
 export const purchasingRouter = router({
   suppliers: router({
@@ -398,96 +511,13 @@ export const purchasingRouter = router({
             let totalReceivedCostMinor = 0n;
 
             for (const itemInput of input.items) {
-                // One statement does the lot: the "line belongs to this PO and
-                // this org" check is the UPDATE's own WHERE, and the quantity
-                // is incremented in SQL. Reading the line first, adding in JS
-                // and writing back an absolute total let two concurrent
-                // receipts both read the same figure and the second overwrite
-                // the first — stock credited, but the line still short.
-                // RETURNING then supplies the sku and the total the database
-                // actually holds.
-                const [poItem] = await tx.update(purchaseOrderItems)
-                    .set({
-                        receivedQuantity: sql`COALESCE(${purchaseOrderItems.receivedQuantity}, 0) + ${itemInput.receivedQuantity}`,
-                    })
-                    .where(and(
-                        eq(purchaseOrderItems.id, itemInput.id),
-                        eq(purchaseOrderItems.orgId, ctx.orgId),
-                        eq(purchaseOrderItems.poId, po.id),
-                    ))
-                    .returning();
+                const lineResult = await applyReceivedLine(tx, ctx.orgId, po, itemInput);
                 // Report unmatched lines while continuing to process valid ones.
-                if (!poItem) {
+                if (!lineResult.matched) {
                     invalidItemIds.push(itemInput.id);
                     continue;
                 }
-
-                // Update inventory if requested and SKU exists
-                if (itemInput.updateInventory && poItem.sku && itemInput.receivedQuantity > 0) {
-                    // Scope the SKU lookup to this org by joining through products:
-                    // Scoped through products: `sku` is unique per org (0040), so an
-                    // unscoped lookup can match another tenant's variant and the
-                    // org-scoped inventory read below then finds nothing — received
-                    // stock would vanish with no error.
-                    const [variant] = await tx.select({ id: productVariants.id })
-                        .from(productVariants)
-                        .innerJoin(products, eq(productVariants.productId, products.id))
-                        .where(and(eq(productVariants.sku, poItem.sku), eq(products.orgId, ctx.orgId)))
-                        .limit(1);
-                    if (variant) {
-                        // Find inventory item
-                        const [invItem] = await tx.select().from(inventoryItems).where(and(eq(inventoryItems.variantId, variant.id), eq(inventoryItems.orgId, ctx.orgId))).limit(1);
-                        if (invItem) {
-                            // recordCostedReceipt MUST run before the quantity
-                            // increment below, not after: it reads
-                            // inventory_items.quantity to compute the weighted
-                            // average, and that read has to see the count as it
-                            // stood BEFORE this receipt. Reversing the order would
-                            // have it average against a total that already
-                            // includes the units being priced, understating the
-                            // new average every time.
-                            //
-                            // unitCostMinor is nullable — a PO line entered with no
-                            // cost has no basis to average against. Recording it as
-                            // zero would drag the item's weighted average toward
-                            // zero, valuing every unit already held as if this batch
-                            // arrived free. Skip the cost update and fall back to a
-                            // plain (uncosted) movement, matching what this line did
-                            // before costing existed at all.
-                            if (poItem.unitCostMinor != null) {
-                                const lineCostMinor = poItem.unitCostMinor * BigInt(itemInput.receivedQuantity);
-                                await recordCostedReceipt(tx, {
-                                    orgId: ctx.orgId,
-                                    itemId: invItem.id,
-                                    quantity: itemInput.receivedQuantity,
-                                    totalCostMinor: lineCostMinor,
-                                    note: `PO ${po.poNumber} receipt`,
-                                });
-                                totalReceivedCostMinor += lineCostMinor;
-                            } else {
-                                await tx.insert(inventoryMovements).values({
-                                    orgId: ctx.orgId,
-                                    itemId: invItem.id,
-                                    type: 'in',
-                                    quantity: itemInput.receivedQuantity,
-                                    note: `PO ${po.poNumber} receipt`,
-                                });
-                            }
-
-                            // Increment in SQL — reading the quantity and writing back an
-                            // absolute value loses concurrent receipts.
-                            await tx.update(inventoryItems)
-                                .set({
-                                    quantity: sql`${inventoryItems.quantity} + ${itemInput.receivedQuantity}`,
-                                    updatedAt: new Date()
-                                })
-                                .where(and(
-                                  eq(inventoryItems.id, invItem.id),
-                                  eq(inventoryItems.orgId, ctx.orgId),
-                                ));
-                        }
-                    }
-                }
+                totalReceivedCostMinor += lineResult.costMinor;
             }
 
             // Read every PO line after this receipt's writes, including lines
