@@ -2,6 +2,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { db } from '@irth/db';
 import * as authSchema from '@irth/db/src/schema/auth';
+import { resolveAppBaseUrl } from './appUrl';
 
 /**
  * The Better Auth server instance.
@@ -28,5 +29,5 @@ export const auth = betterAuth({
     enabled: true,
   },
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+  baseURL: resolveAppBaseUrl(),
 });
