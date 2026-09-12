@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { trpc } from '@/lib/trpc';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { formatDate } from '@irth/domain';

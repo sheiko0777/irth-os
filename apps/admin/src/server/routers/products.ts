@@ -1,7 +1,7 @@
 import { router, requirePermission } from '../trpc';
 import { products, productVariants, categories, brandEnum, paginationOffset, paginationMeta } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
-import { eq, and, desc, sql, count, ilike } from 'drizzle-orm';
+import { eq, and, desc, count, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { withAudit, emitOutboxEvent } from '@irth/db';
