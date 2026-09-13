@@ -19,6 +19,20 @@ describe('auth-server — betterAuth construction', () => {
   it('POST /api/auth/sign-in/email never 500s — proves the drizzle-adapter schema (incl. relations) is valid', async () => {
     const { auth } = await import('@/lib/auth-server');
 
+    // Evaluating `auth.handler` (before it's even called) is what actually
+    // exercises the failure mode: the Proxy's `get` trap synchronously
+    // calls getAuthInstance() -> createAuth() -> betterAuth({...}), and a
+    // schema/relations mismatch throws THERE, synchronously, inside this
+    // `await` expression -- never producing a Response at all. That throw
+    // surfaces as this test failing directly (Vitest reports the thrown
+    // BetterAuthError itself, e.g. "Drizzle schema mismatch: Missing
+    // columns ..." -- which is what actually happened the first two times
+    // this test ran against the real bug). The `not.toBe(500)` assertion
+    // below only matters for the OTHER failure shape: construction
+    // succeeds, but something later in a real request produces an actual
+    // 500 Response. Either shape means this test is red, which is the
+    // property that matters -- but only one of them ever reaches this
+    // assertion.
     const response = await auth.handler(
       new Request('http://localhost:3000/api/auth/sign-in/email', {
         method: 'POST',
@@ -31,9 +45,6 @@ describe('auth-server — betterAuth construction', () => {
     );
 
     // Bad credentials -> better-auth's own 401/422-shaped rejection.
-    // A 500 here means construction itself failed (schema/relations
-    // validation, or anything else thrown inside createAuth()) — exactly
-    // the incident this test exists to catch before it ships again.
     expect(response.status).not.toBe(500);
   });
 });

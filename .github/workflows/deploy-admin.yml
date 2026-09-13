@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - 'apps/admin/**'
+      # Same reasoning as deploy-api.yml: a schema-only change must still
+      # trigger this workflow, since (see the migration step below) this
+      # workflow now migrates before serving traffic through the admin
+      # app's own Better Auth instance.
+      - 'packages/db/**'
   workflow_call:
 
 jobs:
@@ -41,6 +46,30 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      # This workflow triggers independently of deploy-api.yml on the same
+      # push (both are plain `push: branches: [main]`, gated only by path
+      # filters — there is no `needs:` between them for an ordinary push,
+      # only for the manual deploy-all.yml). Without its own migration step,
+      # this job could deploy and start serving traffic against a database
+      # that doesn't have a migration from the SAME push applied yet — and
+      # since `betterAuth()` validates the full schema at construction time
+      # (apps/admin/src/lib/auth-server.ts's lazy Proxy builds it on first
+      # request), a schema mismatch there 500s every sign-in, not just a
+      # feature depending on the new column. That is exactly the incident
+      # fixed in #337 (see packages/db/drizzle/0066's own comment) — this
+      # step exists so this workflow can never reproduce it on its own
+      # rollout. Idempotent (packages/db/scripts/migrate.mjs tracks its own
+      # ledger), so running it here too, alongside deploy-api.yml's own
+      # identical step, is safe even when both happen to run for the same
+      # push.
+      - name: Run DB Migrations
+        run: pnpm --filter @irth/db db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
