@@ -51,8 +51,15 @@ export function TwoFactorSection() {
     try {
       const { data, error } = await authClient.twoFactor.enable({ password });
       if (error) throw new Error(error.message || t("enableError"));
-      setTotpURI(data?.totpURI ?? null);
-      setBackupCodes(data?.backupCodes ?? null);
+      // enable()'s response type is a discriminated union keyed on
+      // `method` ("otp" | "totp") because the client plugin is generic
+      // over whatever otpOptions the server *might* configure — this app
+      // never does (see auth-server.ts), so the account always resolves
+      // to the "totp" branch here, but the type still requires the guard.
+      if (data && "totpURI" in data) {
+        setTotpURI(data.totpURI);
+        setBackupCodes(data.backupCodes);
+      }
       setPassword("");
     } catch (e) {
       setError(e instanceof Error ? e.message : t("unexpectedError"));
