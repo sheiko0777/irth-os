@@ -9,6 +9,7 @@ import { ShippingSection } from "./sections/ShippingSection";
 import { EnvVarsSection } from "./sections/EnvVarsSection";
 import { IntegrationsSection } from "./sections/IntegrationsSection";
 import { TwoFactorSection } from "./sections/TwoFactorSection";
+import { DeadLettersSection } from "./sections/DeadLettersSection";
 
 interface SettingsFormProps {
   initialSettings: Record<string, string>;
@@ -43,6 +44,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       {/* Account-level, not org-level — takes no settings props, manages its
           own state via the auth client directly (see the component). */}
       <TwoFactorSection />
+      {/* Ops surface, not an org setting — hides itself for a member (see
+          the component). */}
+      <DeadLettersSection />
     </div>
   );
 }
