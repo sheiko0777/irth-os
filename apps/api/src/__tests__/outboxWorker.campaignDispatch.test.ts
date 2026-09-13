@@ -2,8 +2,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('../services/integrations', () => ({ sendWhatsAppTemplate: vi.fn(), sendTransactionalEmail: vi.fn() }));
 vi.mock('../services/shopify', () => ({ upsertShopifyProduct: vi.fn(), statusFromLocal: vi.fn() }));
+vi.mock('../services/sms', () => ({ sendSms: vi.fn() }));
 
 import { sendWhatsAppTemplate } from '../services/integrations';
+import { sendSms } from '../services/sms';
 import { processOutbox } from '../workers/outboxWorker';
 
 const ORG_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
@@ -23,9 +25,9 @@ function campaignEvent(attempts: number) {
   };
 }
 
-function joinedRecipientRow(overrides: { recipientStatus?: string; campaignStatus?: string } = {}) {
+function joinedRecipientRow(overrides: { recipientStatus?: string; campaignStatus?: string; channel?: string } = {}) {
   return {
-    campaign_recipients: { id: RECIPIENT_ID, campaignId: CAMPAIGN_ID, channel: 'whatsapp', status: overrides.recipientStatus ?? 'pending' },
+    campaign_recipients: { id: RECIPIENT_ID, campaignId: CAMPAIGN_ID, channel: overrides.channel ?? 'whatsapp', status: overrides.recipientStatus ?? 'pending' },
     campaigns: { id: CAMPAIGN_ID, status: overrides.campaignStatus ?? 'sending', message: 'hello', failedCount: 0 },
     customers: { id: 'cust-1', phone: '+201000000000', email: null, name: 'Test Customer' },
   };
@@ -90,6 +92,7 @@ function makeDb(event: ReturnType<typeof campaignEvent>, recipientRow: ReturnTyp
 
 beforeEach(() => {
   vi.mocked(sendWhatsAppTemplate).mockReset().mockResolvedValue({ messages: [{ id: 'wamid.1' }] });
+  vi.mocked(sendSms).mockReset().mockResolvedValue({ sid: 'SM1' });
 });
 
 describe('processOutbox — campaign.recipient.send', () => {
@@ -142,5 +145,16 @@ describe('processOutbox — campaign.recipient.send', () => {
     // that alone proves the failure was caught and processed, not silently
     // swallowed or left to throw out of processOutbox entirely.
     expect(db.update).toHaveBeenCalled();
+  });
+
+  it('dispatches an sms-channel recipient via sendSms — this channel was selectable but never wired, so it silently failed every send', async () => {
+    const { db, updateCalls } = makeDb(campaignEvent(0), joinedRecipientRow({ channel: 'sms' }), 0);
+
+    await processOutbox(db as never);
+
+    expect(sendSms).toHaveBeenCalledTimes(1);
+    expect(sendSms).toHaveBeenCalledWith({ to: '+201000000000', body: 'hello' });
+    const recipientUpdate = updateCalls.find((c) => (c.values as { status?: string }).status === 'sent');
+    expect(recipientUpdate).toBeTruthy();
   });
 });
