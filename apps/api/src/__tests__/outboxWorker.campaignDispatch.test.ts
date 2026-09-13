@@ -6,6 +6,7 @@ vi.mock('../services/sms', () => ({ sendSms: vi.fn() }));
 
 import { sendWhatsAppTemplate } from '../services/integrations';
 import { sendSms } from '../services/sms';
+import { outboxEvents, outboxDeadLetters } from '@irth/db';
 import { processOutbox } from '../workers/outboxWorker';
 
 const ORG_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
@@ -48,6 +49,8 @@ function chainable(finalValue: unknown) {
  * `.select()`/`.update()` are recorded for assertions. */
 function makeDb(event: ReturnType<typeof campaignEvent>, recipientRow: ReturnType<typeof joinedRecipientRow>, remainingPendingCount: number) {
   const updateCalls: { table: unknown; values: unknown }[] = [];
+  const insertCalls: { table: unknown; values: unknown }[] = [];
+  const deleteCalls: { table: unknown }[] = [];
   let claimTransactionDone = false;
 
   const db = {
@@ -85,9 +88,22 @@ function makeDb(event: ReturnType<typeof campaignEvent>, recipientRow: ReturnTyp
       });
       return chain;
     }),
+    insert: vi.fn((table: unknown) => {
+      const chain = chainable(undefined);
+      const originalValues = chain.values as (v: unknown) => unknown;
+      chain.values = vi.fn((values: unknown) => {
+        insertCalls.push({ table, values });
+        return originalValues(values);
+      });
+      return chain;
+    }),
+    delete: vi.fn((table: unknown) => {
+      deleteCalls.push({ table });
+      return chainable(undefined);
+    }),
   };
 
-  return { db, updateCalls };
+  return { db, updateCalls, insertCalls, deleteCalls };
 }
 
 beforeEach(() => {
@@ -115,14 +131,14 @@ describe('processOutbox — campaign.recipient.send', () => {
     // attempts=4 going into the outer catch means attemptsAfterThis=5, which
     // is exactly the claim query's dead-letter ceiling (attempts < 5).
     const event = campaignEvent(4);
-    const { db } = makeDb(event, joinedRecipientRow(), 0);
+    const { db, insertCalls, deleteCalls } = makeDb(event, joinedRecipientRow(), 0);
 
     // Force the send itself to fail so we reach the outer catch's
     // dead-letter finalization branch instead of the success path.
     vi.mocked(sendWhatsAppTemplate).mockRejectedValue(new Error('provider unreachable'));
 
     // The finalization branch does its own `database.select`/`database.
-    // transaction` for a *third* transaction beyond the claim/attempt-bump
+    // transaction` for a *third* transaction beyond the claim/dead-letter
     // pair — reuse the same db double, whose transaction mock already
     // distinguishes claim vs. non-claim calls generically.
     let bizCallCount = 0;
@@ -141,10 +157,14 @@ describe('processOutbox — campaign.recipient.send', () => {
 
     await processOutbox(db as never);
 
-    // The outer outbox_events update always records the bumped attempts —
-    // that alone proves the failure was caught and processed, not silently
-    // swallowed or left to throw out of processOutbox entirely.
-    expect(db.update).toHaveBeenCalled();
+    // On the exhausting attempt, the event moves to outbox_dead_letters
+    // instead of getting an attempts-bump update on outbox_events — this is
+    // what proves the failure was caught and permanently retired, not
+    // silently swallowed or left to throw out of processOutbox entirely.
+    const deadLetter = insertCalls.find((c) => c.table === outboxDeadLetters);
+    expect(deadLetter).toBeTruthy();
+    expect((deadLetter!.values as { lastError?: string }).lastError).toBe('provider unreachable');
+    expect(deleteCalls.some((d) => d.table === outboxEvents)).toBe(true);
   });
 
   it('dispatches an sms-channel recipient via sendSms — this channel was selectable but never wired, so it silently failed every send', async () => {

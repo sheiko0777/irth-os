@@ -1,5 +1,5 @@
 import { db } from '@irth/db';
-import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInput, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
+import { outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
@@ -25,6 +25,14 @@ type OutboxEvent = typeof outboxEvents.$inferSelect;
  * batch (more may be waiting) from a short one (the queue is drained).
  */
 export const OUTBOX_BATCH_SIZE = 10;
+
+/**
+ * The claim query's own ceiling (below) and `recordEventFailure`'s
+ * dead-letter threshold must agree, or an event could be permanently
+ * excluded from claiming while still sitting in `outbox_events` unmarked, or
+ * vice versa. Named so the two can't drift apart.
+ */
+export const OUTBOX_MAX_ATTEMPTS = 5;
 
 async function markProcessed(database: typeof db, eventId: string): Promise<void> {
     await database.update(outboxEvents)
@@ -395,10 +403,13 @@ async function finalizeDeadLetteredCampaignRecipient(database: typeof db, event:
 
 /**
  * Claims one batch of pending events and dispatches each to its handler.
- * On a handler error, bumps `attempts`/`lastError` and (for every type except
- * ETA, which keeps its own retry state) sets a jittered exponential
- * `nextRetryAt`; a campaign recipient about to cross the attempts<5 ceiling is
- * dead-letter finalized so its campaign can complete.
+ * On a handler error, `recordEventFailure` (below) either bumps
+ * `attempts`/`lastError` and sets a jittered exponential `nextRetryAt` (every
+ * type except ETA, which keeps its own retry state), or — once
+ * OUTBOX_MAX_ATTEMPTS is reached, or immediately for an unparseable payload —
+ * moves the event to `outbox_dead_letters` instead. A dead-lettered
+ * campaign.recipient.send additionally gets its own domain-specific
+ * finalization so its campaign can complete.
  */
 async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<void> {
     switch (event.eventType) {
@@ -418,11 +429,56 @@ async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<v
     }
 }
 
+/**
+ * Moves a permanently-failed event out of the live queue and into
+ * `outbox_dead_letters` — every event type gets this, not just
+ * campaign.recipient.send (see the migration's own comment for why the
+ * other four types needed it just as much). Wrapped in its own try/catch
+ * for the same reason `finalizeDeadLetteredCampaignRecipient` already is:
+ * a DB error here must not abort the rest of this tick's batch.
+ */
+async function deadLetterEvent(database: typeof db, event: OutboxEvent, errorMessage: string, attempts: number): Promise<void> {
+    try {
+        await database.insert(outboxDeadLetters).values({
+            orgId: event.orgId,
+            eventType: event.eventType,
+            payload: event.payload,
+            attempts,
+            lastError: errorMessage,
+        });
+        await database.delete(outboxEvents).where(eq(outboxEvents.id, event.id));
+    } catch (deadLetterError) {
+        console.error('Failed to dead-letter outbox event', deadLetterError);
+    }
+}
+
 async function recordEventFailure(database: typeof db, event: OutboxEvent, error: unknown): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const attemptsAfterThis = event.attempts + 1;
+
+    // A malformed payload can never succeed no matter how many times it is
+    // retried — every handler's first move is `JSON.parse(event.payload)`,
+    // the only place these handlers throw a SyntaxError, so treat it as an
+    // immediate, unconditional signal to dead-letter now rather than
+    // burning up to OUTBOX_MAX_ATTEMPTS retry cycles on something that will
+    // fail identically every time.
+    const permanentlyUnrecoverable = error instanceof SyntaxError;
+
+    if (permanentlyUnrecoverable || attemptsAfterThis >= OUTBOX_MAX_ATTEMPTS) {
+        await deadLetterEvent(database, event, errorMessage, attemptsAfterThis);
+        // Domain-specific failure marking, orthogonal to the generic
+        // dead-letter record above: this is what keeps the campaign's own
+        // recipient/delivered/failed counters truthful, not a duplicate of
+        // the dead-letter table.
+        if (event.eventType === 'campaign.recipient.send') {
+            await finalizeDeadLetteredCampaignRecipient(database, event, errorMessage);
+        }
+        return;
+    }
+
     // ETA keeps its own retry state on eta_invoices. All other
     // event types share this outbox-level cooldown.
-    const baseBackoffMinutes = Math.min(2 ** (event.attempts + 1), 60);
+    const baseBackoffMinutes = Math.min(2 ** attemptsAfterThis, 60);
     // +/-20% jitter prevents every event delayed by the same
     // provider outage from becoming eligible on the same tick.
     // Clamp after jitter so the established 60-minute ceiling
@@ -434,7 +490,6 @@ async function recordEventFailure(database: typeof db, event: OutboxEvent, error
     const nextRetryAt = event.eventType === 'eta.invoice.issue'
         ? undefined
         : new Date(Date.now() + jitteredBackoffMinutes * 60_000);
-    const attemptsAfterThis = event.attempts + 1;
     await database.update(outboxEvents)
         .set({
             attempts: attemptsAfterThis,
@@ -442,12 +497,6 @@ async function recordEventFailure(database: typeof db, event: OutboxEvent, error
             ...(nextRetryAt ? { nextRetryAt } : {})
         })
         .where(eq(outboxEvents.id, event.id));
-
-    // The claim query excludes attempts >= 5 — this event is
-    // about to become permanently dead-lettered.
-    if (event.eventType === 'campaign.recipient.send' && attemptsAfterThis >= 5) {
-        await finalizeDeadLetteredCampaignRecipient(database, event, errorMessage);
-    }
 }
 
 /**
@@ -472,7 +521,7 @@ export async function processOutbox(database: typeof db): Promise<number> {
                 .where(
                     and(
                         eq(outboxEvents.processed, false),
-                        lt(outboxEvents.attempts, 5),
+                        lt(outboxEvents.attempts, OUTBOX_MAX_ATTEMPTS),
                         or(
                             isNull(outboxEvents.nextRetryAt),
                             lte(outboxEvents.nextRetryAt, now)
