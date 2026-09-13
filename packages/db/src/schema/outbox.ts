@@ -24,6 +24,11 @@ export const outboxEvents = pgTable('outbox_events', {
  * just sits in outbox_events forever: processed=false, excluded from every
  * future claim, and invisible.
  *
+ * RLS-protected like every other org_id table (see the migration's own
+ * comment, and rlsCoverage.test.ts) -- the worker's own connection still
+ * sees every org's rows because it runs as the owning role, not through a
+ * tenant-scoped `SET LOCAL ROLE irth_app` session.
+ *
  * `replayedAt`/`replayedBy` are reserved for a future re-queue action --
  * not read or written by anything yet.
  */
