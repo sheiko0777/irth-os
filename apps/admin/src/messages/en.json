@@ -86,7 +86,8 @@
       "product": "Product Numbering",
       "pricing": "Pricing & Tax",
       "shipping": "Shipping",
-      "integrations": "Integrations"
+      "integrations": "Integrations",
+      "deadLetters": "Stuck Messages"
     },
     "fields": {
       "org_name": "Organization Name",
@@ -116,6 +117,25 @@
       "save": "Save",
       "saveSuccess": "Saved successfully",
       "saveError": "An error occurred while saving"
+    },
+    "deadLetters": {
+      "title": "Stuck Messages (Outbox)",
+      "description": "Events that permanently failed after exhausting every retry, moved here instead of disappearing silently.",
+      "empty": "No stuck messages right now.",
+      "table": {
+        "eventType": "Event Type",
+        "lastError": "Last Error",
+        "attempts": "Attempts",
+        "failedAt": "Failed At",
+        "status": "Status"
+      },
+      "failed": "Failed",
+      "replayed": "Replayed",
+      "replay": "Retry",
+      "confirmTitle": "Retry this event?",
+      "confirmDescription": "This will re-queue the event to be processed again.",
+      "replaySuccess": "Re-queued successfully",
+      "replayError": "Could not retry"
     }
   },
   "dashboard": {
