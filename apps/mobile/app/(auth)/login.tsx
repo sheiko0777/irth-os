@@ -17,6 +17,12 @@ const AuthResponseSchema = z.object({
   token: z.string().optional(),
   user: z.any().optional(),
   session: z.object({ token: z.string().optional() }).optional(),
+  // Set instead of token/session when the account has 2FA enabled (see
+  // better-auth's twoFactor plugin, wired in apps/api/src/auth.ts). Its
+  // challenge is a signed cookie exchange, which doesn't fit this app's
+  // bearer-token client without its own design pass — handled below as an
+  // explicit "not supported yet" message, not a silent dead end.
+  twoFactorRedirect: z.boolean().optional(),
 });
 
 export default function LoginScreen() {
@@ -35,12 +41,21 @@ export default function LoginScreen() {
         body: JSON.stringify({ email, password }),
       });
 
+      if (response.twoFactorRedirect) {
+        Alert.alert(t('auth.error'), t('auth.twoFactorRequired'));
+        return;
+      }
+
       // better-auth might return token inside session or directly
       const token = response.token || (response.session && response.session.token);
-      if (token) {
-        await setSessionToken(token);
+      if (!token) {
+        // No token and no 2FA redirect: an unrecognized response shape.
+        // Previously this fell through to router.replace below regardless,
+        // sending the user into the app with no session at all.
+        Alert.alert(t('auth.error'));
+        return;
       }
-      
+      await setSessionToken(token);
       router.replace('/(tabs)/orders');
     } catch (error) {
       Alert.alert(t('auth.error'), (error as Error).message);

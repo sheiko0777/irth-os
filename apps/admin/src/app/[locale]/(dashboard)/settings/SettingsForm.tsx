@@ -8,6 +8,7 @@ import { PricingTaxSection } from "./sections/PricingTaxSection";
 import { ShippingSection } from "./sections/ShippingSection";
 import { EnvVarsSection } from "./sections/EnvVarsSection";
 import { IntegrationsSection } from "./sections/IntegrationsSection";
+import { TwoFactorSection } from "./sections/TwoFactorSection";
 
 interface SettingsFormProps {
   initialSettings: Record<string, string>;
@@ -39,6 +40,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       <ShippingSection {...sharedProps} />
       <EnvVarsSection {...sharedProps} />
       <IntegrationsSection {...sharedProps} />
+      {/* Account-level, not org-level — takes no settings props, manages its
+          own state via the auth client directly (see the component). */}
+      <TwoFactorSection />
     </div>
   );
 }
