@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, uuid, integer } from "drizzle-orm/pg-core";
 import { organizations } from "../schema";
 
 export const user = pgTable("user", {
@@ -40,6 +40,11 @@ export const twoFactor = pgTable(
     secret: text("secret").notNull(),
     backupCodes: text("backup_codes").notNull(),
     verified: boolean("verified").default(true).notNull(),
+    // Brute-force lockout on TOTP verification, added by better-auth 1.7.4's
+    // twoFactor plugin (not present in 1.6.11, which is what this table was
+    // originally modeled on) — see migration 0066 for how this was found.
+    failedVerificationCount: integer("failed_verification_count").default(0).notNull(),
+    lockedUntil: timestamp("locked_until"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

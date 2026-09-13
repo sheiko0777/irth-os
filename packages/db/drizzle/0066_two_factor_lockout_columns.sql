@@ -1,0 +1,23 @@
+-- 0066: two_factor lockout columns better-auth 1.7.4 actually requires.
+--
+-- The real, complete cause of the 2FA production incident (#336's
+-- emergency revert, root-cause diagnosis continued from 0065's relations
+-- fix): better-auth's own drizzle-adapter schema validation, run for real
+-- against the migrated test database in
+-- apps/admin/src/__tests__/integration/authServerConstruction.test.ts,
+-- reported the exact gap directly:
+--
+--   Drizzle schema mismatch
+--     Missing columns
+--       twoFactor.failedVerificationCount
+--       twoFactor.lockedUntil
+--
+-- These did not exist in the plugin's schema when 0063 was written
+-- (checked against a locally-installed 1.6.11) -- 1.7.4's twoFactor plugin
+-- added brute-force lockout on TOTP verification attempts and these two
+-- columns back it. Shapes taken from better-auth's own current schema.ts:
+-- failedVerificationCount is `number, defaultValue: 0` (a counter);
+-- lockedUntil is `date`, no default (null until a lockout is in effect).
+ALTER TABLE "two_factor" ADD COLUMN "failed_verification_count" integer DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "two_factor" ADD COLUMN "locked_until" timestamp;
