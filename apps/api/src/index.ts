@@ -19,11 +19,13 @@ import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
 import { authContext } from './middlewares/authContext'
+import { requestContext } from './middlewares/requestContext'
 import { handleError } from './utils/errors'
 import { dbContext, getDb, captureEnv } from './db'
 import { envVar } from './utils/env'
 import { processOutbox, OUTBOX_BATCH_SIZE } from './workers/outboxWorker'
 import { rollupStorefrontMetrics } from './workers/storefrontRollup'
+import { metricsSnapshot } from './lib/metrics'
 
 const app = new Hono()
 
@@ -31,6 +33,9 @@ const app = new Hono()
 // request `env`, so the database handle cannot exist until a request arrives.
 // Anything registered above this that touches the db would throw.
 app.use('*', dbContext())
+// Second: binds requestId + logger to c.var BEFORE anything can log, so even
+// middleware errors and 429s carry a correlation id.
+app.use('*', requestContext)
 app.use('*', corsMiddleware)
 app.use('*', securityHeaders)
 // TRUSTED_PROXY_COUNT is resolved per request, not at module scope — on
@@ -45,6 +50,7 @@ app.use('/api/auth/*', rateLimit(10, 60_000, trustedProxyCount))
 // gates every mutation.
 app.use('/webhooks/*', rateLimit(600, 60_000, trustedProxyCount))
 app.use('/health', rateLimit(60, 60_000, trustedProxyCount))
+app.use('/ready', rateLimit(60, 60_000, trustedProxyCount))
 // Establish trusted identity (userId/orgId/role) from the session before
 // route handlers run. Skips /api/auth, webhooks, and /health internally.
 app.use('*', authContext())
@@ -73,6 +79,82 @@ app.get('/health', async (c) => {
       503,
     )
   }
+})
+
+/**
+ * Deep readiness: DB AND queue state AND provider counters.
+ *
+ * Distinct from /health by consumer: /health is the load-balancer ping
+ * (DB up? route traffic). /ready is for humans and uptime probes that can
+ * read JSON — it answers "is the comms PIPELINE healthy", not just "is the
+ * box up": a Worker whose DB is up but whose outbox backlog has been
+ * growing for an hour is NOT ready, and a green LB doesn't change that.
+ *
+ * Degrades, never crashes: every check is independent — a DB outage makes
+ * the queue check report null (it needs the DB) but the provider metrics
+ * still ship, because knowing the isolate's send history matters exactly
+ * when things are on fire.
+ *
+ * Webhook/signature routes stay exempt from auth (see authContext) and so
+ * does this: it leaks no tenant data — only counts and statuses.
+ */
+app.get('/ready', async (c) => {
+  const logger = c.var.logger
+  const started = Date.now()
+
+  const result: {
+    data: {
+      status: 'ready' | 'degraded'
+      db: 'up' | 'down' | 'unknown'
+      environment: string
+      outbox: { pending: number | null; oldestPendingMinutes: number | null }
+      providers: ReturnType<typeof metricsSnapshot>
+    },
+    error: null,
+    meta: null,
+  } = {
+    data: {
+      status: 'degraded',
+      db: 'unknown',
+      environment: (c.env as { NODE_ENV?: string }).NODE_ENV || process.env.NODE_ENV || 'development',
+      outbox: { pending: null, oldestPendingMinutes: null },
+      providers: metricsSnapshot(),
+    },
+    error: null,
+    meta: null,
+  }
+
+  try {
+    await getDb().execute(sql`select 1`)
+    result.data.db = 'up'
+  } catch (e) {
+    result.data.db = 'down'
+    logger.error('ready check: db unreachable', { err: e })
+    return c.json(result, 503)
+  }
+
+  // Queue depth only — no payloads, no tenant identifiers.
+  try {
+    const [outboxRow] = await getDb().execute<{ pending: number; oldest: string | null }>(sql`
+      SELECT COUNT(*)::int AS pending,
+             MIN(created_at)::text AS oldest
+      FROM outbox_events
+      WHERE processed = false AND attempts < 5
+    `)
+    result.data.outbox.pending = outboxRow?.pending ?? 0
+    result.data.outbox.oldestPendingMinutes = outboxRow?.oldest
+      ? Math.round((Date.now() - new Date(outboxRow.oldest).getTime()) / 60_000)
+      : 0
+  } catch (e) {
+    // DB is up for `select 1` but the queue query failed — that is
+    // itself a degraded state worth surfacing, not a 500.
+    logger.error('ready check: queue stats query failed', { err: e })
+    return c.json(result, 503)
+  }
+
+  result.data.status = 'ready'
+  logger.info('ready check passed', { durationMs: Date.now() - started, ...result.data.outbox })
+  return c.json(result)
 })
 
 // '*' — not '**'. Hono's router has no '**' syntax; a literal two-star

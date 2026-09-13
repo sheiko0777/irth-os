@@ -3,6 +3,7 @@ import { outboxEvents, products, productVariants, etaInvoices, buildEtaOrderInpu
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
+import { sendSms } from '../services/sms';
 import { renderCampaignEmail, renderOrgInviteEmail, renderOrderConfirmedEmail } from '@irth/emails';
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
@@ -253,6 +254,16 @@ async function handleCampaignRecipientSend(database: typeof db, event: OutboxEve
             }),
         }) as { id?: string };
         providerMessageId = res?.id ?? null;
+    } else if (recipient.campaign_recipients.channel === 'sms' && recipient.customers.phone) {
+        // 'sms' has been a selectable channel on campaigns.create since it
+        // was added to that router's zod enum — but nothing ever dispatched
+        // it, so every recipient of an sms-channel campaign silently threw
+        // 'Unsupported channel' below and dead-lettered. This is the fix.
+        const res = await sendSms({
+            to: recipient.customers.phone,
+            body: recipient.campaigns.message,
+        }) as { sid?: string };
+        providerMessageId = res?.sid ?? null;
     } else {
         // Not a transient failure — retrying won't add a phone/
         // email that doesn't exist. Still goes through the
