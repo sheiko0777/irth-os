@@ -43,7 +43,12 @@ function makeDb(event: ReturnType<typeof orgInviteEvent>) {
 
   const chainable = (finalValue: unknown) => {
     const chain: Record<string, unknown> = {};
-    for (const m of ['from', 'where', 'limit', 'for']) chain[m] = vi.fn(() => chain);
+    // 'set' is needed here too: the claim transaction's own
+    // tx.update(outboxEvents).set({claimedAt}).where(...) call runs before
+    // dispatch ever happens, and without it processOutbox's outer
+    // try/catch swallows the resulting TypeError and returns 0 with none
+    // of this file's own mocks ever exercised.
+    for (const m of ['from', 'where', 'limit', 'for', 'set']) chain[m] = vi.fn(() => chain);
     chain.then = (resolve: (v: unknown) => void) => Promise.resolve(finalValue).then(resolve);
     return chain;
   };
