@@ -7,11 +7,11 @@ import { db, withOrg } from '../db';
 import { products, productVariants, withAudit, jsonSafe, emitOutboxEvent } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
 import { requireRole } from '../middlewares/requireRole';
-import { requireOrgId } from '../middlewares/requireOrgId';
+import { requirePermission } from '../middlewares/requirePermission';
 
 export const productsRouter = new Hono();
 
-productsRouter.get('/', requireOrgId(), async (c: Context) => {
+productsRouter.get('/', requirePermission('products', 'view'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
@@ -108,7 +108,7 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   }
 });
 
-productsRouter.get('/:id', requireOrgId(), async (c: Context) => {
+productsRouter.get('/:id', requirePermission('products', 'view'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
     
@@ -237,7 +237,7 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   }
 });
 
-productsRouter.get('/:id/variants', requireOrgId(), async (c: Context) => {
+productsRouter.get('/:id/variants', requirePermission('products', 'view'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 

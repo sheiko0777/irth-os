@@ -32,3 +32,8 @@
 **Vulnerability:** The `GET /activity` endpoint in `apps/api/src/routes/notifications.ts` used `requireOrgId()` to enforce tenant isolation but lacked any RBAC middleware (such as `requireRole('owner', 'admin')`).
 **Learning:** Tenant isolation (`requireOrgId`) prevents users from reading cross-tenant data, but it does not prevent horizontal privilege escalation. Any authenticated user in an organization could read its entire audit history (`activityLog`).
 **Prevention:** Sensitive organization endpoints, especially those dealing with audit logs, financial records, or configuration, must always have role-based authorization explicitly enforced (e.g., `requireRole('owner', 'admin')`) in addition to tenant scoping.
+
+## 2025-02-24 - Missing Authorization Guard on Products API Endpoints
+**Vulnerability:** The API endpoints for viewing products in `apps/api/src/routes/products.ts` (`GET /`, `GET /:id`, `GET /:id/variants`) only used the `requireOrgId()` middleware, meaning any authenticated member of the organization could access them regardless of their specific permissions.
+**Learning:** `requireOrgId()` only enforces tenant isolation, preventing cross-organization access. It does not enforce role-based access control (RBAC) within the organization itself. If an endpoint requires a specific permission per the matrix in `packages/db/src/permissions.ts`, it must use `requirePermission()`.
+**Prevention:** Always use `requirePermission(resource, action)` instead of `requireOrgId()` for endpoints that expose or manipulate resources mapped in the authorization matrix.
