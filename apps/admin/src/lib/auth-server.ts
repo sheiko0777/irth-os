@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { twoFactor } from 'better-auth/plugins';
 import { db } from '@irth/db';
 import * as authSchema from '@irth/db/src/schema/auth';
 import { resolveAppBaseUrl } from './appUrl';
@@ -56,6 +57,25 @@ function createAuth() {
     emailAndPassword: {
       enabled: true,
     },
+    plugins: [
+      /**
+       * TOTP (authenticator app) + backup codes only — deliberately no
+       * `otpOptions`/email-OTP fallback. That fallback needs a `sendOTP`
+       * hook that sends mail synchronously, in-request; this app has no
+       * such path today. Transactional email here goes through the outbox
+       * (an `outboxEvents` row picked up later by the Worker's outbox
+       * worker, see apps/api/src/workers/outboxWorker.ts) — fine for
+       * "eventually", wrong for "the user is staring at a code field right
+       * now". TOTP needs no server-sent delivery at all, so it works
+       * without inventing a new synchronous email path out of this Vercel
+       * app. Backup codes (built into the plugin) are the recovery path if
+       * the authenticator device is lost.
+       */
+      twoFactor({
+        // The org name shown in the authenticator app entry.
+        issuer: 'IRTH OS',
+      }),
+    ],
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: resolveAppBaseUrl(),
   });

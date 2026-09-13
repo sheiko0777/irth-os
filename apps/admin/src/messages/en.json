@@ -211,7 +211,31 @@
     "noAccount": "Don't have an account?",
     "haveAccount": "Already have an account?",
     "goToSignup": "Sign up",
-    "goToLogin": "Sign in"
+    "goToLogin": "Sign in",
+    "twoFactor": {
+      "title": "Security — Two-Factor Authentication (2FA)",
+      "description": "An extra layer of protection for your account: once enabled, you'll be asked for a code from your authenticator app on every sign-in.",
+      "footer": "Two-factor authentication belongs to your account, not organization settings — it applies to your sign-in across every organization.",
+      "passwordToEnable": "Password to confirm enabling",
+      "passwordToDisable": "Password to confirm disabling",
+      "enable": "Enable two-factor authentication",
+      "disable": "Disable two-factor authentication",
+      "enableError": "Failed to enable two-factor authentication — check your password",
+      "disableError": "Failed to disable two-factor authentication — check your password",
+      "unexpectedError": "An unexpected error occurred",
+      "setupInstructions": "Enter the key manually in your authenticator app (Google Authenticator, Authy...), then enter the 6-digit code to confirm. Enabling isn't complete until you confirm.",
+      "totpUriLabel": "Setup key (TOTP URI)",
+      "backupCodesLabel": "Backup codes — save these somewhere safe, shown only once",
+      "verifyCodeLabel": "Verification code from the app",
+      "confirmAndEnable": "Confirm and enable",
+      "enabledNotice": "✅ Two-factor authentication is enabled on your account.",
+      "busy": "...",
+      "challengeTitle": "Two-factor authentication",
+      "challengeDescription": "Enter the 6-digit verification code from your authenticator app to complete sign-in.",
+      "codeLabel": "Verification code",
+      "verify": "Verify",
+      "invalidCode": "The code is incorrect or has expired"
+    }
   },
   "notifications": {
     "title": "Notifications",

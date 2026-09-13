@@ -20,7 +20,34 @@ export const user = pgTable("user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
 });
+
+/**
+ * Backs the Better Auth `twoFactor` plugin. The plugin owns the fields
+ * (secret, backupCodes, verified); this schema just declares them so
+ * drizzleAdapter can read/write them. Better Auth manages lifecycle —
+ * rows are created on enable, deleted on disable. No org_id: 2FA is a
+ * property of the identity, not of any tenant membership.
+ */
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("two_factor_user_id_idx").on(table.userId)],
+);
 
 export const session = pgTable(
   "session",
