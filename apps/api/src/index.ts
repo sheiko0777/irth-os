@@ -107,7 +107,7 @@ app.get('/ready', async (c) => {
       status: 'ready' | 'degraded'
       db: 'up' | 'down' | 'unknown'
       environment: string
-      outbox: { pending: number | null; oldestPendingMinutes: number | null }
+      outbox: { pending: number | null; oldestPendingMinutes: number | null; deadLetteredLast24h: number | null }
       providers: ReturnType<typeof metricsSnapshot>
     },
     error: null,
@@ -117,7 +117,7 @@ app.get('/ready', async (c) => {
       status: 'degraded',
       db: 'unknown',
       environment: (c.env as { NODE_ENV?: string }).NODE_ENV || process.env.NODE_ENV || 'development',
-      outbox: { pending: null, oldestPendingMinutes: null },
+      outbox: { pending: null, oldestPendingMinutes: null, deadLetteredLast24h: null },
       providers: metricsSnapshot(),
     },
     error: null,
@@ -149,6 +149,23 @@ app.get('/ready', async (c) => {
     // DB is up for `select 1` but the queue query failed — that is
     // itself a degraded state worth surfacing, not a 500.
     logger.error('ready check: queue stats query failed', { err: e })
+    return c.json(result, 503)
+  }
+
+  // Independent of the pending-queue check above, per this route's own
+  // "every check is independent" rule — a dead-letter query failure must
+  // not mask (or be masked by) the pending-count result. A 24h window, not
+  // an all-time count: all-time only grows and stops being actionable;
+  // "how many died recently" is the "is something actively breaking" signal.
+  try {
+    const [deadLetterRow] = await getDb().execute<{ count: number }>(sql`
+      SELECT COUNT(*)::int AS count
+      FROM outbox_dead_letters
+      WHERE failed_at > now() - interval '24 hours'
+    `)
+    result.data.outbox.deadLetteredLast24h = deadLetterRow?.count ?? 0
+  } catch (e) {
+    logger.error('ready check: dead-letter count query failed', { err: e })
     return c.json(result, 503)
   }
 
