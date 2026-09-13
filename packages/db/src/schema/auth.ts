@@ -111,6 +111,25 @@ export const verification = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  twoFactors: many(twoFactor),
+}));
+
+/**
+ * Missing entirely until now — the actual cause of the 2FA production
+ * incident (see the emergency revert commit). better-auth 1.7.4's
+ * drizzle-adapter validates the schema (including relations) at
+ * `betterAuth()` construction time; `twoFactor` had a `userId` FK with no
+ * matching relations() declaration, unlike every sibling table
+ * (session/account both have one, and userRelations names both back).
+ * That validation throws synchronously inside createAuth()/buildAuth(),
+ * which is why EVERY request touching the lazy `auth` Proxy 500'd, not
+ * just 2FA-specific ones.
+ */
+export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+  user: one(user, {
+    fields: [twoFactor.userId],
+    references: [user.id],
+  }),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({

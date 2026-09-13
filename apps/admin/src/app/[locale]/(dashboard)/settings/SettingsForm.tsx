@@ -8,6 +8,7 @@ import { PricingTaxSection } from "./sections/PricingTaxSection";
 import { ShippingSection } from "./sections/ShippingSection";
 import { EnvVarsSection } from "./sections/EnvVarsSection";
 import { IntegrationsSection } from "./sections/IntegrationsSection";
+import { TwoFactorSection } from "./sections/TwoFactorSection";
 import { DeadLettersSection } from "./sections/DeadLettersSection";
 
 interface SettingsFormProps {
@@ -40,7 +41,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       <ShippingSection {...sharedProps} />
       <EnvVarsSection {...sharedProps} />
       <IntegrationsSection {...sharedProps} />
-      {/* TwoFactorSection removed — emergency revert, see auth-server.ts */}
+      {/* Account-level, not org-level — takes no settings props, manages its
+          own state via the auth client directly (see the component). */}
+      <TwoFactorSection />
       {/* Ops surface, not an org setting — hides itself for a member (see
           the component). */}
       <DeadLettersSection />

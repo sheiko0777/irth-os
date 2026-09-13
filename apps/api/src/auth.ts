@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { twoFactor } from 'better-auth/plugins';
 import { db } from './db';
 import { envVar, nodeEnv } from './utils/env';
 import * as authSchema from '@irth/db/src/schema/auth';
@@ -68,10 +69,31 @@ function buildAuth() {
     emailAndPassword: {
       enabled: true,
     },
-    // twoFactor plugin removed — EMERGENCY REVERT (see auth-server.ts for
-    // the matching revert and why). Every sign-in on this Worker started
-    // 500ing the moment this shipped; root cause not yet found. Re-add only
-    // after that's diagnosed and fixed, not just re-tried.
+    // MUST mirror apps/admin/src/lib/auth-server.ts's twoFactor config. This
+    // instance's /api/auth/sign-in/email is what apps/mobile signs in
+    // against directly (see mobile/app/(auth)/login.tsx) — if only the admin
+    // instance enforced 2FA, a user who enabled it in the admin app could
+    // sign in from mobile with just a password and skip the challenge
+    // entirely. Same reasoning as admin for no otpOptions: TOTP + backup
+    // codes only, no synchronous email-send path exists in this Worker
+    // either (its own transactional email goes through the same outbox
+    // pattern, see workers/outboxWorker.ts).
+    //
+    // Mobile itself does not yet have a TOTP challenge screen — its cookie-
+    // based `twoFactorRedirect` flow doesn't fit a bearer-token client
+    // without its own design pass. login.tsx detects the redirect and tells
+    // the user to sign in from the admin dashboard for now rather than
+    // silently proceeding without a session; a native mobile challenge is
+    // separate follow-up work.
+    //
+    // Re-added after an emergency revert (see auth-server.ts's own comment):
+    // the actual break was a missing relations() declaration for
+    // twoFactor's userId FK, not this config.
+    plugins: [
+      twoFactor({
+        issuer: 'IRTH OS',
+      }),
+    ],
     secret,
     baseURL: envVar('API_BASE_URL') ?? 'http://localhost:8787',
   });
