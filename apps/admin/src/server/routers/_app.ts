@@ -25,6 +25,7 @@ import { giftCardsRouter } from './giftCards';
 import { customerSegmentsRouter } from './customerSegments';
 import { platformAdminRouter } from './platformAdmin';
 import { meRouter } from './me';
+import { deadLettersRouter } from './deadLetters';
 
 export const appRouter = router({
     me: meRouter,
@@ -53,6 +54,7 @@ export const appRouter = router({
     giftCards: giftCardsRouter,
     customerSegments: customerSegmentsRouter,
     platformAdmin: platformAdminRouter,
+    deadLetters: deadLettersRouter,
 });
 
 export type AppRouter = typeof appRouter;
