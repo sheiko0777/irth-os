@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { orders } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
+import { requirePermission } from '../middlewares/requirePermission';
 import { requireOrgId } from '../middlewares/requireOrgId';
 
 const shippingRoute = new Hono();
@@ -33,7 +34,7 @@ const createShippingSchema = z.object({
 //   - package weight / dimensions
 // Until those exist, the route validates the order and returns 501 rather
 // than fabricating a shipment.
-shippingRoute.post('/create', requireOrgId(), async (c: Context) => {
+shippingRoute.post('/create', requireOrgId(), requirePermission('orders', 'write'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const body = await c.req.json();
 
