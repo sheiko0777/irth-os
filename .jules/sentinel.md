@@ -37,3 +37,8 @@
 **Vulnerability:** The API endpoints for viewing products in `apps/api/src/routes/products.ts` (`GET /`, `GET /:id`, `GET /:id/variants`) only used the `requireOrgId()` middleware, meaning any authenticated member of the organization could access them regardless of their specific permissions.
 **Learning:** `requireOrgId()` only enforces tenant isolation, preventing cross-organization access. It does not enforce role-based access control (RBAC) within the organization itself. If an endpoint requires a specific permission per the matrix in `packages/db/src/permissions.ts`, it must use `requirePermission()`.
 **Prevention:** Always use `requirePermission(resource, action)` instead of `requireOrgId()` for endpoints that expose or manipulate resources mapped in the authorization matrix.
+
+## 2026-09-14 - Authorization Bypass in API Shipping Endpoint
+**Vulnerability:** The `/api/shipping/create` POST endpoint in `apps/api/src/routes/shipping.ts` only used the `requireOrgId()` middleware, allowing any authenticated member of the organization to access it regardless of their specific permissions.
+**Learning:** `requireOrgId()` only enforces tenant isolation, preventing cross-organization access. It does not enforce role-based access control (RBAC) within the organization itself. Endpoints mapping to specific resources in the authorization matrix (`packages/db/src/permissions.ts`) must explicitly use `requirePermission()`.
+**Prevention:** Always use `requirePermission(resource, action)` instead of `requireOrgId()` for endpoints that expose or manipulate resources mapped in the authorization matrix.
