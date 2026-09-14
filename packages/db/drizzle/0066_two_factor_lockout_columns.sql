@@ -1,8 +1,10 @@
 -- 0066: two_factor lockout columns better-auth 1.7.4 actually requires.
 --
 -- The real, complete cause of the 2FA production incident (#336's
--- emergency revert, root-cause diagnosis continued from 0065's relations
--- fix): better-auth's own drizzle-adapter schema validation, run for real
+-- emergency revert, root-cause diagnosis continued from the twoFactor
+-- relations() fix in packages/db/src/schema/auth.ts -- TS-only, no
+-- migration file of its own, since relations() generates no SQL):
+-- better-auth's own drizzle-adapter schema validation, run for real
 -- against the migrated test database in
 -- apps/admin/src/__tests__/integration/authServerConstruction.test.ts,
 -- reported the exact gap directly:

@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - 'apps/api/**'
+      # A schema-only change (no apps/api/** file touched) must still run
+      # this job's migration step — otherwise a migration can land in a PR
+      # and never actually run in production until some unrelated apps/api
+      # change happens to ship alongside it.
+      - 'packages/db/**'
   workflow_call:
 
 jobs:
