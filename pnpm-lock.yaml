@@ -360,6 +360,9 @@ importers:
         specifier: ^18.2.0
         version: 18.2.0(react@18.3.1)
     devDependencies:
+      '@types/node':
+        specifier: ^25.8.0
+        version: 25.8.0
       '@types/react':
         specifier: ^18.3.0
         version: 18.3.28
@@ -369,6 +372,9 @@ importers:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.6
+        version: 3.2.7(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.1)
 
   packages/types:
     dependencies:
