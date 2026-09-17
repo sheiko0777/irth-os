@@ -110,3 +110,30 @@ and then `wrangler deploy`.
 
 - Branch per change; open a PR to `main`; keep the CI checks green.
 - Make focused commits; describe the phase/feature in the message.
+
+## Agent configuration
+
+- **Plan of record:** `docs/superpowers/specs/2026-09-17-irth-os-bos-design.md`
+  (slices S0–S5, acceptance gates, task DAG, locked decisions). Task packets:
+  `docs/delivery/packets/`.
+- **Delivery map** (ID prefixes, slice gates, executor routing, sizes):
+  `docs/agents/domain.md`.
+- **Issue tracker:** GitHub Issues via `gh` — `docs/agents/issue-tracker.md`.
+- **Labels:** `docs/agents/triage-labels.md`. Labels are applied by the owner or
+  Claude only; other agents read them.
+- **Task packet shape:** `docs/agents/task-packet.md`. Jules and Codex must read
+  the packet's **Do-not-touch** list before changing anything; unless the packet
+  is `exec:claude`, that always includes migrations, `pnpm-lock.yaml`, `.env*`
+  and auth configuration.
+
+## Workflow: intent → packet → PR
+
+1. An idea lands as an `intent` issue or a packet issue (`[ID] title`, sections per
+   `docs/agents/task-packet.md`), attached to its slice epic as a sub-issue with
+   native `blocked_by` dependencies.
+2. The executor named by the `exec:*` label takes it: Jules on the `jules` label,
+   Codex via `scripts/delivery/packet-to-brief.mjs`, Hermes by issue URL, Claude
+   directly. One branch `<exec>/<slice>-<id>-<slug>`, PR title
+   `type(scope): summary [ID]`, body `Closes #<issue>` plus the report contract.
+3. Every non-Claude PR is reviewed by Claude (money/tenancy reviewers, packet
+   compliance) before the owner applies `claude-code` to merge. Squash only.
