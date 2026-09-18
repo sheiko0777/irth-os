@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { and, eq, gt, isNull } from 'drizzle-orm';
-import { can, jsonSafe, shopifyConnections, shopifyOAuthStates, withOrgContext, type Role } from '@irth/db';
+import { jsonSafe, shopifyConnections, shopifyOAuthStates, withOrgContext, type Role } from '@irth/db';
 import { getDb, getEnv } from '../db';
 import { encryptShopifyToken, exchangeShopifyAuthorizationCode, hashOpaque, listShopifyLocations, newOpaqueToken, normalizeShopDomain, registerShopifyWebhooks, SHOPIFY_SCOPES, verifyShopifyOAuthHmac } from '../services/shopifyConnection';
 import { requireOrgId } from '../middlewares/requireOrgId';
+import { requirePermission } from '../middlewares/requirePermission';
 
 export const shopifyRoute = new Hono();
 
@@ -15,11 +16,9 @@ function adminBaseUrl(): string {
   return ((getEnv()?.ADMIN_APP_URL as string | undefined) ?? process.env.ADMIN_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 }
 
-shopifyRoute.get('/connect', requireOrgId(), async (c) => {
+shopifyRoute.get('/connect', requireOrgId(), requirePermission('integrations', 'connect'), async (c) => {
   const orgId = c.get('orgId') as string;
-  const role = c.get('role') as Role;
   const shopDomain = normalizeShopDomain(c.req.query('shop') ?? '');
-  if (!can(role, 'integrations', 'connect')) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
   if (!shopDomain) return c.json({ data: null, error: 'invalid_shop_domain', meta: null }, 400);
   const state = newOpaqueToken();
   await withOrgContext(getDb(), orgId, (tx) => tx.insert(shopifyOAuthStates).values({
@@ -63,27 +62,21 @@ shopifyRoute.get('/oauth/callback', async (c) => {
   return c.redirect(`${adminBaseUrl()}/ar/integrations?shopify=connected`);
 });
 
-shopifyRoute.get('/status', requireOrgId(), async (c) => {
+shopifyRoute.get('/status', requireOrgId(), requirePermission('integrations', 'view'), async (c) => {
   const orgId = c.get('orgId') as string;
-  const role = c.get('role') as Role;
-  if (!can(role, 'integrations', 'view')) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
   const [connection] = await getDb().select({ id: shopifyConnections.id, shopDomain: shopifyConnections.shopDomain, inventoryLocationId: shopifyConnections.inventoryLocationId, status: shopifyConnections.status, lastSyncAt: shopifyConnections.lastSyncAt, lastWebhookAt: shopifyConnections.lastWebhookAt, lastError: shopifyConnections.lastError }).from(shopifyConnections).where(eq(shopifyConnections.orgId, orgId)).limit(1);
   return c.json({ data: jsonSafe(connection ?? null), error: null, meta: null });
 });
 
-shopifyRoute.get('/locations', requireOrgId(), async (c) => {
+shopifyRoute.get('/locations', requireOrgId(), requirePermission('integrations', 'view'), async (c) => {
   const orgId = c.get('orgId') as string;
-  const role = c.get('role') as Role;
-  if (!can(role, 'integrations', 'view')) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
   const [connection] = await getDb().select().from(shopifyConnections).where(and(eq(shopifyConnections.orgId, orgId), eq(shopifyConnections.status, 'active'))).limit(1);
   if (!connection) return c.json({ data: null, error: 'not_connected', meta: null }, 404);
   return c.json({ data: jsonSafe(await listShopifyLocations(connection)), error: null, meta: null });
 });
 
-shopifyRoute.put('/location', requireOrgId(), async (c) => {
+shopifyRoute.put('/location', requireOrgId(), requirePermission('integrations', 'manage'), async (c) => {
   const orgId = c.get('orgId') as string;
-  const role = c.get('role') as Role;
-  if (!can(role, 'integrations', 'manage')) return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
   const body = await c.req.json<{ inventoryLocationId?: string }>();
   if (!body.inventoryLocationId?.startsWith('gid://shopify/Location/')) return c.json({ data: null, error: 'invalid_location', meta: null }, 400);
   const [connection] = await withOrgContext(getDb(), orgId, (tx) => tx.update(shopifyConnections).set({ inventoryLocationId: body.inventoryLocationId, updatedAt: new Date() }).where(eq(shopifyConnections.orgId, orgId)).returning());
