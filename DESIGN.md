@@ -3,6 +3,79 @@
 Admin console for Egyptian and Gulf commerce operations. Arabic-first, RTL by
 default, English supported through the same components.
 
+## Carbon shell review — staged migration
+
+Branch: `feature/carbon-ui-shell`. This is an unverified review implementation,
+not a completed application-wide redesign. Do not merge before the gates below.
+
+The dashboard layout now wraps existing server-rendered pages in `CarbonShell`.
+The shell uses real `@carbon/react` header, navigation and button components,
+with a scoped Gray 100 theme in `apps/admin/src/styles/carbon.scss`. The existing
+Radix Dialog primitive provides mobile focus trapping, Escape dismissal and
+focus restoration. Carbon's global reset is not imported. Page colors, business
+logic, authentication, financial calculations and server permissions are unchanged.
+
+The shell uses IBM Plex Sans Arabic and blue Carbon interaction accents. The
+legacy obsidian/gold rules below still apply to page content. Do not globally
+map the gold token to blue: existing foreground combinations would lose contrast.
+Existing navigation labels remain Arabic where the shared navigation model does
+not yet supply English translations. Document direction remains locale-driven.
+
+### Intentional UX changes
+
+- Desktop navigation starts expanded and can be hidden with the header toggle.
+- Below 66rem, navigation is a modal drawer instead of an always-visible rail.
+- Navigation moves to the logical inline-start edge in both RTL and LTR.
+- Only the most specific matching route receives the active-page indicator.
+- The header shows the current page label instead of the former breadcrumb strip.
+- Logout reports a recoverable error and prevents duplicate submissions.
+
+Existing organization switching, operational alerts, platform-admin visibility,
+notifications, command-palette events, chatbot and page routes are retained.
+Legacy Header and Sidebar files remain available for characterization tests and
+rollback; they are not mounted by the new dashboard layout.
+
+### Install and verify before review
+
+The editing environment cannot execute pnpm, generate a lockfile, run tests or
+render a browser. `pnpm-lock.yaml` is intentionally unchanged, so frozen-lockfile
+CI is expected to fail until a reviewer generates and commits it on this branch.
+The following commands assume a clean checkout, Node 20+ and pnpm 10.30.3:
+
+```bash
+git fetch origin
+git switch feature/carbon-ui-shell
+CI=true pnpm install --no-frozen-lockfile
+pnpm exec prettier --write apps/admin/src/components/layout/CarbonShell.tsx apps/admin/src/styles/carbon.scss apps/admin/src/__tests__/ui/CarbonShell.test.tsx apps/admin/vitest.ui.config.ts apps/admin/package.json 'apps/admin/src/app/[locale]/(dashboard)/layout.tsx'
+pnpm --filter @irth/admin test:ui
+pnpm turbo lint typecheck test
+pnpm --filter @irth/admin build
+pnpm --filter @irth/admin dev
+```
+
+Review the generated lockfile before committing it. Run integration tests only
+against the configured DISPOSABLE test database, never an application database;
+the existing integration suite truncates tables. Preserve all existing CI gates.
+
+The new UI suite includes legacy characterization plus Carbon navigation,
+locale routing, active-page selection, mobile dismissal/focus containment,
+platform-admin visibility, command palette and logout tests. These tests were
+written before the shell replacement but have NOT been executed here.
+
+Manually review Arabic and English at 375px, 768px and 1440px, including keyboard
+Tab/Shift+Tab/Escape, reduced motion, focus visibility, long account names,
+organization switching, notifications and existing table/form pages. Confirm
+there are no hydration errors or unintended CSS changes outside the shell.
+
+No preview deployment, pull request, merge or production deployment is implied.
+After validation, stage only reviewed files and the generated lockfile, commit
+on this branch, and request review before merging. Dashboard/KPI/table migration
+is a separate follow-up slice.
+
+---
+
+## Legacy page design (unchanged)
+
 Source of truth: `apps/admin/src/app/[locale]/globals.css`. Every value below is
 registered as a Tailwind v4 `@theme` token, so `bg-surface`, `text-t2`,
 `border-rim1` are real utility classes — not arbitrary values.
