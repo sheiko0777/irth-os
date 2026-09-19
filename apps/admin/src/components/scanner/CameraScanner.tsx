@@ -389,9 +389,9 @@ export function CameraScanner({
               <AlertCircle className="w-3.5 h-3.5 text-[var(--gold)]" />
               لمستخدمي iPhone و Safari:
             </div>
-            <p>1. اضغط على رمز "aA" أو أيقونة الموقع في شريط العناوين بالأسفل.</p>
-            <p>2. اختر "إعدادات موقع الويب" (Website Settings).</p>
-            <p>3. اضبط "الكاميرا" (Camera) على "سماح" (Allow).</p>
+            <p>1. اضغط على رمز &quot;aA&quot; أو أيقونة الموقع في شريط العناوين بالأسفل.</p>
+            <p>2. اختر &quot;إعدادات موقع الويب&quot; (Website Settings).</p>
+            <p>3. اضبط &quot;الكاميرا&quot; (Camera) على &quot;سماح&quot; (Allow).</p>
           </div>
           <Button
             size="sm"
@@ -405,7 +405,7 @@ export function CameraScanner({
       )}
 
       {/* CSS Keyframes for scanner laser animation */}
-      <style jsx>{`
+      <style>{`
         @keyframes scannerMove {
           0% {
             transform: translateY(0);

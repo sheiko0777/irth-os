@@ -212,87 +212,89 @@ export const inventoryRouter = router({
         raw = raw.slice(4);
       }
 
-      // 1. Try finding in productVariants first
-      const variantRows = await ctx.db
-        .select({
-          variant: productVariants,
-          product: products,
-          item: inventoryItems,
-        })
-        .from(productVariants)
-        .innerJoin(products, eq(productVariants.productId, products.id))
-        .leftJoin(inventoryItems, and(
-          eq(inventoryItems.variantId, productVariants.id),
-          eq(inventoryItems.orgId, ctx.orgId)
-        ))
-        .where(
-          and(
-            eq(products.orgId, ctx.orgId),
-            eq(productVariants.sku, raw)
+      return await ctx.withOrg(async (tx) => {
+        // 1. Try finding in productVariants first
+        const variantRows = await tx
+          .select({
+            variant: productVariants,
+            product: products,
+            item: inventoryItems,
+          })
+          .from(productVariants)
+          .innerJoin(products, eq(productVariants.productId, products.id))
+          .leftJoin(inventoryItems, and(
+            eq(inventoryItems.variantId, productVariants.id),
+            eq(inventoryItems.orgId, ctx.orgId)
+          ))
+          .where(
+            and(
+              eq(products.orgId, ctx.orgId),
+              eq(productVariants.sku, raw)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (variantRows.length > 0) {
-        const row = variantRows[0];
-        return {
-          found: true,
-          item: {
-            inventoryItemId: row.item?.id ?? null,
-            variantId: row.variant.id,
-            productId: row.product.id,
-            productName: row.product.name,
-            productNameAr: row.product.nameAr,
-            variantName: row.variant.name,
-            sku: row.variant.sku,
-            quantity: row.item?.quantity ?? 0,
-            reorderPoint: row.item?.reorderPoint ?? 10,
-            priceMinor: row.variant.priceMinor ?? row.product.priceMinor,
-          },
-        };
-      }
+        if (variantRows.length > 0) {
+          const row = variantRows[0];
+          return {
+            found: true,
+            item: {
+              inventoryItemId: row.item?.id ?? null,
+              variantId: row.variant.id,
+              productId: row.product.id,
+              productName: row.product.name,
+              productNameAr: row.product.nameAr,
+              variantName: row.variant.name,
+              sku: row.variant.sku,
+              quantity: row.item?.quantity ?? 0,
+              reorderPoint: row.item?.reorderPoint ?? 10,
+              priceMinor: row.variant.priceMinor ?? row.product.priceMinor,
+            },
+          };
+        }
 
-      // 2. Try finding in products
-      const productRows = await ctx.db
-        .select({
-          product: products,
-          variant: productVariants,
-          item: inventoryItems,
-        })
-        .from(products)
-        .leftJoin(productVariants, eq(productVariants.productId, products.id))
-        .leftJoin(inventoryItems, and(
-          eq(inventoryItems.variantId, productVariants.id),
-          eq(inventoryItems.orgId, ctx.orgId)
-        ))
-        .where(
-          and(
-            eq(products.orgId, ctx.orgId),
-            eq(products.sku, raw)
+        // 2. Try finding in products
+        const productRows = await tx
+          .select({
+            product: products,
+            variant: productVariants,
+            item: inventoryItems,
+          })
+          .from(products)
+          .leftJoin(productVariants, eq(productVariants.productId, products.id))
+          .leftJoin(inventoryItems, and(
+            eq(inventoryItems.variantId, productVariants.id),
+            eq(inventoryItems.orgId, ctx.orgId)
+          ))
+          .where(
+            and(
+              eq(products.orgId, ctx.orgId),
+              eq(products.sku, raw)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (productRows.length > 0) {
-        const row = productRows[0];
-        return {
-          found: true,
-          item: {
-            inventoryItemId: row.item?.id ?? null,
-            variantId: row.variant?.id ?? null,
-            productId: row.product.id,
-            productName: row.product.name,
-            productNameAr: row.product.nameAr,
-            variantName: row.variant?.name ?? 'الأساسي',
-            sku: row.product.sku,
-            quantity: row.item?.quantity ?? row.product.stock ?? 0,
-            reorderPoint: row.item?.reorderPoint ?? 10,
-            priceMinor: row.product.priceMinor,
-          },
-        };
-      }
+        if (productRows.length > 0) {
+          const row = productRows[0];
+          return {
+            found: true,
+            item: {
+              inventoryItemId: row.item?.id ?? null,
+              variantId: row.variant?.id ?? null,
+              productId: row.product.id,
+              productName: row.product.name,
+              productNameAr: row.product.nameAr,
+              variantName: row.variant?.name ?? 'الأساسي',
+              sku: row.product.sku,
+              quantity: row.item?.quantity ?? row.product.stock ?? 0,
+              reorderPoint: row.item?.reorderPoint ?? 10,
+              priceMinor: row.product.priceMinor,
+            },
+          };
+        }
 
-      return { found: false, item: null };
+        return { found: false, item: null };
+      });
     }),
 
   batchAdjust: requirePermission('inventory', 'write')

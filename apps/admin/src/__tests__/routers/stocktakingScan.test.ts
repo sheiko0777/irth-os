@@ -57,7 +57,7 @@ describe('stocktaking router — recordScan procedure', () => {
     // 3. update returning
     mockDb.update.mockReturnValueOnce(chainOf([updatedItem]));
 
-    const result = await caller.sessions.recordScan({
+    const result = await caller.recordScan({
       sessionId: SESSION_ID,
       code: 'irth:sku:SKU-001',
       quantityDelta: 1,
@@ -75,7 +75,7 @@ describe('stocktaking router — recordScan procedure', () => {
     mockDb.select.mockReturnValueOnce(chainOf([completedSession]));
 
     await expect(
-      caller.sessions.recordScan({
+      caller.recordScan({
         sessionId: SESSION_ID,
         code: 'SKU-001',
         quantityDelta: 1,

@@ -95,7 +95,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
     { enabled: !!detailSession }
   );
 
-  const recordScanMutation = trpc.stocktaking.sessions.recordScan.useMutation({
+  const recordScanMutation = trpc.stocktaking.recordScan.useMutation({
     onSuccess: (res) => {
       if (res.data) {
         const item = res.data;
@@ -131,7 +131,10 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
     });
   };
 
-  const rawItems = getItemsQuery.data?.data ?? [];
+  const rawItems = useMemo(
+    () => getItemsQuery.data?.data ?? [],
+    [getItemsQuery.data?.data]
+  );
 
   const filteredItems = useMemo(() => {
     return rawItems.filter((item) => {
