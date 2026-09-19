@@ -8,6 +8,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "check:migrations": "node scripts/check-migrations.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

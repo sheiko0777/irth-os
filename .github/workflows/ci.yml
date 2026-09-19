@@ -23,6 +23,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo lint typecheck test
 
+  migration-check:
+    name: migration-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch origin main
+        run: git fetch origin main:origin/main || git fetch origin main
+      - name: Run migration check
+        run: node packages/db/scripts/check-migrations.mjs
+
   # Runs against a real Postgres branch. The unit suite above mocks `db`
   # wholesale, so it cannot exercise a constraint, a trigger, or an RLS policy —
   # every rule the database is supposed to enforce is invisible to it.
