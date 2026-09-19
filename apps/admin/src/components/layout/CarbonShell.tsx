@@ -104,7 +104,7 @@ export function CarbonShell({ locale, children }: { locale: string; children: Re
         {groups.map((group, index) => (
           <section key={group.label} aria-labelledby={`irth-nav-group-${index}`}>
             <h2 id={`irth-nav-group-${index}`} className="irth-navigation__group">{group.label}</h2>
-            <SideNavItems>
+            <SideNavItems isSideNavExpanded>
               {group.items.map((item) => (
                 <SideNavLink
                   key={item.href}
@@ -123,7 +123,7 @@ export function CarbonShell({ locale, children }: { locale: string; children: Re
           </section>
         ))}
         {platformAdmin && (
-          <SideNavItems>
+          <SideNavItems isSideNavExpanded>
             <SideNavLink
               element={Link}
               href={`/${locale}/platform-admin`}
@@ -166,7 +166,7 @@ export function CarbonShell({ locale, children }: { locale: string; children: Re
           <HeaderMenuButton
             id="irth-menu-toggle"
             aria-label={expanded ? (ar ? 'إغلاق القائمة' : 'Close navigation') : (ar ? 'فتح القائمة' : 'Open navigation')}
-            aria-controls="irth-main-navigation"
+            aria-controls={expanded ? 'irth-main-navigation' : undefined}
             aria-expanded={expanded}
             isActive={expanded}
             isCollapsible
