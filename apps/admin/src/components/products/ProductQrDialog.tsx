@@ -73,11 +73,11 @@ export function ProductQrDialog({
   const currentSku = activeItem?.sku ?? '';
 
   const { data: lookupData } = trpc.inventory.lookupByBarcode.useQuery(
-    { barcode: currentSku },
+    { code: currentSku },
     { enabled: !!open && !!currentSku }
   );
 
-  const binLocation = activeItem?.binLocation || lookupData?.item?.binLocation || null;
+  const binLocation = activeItem?.binLocation || (lookupData?.found ? lookupData.item.binLocation : null) || null;
 
   const qrSvg = useMemo(() => {
     if (!currentSku) return '';
