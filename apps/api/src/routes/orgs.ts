@@ -8,7 +8,8 @@ import {
   emitOutboxEvent, generateInviteOtp, acceptOrgInvite, canAssignRole, type Role,
 } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
-import { requireRole } from '../middlewares/requireRole';
+import { requireOrgId } from '../middlewares/requireOrgId';
+import { requirePermission } from '../middlewares/requirePermission';
 import { envVar } from '../utils/env';
 
 export const orgsRouter = new Hono();
@@ -40,7 +41,7 @@ orgsRouter.post('/switch', async (c: Context) => {
   }
 });
 
-orgsRouter.get('/:id/members', requireRole('owner', 'admin'), async (c: Context) => {
+orgsRouter.get('/:id/members', requireOrgId(), requirePermission('members', 'view'), async (c: Context) => {
   try {
     const id = c.req.param('id');
     const orgId = c.get('orgId') as string;
@@ -58,7 +59,7 @@ const inviteSchema = z.object({
   role: z.enum(['owner', 'admin', 'member']).default('member'),
 });
 
-orgsRouter.post('/:id/invite', requireRole('owner', 'admin'), async (c: Context) => {
+orgsRouter.post('/:id/invite', requireOrgId(), requirePermission('members', 'invite'), async (c: Context) => {
   try {
     const id = c.req.param('id');
     const orgId = c.get('orgId') as string;
@@ -149,7 +150,7 @@ const updateRoleSchema = z.object({
   role: z.enum(['owner', 'admin', 'member']),
 });
 
-orgsRouter.patch('/members/:memberId/role', requireRole('owner'), async (c: Context) => {
+orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('members', 'changeRole'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
     const memberId = c.req.param('memberId');
