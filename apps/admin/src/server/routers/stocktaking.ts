@@ -36,16 +36,16 @@ export const stocktakingRouter = router({
 
     create: adminProcedure
       .input(z.object({ notes: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
         const [session] = await ctx.withOrg(async (tx) => {
-          const [s] = await tx
-            .insert(stocktakingSessions)
-            .values({
-              orgId: ctx.orgId,
-              status: 'in_progress',
-              startedAt: new Date(),
-              notes: input.notes ?? null,
-            })
-            .returning(); await initStocktakeItems(tx, ctx.orgId, s.id); return [s]; });
+          const [s] = await tx.insert(stocktakingSessions).values({
+            orgId: ctx.orgId,
+            status: 'in_progress',
+            startedAt: new Date(),
+            notes: input.notes ?? null,
+          }).returning();
+          await initStocktakeItems(tx, ctx.orgId, s.id);
+          return [s]; });
         return { data: session, error: null };
       }),
 
