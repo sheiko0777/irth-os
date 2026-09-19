@@ -249,6 +249,7 @@ export const inventoryRouter = router({
               quantity: row.item?.quantity ?? 0,
               reorderPoint: row.item?.reorderPoint ?? 10,
               priceMinor: row.variant.priceMinor ?? row.product.priceMinor,
+              binLocation: ((row.variant.attributes as Record<string, unknown> | null)?.binLocation as string) ?? null,
             },
           };
         }
@@ -289,6 +290,7 @@ export const inventoryRouter = router({
               quantity: row.item?.quantity ?? row.product.stock ?? 0,
               reorderPoint: row.item?.reorderPoint ?? 10,
               priceMinor: row.product.priceMinor,
+              binLocation: ((row.variant?.attributes as Record<string, unknown> | null)?.binLocation as string) ?? null,
             },
           };
         }
@@ -377,6 +379,62 @@ export const inventoryRouter = router({
         );
 
         return { data: { success: true, count: adjustedItems.length }, error: null };
+      });
+    }),
+
+  updateBinLocation: requirePermission('inventory', 'write')
+    .input(z.object({
+      variantId: z.string().uuid(),
+      binLocation: z.string().trim().max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return await ctx.withOrg(async (tx) => {
+        const [variant] = await tx
+          .select({
+            id: productVariants.id,
+            attributes: productVariants.attributes,
+          })
+          .from(productVariants)
+          .where(
+            and(
+              eq(productVariants.id, input.variantId),
+              eq(productVariants.orgId, ctx.orgId)
+            )
+          )
+          .limit(1);
+
+        if (!variant) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'المتغير غير موجود' });
+        }
+
+        const currentAttrs = (variant.attributes as Record<string, unknown> | null) || {};
+        const updatedAttrs = { ...currentAttrs, binLocation: input.binLocation };
+
+        await withAudit(
+          tx,
+          async () => {
+            const [updated] = await tx
+              .update(productVariants)
+              .set({ attributes: updatedAttrs })
+              .where(
+                and(
+                  eq(productVariants.id, input.variantId),
+                  eq(productVariants.orgId, ctx.orgId)
+                )
+              )
+              .returning();
+            return updated;
+          },
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'UPDATE_BIN_LOCATION',
+            tableName: 'product_variants',
+            changes: { from: currentAttrs.binLocation, to: input.binLocation },
+          }
+        );
+
+        return { data: { success: true, binLocation: input.binLocation }, error: null };
       });
     }),
 });

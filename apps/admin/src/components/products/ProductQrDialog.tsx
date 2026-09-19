@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { formatMoney, fromMinor } from '@irth/domain';
 import { generateQrSvg, generateQrDataUrl } from '@/lib/qr';
-import { Printer, Download, QrCode, Tag } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
+import { Printer, Download, QrCode, Tag, MapPin } from 'lucide-react';
 
 export interface ProductQrItem {
   id: string;
@@ -16,6 +17,7 @@ export interface ProductQrItem {
   sku: string;
   priceMinor?: bigint | number | null;
   brand?: string;
+  binLocation?: string | null;
 }
 
 export interface ProductVariantQrItem {
@@ -23,6 +25,7 @@ export interface ProductVariantQrItem {
   name: string;
   sku: string;
   priceMinor?: bigint | number | null;
+  binLocation?: string | null;
 }
 
 interface ProductQrDialogProps {
@@ -53,6 +56,7 @@ export function ProductQrDialog({
           sku: v.sku,
           priceMinor: v.priceMinor ?? product.priceMinor,
           brand: product.brand || 'IRTH',
+          binLocation: v.binLocation ?? null,
         };
       }
     }
@@ -62,17 +66,26 @@ export function ProductQrDialog({
       sku: product.sku,
       priceMinor: product.priceMinor,
       brand: product.brand || 'IRTH',
+      binLocation: product.binLocation ?? null,
     };
   }, [product, selectedSku, variants]);
 
+  const currentSku = activeItem?.sku ?? '';
+
+  const { data: lookupData } = trpc.inventory.lookupByBarcode.useQuery(
+    { barcode: currentSku },
+    { enabled: !!open && !!currentSku }
+  );
+
+  const binLocation = activeItem?.binLocation || lookupData?.item?.binLocation || null;
+
   const qrSvg = useMemo(() => {
-    if (!activeItem?.sku) return '';
-    return generateQrSvg(activeItem.sku, 4, 2);
-  }, [activeItem?.sku]);
+    if (!currentSku) return '';
+    return generateQrSvg(currentSku, 4, 2);
+  }, [currentSku]);
 
   if (!product || !activeItem) return null;
 
-  const currentSku = activeItem.sku;
   const currentPriceFormatted =
     activeItem.priceMinor != null
       ? `${fromMinor(BigInt(activeItem.priceMinor)).toString()} ج.م`
@@ -160,6 +173,17 @@ export function ProductQrDialog({
               direction: ltr;
               text-align: right;
             }
+            .bin-location {
+              font-family: system-ui, -apple-system, sans-serif;
+              font-size: 7pt;
+              font-weight: 700;
+              color: #111;
+              background: #f1f1f1;
+              padding: 0.5mm 1.5mm;
+              border-radius: 1mm;
+              display: inline-block;
+              margin-top: 0.5mm;
+            }
             .price {
               font-size: 9pt;
               font-weight: 800;
@@ -191,6 +215,7 @@ export function ProductQrDialog({
               </div>
               <div>
                 <div class="sku">${currentSku}</div>
+                ${binLocation ? `<div class="bin-location">الرف: ${binLocation}</div>` : ''}
                 ${currentPriceFormatted ? `<div class="price">${currentPriceFormatted}</div>` : ''}
               </div>
             </div>
@@ -305,6 +330,12 @@ export function ProductQrDialog({
                 <div className="font-mono text-xs font-semibold text-zinc-600 dir-ltr text-start">
                   SKU: {currentSku}
                 </div>
+                {binLocation && (
+                  <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded w-fit">
+                    <MapPin className="w-3 h-3 text-amber-600" />
+                    <span>الرف: {binLocation}</span>
+                  </div>
+                )}
                 {currentPriceFormatted && (
                   <div className="text-base font-extrabold text-black pt-1">
                     {currentPriceFormatted}

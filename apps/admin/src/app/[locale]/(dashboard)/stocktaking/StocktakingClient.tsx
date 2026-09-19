@@ -9,6 +9,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CameraScanner } from '@/components/scanner/CameraScanner';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { playBeep, triggerHaptic } from '@/lib/sound';
 import { toast } from 'sonner';
 import {
   ClipboardList,
@@ -20,6 +22,8 @@ import {
   X,
   RotateCcw,
   Sparkles,
+  Zap,
+  Boxes,
 } from 'lucide-react';
 import { formatDate as formatDateShared } from '@irth/domain';
 
@@ -65,6 +69,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
   const [filterType, setFilterType] = useState<'all' | 'counted' | 'uncounted' | 'variance'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [manualSku, setManualSku] = useState('');
+  const [multiplier, setMultiplier] = useState<number>(1);
 
   const createMutation = trpc.stocktaking.sessions.create.useMutation({
     onSuccess: (res) => {
@@ -107,8 +112,16 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
           variance: item.variance ?? 0,
         });
 
+        if (item.variance !== 0) {
+          playBeep('warning');
+          triggerHaptic('warning');
+        } else {
+          playBeep('success');
+          triggerHaptic('success');
+        }
+
         toast.success(
-          `تم تسجيل: ${item.productName} (${item.sku}) | الفعلي: ${item.actualQuantity}`,
+          `تم تسجيل: ${item.productName} (${item.sku}) | الفعلي: ${item.actualQuantity}${multiplier > 1 ? ` [x${multiplier}]` : ''}`,
           { duration: 1500 }
         );
       }
@@ -118,6 +131,8 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
       }
     },
     onError: (err) => {
+      playBeep('error');
+      triggerHaptic('error');
       toast.error(err.message || 'تعذر تسجيل الصنف');
     },
   });
@@ -127,9 +142,17 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
     recordScanMutation.mutate({
       sessionId: detailSession.id,
       code,
-      quantityDelta: 1,
+      quantityDelta: multiplier,
     });
   };
+
+  // Hardware barcode scanner wedge listener for stocktaking
+  useBarcodeScanner({
+    onScan: (code) => {
+      handleScanCode(code);
+    },
+    enabled: !!detailSession && detailSession.status === 'in_progress',
+  });
 
   const rawItems = useMemo(
     () => getItemsQuery.data?.data ?? [],
@@ -329,32 +352,63 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
               </div>
 
               {detailSession.status === 'in_progress' && (
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    placeholder="أو اكتب SKU لمسحه..."
-                    value={manualSku}
-                    onChange={(e) => setManualSku(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && manualSku) {
-                        handleScanCode(manualSku);
-                        setManualSku('');
-                      }
-                    }}
-                    className="h-8 w-44 text-xs bg-[var(--surface2)] border-[var(--rim1)]"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (manualSku) {
-                        handleScanCode(manualSku);
-                        setManualSku('');
-                      }
-                    }}
-                    className="h-8 text-xs px-2.5"
-                  >
-                    تسجيل (+1)
-                  </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Multiplier */}
+                  <div className="flex items-center gap-1 bg-[var(--surface2)] p-1 rounded-lg border border-[var(--rim1)]">
+                    <span className="text-[11px] text-[var(--t2)] font-medium px-1 flex items-center gap-1">
+                      <Boxes className="w-3.5 h-3.5 text-[var(--gold)]" />
+                      الكمية:
+                    </span>
+                    {[1, 6, 12, 24].map((qty) => (
+                      <button
+                        key={qty}
+                        type="button"
+                        onClick={() => setMultiplier(qty)}
+                        className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${
+                          multiplier === qty
+                            ? 'bg-[var(--gold)] text-black shadow-xs'
+                            : 'text-[var(--t2)] hover:text-[var(--t1)]'
+                        }`}
+                      >
+                        x{qty}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Hardware ready badge */}
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded-full border border-emerald-800/40">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <Zap className="w-3 h-3 text-emerald-400" />
+                    <span>قارئ الليزر جاهز</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      placeholder="أو اكتب SKU لمسحه..."
+                      value={manualSku}
+                      onChange={(e) => setManualSku(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && manualSku) {
+                          handleScanCode(manualSku);
+                          setManualSku('');
+                        }
+                      }}
+                      className="h-8 w-40 text-xs bg-[var(--surface2)] border-[var(--rim1)]"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (manualSku) {
+                          handleScanCode(manualSku);
+                          setManualSku('');
+                        }
+                      }}
+                      className="h-8 text-xs px-2.5"
+                    >
+                      تسجيل (+{multiplier})
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -534,21 +588,42 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
       {/* Standalone Stocktaking Camera Scanner Overlay */}
       {isScannerOpen && detailSession && (
         <div className="fixed inset-0 z-[60] bg-black flex flex-col">
-          {/* Top banner with close button */}
-          <div className="p-3 bg-zinc-900/90 backdrop-blur-md flex items-center justify-between text-white z-20 border-b border-zinc-800">
+          {/* Top banner with close button and multiplier */}
+          <div className="p-3 bg-zinc-900/90 backdrop-blur-md flex items-center justify-between text-white z-20 border-b border-zinc-800 flex-wrap gap-2">
             <div className="flex items-center gap-2 text-sm font-bold">
               <Camera className="w-5 h-5 text-[var(--gold)]" />
               <span>ماسح الجرد السريع - {detailSession.notes || 'جلسة نشطة'}</span>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsScannerOpen(false)}
-              className="text-xs bg-zinc-800 text-white hover:bg-zinc-700 border-none"
-            >
-              <X className="w-4 h-4 ml-1" />
-              إغلاق الكاميرا
-            </Button>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 bg-zinc-800/90 px-2 py-0.5 rounded-lg border border-zinc-700 text-xs">
+                <span className="text-zinc-400 text-[11px]">الكمية:</span>
+                {[1, 6, 12, 24].map((qty) => (
+                  <button
+                    key={qty}
+                    type="button"
+                    onClick={() => setMultiplier(qty)}
+                    className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${
+                      multiplier === qty
+                        ? 'bg-[var(--gold)] text-black shadow-xs'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    x{qty}
+                  </button>
+                ))}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsScannerOpen(false)}
+                className="text-xs bg-zinc-800 text-white hover:bg-zinc-700 border-none"
+              >
+                <X className="w-4 h-4 ml-1" />
+                إغلاق الكاميرا
+              </Button>
+            </div>
           </div>
 
           {/* Camera View */}
@@ -556,7 +631,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
             <CameraScanner
               active={isScannerOpen}
               onScan={handleScanCode}
-              overlayText="وجّه الكاميرا نحو رمز QR لتسجيل الصنف (+1)"
+              overlayText={`وجّه الكاميرا نحو رمز QR لتسجيل الصنف (+${multiplier})`}
               className="w-full h-full"
             />
           </div>
