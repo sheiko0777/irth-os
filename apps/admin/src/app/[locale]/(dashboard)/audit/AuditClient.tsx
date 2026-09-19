@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { trpc } from '@/lib/trpc';
+import { trpc, type RouterOutputs } from '@/lib/trpc';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,51 +32,12 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 
-interface AuditItem {
-  id: string;
-  action: string;
-  actionLabelAr: string;
-  actionCategory: string;
-  actionBadgeClass: string;
-  tableName: string;
-  tableLabelAr: string;
-  recordId: string | null;
-  changes: Record<string, unknown>;
-  createdAt: Date | string;
-  actor: {
-    id: string | null;
-    name: string;
-    email: string | null;
-    image: string | null;
-    role: string;
-  };
-  client: {
-    ipAddress: string | null;
-    rawUa: string | null;
-    deviceType: string;
-    browser: string;
-    os: string;
-    deviceLabelAr: string;
-  };
-}
-
-interface AuditStats {
-  totalEvents: number;
-  todayEvents: number;
-  activeOperatorsCount: number;
-  latestEvent: { createdAt: Date | string; action: string } | null;
-}
+type AuditListResponse = RouterOutputs['audit']['list'];
+type AuditItem = AuditListResponse['items'][number];
+type AuditStats = RouterOutputs['audit']['stats'];
 
 interface Props {
-  initialData: {
-    items: AuditItem[];
-    pagination: {
-      page: number;
-      pageSize: number;
-      total: number;
-      totalPages: number;
-    };
-  };
+  initialData: AuditListResponse;
   initialStats: AuditStats;
 }
 
