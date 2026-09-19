@@ -1,0 +1,263 @@
+@use 'sass:meta';
+@use '@carbon/styles/scss/theme';
+@use '@carbon/styles/scss/themes';
+
+// Deliberately no Carbon reset or global typography import: existing page
+// components keep their current Tailwind styles until individually migrated.
+.irth-carbon-ui {
+  @include theme.theme(themes.$g100);
+  @include meta.load-css('@carbon/styles/scss/components/ui-shell');
+  @include meta.load-css('@carbon/styles/scss/components/button');
+
+  color: var(--cds-text-primary);
+  font-family: var(--font-sans);
+  line-height: 1.75;
+
+  :where(button, a, select):focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
+  }
+
+  .cds--header,
+  .cds--header__name,
+  .cds--side-nav__link,
+  .cds--side-nav__link-text,
+  .cds--btn {
+    font-family: inherit;
+  }
+
+  .irth-header {
+    z-index: 40;
+    block-size: 3rem;
+    border-block-end: 1px solid var(--cds-border-subtle-01);
+    background: var(--cds-background);
+  }
+
+  .irth-brand {
+    gap: .5rem;
+    flex-shrink: 0;
+    padding-inline: 1rem;
+    border-inline-end: 1px solid var(--cds-border-subtle-01);
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .irth-brand__suffix {
+    color: var(--cds-text-secondary);
+    font-size: .75rem;
+    font-weight: 400;
+  }
+
+  .irth-header__page {
+    overflow: hidden;
+    padding-inline: 1rem;
+    color: var(--cds-text-secondary);
+    font-size: .8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .irth-header__actions {
+    align-items: center;
+    gap: .5rem;
+    margin-inline-start: auto;
+    padding-inline-end: .75rem;
+  }
+
+  .irth-search {
+    display: flex;
+    min-block-size: 2.5rem;
+    align-items: center;
+    gap: .75rem;
+    padding-inline: .75rem;
+    border: 1px solid var(--cds-border-subtle-01);
+    background: var(--cds-layer-01);
+    color: var(--cds-text-secondary);
+    cursor: pointer;
+    font-size: .75rem;
+
+    &:hover { background: var(--cds-layer-hover-01); }
+    kbd {
+      margin-inline-start: 1rem;
+      padding-inline: .375rem;
+      border: 1px solid var(--cds-border-strong-01);
+      font-family: inherit;
+    }
+  }
+
+  .irth-navigation {
+    position: fixed;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    inset-block: 3rem 0;
+    inset-inline: 0 auto;
+    inline-size: 16rem;
+    max-inline-size: 100%;
+    block-size: auto;
+    max-block-size: none;
+    border-inline-end: 1px solid var(--cds-border-subtle-01);
+    background: var(--cds-background);
+    color: var(--cds-text-primary);
+    transform: none;
+    visibility: visible;
+    overflow: hidden;
+
+    .cds--side-nav__items { padding: 0; }
+    .cds--side-nav__link {
+      min-block-size: 2.75rem;
+      padding-inline: 1rem;
+      text-align: start;
+    }
+    .cds--side-nav__icon { margin-inline: 0 1rem; }
+    .cds--side-nav__icon svg { inline-size: 1rem; block-size: 1rem; }
+    .cds--side-nav__link-text { color: var(--cds-text-secondary); }
+    .cds--side-nav__link[aria-current='page'] {
+      background: var(--cds-layer-selected-01);
+      box-shadow: inset 3px 0 var(--cds-interactive);
+    }
+    .cds--side-nav__link[aria-current='page'] .cds--side-nav__link-text {
+      color: var(--cds-text-primary);
+      font-weight: 600;
+    }
+    .cds--side-nav__link::before { display: none; }
+  }
+
+  .irth-navigation__intro {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: 1.5rem 1rem 1rem;
+    border-block-end: 1px solid var(--cds-border-subtle-01);
+  }
+
+  .irth-eyebrow {
+    color: var(--cds-text-secondary);
+    font-size: .6875rem;
+    font-weight: 500;
+  }
+  .irth-navigation__title { font-size: 1rem; font-weight: 600; }
+  .irth-navigation__scroll { flex: 1; min-block-size: 0; overflow-y: auto; padding-block-end: 1rem; }
+  .irth-navigation__alerts { padding-inline: .5rem; }
+  .irth-navigation__group {
+    margin: 0;
+    padding: 1.25rem 1rem .375rem;
+    color: var(--cds-text-secondary);
+    font-family: inherit;
+    font-size: .6875rem;
+    font-weight: 500;
+    line-height: 1.75;
+  }
+  .irth-navigation__footer {
+    display: grid;
+    gap: .5rem;
+    padding: 1rem;
+    border-block-start: 1px solid var(--cds-border-subtle-01);
+    background: var(--cds-layer-01);
+    .cds--btn { inline-size: 100%; max-inline-size: none; }
+  }
+  .irth-organization { display: grid; gap: .375rem; }
+  .irth-account {
+    overflow: hidden;
+    color: var(--cds-text-secondary);
+    font-size: .75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .irth-logout-error { color: var(--cds-text-error); font-size: .75rem; }
+
+  .irth-skip-link {
+    position: fixed;
+    z-index: 100;
+    inset-block-start: .5rem;
+    inset-inline-start: .5rem;
+    padding: .75rem 1rem;
+    background: var(--cds-background);
+    color: var(--cds-link-primary);
+    transform: translateY(-200%);
+    &:focus { transform: none; }
+  }
+
+  .irth-drawer-overlay {
+    position: fixed;
+    z-index: 60;
+    inset: 0;
+    background: var(--cds-overlay);
+  }
+  .irth-drawer {
+    position: fixed;
+    z-index: 61;
+    display: flex;
+    flex-direction: column;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: min(20rem, calc(100vw - 2rem));
+    background: var(--cds-background);
+    color: var(--cds-text-primary);
+    box-shadow: 0 0 2rem rgb(0 0 0 / 25%);
+    .irth-navigation {
+      position: relative;
+      inset: auto;
+      inline-size: 100%;
+      flex: 1;
+      min-block-size: 0;
+      border: 0;
+    }
+  }
+  .irth-drawer__heading {
+    display: flex;
+    min-block-size: 3rem;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: 1rem .25rem;
+    border-block-end: 1px solid var(--cds-border-subtle-01);
+    h2 { font-family: inherit; font-size: .875rem; color: inherit; }
+  }
+  .irth-close {
+    display: grid;
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    place-items: center;
+    color: inherit;
+    cursor: pointer;
+    &:hover { background: var(--cds-layer-hover-01); }
+  }
+}
+
+// Structural styles only: legacy page colors, typography and component tokens
+// are deliberately not aliased to Carbon during this first review slice.
+.irth-shell { min-block-size: 100dvh; }
+.irth-shell__content {
+  block-size: 100dvh;
+  min-inline-size: 0;
+  overflow: auto;
+  padding: 4.5rem 1rem 2rem;
+  scroll-padding-block-start: 4rem;
+}
+.irth-shell__page { max-inline-size: 90rem; margin-inline: auto; }
+@media (min-width: 42rem) {
+  .irth-shell__content { padding: 5rem 2rem 2rem; }
+}
+@media (min-width: 66rem) {
+  .irth-shell[data-navigation-open='true'] .irth-shell__content { margin-inline-start: 16rem; }
+}
+@media (max-width: 41.99rem) {
+  .irth-carbon-ui .irth-header__page,
+  .irth-carbon-ui .irth-search span,
+  .irth-carbon-ui .irth-search kbd { display: none; }
+  .irth-carbon-ui .irth-search { border: 0; background: transparent; }
+}
+[dir='rtl'] .irth-carbon-ui .irth-navigation .cds--side-nav__link[aria-current='page'] {
+  box-shadow: inset -3px 0 var(--cds-interactive);
+}
+@media (forced-colors: active) {
+  .irth-carbon-ui .irth-navigation .cds--side-nav__link[aria-current='page'] {
+    border-inline-start: 3px solid Highlight;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .irth-carbon-ui *, .irth-carbon-ui *::before, .irth-carbon-ui *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
