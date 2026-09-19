@@ -4,7 +4,7 @@ import { getDb, getEnv } from '../../db';
 import {
   orders, orderItems, customers, productVariants, inventoryItems, inventoryMovements,
   inventoryDiscrepancies, inventoryLevelDiscrepancies, orgMembers, notifications,
-  shopifyConnections, shopifyWebhookDeliveries,
+  shopifyConnections, shopifyWebhookDeliveries, storefrontSessions, storefrontEvents,
   withOrgContext, withAudit, jsonSafe,
   nextDocumentNumber, formatDocumentNumber,
   emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
@@ -12,6 +12,7 @@ import {
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
 import { UnsupportedCurrencyError, assertSupportedCurrency } from '@irth/domain';
+import { hashOpaque } from '../../services/shopifyConnection';
 
 /**
  * Inbound half of the Shopify sync (the dashboard-owns-catalog outbound half
@@ -186,6 +187,30 @@ interface ShopifyOrderPayload {
   total_price: string;
   customer?: ShopifyCustomerPayload | null;
   line_items: ShopifyLineItem[];
+}
+interface ShopifyCheckoutPayload {
+  id: number | string;
+  token: string;
+  cart_token?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  total_price: string;
+  currency?: string;
+  completed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  abandoned_checkout_url?: string | null;
+  customer?: ShopifyCustomerPayload | null;
+  line_items?: Array<{
+    id?: number | string;
+    variant_id?: number | string | null;
+    product_id?: number | string | null;
+    title?: string;
+    variant_title?: string | null;
+    sku?: string | null;
+    quantity: number;
+    price: string;
+  }>;
 }
 
 /** Shopify's numeric/GID id, normalised to the string form this schema stores. */
@@ -900,6 +925,99 @@ shopifyWebhookRoute.post('/inventory-levels-update', verifyShopifyWebhook(), asy
   }
 
   return c.json({ data: { synced: true }, error: null, meta: null });
+});
+
+shopifyWebhookRoute.post('/checkouts-upsert', verifyShopifyWebhook(), async (c: Context) => {
+  const db = getDb();
+  const resolved = await resolveWebhookOrg(c, db);
+  if (!resolved) return c.json({ data: null, error: 'no_matching_connection', meta: null }, 404);
+  const { orgId, connectionId } = resolved;
+
+  const bodyRaw = c.get('rawBody') as string;
+  const payload = parseWebhookBody<ShopifyCheckoutPayload>(bodyRaw);
+  if (!payload) return c.json({ data: null, error: 'invalid_json', meta: null }, 400);
+
+  const delivery = await claimDelivery(db, resolved, c, 'checkouts/upsert', payload);
+  if (delivery.kind === 'processed') {
+    return c.json({ data: { alreadyProcessed: true }, error: null, meta: null });
+  }
+
+  try {
+    await withOrgContext(db, orgId, async (tx) => {
+      let customerId: string | null = null;
+      if (payload.customer || payload.email || payload.phone) {
+        customerId = await findOrCreateCustomer(tx, orgId, payload.customer ?? {
+          id: payload.token || String(payload.id),
+          email: payload.email,
+          phone: payload.phone,
+        });
+      }
+
+      const clientRaw = payload.token || payload.cart_token || String(payload.id);
+      const clientIdHash = hashOpaque(clientRaw);
+
+      let sessionId: string | null = null;
+      if (connectionId) {
+        const [session] = await tx.insert(storefrontSessions).values({
+          orgId,
+          connectionId,
+          clientIdHash,
+          customerId: customerId ?? undefined,
+          landingPath: '/checkout',
+        }).onConflictDoUpdate({
+          target: [storefrontSessions.connectionId, storefrontSessions.clientIdHash],
+          set: {
+            lastSeenAt: new Date(),
+            ...(customerId ? { customerId } : {}),
+          },
+        }).returning({ id: storefrontSessions.id });
+        sessionId = session?.id ?? null;
+      }
+
+      if (connectionId && sessionId) {
+        const isCompleted = Boolean(payload.completed_at);
+        const eventName = isCompleted ? 'checkout_completed' : 'checkout_started';
+        const eventId = `chk_${payload.token || payload.id}_${payload.updated_at ? new Date(payload.updated_at).getTime() : Date.now()}`;
+        const occurredAt = new Date(payload.updated_at || payload.created_at || Date.now());
+
+        await tx.insert(storefrontEvents).values({
+          orgId,
+          connectionId,
+          sessionId,
+          eventId,
+          eventName,
+          occurredAt: Number.isFinite(occurredAt.getTime()) ? occurredAt : new Date(),
+          path: '/checkout',
+          metadata: {
+            checkoutToken: payload.token,
+            cartToken: payload.cart_token ?? null,
+            email: payload.email ?? payload.customer?.email ?? null,
+            phone: payload.phone ?? payload.customer?.phone ?? null,
+            customerName: [payload.customer?.first_name, payload.customer?.last_name].filter(Boolean).join(' ') || null,
+            totalPrice: payload.total_price,
+            currency: payload.currency || 'EGP',
+            abandonedCheckoutUrl: payload.abandoned_checkout_url ?? null,
+            completedAt: payload.completed_at ?? null,
+            lineItems: (payload.line_items || []).map((item) => ({
+              id: item.id ? String(item.id) : undefined,
+              title: item.title,
+              variantTitle: item.variant_title ?? null,
+              sku: item.sku ?? null,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+          },
+        }).onConflictDoNothing();
+      }
+
+      if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
+    });
+
+    return c.json({ data: { recorded: true }, error: null, meta: null });
+  } catch (err) {
+    if (delivery.kind !== 'unrecorded') await markDeliveryFailed(db, delivery.deliveryId, err);
+    throw err;
+  }
 });
 
 /**

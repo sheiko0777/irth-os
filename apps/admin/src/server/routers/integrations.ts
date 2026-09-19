@@ -90,7 +90,7 @@ export const integrationsRouter = router({
         const [connection] = await ctx.db
             .select({
                 shopDomain: shopifyConnections.shopDomain,
-                status: shopifyConnections.status,
+                status: shopifyConnections.status, pixelIngestionKey: shopifyConnections.pixelIngestionKey,
                 inventoryLocationId: shopifyConnections.inventoryLocationId,
                 lastSyncAt: shopifyConnections.lastSyncAt,
                 lastWebhookAt: shopifyConnections.lastWebhookAt,
@@ -202,4 +202,97 @@ export const integrationsRouter = router({
             }
             return { data: connection, error: null, meta: null };
         }),
+
+    shopifyPixelSnippet: protectedProcedure.query(async ({ ctx }) => {
+        const [connection] = await ctx.withOrg(async (tx) => tx
+            .select({
+                shopDomain: shopifyConnections.shopDomain,
+                pixelIngestionKey: shopifyConnections.pixelIngestionKey,
+                status: shopifyConnections.status,
+            })
+            .from(shopifyConnections)
+            .where(eq(shopifyConnections.orgId, ctx.orgId)));
+
+        if (!connection) {
+            return { data: null, error: null, meta: null };
+        }
+
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.irth-house.com';
+        const endpoint = `${apiBaseUrl.replace(/\/$/, '')}/api/shopify/pixel/${connection.pixelIngestionKey}`;
+
+        const snippet = `// IRTH-OS Realtime Customer & Cart Analytics Pixel
+// Shopify Admin -> Settings -> Customer Events -> Add custom pixel
+analytics.subscribe("all_standard_events", (event) => {
+  const payload = {
+    eventId: event.id,
+    eventName: event.name,
+    occurredAt: event.timestamp,
+    clientId: event.clientId,
+    path: event.context?.window?.location?.pathname,
+    referrerHost: event.context?.window?.location?.hostname,
+    metadata: {
+      data: event.data,
+      context: {
+        language: event.context?.language,
+        userAgent: event.context?.navigator?.userAgent,
+      },
+    },
+  };
+
+  if (event.name === "product_viewed" || event.name === "product_added_to_cart") {
+    const item = event.data?.productVariant;
+    if (item) {
+      payload.productId = item.product?.id;
+      payload.variantId = item.id;
+      payload.metadata.title = item.product?.title;
+      payload.metadata.price = item.price?.amount;
+      payload.metadata.currency = item.price?.currencyCode;
+      payload.metadata.sku = item.sku;
+    }
+  } else if (event.name === "cart_viewed") {
+    const cart = event.data?.cart;
+    if (cart) {
+      payload.metadata.totalPrice = cart.cost?.totalAmount?.amount;
+      payload.metadata.currency = cart.cost?.totalAmount?.currencyCode;
+      payload.metadata.linesCount = cart.lines?.length;
+      payload.metadata.lines = cart.lines?.map((l) => ({
+        title: l.merchandise?.product?.title,
+        quantity: l.quantity,
+        price: l.merchandise?.price?.amount,
+      }));
+    }
+  } else if (event.name === "checkout_started" || event.name === "checkout_completed") {
+    const chk = event.data?.checkout;
+    if (chk) {
+      payload.metadata.checkoutToken = chk.token;
+      payload.metadata.totalPrice = chk.totalPrice?.amount;
+      payload.metadata.currency = chk.totalPrice?.currencyCode;
+      payload.metadata.email = chk.email;
+      payload.metadata.phone = chk.phone;
+      payload.metadata.lines = chk.lineItems?.map((l) => ({
+        title: l.title,
+        quantity: l.quantity,
+        price: l.variant?.price?.amount,
+      }));
+    }
+  }
+
+  fetch("${endpoint}", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  });
+});`;
+
+        return {
+            data: {
+                endpoint,
+                pixelIngestionKey: connection.pixelIngestionKey,
+                snippet,
+            },
+            error: null,
+            meta: null,
+        };
+    }),
 });

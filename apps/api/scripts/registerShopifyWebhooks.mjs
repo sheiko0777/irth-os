@@ -58,6 +58,8 @@ const TOPICS = [
   { topic: 'CUSTOMERS_CREATE', route: 'customers-upsert' },
   { topic: 'CUSTOMERS_UPDATE', route: 'customers-upsert' },
   { topic: 'INVENTORY_LEVELS_UPDATE', route: 'inventory-levels-update' },
+  { topic: 'CHECKOUTS_CREATE', route: 'checkouts-upsert' },
+  { topic: 'CHECKOUTS_UPDATE', route: 'checkouts-upsert' },
 ];
 
 async function main() {

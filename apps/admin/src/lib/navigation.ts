@@ -52,6 +52,7 @@ export function buildNavGroups(locale: string): NavGroup[] {
       items: [
         { href: `/${locale}/finance`, label: 'المالية', icon: DollarSign, keywords: 'finance money' },
         { href: `/${locale}/analytics`, label: 'التحليلات', icon: PieChart, keywords: 'analytics reports' },
+        { href: `/${locale}/analytics?tab=carts`, label: 'سلات الشراء وسلوك العملاء', icon: ShoppingCart, keywords: 'carts abandoned behavior pixel shopify سلات متروكة زوار عملاء' },
         { href: `/${locale}/coupons`, label: 'الكوبونات', icon: Tag, keywords: 'coupons discount' },
         { href: `/${locale}/pricelists`, label: 'قوائم الأسعار', icon: List, keywords: 'pricelists pricing' },
         { href: `/${locale}/campaigns`, label: 'الحملات', icon: Megaphone, keywords: 'campaigns marketing' },

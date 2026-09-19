@@ -96,3 +96,26 @@ describe('integrations.outboxRetry', () => {
     expect(auditValues).not.toHaveBeenCalled();
   });
 });
+
+describe('integrations.shopifyPixelSnippet', () => {
+  it('returns null data when no connection exists', async () => {
+    mockDb.select = vi.fn(() => chainOf([]));
+    const caller = integrationsRouter.createCaller(ctx('owner'));
+    const res = await caller.shopifyPixelSnippet();
+    expect(res).toEqual({ data: null, error: null, meta: null });
+  });
+
+  it('returns snippet and endpoint when connection exists', async () => {
+    mockDb.select = vi.fn(() => chainOf([{
+      shopDomain: 'test.myshopify.com',
+      pixelIngestionKey: 'test-pixel-key-123',
+      status: 'active',
+    }]));
+    const caller = integrationsRouter.createCaller(ctx('owner'));
+    const res = await caller.shopifyPixelSnippet();
+    expect(res.data?.pixelIngestionKey).toBe('test-pixel-key-123');
+    expect(res.data?.endpoint).toContain('/api/shopify/pixel/test-pixel-key-123');
+    expect(res.data?.snippet).toContain('analytics.subscribe');
+    expect(res.error).toBeNull();
+  });
+});
