@@ -29,7 +29,8 @@ import { SkeletonRow } from "@/components/ui/skeleton";
 
 import { toast } from "sonner";
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Box } from 'lucide-react';
+import { Box, QrCode } from 'lucide-react';
+import { ProductQrDialog } from '@/components/products/ProductQrDialog';
 
 
 export interface Product {
@@ -57,8 +58,8 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
     const [isModalOpen, setIsModalOpen] = useState(false);
     const PAGE_SIZE = 50;
     
-    // Modal state for form
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [qrProduct, setQrProduct] = useState<Product | null>(null);
     const [formName, setFormName] = useState("");
     const [formNameAr, setFormNameAr] = useState("");
     const [formSku, setFormSku] = useState("");
@@ -318,31 +319,44 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                     <TableCell>{getStatusBadge(p.status)}</TableCell>
                                     <TableCell>{p.category || '-'}</TableCell>
                                     <TableCell className="text-end">
-                                        <PermissionGate resource="products" action="write">
-                                            <div className="flex justify-end gap-2">
-                                                <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)}>
-                                                    تعديل
-                                                </Button>
-                                                {p.status === 'active' && (
-                                                    <ConfirmDialog
-                                                        title="تعطيل المنتج"
-                                                        description={`سيتم تعطيل المنتج «${p.name}». لن يظهر للبيع بعد ذلك.`}
-                                                        confirmLabel="تعطيل"
-                                                        pending={deactivateMutation.isPending}
-                                                        onConfirm={() => deactivateMutation.mutate({ id: p.id })}
-                                                    >
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            style={{ color: 'var(--crimson)' }}
-                                                            disabled={deactivateMutation.isPending}
+                                        <div className="flex justify-end gap-1.5 items-center">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setQrProduct(p)}
+                                                title="رمز QR وطباعة الملصق"
+                                                className="flex items-center gap-1 text-[var(--gold)] hover:text-[var(--gold)] hover:bg-[var(--gold)]/10"
+                                            >
+                                                <QrCode className="w-4 h-4" />
+                                                <span className="hidden sm:inline">QR</span>
+                                            </Button>
+
+                                            <PermissionGate resource="products" action="write">
+                                                <div className="flex gap-1.5">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(p)}>
+                                                        تعديل
+                                                    </Button>
+                                                    {p.status === 'active' && (
+                                                        <ConfirmDialog
+                                                            title="تعطيل المنتج"
+                                                            description={`سيتم تعطيل المنتج «${p.name}». لن يظهر للبيع بعد ذلك.`}
+                                                            confirmLabel="تعطيل"
+                                                            pending={deactivateMutation.isPending}
+                                                            onConfirm={() => deactivateMutation.mutate({ id: p.id })}
                                                         >
-                                                            تعطيل
-                                                        </Button>
-                                                    </ConfirmDialog>
-                                                )}
-                                            </div>
-                                        </PermissionGate>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                style={{ color: 'var(--crimson)' }}
+                                                                disabled={deactivateMutation.isPending}
+                                                            >
+                                                                تعطيل
+                                                            </Button>
+                                                        </ConfirmDialog>
+                                                    )}
+                                                </div>
+                                            </PermissionGate>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -356,6 +370,12 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                 pageSize={PAGE_SIZE}
                 total={total}
                 onPageChange={setPage}
+            />
+
+            <ProductQrDialog
+                open={!!qrProduct}
+                onOpenChange={(open) => !open && setQrProduct(null)}
+                product={qrProduct}
             />
         </div>
     );

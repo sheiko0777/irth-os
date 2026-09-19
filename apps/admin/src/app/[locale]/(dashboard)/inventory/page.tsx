@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExportButton } from "@/components/ExportButton";
+import { InventoryScannerTrigger } from "@/components/inventory/InventoryScannerTrigger";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { FilterTabs, type FilterTab } from "@/components/ui/FilterTabs";
@@ -60,7 +61,10 @@ export default async function InventoryPage({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-[var(--t1)]">{t("inventory.title")}</h1>
-        <ExportButton type="inventory" label="تصدير المخزون" />
+        <div className="flex items-center gap-2">
+          <InventoryScannerTrigger />
+          <ExportButton type="inventory" label="تصدير المخزون" />
+        </div>
       </div>
 
       {/* The banner is gone: the tab strip carries the same warning as a live,

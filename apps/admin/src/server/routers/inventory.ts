@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, requirePermission } from '../trpc';
 import { inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
-import { eq, and, desc, asc, lte, gt, sql, count } from 'drizzle-orm';
+import { eq, and, desc, asc, lte, gt, sql, count, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const inventoryRouter = router({
@@ -197,6 +197,184 @@ export const inventoryRouter = router({
         });
 
         return { data: { newQuantity }, error: null, meta: null };
+      });
+    }),
+
+  lookupByBarcode: requirePermission('inventory', 'view')
+    .input(z.object({
+      code: z.string().min(1),
+    }))
+    .query(async ({ ctx, input }) => {
+      let raw = input.code.trim();
+      if (raw.toLowerCase().startsWith('irth:sku:')) {
+        raw = raw.slice(9);
+      } else if (raw.toLowerCase().startsWith('sku:')) {
+        raw = raw.slice(4);
+      }
+
+      // 1. Try finding in productVariants first
+      const variantRows = await ctx.db
+        .select({
+          variant: productVariants,
+          product: products,
+          item: inventoryItems,
+        })
+        .from(productVariants)
+        .innerJoin(products, eq(productVariants.productId, products.id))
+        .leftJoin(inventoryItems, and(
+          eq(inventoryItems.variantId, productVariants.id),
+          eq(inventoryItems.orgId, ctx.orgId)
+        ))
+        .where(
+          and(
+            eq(products.orgId, ctx.orgId),
+            eq(productVariants.sku, raw)
+          )
+        )
+        .limit(1);
+
+      if (variantRows.length > 0) {
+        const row = variantRows[0];
+        return {
+          found: true,
+          item: {
+            inventoryItemId: row.item?.id ?? null,
+            variantId: row.variant.id,
+            productId: row.product.id,
+            productName: row.product.name,
+            productNameAr: row.product.nameAr,
+            variantName: row.variant.name,
+            sku: row.variant.sku,
+            quantity: row.item?.quantity ?? 0,
+            reorderPoint: row.item?.reorderPoint ?? 10,
+            priceMinor: row.variant.priceMinor ?? row.product.priceMinor,
+          },
+        };
+      }
+
+      // 2. Try finding in products
+      const productRows = await ctx.db
+        .select({
+          product: products,
+          variant: productVariants,
+          item: inventoryItems,
+        })
+        .from(products)
+        .leftJoin(productVariants, eq(productVariants.productId, products.id))
+        .leftJoin(inventoryItems, and(
+          eq(inventoryItems.variantId, productVariants.id),
+          eq(inventoryItems.orgId, ctx.orgId)
+        ))
+        .where(
+          and(
+            eq(products.orgId, ctx.orgId),
+            eq(products.sku, raw)
+          )
+        )
+        .limit(1);
+
+      if (productRows.length > 0) {
+        const row = productRows[0];
+        return {
+          found: true,
+          item: {
+            inventoryItemId: row.item?.id ?? null,
+            variantId: row.variant?.id ?? null,
+            productId: row.product.id,
+            productName: row.product.name,
+            productNameAr: row.product.nameAr,
+            variantName: row.variant?.name ?? 'الأساسي',
+            sku: row.product.sku,
+            quantity: row.item?.quantity ?? row.product.stock ?? 0,
+            reorderPoint: row.item?.reorderPoint ?? 10,
+            priceMinor: row.product.priceMinor,
+          },
+        };
+      }
+
+      return { found: false, item: null };
+    }),
+
+  batchAdjust: requirePermission('inventory', 'write')
+    .input(z.object({
+      type: z.enum(['in', 'out', 'adjustment']),
+      items: z.array(z.object({
+        itemId: z.string().uuid(),
+        quantity: z.number().int().positive(),
+      })).min(1),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return await ctx.withOrg(async (tx) => {
+        const itemIds = input.items.map((i) => i.itemId);
+        const existingItems = await tx
+          .select()
+          .from(inventoryItems)
+          .where(
+            and(
+              inArray(inventoryItems.id, itemIds),
+              eq(inventoryItems.orgId, ctx.orgId)
+            )
+          );
+
+        const existingMap = new Map(existingItems.map((i) => [i.id, i]));
+        const adjustedItems: Array<{ id: string; oldQuantity: number; newQuantity: number }> = [];
+
+        for (const line of input.items) {
+          const item = existingMap.get(line.itemId);
+          if (!item) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: `العنصر ${line.itemId} غير موجود في المخزون`,
+            });
+          }
+
+          const quantityUpdate =
+            input.type === 'in'
+              ? sql`${inventoryItems.quantity} + ${line.quantity}`
+              : input.type === 'out'
+                ? sql`${inventoryItems.quantity} - ${line.quantity}`
+                : line.quantity;
+
+          let newQuantity = item.quantity;
+          if (input.type === 'in') newQuantity += line.quantity;
+          else if (input.type === 'out') newQuantity -= line.quantity;
+          else newQuantity = line.quantity;
+
+          await tx
+            .update(inventoryItems)
+            .set({ quantity: quantityUpdate, updatedAt: new Date() })
+            .where(
+              and(
+                eq(inventoryItems.id, line.itemId),
+                eq(inventoryItems.orgId, ctx.orgId)
+              )
+            );
+
+          await tx.insert(inventoryMovements).values({
+            orgId: ctx.orgId,
+            itemId: line.itemId,
+            type: input.type,
+            quantity: line.quantity,
+            note: input.note ?? `مسح باركود دفعة: ${input.type}`,
+          });
+
+          adjustedItems.push({ id: line.itemId, oldQuantity: item.quantity, newQuantity });
+        }
+
+        await withAudit(
+          tx,
+          async () => adjustedItems,
+          {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'inventory_batch_adjust',
+            tableName: 'inventory_items',
+            changes: { type: input.type, count: input.items.length, items: adjustedItems },
+          }
+        );
+
+        return { data: { success: true, count: adjustedItems.length }, error: null };
       });
     }),
 });
