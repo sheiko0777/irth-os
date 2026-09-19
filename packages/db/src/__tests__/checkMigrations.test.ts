@@ -28,9 +28,9 @@ describe('check-migrations plan()', () => {
       { status: 'A', file: 'packages/db/drizzle/0066_dup.sql' },
     ]);
     expect(result.ok).toBe(false);
-    expect(result.errors.some((e) => e.includes('Duplicate migration number "0066"'))).toBe(true);
-    expect(result.errors.some((e) => e.includes('0066_two_factor_lockout_columns.sql') && e.includes('0066_dup.sql'))).toBe(true);
-    expect(result.errors.some((e) => e.includes('must be strictly greater than origin/main\'s highest migration (0066)'))).toBe(true);
+    expect(result.errors.some((e: string) => e.includes('Duplicate migration number "0066"'))).toBe(true);
+    expect(result.errors.some((e: string) => e.includes('0066_two_factor_lockout_columns.sql') && e.includes('0066_dup.sql'))).toBe(true);
+    expect(result.errors.some((e: string) => e.includes('must be strictly greater than origin/main\'s highest migration (0066)'))).toBe(true);
   });
 
   it('fails when two migrations with the same prefix are added in the same PR', () => {
@@ -39,7 +39,7 @@ describe('check-migrations plan()', () => {
       { status: 'A', file: 'packages/db/drizzle/0067_second.sql' },
     ]);
     expect(result.ok).toBe(false);
-    expect(result.errors.some((e) => e.includes('Duplicate migration number "0067"') && e.includes('0067_first.sql') && e.includes('0067_second.sql'))).toBe(true);
+    expect(result.errors.some((e: string) => e.includes('Duplicate migration number "0067"') && e.includes('0067_first.sql') && e.includes('0067_second.sql'))).toBe(true);
   });
 
   it('fails when an existing migration is modified (status M, planted edit to 0010)', () => {
@@ -71,7 +71,7 @@ describe('check-migrations plan()', () => {
       { status: 'A', file: 'packages/db/drizzle/0060_x.sql' },
     ]);
     expect(result.ok).toBe(false);
-    expect(result.errors.some((e) => e.includes('Migration number 0060 (0060_x.sql) must be strictly greater than origin/main\'s highest migration (0066)'))).toBe(true);
+    expect(result.errors.some((e: string) => e.includes('Migration number 0060 (0060_x.sql) must be strictly greater than origin/main\'s highest migration (0066)'))).toBe(true);
   });
 
   it('fails when an added migration filename is malformed', () => {
@@ -86,7 +86,7 @@ describe('check-migrations plan()', () => {
     for (const file of cases) {
       const result = plan(sampleMain, [{ status: 'A', file }]);
       expect(result.ok).toBe(false);
-      expect(result.errors.some((e) => e.includes(`Migration filename "${file}" is malformed`))).toBe(true);
+      expect(result.errors.some((e: string) => e.includes(`Migration filename "${file}" is malformed`))).toBe(true);
     }
   });
 
