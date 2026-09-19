@@ -1,8 +1,8 @@
-import { CarbonShell } from '@/components/layout/CarbonShell';
-import { ChatBot } from '@/components/chatbot/ChatBot';
-import { CommandPalette } from '@/components/CommandPalette';
-import type { ReactNode } from 'react';
-import '@/styles/carbon.scss';
+import { CarbonShell } from "@/components/layout/CarbonShell";
+import { ChatBot } from "@/components/chatbot/ChatBot";
+import { CommandPalette } from "@/components/CommandPalette";
+import type { ReactNode } from "react";
+import "@/styles/carbon.scss";
 
 export default async function DashboardLayout({
   children,
