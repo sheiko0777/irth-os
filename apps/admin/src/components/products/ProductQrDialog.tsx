@@ -77,7 +77,7 @@ export function ProductQrDialog({
     { enabled: !!open && !!currentSku }
   );
 
-  const binLocation = activeItem?.binLocation || (lookupData?.found ? lookupData.item.binLocation : null) || null;
+  const binLocation = activeItem?.binLocation ?? lookupData?.item?.binLocation ?? null;
 
   const qrSvg = useMemo(() => {
     if (!currentSku) return '';
