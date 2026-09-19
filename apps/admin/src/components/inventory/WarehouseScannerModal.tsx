@@ -27,7 +27,7 @@ type Mode = 'in' | 'out' | 'lookup';
 
 interface ScannedEntry {
   inventoryItemId: string;
-  variantId: string;
+  variantId: string | null;
   productId: string;
   productName: string;
   productNameAr?: string | null;
@@ -92,6 +92,11 @@ export function WarehouseScannerModal({
         }
 
         const item = res.item;
+        if (!item.inventoryItemId) {
+          toast.error(`المنتج "${item.productNameAr || item.productName}" ليس له سجل مخزون.`);
+          return;
+        }
+
         const entryId = item.inventoryItemId;
 
         setScannedItems((prev) => {
@@ -100,7 +105,7 @@ export function WarehouseScannerModal({
           const newQty = (existing?.scannedQty ?? 0) + 1;
 
           const updated: ScannedEntry = {
-            inventoryItemId: item.inventoryItemId!,
+            inventoryItemId: entryId,
             variantId: item.variantId,
             productId: item.productId,
             productName: item.productName,

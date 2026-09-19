@@ -39,11 +39,11 @@ function gfPolyMul(p1: Uint8Array, p2: Uint8Array): Uint8Array {
 }
 
 function getRsGeneratorPoly(degree: number): Uint8Array {
-  let poly = new Uint8Array([1]);
+  let poly: any = new Uint8Array([1]);
   for (let i = 0; i < degree; i++) {
     poly = gfPolyMul(poly, new Uint8Array([1, EXP_TABLE[i]]));
   }
-  return poly;
+  return poly as Uint8Array;
 }
 
 function rsComputeRemainder(data: Uint8Array, generator: Uint8Array): Uint8Array {

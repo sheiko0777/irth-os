@@ -366,7 +366,7 @@ export const inventoryRouter = router({
 
         await withAudit(
           tx,
-          async () => adjustedItems,
+          async () => ({ id: adjustedItems[0]?.id }),
           {
             orgId: ctx.orgId,
             userId: ctx.userId,
