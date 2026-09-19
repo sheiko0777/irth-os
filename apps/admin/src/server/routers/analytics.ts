@@ -292,5 +292,389 @@ export const analyticsRouter = router({
       const data = (rows as unknown as Row[]).map((r) => ({ path: r.path, views: Number(r.views) }));
       return { data, error: null, meta: null };
     }),
+
+  /**
+   * Real-time & Abandoned Cart Monitor.
+   * Analyzes cart_viewed, product_added_to_cart, checkout_started, and checkout_completed events.
+   */
+  cartMonitor: protectedProcedure
+    .input(z.object({
+      days: z.number().min(1).max(90).default(7),
+      status: z.enum(['all', 'abandoned', 'active', 'converted']).default('all'),
+      limit: z.number().min(5).max(100).default(50),
+    }))
+    .query(async ({ ctx, input }) => {
+      const sinceIso = daysAgoIso(input.days);
+
+      const rows = await ctx.withOrg(async (tx) => tx.execute(sql`
+        SELECT
+          e.id,
+          e.event_name,
+          e.occurred_at,
+          e.metadata,
+          s.id AS session_id,
+          s.client_id_hash,
+          s.landing_path,
+          s.source,
+          s.medium,
+          c.name AS customer_name,
+          c.email AS customer_email,
+          c.phone AS customer_phone
+        FROM storefront_events e
+        JOIN storefront_sessions s ON s.id = e.session_id
+        LEFT JOIN customers c ON c.id = s.customer_id
+        WHERE e.org_id = ${ctx.orgId}
+          AND e.occurred_at >= ${sinceIso}
+          AND e.event_name IN ('cart_viewed', 'product_added_to_cart', 'checkout_started', 'checkout_completed')
+        ORDER BY e.occurred_at DESC
+        LIMIT 500
+      `));
+
+      type EventRow = {
+        id: string;
+        event_name: string;
+        occurred_at: string;
+        metadata: any;
+        session_id: string;
+        client_id_hash: string;
+        landing_path: string | null;
+        source: string | null;
+        medium: string | null;
+        customer_name: string | null;
+        customer_email: string | null;
+        customer_phone: string | null;
+      };
+
+      const eventRows = rows as unknown as EventRow[];
+
+      type CartGroup = {
+        cartToken: string;
+        sessionId: string;
+        lastEventName: string;
+        lastOccurredAt: Date;
+        customerName: string | null;
+        customerEmail: string | null;
+        customerPhone: string | null;
+        totalPrice: number;
+        currency: string;
+        abandonedCheckoutUrl: string | null;
+        lineItems: Array<{ title: string; quantity: number; price: number; sku?: string | null }>;
+        isConverted: boolean;
+      };
+
+      const cartsMap = new Map<string, CartGroup>();
+
+      for (const row of eventRows) {
+        const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+        const key = meta.checkoutToken || meta.cartToken || row.session_id;
+
+        const existing = cartsMap.get(key);
+        const occurred = new Date(row.occurred_at);
+
+        if (!existing) {
+          const items: Array<{ title: string; quantity: number; price: number; sku?: string | null }> = [];
+          if (Array.isArray(meta.lineItems)) {
+            for (const item of meta.lineItems) {
+              items.push({
+                title: item.title || item.variantTitle || 'منتج',
+                quantity: Number(item.quantity) || 1,
+                price: Number(item.price) || 0,
+                sku: item.sku ?? null,
+              });
+            }
+          } else if (Array.isArray(meta.lines)) {
+            for (const item of meta.lines) {
+              items.push({
+                title: item.title || 'منتج',
+                quantity: Number(item.quantity) || 1,
+                price: Number(item.price) || 0,
+                sku: item.sku ?? null,
+              });
+            }
+          } else if (meta.title) {
+            items.push({
+              title: meta.title,
+              quantity: 1,
+              price: Number(meta.price) || 0,
+              sku: meta.sku ?? null,
+            });
+          }
+
+          const rawTotal = meta.totalPrice || (items.length > 0 ? items.reduce((sum, it) => sum + (it.price * it.quantity), 0) : 0);
+          const numTotal = Number(rawTotal) || 0;
+
+          cartsMap.set(key, {
+            cartToken: key,
+            sessionId: row.session_id,
+            lastEventName: row.event_name,
+            lastOccurredAt: occurred,
+            customerName: row.customer_name || meta.customerName || null,
+            customerEmail: row.customer_email || meta.email || null,
+            customerPhone: row.customer_phone || meta.phone || null,
+            totalPrice: numTotal,
+            currency: meta.currency || 'EGP',
+            abandonedCheckoutUrl: meta.abandonedCheckoutUrl || null,
+            lineItems: items,
+            isConverted: row.event_name === 'checkout_completed',
+          });
+        } else {
+          if (row.event_name === 'checkout_completed') {
+            existing.isConverted = true;
+          }
+          if (occurred > existing.lastOccurredAt) {
+            existing.lastOccurredAt = occurred;
+            existing.lastEventName = row.event_name;
+          }
+          if (!existing.customerEmail && (row.customer_email || meta.email)) {
+            existing.customerEmail = row.customer_email || meta.email;
+          }
+          if (!existing.customerPhone && (row.customer_phone || meta.phone)) {
+            existing.customerPhone = row.customer_phone || meta.phone;
+          }
+          if (!existing.customerName && (row.customer_name || meta.customerName)) {
+            existing.customerName = row.customer_name || meta.customerName;
+          }
+          if (!existing.abandonedCheckoutUrl && meta.abandonedCheckoutUrl) {
+            existing.abandonedCheckoutUrl = meta.abandonedCheckoutUrl;
+          }
+        }
+      }
+
+      const nowMs = Date.now();
+      const ABANDONED_THRESHOLD_MS = 20 * 60 * 1000;
+
+      const allCarts = Array.from(cartsMap.values()).map((c) => {
+        let status: 'abandoned' | 'active' | 'converted';
+        if (c.isConverted) {
+          status = 'converted';
+        } else if (nowMs - c.lastOccurredAt.getTime() > ABANDONED_THRESHOLD_MS) {
+          status = 'abandoned';
+        } else {
+          status = 'active';
+        }
+
+        return {
+          id: c.cartToken,
+          status,
+          customerName: c.customerName,
+          customerEmail: c.customerEmail,
+          customerPhone: c.customerPhone,
+          totalPrice: c.totalPrice,
+          currency: c.currency,
+          lineItems: c.lineItems,
+          itemsCount: c.lineItems.reduce((acc, item) => acc + item.quantity, 0),
+          lastActiveAt: c.lastOccurredAt.toISOString(),
+          abandonedCheckoutUrl: c.abandonedCheckoutUrl,
+        };
+      });
+
+      const totalCarts = allCarts.length;
+      const abandonedCarts = allCarts.filter((c) => c.status === 'abandoned');
+      const activeCarts = allCarts.filter((c) => c.status === 'active');
+      const convertedCarts = allCarts.filter((c) => c.status === 'converted');
+
+      const abandonedValue = abandonedCarts.reduce((sum, c) => sum + c.totalPrice, 0);
+      const convertedValue = convertedCarts.reduce((sum, c) => sum + c.totalPrice, 0);
+      const abandonmentRate = totalCarts > 0 ? Math.round((abandonedCarts.length / totalCarts) * 100) : 0;
+
+      let filteredCarts = allCarts;
+      if (input.status !== 'all') {
+        filteredCarts = allCarts.filter((c) => c.status === input.status);
+      }
+      filteredCarts.sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime());
+
+      return {
+        data: {
+          kpis: {
+            totalCarts,
+            abandonedCount: abandonedCarts.length,
+            activeCount: activeCarts.length,
+            convertedCount: convertedCarts.length,
+            abandonmentRate,
+            abandonedValue,
+            convertedValue,
+          },
+          carts: filteredCarts.slice(0, input.limit),
+        },
+        error: null,
+        meta: null,
+      };
+    }),
+
+  /**
+   * 5-Stage Customer Conversion Funnel:
+   * Sessions -> Product Viewed -> Cart Added -> Checkout Started -> Orders Completed
+   */
+  customerFunnel: protectedProcedure
+    .input(z.object({ days: z.number().min(1).max(90).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const sinceIso = daysAgoIso(input.days);
+
+      const [sessionsRow, eventsRows, ordersRow] = await ctx.withOrg(async (tx) => Promise.all([
+        tx.execute(sql`
+          SELECT COUNT(DISTINCT id)::int AS count
+          FROM storefront_sessions
+          WHERE org_id = ${ctx.orgId} AND first_seen_at >= ${sinceIso}
+        `),
+        tx.execute(sql`
+          SELECT
+            event_name,
+            COUNT(DISTINCT session_id)::int AS unique_sessions,
+            COUNT(*)::int AS total_events
+          FROM storefront_events
+          WHERE org_id = ${ctx.orgId} AND occurred_at >= ${sinceIso}
+            AND event_name IN ('product_viewed', 'product_added_to_cart', 'cart_viewed', 'checkout_started', 'checkout_completed')
+          GROUP BY event_name
+        `),
+        tx.execute(sql`
+          SELECT COUNT(*)::int AS count
+          FROM orders
+          WHERE org_id = ${ctx.orgId} AND created_at >= ${sinceIso}
+            AND status != 'cancelled'
+        `),
+      ]));
+
+      type CountRow = { count: number };
+      type EventCountRow = { event_name: string; unique_sessions: number; total_events: number };
+
+      const totalSessions = Number((sessionsRow as unknown as CountRow[])[0]?.count ?? 0);
+      const bookedOrders = Number((ordersRow as unknown as CountRow[])[0]?.count ?? 0);
+
+      const eventsMap = new Map<string, { uniqueSessions: number; totalEvents: number }>();
+      for (const row of eventsRows as unknown as EventCountRow[]) {
+        eventsMap.set(row.event_name, {
+          uniqueSessions: Number(row.unique_sessions),
+          totalEvents: Number(row.total_events),
+        });
+      }
+
+      const productViews = eventsMap.get('product_viewed')?.uniqueSessions ?? 0;
+      const cartAdds = Math.max(eventsMap.get('product_added_to_cart')?.uniqueSessions ?? 0, eventsMap.get('cart_viewed')?.uniqueSessions ?? 0);
+      const checkoutStarts = eventsMap.get('checkout_started')?.uniqueSessions ?? 0;
+      const pixelCompletions = eventsMap.get('checkout_completed')?.uniqueSessions ?? 0;
+      const completedPurchases = Math.max(bookedOrders, pixelCompletions);
+
+      const baseSessions = Math.max(totalSessions, productViews, cartAdds, checkoutStarts, completedPurchases);
+
+      const funnel = [
+        { stage: 'visitors', label: 'الزيارات', labelEn: 'Visitors', count: baseSessions, rate: 100 },
+        { stage: 'product_viewed', label: 'تصفح المنتجات', labelEn: 'Product Views', count: productViews, rate: baseSessions > 0 ? Math.round((productViews / baseSessions) * 100) : 0 },
+        { stage: 'added_to_cart', label: 'إضافة للسلة', labelEn: 'Added to Cart', count: cartAdds, rate: baseSessions > 0 ? Math.round((cartAdds / baseSessions) * 100) : 0 },
+        { stage: 'checkout_started', label: 'بدء الدفع', labelEn: 'Checkout Started', count: checkoutStarts, rate: baseSessions > 0 ? Math.round((checkoutStarts / baseSessions) * 100) : 0 },
+        { stage: 'purchased', label: 'إتمام الشراء', labelEn: 'Completed Orders', count: completedPurchases, rate: baseSessions > 0 ? Math.round((completedPurchases / baseSessions) * 100) : 0 },
+      ];
+
+      return {
+        data: {
+          funnel,
+          conversionRate: baseSessions > 0 ? +(completedPurchases / baseSessions * 100).toFixed(2) : 0,
+        },
+        error: null,
+        meta: null,
+      };
+    }),
+
+  /**
+   * Live customer activity stream (last N storefront events).
+   */
+  customerActivityStream: protectedProcedure
+    .input(z.object({ limit: z.number().min(10).max(100).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.withOrg(async (tx) => tx.execute(sql`
+        SELECT
+          e.id,
+          e.event_name,
+          e.occurred_at,
+          e.path,
+          e.product_id,
+          e.search_term,
+          e.metadata,
+          s.landing_path,
+          s.source,
+          s.medium,
+          c.name AS customer_name,
+          c.email AS customer_email
+        FROM storefront_events e
+        JOIN storefront_sessions s ON s.id = e.session_id
+        LEFT JOIN customers c ON c.id = s.customer_id
+        WHERE e.org_id = ${ctx.orgId}
+        ORDER BY e.occurred_at DESC
+        LIMIT ${input.limit}
+      `));
+
+      type StreamRow = {
+        id: string;
+        event_name: string;
+        occurred_at: string;
+        path: string | null;
+        product_id: string | null;
+        search_term: string | null;
+        metadata: any;
+        landing_path: string | null;
+        source: string | null;
+        medium: string | null;
+        customer_name: string | null;
+        customer_email: string | null;
+      };
+
+      const data = (rows as unknown as StreamRow[]).map((r) => {
+        const meta = typeof r.metadata === 'string' ? JSON.parse(r.metadata) : (r.metadata || {});
+        return {
+          id: r.id,
+          eventName: r.event_name,
+          occurredAt: r.occurred_at,
+          path: r.path,
+          productId: r.product_id,
+          searchTerm: r.search_term,
+          title: meta.title || null,
+          price: meta.price ? Number(meta.price) : null,
+          totalPrice: meta.totalPrice ? Number(meta.totalPrice) : null,
+          source: r.source || 'direct',
+          medium: r.medium || '(none)',
+          customerName: r.customer_name || meta.customerName || null,
+          customerEmail: r.customer_email || meta.email || null,
+        };
+      });
+
+      return { data, error: null, meta: null };
+    }),
+
+  /**
+   * Top products abandoned in carts without purchase.
+   */
+  abandonedProducts: protectedProcedure
+    .input(z.object({ days: z.number().min(1).max(90).default(30), limit: z.number().min(5).max(30).default(10) }))
+    .query(async ({ ctx, input }) => {
+      const sinceIso = daysAgoIso(input.days);
+
+      const rows = await ctx.withOrg(async (tx) => tx.execute(sql`
+        SELECT
+          COALESCE(e.metadata->>'title', e.path, 'منتج غير محدد') AS title,
+          COUNT(*)::int AS abandon_count,
+          COALESCE(SUM(NULLIF(e.metadata->>'price', '')::numeric), 0)::numeric AS estimated_value
+        FROM storefront_events e
+        WHERE e.org_id = ${ctx.orgId}
+          AND e.occurred_at >= ${sinceIso}
+          AND e.event_name IN ('product_added_to_cart', 'cart_viewed')
+          AND NOT EXISTS (
+            SELECT 1 FROM storefront_events comp
+            WHERE comp.session_id = e.session_id
+              AND comp.event_name = 'checkout_completed'
+              AND comp.occurred_at >= e.occurred_at
+          )
+        GROUP BY 1
+        ORDER BY abandon_count DESC
+        LIMIT ${input.limit}
+      `));
+
+      type ProdRow = { title: string; abandon_count: number; estimated_value: string };
+      const data = (rows as unknown as ProdRow[]).map((r) => ({
+        title: r.title,
+        abandonCount: Number(r.abandon_count),
+        estimatedValue: Number(r.estimated_value),
+      }));
+
+      return { data, error: null, meta: null };
+    }),
 });
 

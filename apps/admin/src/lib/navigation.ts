@@ -3,7 +3,7 @@ import {
   Box, FolderOpen, Warehouse, ClipboardList, ShoppingBag, RotateCcw,
   DollarSign, PieChart, Tag, List, Megaphone, Gift,
   Truck, MapPin, FileText, Plug2,
-  Settings, UserCog, BrainCircuit,
+  Settings, UserCog, BrainCircuit, ShieldCheck,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -52,6 +52,7 @@ export function buildNavGroups(locale: string): NavGroup[] {
       items: [
         { href: `/${locale}/finance`, label: 'المالية', icon: DollarSign, keywords: 'finance money' },
         { href: `/${locale}/analytics`, label: 'التحليلات', icon: PieChart, keywords: 'analytics reports' },
+        { href: `/${locale}/analytics?tab=carts`, label: 'سلات الشراء وسلوك العملاء', icon: ShoppingCart, keywords: 'carts abandoned behavior pixel shopify سلات متروكة زوار عملاء' },
         { href: `/${locale}/coupons`, label: 'الكوبونات', icon: Tag, keywords: 'coupons discount' },
         { href: `/${locale}/pricelists`, label: 'قوائم الأسعار', icon: List, keywords: 'pricelists pricing' },
         { href: `/${locale}/campaigns`, label: 'الحملات', icon: Megaphone, keywords: 'campaigns marketing' },
@@ -68,10 +69,11 @@ export function buildNavGroups(locale: string): NavGroup[] {
       ],
     },
     {
-      label: 'الإعدادات',
+      label: 'الإعدادات والرقابة',
       items: [
         { href: `/${locale}/settings`, label: 'الإعدادات', icon: Settings, keywords: 'settings' },
         { href: `/${locale}/settings/members`, label: 'الأعضاء', icon: UserCog, keywords: 'members team users' },
+        { href: `/${locale}/audit`, label: 'سجلات الرقابة والنشاط', icon: ShieldCheck, keywords: 'audit logs activity history security رقابة سجلات حركات' },
       ],
     },
   ];

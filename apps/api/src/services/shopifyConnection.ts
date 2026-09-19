@@ -185,6 +185,8 @@ const WEBHOOK_TOPIC_ROUTES: Record<string, string> = {
   CUSTOMERS_CREATE: 'customers-upsert',
   CUSTOMERS_UPDATE: 'customers-upsert',
   INVENTORY_LEVELS_UPDATE: 'inventory-levels-update',
+  CHECKOUTS_CREATE: 'checkouts-upsert',
+  CHECKOUTS_UPDATE: 'checkouts-upsert',
   APP_UNINSTALLED: 'app-uninstalled',
 };
 

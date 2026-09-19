@@ -4,7 +4,8 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatBox } from '@/components/ui/StatBox';
-import { TrendingUp, Box, Warehouse } from 'lucide-react';
+import { TrendingUp, Box, Warehouse, Globe, FileText } from 'lucide-react';
+import { AnalyticsTabs } from './AnalyticsTabs';
 
 function fmt(n: number) {
   return n.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -28,14 +29,21 @@ function GrowthBadge({ pct }: { pct: number | null }) {
   );
 }
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
+  const { tab } = await searchParams;
   const caller = await serverCaller();
 
-  const [kpi, revenueRes, topProductsRes, inventoryRes] = await Promise.all([
+  const [kpi, revenueRes, topProductsRes, inventoryRes, sourcesRes, topPagesRes] = await Promise.all([
     caller.analytics.kpiSummary(),
     caller.analytics.revenue({ days: 14 }),
     caller.analytics.topProducts({ limit: 10 }),
     caller.analytics.inventoryTurnover({ days: 30 }),
+    caller.analytics.storefrontSources({ days: 30 }),
+    caller.analytics.storefrontTopPages({ days: 30, limit: 10 }),
   ]);
 
   const kpiData = kpi.data;
@@ -43,6 +51,8 @@ export default async function AnalyticsPage() {
   const topProducts = topProductsRes.data ?? [];
   const inventory = inventoryRes.data ?? [];
   const lowStockCount = inventoryRes.lowStockCount ?? 0;
+  const sources = sourcesRes.data ?? [];
+  const topPages = topPagesRes.data ?? [];
 
   // Build bar chart data from revenue series
   const revenueChartData = revenueData.map((r) => ({
@@ -51,11 +61,11 @@ export default async function AnalyticsPage() {
   }));
 
   const maxRevenue = Math.max(...topProducts.map((p) => p.revenue), 1);
+  const maxSourceSessions = Math.max(...sources.map((s) => s.sessions), 1);
+  const maxPageViews = Math.max(...topPages.map((p) => p.views), 1);
 
-  return (
+  const salesContent = (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">التقارير والتحليلات</h1>
-
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatBox label="طلبات اليوم" value={fmt(kpiData.ordersToday)} />
@@ -212,6 +222,94 @@ export default async function AnalyticsPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  const sourcesContent = (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Traffic Sources */}
+      <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-lg text-[var(--t1)] flex items-center gap-2">
+            <Globe className="w-5 h-5 text-[var(--gold)]" />
+            <span>مصادر الزيارات (Traffic Sources)</span>
+          </h2>
+          <span className="text-xs text-[var(--t2)]">آخر 30 يوم</span>
+        </div>
+        {sources.length === 0 ? (
+          <EmptyState
+            icon={Globe}
+            title="لا توجد بيانات مصادر زيارات"
+            hint="سيبدأ رصد مصادر الزيارات تلقائياً بمجرد زيارة المتجر."
+          />
+        ) : (
+          <div className="space-y-3">
+            {sources.map((s, i) => {
+              const pct = Math.round((s.sessions / maxSourceSessions) * 100);
+              return (
+                <div key={i} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--t1)] font-medium">
+                      {s.source} <span className="text-[var(--t3)]">({s.medium})</span>
+                    </span>
+                    <span className="font-semibold text-[var(--gold)]">{fmt(s.sessions)} زيارة</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-[var(--rim1)]">
+                    <div className="h-1.5 rounded-full bg-[var(--gold)]" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Top Viewed Pages */}
+      <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-lg text-[var(--t1)] flex items-center gap-2">
+            <FileText className="w-5 h-5 text-[var(--gold)]" />
+            <span>الصفحات الأكثر زيارة</span>
+          </h2>
+          <span className="text-xs text-[var(--t2)]">آخر 30 يوم</span>
+        </div>
+        {topPages.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="لا توجد مشاهدات صفحات"
+            hint="يتم تسجيل المشاهدات فور تفعيل البيكسل على الموقع."
+          />
+        ) : (
+          <div className="space-y-3">
+            {topPages.map((p, i) => {
+              const pct = Math.round((p.views / maxPageViews) * 100);
+              return (
+                <div key={i} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--t1)] font-mono truncate max-w-[70%]" dir="ltr">{p.path}</span>
+                    <span className="font-semibold text-[var(--emerald)]">{fmt(p.views)} مشاهدة</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-[var(--rim1)]">
+                    <div className="h-1.5 rounded-full bg-[var(--emerald)]" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">التقارير والتحليلات وسلوك العملاء</h1>
+
+      <AnalyticsTabs
+        initialTab={tab === 'carts' ? 'carts' : 'sales'}
+        salesContent={salesContent}
+        sourcesContent={sourcesContent}
+      />
     </div>
   );
 }

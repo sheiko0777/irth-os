@@ -37,15 +37,15 @@ export const stocktakingRouter = router({
     create: adminProcedure
       .input(z.object({ notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
-        const [session] = await ctx.withOrg(async (tx) => tx
-          .insert(stocktakingSessions)
-          .values({
+        const [session] = await ctx.withOrg(async (tx) => {
+          const [s] = await tx.insert(stocktakingSessions).values({
             orgId: ctx.orgId,
             status: 'in_progress',
             startedAt: new Date(),
             notes: input.notes ?? null,
-          })
-          .returning());
+          }).returning();
+          await initStocktakeItems(tx, ctx.orgId, s.id);
+          return [s]; });
         return { data: session, error: null };
       }),
 
@@ -328,4 +328,183 @@ export const stocktakingRouter = router({
 
     return { data: { totalSessions, activeSessions, lastCompletedAt }, error: null };
   }),
+
+  recordScan: protectedProcedure
+    .input(z.object({
+      sessionId: z.string().uuid(),
+      code: z.string().min(1),
+      quantityDelta: z.number().int().default(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      let raw = input.code.trim();
+      if (raw.toLowerCase().startsWith('irth:sku:')) {
+        raw = raw.slice(9);
+      } else if (raw.toLowerCase().startsWith('sku:')) {
+        raw = raw.slice(4);
+      }
+
+      return await ctx.withOrg(async (tx) => {
+        const [session] = await tx
+          .select()
+          .from(stocktakingSessions)
+          .where(
+            and(
+              eq(stocktakingSessions.id, input.sessionId),
+              eq(stocktakingSessions.orgId, ctx.orgId)
+            )
+          )
+          .limit(1);
+
+        if (!session) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'جلسة الجرد غير موجودة' });
+        }
+        if (session.status !== 'in_progress') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'جلسة الجرد غير نشطة أو مكتملة بالفعل' });
+        }
+
+        const [existingItem] = await tx
+          .select()
+          .from(stocktakingItems)
+          .where(
+            and(
+              eq(stocktakingItems.sessionId, input.sessionId),
+              eq(stocktakingItems.orgId, ctx.orgId),
+              eq(stocktakingItems.sku, raw)
+            )
+          )
+          .limit(1);
+
+        if (existingItem) {
+          const currentActual = existingItem.actualQuantity ?? 0;
+          const newActual = currentActual + input.quantityDelta;
+          const variance = newActual - existingItem.expectedQuantity;
+
+          const [updated] = await tx
+            .update(stocktakingItems)
+            .set({ actualQuantity: newActual, variance })
+            .where(
+              and(
+                eq(stocktakingItems.id, existingItem.id),
+                eq(stocktakingItems.orgId, ctx.orgId)
+              )
+            )
+            .returning();
+
+          return { data: updated, isNew: false, error: null };
+        }
+
+        const [variantRow] = await tx
+          .select({
+            productId: products.id,
+            variantId: productVariants.id,
+            productName: products.name,
+            productNameAr: products.nameAr,
+            variantName: productVariants.name,
+            sku: productVariants.sku,
+          })
+          .from(productVariants)
+          .innerJoin(products, eq(productVariants.productId, products.id))
+          .where(
+            and(
+              eq(products.orgId, ctx.orgId),
+              eq(productVariants.sku, raw)
+            )
+          )
+          .limit(1);
+
+        if (variantRow) {
+          const variance = input.quantityDelta;
+          const [newItem] = await tx
+            .insert(stocktakingItems)
+            .values({
+              sessionId: input.sessionId,
+              orgId: ctx.orgId,
+              productId: variantRow.productId,
+              variantId: variantRow.variantId,
+              sku: variantRow.sku,
+              productName: `${variantRow.productNameAr || variantRow.productName} - ${variantRow.variantName}`,
+              expectedQuantity: 0,
+              actualQuantity: input.quantityDelta,
+              variance,
+            })
+            .returning();
+
+          return { data: newItem, isNew: true, error: null };
+        }
+
+        const [prodRow] = await tx
+          .select({
+            productId: products.id,
+            productName: products.name,
+            productNameAr: products.nameAr,
+            sku: products.sku,
+          })
+          .from(products)
+          .where(
+            and(
+              eq(products.orgId, ctx.orgId),
+              eq(products.sku, raw)
+            )
+          )
+          .limit(1);
+
+        if (prodRow) {
+          const variance = input.quantityDelta;
+          const [newItem] = await tx
+            .insert(stocktakingItems)
+            .values({
+              sessionId: input.sessionId,
+              orgId: ctx.orgId,
+              productId: prodRow.productId,
+              variantId: null,
+              sku: prodRow.sku,
+              productName: prodRow.productNameAr || prodRow.productName,
+              expectedQuantity: 0,
+              actualQuantity: input.quantityDelta,
+              variance,
+            })
+            .returning();
+
+          return { data: newItem, isNew: true, error: null };
+        }
+
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `الرمز "${raw}" غير مسجل في كتالوج المنتجات`,
+        });
+      });
+    }),
 });
+
+// Helper hoisted function to populate stocktaking items without shifting lines
+async function initStocktakeItems(tx: any, orgId: string, sessionId: string) {
+  const variantsWithStock = await tx
+    .select({
+      productId: products.id,
+      variantId: productVariants.id,
+      productName: products.name,
+      productNameAr: products.nameAr,
+      variantName: productVariants.name,
+      sku: productVariants.sku,
+      quantity: inventoryItems.quantity,
+    })
+    .from(productVariants)
+    .innerJoin(products, eq(productVariants.productId, products.id))
+    .leftJoin(inventoryItems, and(eq(inventoryItems.variantId, productVariants.id), eq(inventoryItems.orgId, orgId)))
+    .where(eq(products.orgId, orgId));
+
+  if (variantsWithStock.length > 0) {
+    const itemsToInsert = variantsWithStock.map((row: any) => ({
+      sessionId,
+      orgId,
+      productId: row.productId,
+      variantId: row.variantId,
+      sku: row.sku,
+      productName: `${row.productNameAr || row.productName}${row.variantName && row.variantName !== 'Default Title' && row.variantName !== 'الأساسي' ? ` - ${row.variantName}` : ''}`,
+      expectedQuantity: row.quantity ?? 0,
+      actualQuantity: null,
+      variance: null,
+    }));
+    await tx.insert(stocktakingItems).values(itemsToInsert);
+  }
+}

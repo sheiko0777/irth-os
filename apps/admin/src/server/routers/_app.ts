@@ -26,8 +26,10 @@ import { customerSegmentsRouter } from './customerSegments';
 import { platformAdminRouter } from './platformAdmin';
 import { meRouter } from './me';
 import { deadLettersRouter } from './deadLetters';
+import { auditRouter } from './audit';
 
 export const appRouter = router({
+    audit: auditRouter,
     me: meRouter,
     dashboard: dashboardRouter,
     orders: ordersRouter,

@@ -148,4 +148,39 @@ describe('analytics router', () => {
       meta: null,
     });
   });
+
+  it('cartMonitor: yields empty data and zeroed kpis when no events', async () => {
+    const res = await caller.cartMonitor({ days: 7 });
+    expect(res.data?.kpis).toEqual({
+      totalCarts: 0,
+      abandonedCount: 0,
+      activeCount: 0,
+      convertedCount: 0,
+      abandonmentRate: 0,
+      abandonedValue: 0,
+      convertedValue: 0,
+    });
+    expect(res.data?.carts).toEqual([]);
+    expect(res.error).toBeNull();
+  });
+
+  it('customerFunnel: yields 5-step funnel structure', async () => {
+    const res = await caller.customerFunnel({ days: 30 });
+    expect(res.data?.funnel).toHaveLength(5);
+    expect(res.data?.funnel[0].stage).toBe('visitors');
+    expect(res.data?.conversionRate).toBe(0);
+    expect(res.error).toBeNull();
+  });
+
+  it('customerActivityStream: yields empty array on empty db', async () => {
+    const res = await caller.customerActivityStream({ limit: 10 });
+    expect(res.data).toEqual([]);
+    expect(res.error).toBeNull();
+  });
+
+  it('abandonedProducts: yields empty array on empty db', async () => {
+    const res = await caller.abandonedProducts({ days: 30, limit: 10 });
+    expect(res.data).toEqual([]);
+    expect(res.error).toBeNull();
+  });
 });
