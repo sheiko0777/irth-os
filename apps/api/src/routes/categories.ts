@@ -5,11 +5,12 @@ import { z } from 'zod';
 import { db, withOrg } from '../db';
 import { categories, withAudit, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
+import { requireOrgId } from '../middlewares/requireOrgId';
 import { requirePermission } from '../middlewares/requirePermission';
 
 export const categoriesRouter = new Hono();
 
-categoriesRouter.get('/', requirePermission('categories', 'view'), async (c: Context) => {
+categoriesRouter.get('/', requireOrgId(), requirePermission('categories', 'view'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
@@ -27,7 +28,7 @@ const createCategorySchema = z.object({
   parentId: z.string().uuid().optional(),
 });
 
-categoriesRouter.post('/', requirePermission('categories', 'write'), async (c: Context) => {
+categoriesRouter.post('/', requireOrgId(), requirePermission('categories', 'write'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
@@ -64,7 +65,7 @@ categoriesRouter.post('/', requirePermission('categories', 'write'), async (c: C
   }
 });
 
-categoriesRouter.delete('/:id', requirePermission('categories', 'delete'), async (c: Context) => {
+categoriesRouter.delete('/:id', requireOrgId(), requirePermission('categories', 'delete'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
