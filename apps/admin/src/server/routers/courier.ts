@@ -24,18 +24,18 @@ export const courierRouter = router({
           conditions.push(eq(courierShipments.courierStatus, input.status));
         }
 
-        const [data, totalRowResult] = await ctx.withOrg(async (tx) => Promise.all([
-          tx
+        const [data, totalRowResult] = await Promise.all([
+          ctx.withOrg(async (tx) => tx
             .select()
             .from(courierShipments)
             .where(and(...conditions))
             .limit(input.pageSize)
-            .offset(offset),
-          tx
+            .offset(offset)),
+          ctx.withOrg(async (tx) => tx
             .select({ count: count() })
             .from(courierShipments)
-            .where(and(...conditions))
-        ]));
+            .where(and(...conditions)))
+        ]);
 
         const totalRow = totalRowResult[0];
 
@@ -91,18 +91,18 @@ export const courierRouter = router({
           conditions.push(eq(courierRemittances.status, input.status));
         }
 
-        const [data, totalRowResult] = await ctx.withOrg(async (tx) => Promise.all([
-          tx
+        const [data, totalRowResult] = await Promise.all([
+          ctx.withOrg(async (tx) => tx
             .select()
             .from(courierRemittances)
             .where(and(...conditions))
             .limit(input.pageSize)
-            .offset(offset),
-          tx
+            .offset(offset)),
+          ctx.withOrg(async (tx) => tx
             .select({ count: count() })
             .from(courierRemittances)
-            .where(and(...conditions))
-        ]));
+            .where(and(...conditions)))
+        ]);
 
         const totalRow = totalRowResult[0];
 
@@ -255,26 +255,26 @@ export const courierRouter = router({
 
   summary: requirePermission('courier', 'view').query(async ({ ctx }) => {
     // We will run the aggregations using Promise.all per the memory guidelines
-    const [collectedRes, remittedRes, unremittedRes, statusesRes] = await ctx.withOrg(async (tx) => Promise.all([
+    const [collectedRes, remittedRes, unremittedRes, statusesRes] = await Promise.all([
       // The CAST is gone with the column: cod_amount_minor is already bigint,
       // so sum() aggregates it natively.
-      tx.select({ total: sum(courierShipments.codAmountMinor) })
+      ctx.withOrg(async (tx) => tx.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
-        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true))),
+        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true)))),
 
-      tx.select({ total: sum(courierShipments.codAmountMinor) })
+      ctx.withOrg(async (tx) => tx.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
-        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codRemitted, true))),
+        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codRemitted, true)))),
 
-      tx.select({ total: sum(courierShipments.codAmountMinor) })
+      ctx.withOrg(async (tx) => tx.select({ total: sum(courierShipments.codAmountMinor) })
         .from(courierShipments)
-        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true), eq(courierShipments.codRemitted, false))),
+        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true), eq(courierShipments.codRemitted, false)))),
 
-      tx.select({ status: courierShipments.courierStatus, count: count() })
+      ctx.withOrg(async (tx) => tx.select({ status: courierShipments.courierStatus, count: count() })
         .from(courierShipments)
         .where(eq(courierShipments.orgId, ctx.orgId))
-        .groupBy(courierShipments.courierStatus)
-    ]));
+        .groupBy(courierShipments.courierStatus))
+    ]);
 
     const shipmentsByStatus = statusesRes.reduce((acc: Record<string, number>, curr: { status: string; count: number }) => {
       acc[curr.status] = curr.count;
