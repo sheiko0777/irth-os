@@ -6,12 +6,13 @@ import { z } from 'zod';
 import { db, withOrg } from '../db';
 import { products, productVariants, withAudit, jsonSafe, emitOutboxEvent } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
-import { requireRole } from '../middlewares/requireRole';
+import { requireOrgId } from '../middlewares/requireOrgId';
+
 import { requirePermission } from '../middlewares/requirePermission';
 
 export const productsRouter = new Hono();
 
-productsRouter.get('/', requirePermission('products', 'view'), async (c: Context) => {
+productsRouter.get('/', requireOrgId(), requirePermission('products', 'view'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
@@ -59,7 +60,7 @@ const createProductSchema = z.object({
   images: z.array(z.any()).default([]),
 });
 
-productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
+productsRouter.post('/', requireOrgId(), requirePermission('products', 'write'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
@@ -108,7 +109,7 @@ productsRouter.post('/', requireRole('owner', 'admin'), async (c: Context) => {
   }
 });
 
-productsRouter.get('/:id', requirePermission('products', 'view'), async (c: Context) => {
+productsRouter.get('/:id', requireOrgId(), requirePermission('products', 'view'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
     
@@ -143,7 +144,7 @@ const updateProductSchema = z.object({
   images: z.array(z.any()).optional(),
 });
 
-productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) => {
+productsRouter.patch('/:id', requireOrgId(), requirePermission('products', 'write'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
@@ -204,7 +205,7 @@ productsRouter.patch('/:id', requireRole('owner', 'admin'), async (c: Context) =
   }
 });
 
-productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
+productsRouter.delete('/:id', requireOrgId(), requirePermission('products', 'delete'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
@@ -237,7 +238,7 @@ productsRouter.delete('/:id', requireRole('owner'), async (c: Context) => {
   }
 });
 
-productsRouter.get('/:id/variants', requirePermission('products', 'view'), async (c: Context) => {
+productsRouter.get('/:id/variants', requireOrgId(), requirePermission('products', 'view'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
@@ -267,7 +268,7 @@ const createVariantSchema = z.object({
   attributes: z.any().default({}),
 });
 
-productsRouter.post('/:id/variants', requireRole('owner', 'admin'), async (c: Context) => {
+productsRouter.post('/:id/variants', requireOrgId(), requirePermission('products', 'write'), async (c: Context) => {
   try {
     const orgId = c.get('orgId') as string;
 
