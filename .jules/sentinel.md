@@ -52,3 +52,8 @@
 **Vulnerability:** The `/orgs/:id/members`, `/orgs/:id/invite`, and `/orgs/members/:memberId/role` endpoints in `apps/api/src/routes/orgs.ts` utilized `requireRole` instead of the centralized `requirePermission` middleware. This bypassed the authorization matrix defined in `packages/db/src/permissions.ts`.
 **Learning:** Using `requireRole` directly instead of checking against the established `requirePermission(resource, action)` skips the centralized role definition mechanism for resources. This means that if permission definitions change in `permissions.ts`, the API routes would silently remain out of sync. Furthermore, relying only on `requireRole` can inadvertently overlook tenant isolation if `requireOrgId` is skipped.
 **Prevention:** Always secure API endpoints mapping to resources defined in the authorization matrix with a combination of `requireOrgId()` and `requirePermission(resource, action)` instead of relying solely on `requireRole(...)`.
+
+## 2025-03-01 - Missing Tenant Isolation in Products and Orders Routes
+**Vulnerability:** The `requirePermission` checks in the `products` and `orders` routes were un-isolated (not composed with `requireOrgId()`), allowing requests to potentially bypass tenant-level restrictions or crash on incomplete context, leading to a breakdown of both authorization and isolation.
+**Learning:** `requirePermission` does not guarantee isolation on its own; it requires standard role context to function properly, but tenant scoping and isolation must be deliberately enforced first.
+**Prevention:** Always compose `requireOrgId()` followed by `requirePermission(resource, action)` to guarantee robust tenant isolation combined with granular authorization control.
