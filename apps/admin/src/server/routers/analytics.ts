@@ -510,13 +510,13 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
 
-      const [sessionsRow, eventsRows, ordersRow] = await ctx.withOrg(async (tx) => Promise.all([
-        tx.execute(sql`
+      const [sessionsRow, eventsRows, ordersRow] = await Promise.all([
+        ctx.withOrg(async (tx) => tx.execute(sql`
           SELECT COUNT(DISTINCT id)::int AS count
           FROM storefront_sessions
           WHERE org_id = ${ctx.orgId} AND first_seen_at >= ${sinceIso}
-        `),
-        tx.execute(sql`
+        `)),
+        ctx.withOrg(async (tx) => tx.execute(sql`
           SELECT
             event_name,
             COUNT(DISTINCT session_id)::int AS unique_sessions,
@@ -525,14 +525,14 @@ export const analyticsRouter = router({
           WHERE org_id = ${ctx.orgId} AND occurred_at >= ${sinceIso}
             AND event_name IN ('product_viewed', 'product_added_to_cart', 'cart_viewed', 'checkout_started', 'checkout_completed')
           GROUP BY event_name
-        `),
-        tx.execute(sql`
+        `)),
+        ctx.withOrg(async (tx) => tx.execute(sql`
           SELECT COUNT(*)::int AS count
           FROM orders
           WHERE org_id = ${ctx.orgId} AND created_at >= ${sinceIso}
             AND status != 'cancelled'
-        `),
-      ]));
+        `)),
+      ]);
 
       type CountRow = { count: number };
       type EventCountRow = { event_name: string; unique_sessions: number; total_events: number };

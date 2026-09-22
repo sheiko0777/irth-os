@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db, withOrg } from '../db';
 import { categories, withAudit, jsonSafe } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
+import { requireOrgId } from '../middlewares/requireOrgId';
 import { requirePermission } from '../middlewares/requirePermission';
 import { requireOrgId } from '../middlewares/requireOrgId';
 
