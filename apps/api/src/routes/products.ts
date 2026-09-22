@@ -7,7 +7,6 @@ import { db, withOrg } from '../db';
 import { products, productVariants, withAudit, jsonSafe, emitOutboxEvent } from '@irth/db';
 import { eq, and, desc, sql, ilike } from 'drizzle-orm';
 import { requireOrgId } from '../middlewares/requireOrgId';
-
 import { requirePermission } from '../middlewares/requirePermission';
 
 export const productsRouter = new Hono();

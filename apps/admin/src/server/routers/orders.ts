@@ -70,24 +70,24 @@ export const ordersRouter = router({
             const conditions = status ? [...scope, eq(orders.status, status)] : scope;
 
             // Execute list, count and status breakdown concurrently
-            const [data, totalQuery, statusCountsQuery] = await ctx.withOrg(async (tx) => Promise.all([
-                tx
+            const [data, totalQuery, statusCountsQuery] = await Promise.all([
+                ctx.withOrg(async (tx) => tx
                     .select()
                     .from(orders)
                     .where(and(...conditions))
                     .orderBy(desc(orders.createdAt))
                     .limit(pageSize)
-                    .offset(offset),
-                tx
+                    .offset(offset)),
+                ctx.withOrg(async (tx) => tx
                     .select({ count: count() })
                     .from(orders)
-                    .where(and(...conditions)),
-                tx
+                    .where(and(...conditions))),
+                ctx.withOrg(async (tx) => tx
                     .select({ status: orders.status, count: count() })
                     .from(orders)
                     .where(and(...scope))
-                    .groupBy(orders.status),
-            ]));
+                    .groupBy(orders.status)),
+            ]);
 
             return {
                 data,
@@ -110,14 +110,14 @@ export const ordersRouter = router({
             // org-scoped transaction concurrently instead of three sequential
             // round-trips, matching the `list` procedure above. On the rare
             // not-found path the two extra queries just return empty.
-            const [order, items, history] = await ctx.withOrg(async (tx) => Promise.all([
-                tx.query.orders.findFirst({
+            const [order, items, history] = await Promise.all([
+                ctx.withOrg(async (tx) => tx.query.orders.findFirst({
                     where: and(
                         eq(orders.id, input.id),
                         eq(orders.orgId, ctx.orgId)
                     )
-                }),
-                tx
+                })),
+                ctx.withOrg(async (tx) => tx
                     .select({
                         id: orderItems.id,
                         quantity: orderItems.quantity,
@@ -129,16 +129,16 @@ export const ordersRouter = router({
                     .where(and(
                         eq(orderItems.orderId, input.id),
                         eq(orderItems.orgId, ctx.orgId)
-                    )),
-                tx
+                    ))),
+                ctx.withOrg(async (tx) => tx
                     .select()
                     .from(shipmentTracking)
                     .where(and(
                         eq(shipmentTracking.orderId, input.id),
                         eq(shipmentTracking.orgId, ctx.orgId)
                     ))
-                    .orderBy(desc(shipmentTracking.createdAt)),
-            ]));
+                    .orderBy(desc(shipmentTracking.createdAt))),
+            ]);
 
             if (!order) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
