@@ -27,6 +27,8 @@ import { processOutbox, OUTBOX_BATCH_SIZE } from './workers/outboxWorker'
 import { rollupStorefrontMetrics } from './workers/storefrontRollup'
 import { metricsSnapshot } from './lib/metrics'
 
+export { RateLimiterDO } from './durableObjects/RateLimiterDO'
+
 const app = new Hono()
 
 // First in the chain on purpose: Workers expose configuration only through the
