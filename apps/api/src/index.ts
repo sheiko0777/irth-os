@@ -21,7 +21,7 @@ import { rateLimit } from './middlewares/rateLimit'
 import { authContext } from './middlewares/authContext'
 import { requestContext } from './middlewares/requestContext'
 import { handleError } from './utils/errors'
-import { dbContext, getDb, captureEnv } from './db'
+import { dbContext, getDb, captureEnv, getDbHost } from './db'
 import { envVar } from './utils/env'
 import { processOutbox, OUTBOX_BATCH_SIZE } from './workers/outboxWorker'
 import { rollupStorefrontMetrics } from './workers/storefrontRollup'
@@ -72,10 +72,10 @@ app.get('/health', async (c) => {
   const environment = (c.env as { NODE_ENV?: string }).NODE_ENV || process.env.NODE_ENV || 'development'
   try {
     await getDb().execute(sql`select 1`)
-    return c.json({ data: { status: 'ok', db: 'up', environment }, error: null, meta: null })
+    return c.json({ data: { status: 'ok', db: 'up', environment, dbHost: getDbHost() }, error: null, meta: null })
   } catch {
     return c.json(
-      { data: { status: 'degraded', db: 'down', environment }, error: 'db_unreachable', meta: null },
+      { data: { status: 'degraded', db: 'down', environment, dbHost: getDbHost() }, error: 'db_unreachable', meta: null },
       503,
     )
   }
