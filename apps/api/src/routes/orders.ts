@@ -274,7 +274,7 @@ const updateStatusSchema = z.object({
 // COGS) and fire a real ETA e-invoice submission on 'delivered' (see below),
 // so it needs the same authorization as the identical mutation's tRPC
 // counterpart, apps/admin/src/server/routers/orders.ts's updateStatus
-// (requirePermission('orders', 'write')). Found via the archaeology sweep:
+// (requireOrgId(), requirePermission('orders', 'write')). Found via the archaeology sweep:
 // this route had no role guard at all — any authenticated member could
 // trigger both side effects.
 ordersRoute.patch('/:id/status', requireOrgId(), requirePermission('orders', 'write'), async (c: Context) => {
