@@ -6,7 +6,6 @@ import { orders } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireOrgId } from '../middlewares/requireOrgId';
 import { requirePermission } from '../middlewares/requirePermission';
-import { requireOrgId } from '../middlewares/requireOrgId';
 
 const shippingRoute = new Hono();
 
