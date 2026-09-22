@@ -34,7 +34,7 @@ const createOrderSchema = z.object({
   }))
 });
 
-ordersRoute.post('/', requirePermission('orders', 'write'), async (c: Context) => {
+ordersRoute.post('/', requireOrgId(), requirePermission('orders', 'write'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const userId = getUserId(c);
   const body = await c.req.json();
@@ -237,7 +237,7 @@ ordersRoute.post('/', requirePermission('orders', 'write'), async (c: Context) =
   return c.json({ data: jsonSafe(newOrder), error: null, meta: null });
 });
 
-ordersRoute.get('/', requirePermission('orders', 'view'), async (c: Context) => {
+ordersRoute.get('/', requireOrgId(), requirePermission('orders', 'view'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
 
   const page = parseInt(c.req.query('page') || '1', 10);
@@ -254,7 +254,7 @@ ordersRoute.get('/', requirePermission('orders', 'view'), async (c: Context) => 
   return c.json({ data: jsonSafe(list), error: null, meta: { total: totalCount, page, limit } });
 });
 
-ordersRoute.get('/:id', requirePermission('orders', 'view'), async (c: Context) => {
+ordersRoute.get('/:id', requireOrgId(), requirePermission('orders', 'view'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const id = c.req.param('id');
   const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
@@ -277,7 +277,7 @@ const updateStatusSchema = z.object({
 // (requirePermission('orders', 'write')). Found via the archaeology sweep:
 // this route had no role guard at all — any authenticated member could
 // trigger both side effects.
-ordersRoute.patch('/:id/status', requirePermission('orders', 'write'), async (c: Context) => {
+ordersRoute.patch('/:id/status', requireOrgId(), requirePermission('orders', 'write'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const userId = getUserId(c);
   const id = c.req.param('id');
