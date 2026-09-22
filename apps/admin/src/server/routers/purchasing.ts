@@ -268,8 +268,8 @@ export const purchasingRouter = router({
         const offset = paginationOffset(input.page, input.pageSize);
 
         // ⚡ Bolt: Execute list and count queries concurrently to reduce max latency
-        const [data, totalResult] = await ctx.withOrg(async (tx) => Promise.all([
-          tx
+        const [data, totalResult] = await Promise.all([
+          ctx.withOrg(async (tx) => tx
             .select({
               id: purchaseOrders.id,
               poNumber: purchaseOrders.poNumber,
@@ -288,12 +288,12 @@ export const purchasingRouter = router({
             .groupBy(purchaseOrders.id, suppliers.name)
             .orderBy(desc(purchaseOrders.createdAt))
             .limit(input.pageSize)
-            .offset(offset),
-          tx
+            .offset(offset)),
+          ctx.withOrg(async (tx) => tx
             .select({ count: count() })
             .from(purchaseOrders)
-            .where(eq(purchaseOrders.orgId, ctx.orgId))
-        ]));
+            .where(eq(purchaseOrders.orgId, ctx.orgId)))
+        ]);
 
         const total = totalResult[0]?.count ?? 0;
 
