@@ -74,12 +74,21 @@ async function recordDurableObjectHit(
  * is empty at module scope there (see apps/api/src/db.ts); reading it lazily
  * inside the middleware means it resolves from the captured request env.
  */
+let nextInstanceId = 0;
+
 export function rateLimit(
   max: number,
   windowMs: number,
   trustedProxiesCount: number | (() => number) = 0,
   keyResolver?: (c: Context) => string | undefined,
 ): MiddlewareHandler {
+  // `hits` (local fallback) and the Durable Object namespace are both shared
+  // across every `rateLimit()` call in the isolate — a bare client key would
+  // let two different routes limiting the same IP/org bleed into one shared
+  // counter. Each call gets its own prefix so route A's budget can never be
+  // spent by route B, matching the old per-call `Map` closure this replaced.
+  const instanceId = nextInstanceId++;
+
   return async (c, next) => {
     const trustedProxies =
       typeof trustedProxiesCount === 'function' ? trustedProxiesCount() : trustedProxiesCount;
@@ -105,12 +114,13 @@ export function rateLimit(
       }
       if (!key) key = 'unknown';
     }
+    const scopedKey = `${instanceId}:${key}`;
 
     const now = Date.now();
     const namespace = getEnv()?.RATE_LIMITER as DurableObjectNamespace | undefined;
     const decision = namespace
-      ? await recordDurableObjectHit(namespace, key, max, windowMs)
-      : recordLocalHit(key, now, max, windowMs);
+      ? await recordDurableObjectHit(namespace, scopedKey, max, windowMs)
+      : recordLocalHit(scopedKey, now, max, windowMs);
 
     if (!decision.allowed) {
       c.header('X-RateLimit-Limit', String(max));
