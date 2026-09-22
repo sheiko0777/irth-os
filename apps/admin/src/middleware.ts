@@ -63,17 +63,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Optional: Redirect authenticated users away from login
-  if (pathWithoutLocale === "login" && hasSessionCookie) {
-    // `/${locale}`, not `/${locale}/dashboard` — that route was removed (see
-    // login/page.tsx's own comment: it "used to point at a stale duplicate
-    // that sat outside the (dashboard) group and so rendered with no
-    // sidebar and no header"). This redirect target was never updated to
-    // match, so an already-authenticated visitor landing on /login was sent
-    // to a 404 instead of the dashboard.
-    const dashboardUrl = new URL(`/${locale}`, request.url);
-    return NextResponse.redirect(dashboardUrl);
-  }
+  // There used to be an "already authenticated, bounce away from /login"
+  // redirect here, keyed on the same optimistic hasSessionCookie check
+  // above. Removed: hasSessionCookie is cookie *presence*, not validity —
+  // (dashboard)/page.tsx does the real DB-backed check and redirects an
+  // invalid session INTO /login. Whenever a cookie is present but stale
+  // (expired, revoked, or — what actually happened — pointed at a
+  // DATABASE_URL that no longer has that session row after a DB migration),
+  // the two redirects disagreed and looped forever (ERR_TOO_MANY_REDIRECTS,
+  // 2026-09-22 incident). A genuinely-logged-in visitor who navigates to
+  // /login now just sees the form instead of auto-bouncing to the
+  // dashboard — a minor UX nicety traded for never looping.
 
   return response;
 }
