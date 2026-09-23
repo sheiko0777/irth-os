@@ -11,6 +11,16 @@ A separate astra review concluded: modular monolith; keep the proven kernel (dou
 ## What exists (inspect it, then judge keep vs rebuild)
 Monorepo: `apps/admin` (Next.js 15 App Router on Vercel, tRPC, Better Auth, Arabic RTL already present in places), `apps/api` (Hono on Cloudflare Workers), `packages/db` (Drizzle + Neon Postgres), `packages/emails` (react-email, Arabic RTL layout). Look at: `apps/admin/package.json`, `apps/admin/src` (app routes, components, styling, i18n/locale handling, data-fetching pattern, existing dashboard/stat components, tables, forms), tailwind/postcss/globals CSS, any `components/ui` (shadcn?) folder, the current orders list and order detail pages, and `apps/mobile` (Expo — the plan deletes it; note anything worth salvaging as a PWA pattern). Report concretely: what is reusable, what is a dead end, and why.
 
+### Current state (verified 2026-09-24 on main — supersedes anything above it contradicts)
+- **Shell:** `components/layout/CarbonShell.tsx` + `styles/carbon.scss` wrap every page in `@carbon/react` Header/SideNav, g100 dark theme (PR #363). Pages inside are still shadcn/Tailwind, so chrome and content are two design systems. **Owner decision: remove Carbon.** One system, no component-library swap.
+- **Tokens:** `app/[locale]/globals.css` — dark-only navy `#060a10` + gold `#e09000`, no light theme, no `prefers-color-scheme`. Pages bypass tokens: ~1,722 inline `var(--x)` arbitrary values, 78 raw palette classes, 18 hex literals.
+- **IA:** 25 dashboard route groups, `lib/navigation.ts` = 5 groups / 26 flat links, labels hard-coded Arabic; mobile = a Radix drawer below 66rem, no bottom tabs.
+- **Components:** 23 in `components/ui` (shadcn primitives + KpiCard, StatBox, FormDialog, EmptyState, StatusBadge, PipelineBar, FilterTabs, …). Charts = two hand-rolled SVGs (`charts/BarChart.tsx`, `Sparkline.tsx`). No chart/table lib, no Playwright, no PWA.
+- **i18n:** next-intl; batches A–D (#374–#377) externalized orders/products/customers/campaigns; ~700 lines of Arabic literals remain elsewhere. Digits: owner home now Western (#382); 17 other `ar-EG` Arabic-Indic sites remain.
+- **Home today:** 4 KPI cards + pipeline bar + recent-orders table. Production DB currently has **no orders/inventory**, so every screen shows empty states — design the empty/first-run experience deliberately.
+- **Owner decisions (2026-09-23):** no Chatwoot/Metabase/n8n — inbox, reports and integrations live inside this admin; real data will come from the Shopify order pipeline (S1), not demo seeds.
+- **Who builds your packets:** UI packets go to an agent on the `ui` lane (agy) plus Stitch-generated screen references; write every packet so it is executable from the packet alone, with `data-testid` assertions.
+
 Brand context (storefront brand bible — NOT to be copied literally into the admin): CALM · REFINED · TIMELESS; ivory #F3EFE7 / black #111111 / gold ≈#B0885E; Canela + Suisse Intl on the storefront. The admin is a working tool used 8h/day — it should feel like it belongs to the same house (restraint, warmth, precision) without pretending to be the storefront.
 
 ## Deliver these sections, in order

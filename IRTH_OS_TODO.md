@@ -1,3 +1,5 @@
+> **Superseded (2026-09-24).** The current plan is [docs/superpowers/specs/2026-09-17-irth-os-bos-design.md](docs/superpowers/specs/2026-09-17-irth-os-bos-design.md). Status claims below are historical — e.g. the database is Neon, not Supabase; tRPC wiring, RBAC and the deploy migrate step are already fixed.
+
 # 🛠️ irth-os Code Refactoring & Production Todo List
 
 This document serves as the unified checklist of structural schema changes, manual code fixes, dependency alignments, and CI/CD pipelines needed to bring **irth-os** into a fully secure and robust production state.
