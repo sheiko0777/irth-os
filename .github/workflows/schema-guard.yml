@@ -1,0 +1,81 @@
+name: Schema Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  schema-guard:
+    name: schema-guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Schema Ownership and Server Code Guard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PR_JSON=$(gh pr view "$PR_NUMBER" --json files,labels)
+
+          PR_JSON="$PR_JSON" node -e '
+            const pr = JSON.parse(process.env.PR_JSON);
+            const files = (pr.files || []).map(f => f.path);
+            const labels = (pr.labels || []).map(l => l.name);
+
+            const guardedPrefixes = [
+              "packages/db/drizzle/",
+              "packages/db/src/schema/",
+            ];
+            const guardedExactFiles = [
+              "packages/db/src/index.ts",
+              "packages/db/src/orgContext.ts",
+              "packages/db/src/permissions.ts",
+              "apps/admin/src/tests/tenancyGate.test.ts",
+              "apps/admin/src/tests/integration/rlsCoverage.test.ts",
+              "apps/admin/src/tests/integration/schemaDrift.test.ts",
+              "apps/admin/src/__tests__/tenancyGate.test.ts",
+              "apps/admin/src/__tests__/integration/rlsCoverage.test.ts",
+              "apps/admin/src/__tests__/integration/schemaDrift.test.ts",
+            ];
+
+            const isGuardedPath = (file) => {
+              if (guardedPrefixes.some(prefix => file.startsWith(prefix))) return true;
+              if (guardedExactFiles.includes(file)) return true;
+              return false;
+            };
+
+            const touchedGuardedFiles = files.filter(isGuardedPath);
+            const hasClaudeLabel = labels.includes("exec:claude") || labels.includes("schema:approved");
+
+            let failed = false;
+
+            if (touchedGuardedFiles.length > 0) {
+              console.log("PR touches schema/RLS/tenancy guarded paths:");
+              touchedGuardedFiles.forEach(f => console.log("  - " + f));
+              if (!hasClaudeLabel) {
+                console.error("::error::PR changes schema/RLS/tenancy-critical paths but lacks exec:claude or schema:approved label.");
+                failed = true;
+              } else {
+                console.log("Guarded path check passed (approved by label).");
+              }
+            }
+
+            const isUiExec = labels.includes("exec:ui");
+            if (isUiExec) {
+              const touchedServerFiles = files.filter(f => f.startsWith("apps/admin/src/server/"));
+              if (touchedServerFiles.length > 0) {
+                console.error("::error::PR carries exec:ui label but touches server code under apps/admin/src/server/:");
+                touchedServerFiles.forEach(f => console.error("  - " + f));
+                failed = true;
+              }
+            }
+
+            if (failed) {
+              process.exit(1);
+            } else {
+              console.log("schema-guard check passed successfully.");
+            }
+          '
