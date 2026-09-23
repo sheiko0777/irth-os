@@ -103,17 +103,17 @@ export default async function DashboardPage({
           id="revenue"
           variant="hero"
           title={t("revenueToday")}
-          value={formatMoney(revenueToday)}
+          value={formatMoney(revenueToday, { digits: 'latin' })}
           sub="الإيراد من الطلبات المسلَّمة"
           trend={deltas.revenueToday}
           series={series.revenue}
-          href={`/${locale}/reports`}
+          href={`/${locale}/finance`}
           icon={<DollarSign size={16} />}
         />
         <KpiCard
           id="orders"
           title={t("ordersToday")}
-          value={ordersToday.toLocaleString("ar-EG")}
+          value={ordersToday.toLocaleString("ar-EG-u-nu-latn")}
           sub="إجمالي الطلبات اليوم"
           trend={deltas.ordersToday}
           series={series.orders}
@@ -123,7 +123,7 @@ export default async function DashboardPage({
         <KpiCard
           id="pending"
           title={t("pendingOrders")}
-          value={pendingOrders.toLocaleString("ar-EG")}
+          value={pendingOrders.toLocaleString("ar-EG-u-nu-latn")}
           sub="في انتظار المراجعة"
           href={`/${locale}/orders`}
           icon={<Clock size={16} />}
@@ -131,7 +131,7 @@ export default async function DashboardPage({
         <KpiCard
           id="products"
           title={t("activeProducts")}
-          value={activeProducts.toLocaleString("ar-EG")}
+          value={activeProducts.toLocaleString("ar-EG-u-nu-latn")}
           sub="منتجات متاحة للبيع"
           href={`/${locale}/products`}
           icon={<Package size={16} />}
@@ -194,7 +194,7 @@ export default async function DashboardPage({
                 >
                   <td className="px-5 py-3.5 font-mono text-xs text-[var(--gold)] font-medium">
                     <Link
-                      href={`/${locale}/orders`}
+                      href={`/${locale}/orders/${order.id}`}
                       className="hover:underline underline-offset-2"
                     >
                       {order.orderNumber}
@@ -204,7 +204,7 @@ export default async function DashboardPage({
                     <StatusBadge status={order.status} domain="order" />
                   </td>
                   <td className="px-5 py-3.5 text-[var(--t1)] font-medium tabular-nums" dir="ltr">
-                    {formatMoney(fromMinor(order.totalAmountMinor))}
+                    {formatMoney(fromMinor(order.totalAmountMinor), { digits: 'latin' })}
                   </td>
                   <td className="px-5 py-3.5 text-[var(--t3)] text-xs">
                     {order.createdAt
