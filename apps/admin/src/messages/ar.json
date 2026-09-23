@@ -9,7 +9,44 @@
     "submit": "دخول"
   },
   "categories": {
-    "title": "التصنيفات"
+    "title": "التصنيفات",
+    "table": {
+      "name": "الاسم",
+      "slug": "الرابط (Slug)",
+      "parent": "الفئة الأب",
+      "actions": "الإجراءات",
+      "noParent": "-"
+    },
+    "actions": {
+      "add": "إضافة فئة",
+      "delete": "حذف",
+      "cancel": "إلغاء"
+    },
+    "form": {
+      "title": "إضافة فئة جديدة",
+      "name": "الاسم",
+      "slug": "الرابط (Slug)",
+      "parentOptional": "الفئة الأب (اختياري)",
+      "noParent": "لا يوجد",
+      "adding": "جاري الإضافة..."
+    },
+    "empty": {
+      "title": "لا توجد فئات",
+      "hint": "الفئات بتنظّم المنتجات وبتظهر للعميل كتصنيفات في المتجر."
+    },
+    "confirm": {
+      "deleteTitle": "حذف الفئة",
+      "deleteDescription": "هل أنت متأكد من حذف الفئة «{name}»؟"
+    },
+    "toasts": {
+      "added": "تم إضافة الفئة بنجاح",
+      "deleted": "تم حذف الفئة"
+    },
+    "errors": {
+      "loadCategories": "تعذّر تحميل الفئات.",
+      "addCategory": "حدث خطأ أثناء إضافة الفئة",
+      "deleteCategory": "حدث خطأ أثناء الحذف"
+    }
   },
   "nav": {
     "dashboard": "لوحة القيادة",
@@ -240,11 +277,18 @@
       "brand": "العلامة التجارية",
       "variants": "الأنواع",
       "status": "الحالة",
-      "actions": "إجراءات"
+      "actions": "إجراءات",
+      "sku": "SKU",
+      "price": "السعر",
+      "stock": "المخزون",
+      "category": "القسم",
+      "noCategory": "-"
     },
     "status": {
       "active": "نشط",
-      "inactive": "غير نشط"
+      "inactive": "غير نشط",
+      "draft": "مسودة",
+      "archived": "مؤرشف"
     },
     "form": {
       "name": "اسم المنتج",
@@ -257,7 +301,58 @@
       "addVariant": "إضافة نوع",
       "sku": "رمز المنتج (SKU)",
       "price": "السعر",
-      "stock": "المخزون"
+      "stock": "المخزون",
+      "basicInfo": "معلومات المنتج الأساسية",
+      "nameAr": "الاسم (بالعربية)",
+      "descriptionAr": "الوصف (بالعربية)",
+      "saving": "جاري الحفظ...",
+      "categoryId": "القسم",
+      "categoryPlaceholder": "اختر القسم",
+      "noCategory": "لا يوجد قسم",
+      "currency": "العملة",
+      "status": "الحالة"
+    },
+    "actions": {
+      "new": "منتج جديد",
+      "edit": "تعديل",
+      "deactivate": "تعطيل"
+    },
+    "filters": {
+      "all": "الكل"
+    },
+    "search": {
+      "placeholder": "بحث في المنتجات..."
+    },
+    "empty": {
+      "title": "لا توجد منتجات",
+      "hint": "ابدأ بإضافة أول منتج، وهيظهر هنا بمتغيّراته وسعره."
+    },
+    "confirm": {
+      "deactivateTitle": "تعطيل المنتج",
+      "deactivateDescription": "سيتم تعطيل المنتج «{name}». لن يظهر للبيع بعد ذلك."
+    },
+    "toasts": {
+      "created": "تم إنشاء المنتج بنجاح",
+      "added": "تم إضافة المنتج بنجاح",
+      "updated": "تم تحديث المنتج بنجاح",
+      "deactivated": "تم تعطيل المنتج"
+    },
+    "errors": {
+      "loadProducts": "تعذّر تحميل المنتجات.",
+      "loadCategories": "تعذّر تحميل الفئات.",
+      "createProduct": "حدث خطأ أثناء إنشاء المنتج",
+      "addProduct": "حدث خطأ أثناء إضافة المنتج",
+      "updateProduct": "حدث خطأ أثناء تحديث المنتج",
+      "deactivateProduct": "حدث خطأ أثناء التعطيل",
+      "createProductWithMessage": "حدث خطأ أثناء إنشاء المنتج: {error}",
+      "updateProductWithMessage": "حدث خطأ أثناء تحديث المنتج: {error}"
+    },
+    "validation": {
+      "nameRequired": "اسم المنتج مطلوب",
+      "skuRequired": "رمز المنتج (SKU) مطلوب",
+      "priceRequired": "السعر مطلوب",
+      "priceMin": "السعر يجب أن يكون 0 أو أكثر",
+      "stockMin": "المخزون يجب أن يكون 0 أو أكثر"
     }
   },
   "common": {

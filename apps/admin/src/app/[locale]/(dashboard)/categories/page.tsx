@@ -11,7 +11,7 @@ export default async function CategoriesPage() {
     const categoriesResponse = await caller.categories.list();
 
     if (categoriesResponse.error) {
-        return <ErrorState message="تعذّر تحميل الفئات." />;
+        return <ErrorState message={t("errors.loadCategories")} />;
     }
 
     const { data: categories } = categoriesResponse;
