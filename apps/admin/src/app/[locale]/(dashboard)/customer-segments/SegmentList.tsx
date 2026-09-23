@@ -2,6 +2,7 @@
 
 import { type CustomerSegment } from './CustomerSegmentsClient';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useTranslations } from 'next-intl';
 
 type SegmentListProps = {
   segments: CustomerSegment[];
@@ -16,10 +17,12 @@ export function SegmentList({
   onOpenSegment,
   onDeleteSegment,
 }: SegmentListProps) {
+  const t = useTranslations('customerSegments');
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {segments.length === 0 && (
-        <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-xl"><EmptyState title="لا توجد شرائح بعد" hint="الشريحة بتجمّع عملاء بمعيار مشترك عشان تستهدفهم بحملة." /></div>
+        <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-xl"><EmptyState title={t('empty.title')} hint={t('empty.hint')} /></div>
       )}
       {segments.map((seg) => (
         <div
@@ -40,17 +43,17 @@ export function SegmentList({
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '13px', color: 'var(--t2)' }}>{seg.memberCount} عميل</span>
+              <span style={{ fontSize: '13px', color: 'var(--t2)' }}>{t('list.memberCount', { count: seg.memberCount })}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (confirm('حذف الشريحة؟')) {
+                  if (confirm(t('confirm.delete'))) {
                     onDeleteSegment(seg.id);
                   }
                 }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--crimson)', fontSize: '13px' }}
               >
-                حذف
+                {t('actions.delete')}
               </button>
             </div>
           </div>

@@ -5,8 +5,10 @@ import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 
 export default function CreateCustomerDialog() {
+  const t = useTranslations('customers');
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -19,7 +21,7 @@ export default function CreateCustomerDialog() {
 
   const createMutation = trpc.customers.create.useMutation({
     onSuccess: () => {
-      toast.success('تم إضافة العميل بنجاح');
+      toast.success(t('toasts.created'));
       router.refresh();
       setIsOpen(false);
       setName('');
@@ -29,7 +31,7 @@ export default function CreateCustomerDialog() {
       setNotes('');
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء إضافة العميل');
+      toast.error(err instanceof Error ? err.message : t('errors.createCustomer'));
     },
   });
 
@@ -48,14 +50,14 @@ export default function CreateCustomerDialog() {
 
   return (
     <>
-      <Button onClick={() => setIsOpen(true)}>إضافة عميل</Button>
+      <Button onClick={() => setIsOpen(true)}>{t('actions.create')}</Button>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsOpen(false)}>
           <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold mb-4">إضافة عميل جديد</h2>
+            <h2 className="text-lg font-bold mb-4">{t('createDialog.title')}</h2>
             <form onSubmit={handleCreateSubmit} className="space-y-3">
               <div>
-                <label className="block text-sm text-[var(--t2)] mb-1">الاسم *</label>
+                <label className="block text-sm text-[var(--t2)] mb-1">{t('form.nameRequired')}</label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -64,7 +66,7 @@ export default function CreateCustomerDialog() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-[var(--t2)] mb-1">البريد الإلكتروني</label>
+                <label className="block text-sm text-[var(--t2)] mb-1">{t('form.email')}</label>
                 <input
                   type="email"
                   value={email}
@@ -74,7 +76,7 @@ export default function CreateCustomerDialog() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-[var(--t2)] mb-1">الهاتف</label>
+                <label className="block text-sm text-[var(--t2)] mb-1">{t('form.phone')}</label>
                 <input
                   type="tel"
                   value={phone}
@@ -84,7 +86,7 @@ export default function CreateCustomerDialog() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-[var(--t2)] mb-1">العنوان</label>
+                <label className="block text-sm text-[var(--t2)] mb-1">{t('form.address')}</label>
                 <input
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
@@ -92,7 +94,7 @@ export default function CreateCustomerDialog() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-[var(--t2)] mb-1">ملاحظات</label>
+                <label className="block text-sm text-[var(--t2)] mb-1">{t('form.notes')}</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -106,14 +108,14 @@ export default function CreateCustomerDialog() {
                   disabled={isPending}
                   className="flex-1 bg-[var(--t1)] text-[var(--surface)] font-bold py-2 px-4 rounded-md hover:opacity-90 disabled:opacity-50"
                 >
-                  {isPending ? 'جاري الحفظ...' : 'حفظ'}
+                  {isPending ? t('form.saving') : t('form.save')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
                   className="flex-1 border border-[var(--rim1)] text-[var(--t2)] py-2 px-4 rounded-md hover:bg-[var(--rim1)]"
                 >
-                  إلغاء
+                  {t('form.cancel')}
                 </button>
               </div>
             </form>
