@@ -1,0 +1,12 @@
+-- 0067: inventory_items.quantity can never go below zero.
+--
+-- Every order path already refuses to oversell (apps/api orders.ts guarded
+-- UPDATE ... WHERE quantity >= n; Shopify webhook clamps to on-hand). The
+-- remaining writers that could drive it negative were the admin inventory
+-- "out" adjustments (single + batch) and a stocktake completed from a count
+-- that went negative via recordScan -- both now rejected in the routers. This
+-- constraint is the backstop so a future writer that forgets the guard fails
+-- loudly instead of silently recording negative stock.
+--
+-- Checked before writing: production had 0 rows with quantity < 0.
+ALTER TABLE "inventory_items" ADD CONSTRAINT "inventory_items_quantity_nonnegative" CHECK ("quantity" >= 0);

@@ -82,4 +82,26 @@ describe('stocktaking router — recordScan procedure', () => {
       })
     ).rejects.toThrow('جلسة الجرد غير نشطة أو مكتملة بالفعل');
   });
+
+  it('recordScan: rejects a negative delta that would push the count below zero', async () => {
+    const caller = stocktakingRouter.createCaller(ctx('admin'));
+    mockDb.select.mockReturnValueOnce(chainOf([{ id: SESSION_ID, status: 'in_progress', orgId: 'org-1' }]));
+    mockDb.select.mockReturnValueOnce(chainOf([{ id: 'item-1', sku: 'SKU-001', expectedQuantity: 10, actualQuantity: 1 }]));
+
+    await expect(
+      caller.recordScan({ sessionId: SESSION_ID, code: 'SKU-001', quantityDelta: -2 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.update).not.toHaveBeenCalled();
+  });
+
+  it('recordScan: rejects a first scan with a negative delta', async () => {
+    const caller = stocktakingRouter.createCaller(ctx('admin'));
+    mockDb.select.mockReturnValueOnce(chainOf([{ id: SESSION_ID, status: 'in_progress', orgId: 'org-1' }]));
+    mockDb.select.mockReturnValueOnce(chainOf([]));
+
+    await expect(
+      caller.recordScan({ sessionId: SESSION_ID, code: 'SKU-001', quantityDelta: -1 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
 });

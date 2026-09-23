@@ -1,4 +1,5 @@
-import { pgTable, uuid, timestamp, text, integer, bigint, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, text, integer, bigint, pgEnum, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { productVariants } from "../schema";
 import { organizations } from '../schema';
 
@@ -17,7 +18,9 @@ export const inventoryItems = pgTable("inventory_items", {
   lastShopifyInventoryEventAt: timestamp('last_shopify_inventory_event_at', { withTimezone: true }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  check('inventory_items_quantity_nonnegative', sql`${table.quantity} >= 0`),
+]);
 
 export const inventoryMovements = pgTable("inventory_movements", {
   id: uuid("id").defaultRandom().primaryKey(),
