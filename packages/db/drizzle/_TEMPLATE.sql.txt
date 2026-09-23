@@ -1,0 +1,30 @@
+-- NNNN: <one concern, one line>.
+--
+-- Why this exists, what it replaces, and anything a reviewer must know
+-- (e.g. backfill assumptions, why DROP/recreate is safe here).
+--
+-- Copy to packages/db/drizzle/NNNN_snake_case_name.sql. NNNN must be greater
+-- than main's highest migration and claimed in the PR title. This .txt file is
+-- never applied: migrate.mjs only runs *.sql. Rules: docs/db/MIGRATIONS.md.
+
+CREATE TABLE "example_things" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "org_id" uuid NOT NULL REFERENCES "organizations"("id"),
+  -- Money/stock children of an entity-scoped parent: carry legal_entity_id and
+  -- FK (parent_id, legal_entity_id) -> parent(id, legal_entity_id) so a line
+  -- whose entity disagrees with its parent is unrepresentable (0030/0038 pattern).
+  "created_at" timestamp NOT NULL DEFAULT now()
+);--> statement-breakpoint
+-- Every table with org_id: RLS on, forced, NULLIF-safe policy (0038 shape).
+ALTER TABLE "example_things" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "example_things" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+DROP POLICY IF EXISTS "example_things_tenant_isolation" ON "example_things";--> statement-breakpoint
+CREATE POLICY "example_things_tenant_isolation" ON "example_things"
+  USING ("org_id" = NULLIF((SELECT current_setting('app.org_id', true)), '')::uuid)
+  WITH CHECK ("org_id" = NULLIF((SELECT current_setting('app.org_id', true)), '')::uuid);--> statement-breakpoint
+-- Explicit grants. 0031's ALTER DEFAULT PRIVILEGES already grants
+-- SELECT/INSERT/UPDATE/DELETE to irth_app on new tables, so an append-only
+-- table (ledger, audit, stock moves) must REVOKE, not just omit:
+GRANT SELECT, INSERT, UPDATE, DELETE ON "example_things" TO "irth_app";
+-- append-only instead:
+-- REVOKE UPDATE, DELETE ON "example_things" FROM "irth_app";
