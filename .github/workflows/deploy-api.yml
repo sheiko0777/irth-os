@@ -38,6 +38,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Snapshot DB before migrating
+        run: bash packages/db/scripts/pre-migrate-snapshot.sh pre-migrate-api
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Run DB Migrations
         run: pnpm --filter @irth/db db:migrate
         env:

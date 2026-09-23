@@ -66,6 +66,12 @@ jobs:
       # ledger), so running it here too, alongside deploy-api.yml's own
       # identical step, is safe even when both happen to run for the same
       # push.
+      - name: Snapshot DB before migrating
+        run: bash packages/db/scripts/pre-migrate-snapshot.sh pre-migrate-admin
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Run DB Migrations
         run: pnpm --filter @irth/db db:migrate
         env:
