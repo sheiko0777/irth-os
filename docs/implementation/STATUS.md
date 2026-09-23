@@ -1,3 +1,5 @@
+> **Frozen 2026-09-17 — new rows in docs/delivery/**
+
 # Implementation Status — IRTH OS Plan
 
 See `BASELINE.md` for Phase 0 decisions and environment limits. Baseline/current commit: `6dcf2df40b44e6b9b71979775eac1c393afd9a37`.

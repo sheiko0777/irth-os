@@ -1,3 +1,5 @@
+> **Superseded — the system is not in production; locked facts in docs/agents/domain.md**
+
 # Baseline — IRTH OS Implementation Plan
 
 **Reviewed commit (per the plan):** `6dcf2df40b44e6b9b71979775eac1c393afd9a37`
