@@ -1,0 +1,33 @@
+name: Slice Epic
+description: Create a slice epic issue tracking a delivery slice
+title: "[Slice Sn] Epic title"
+labels: ["epic"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: Goal of the slice epic.
+    validations:
+      required: true
+  - type: textarea
+    id: gate_checklist
+    attributes:
+      label: Gate Checklist
+      description: Gate checklist for the slice.
+    validations:
+      required: true
+  - type: textarea
+    id: lanes_file_ownership
+    attributes:
+      label: Lanes / File-Ownership Table
+      description: Table of lanes and file ownership.
+    validations:
+      required: true
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone
+      description: Associated milestone for this epic.
+    validations:
+      required: false
