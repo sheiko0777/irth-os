@@ -11,18 +11,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 
 export function CreateCouponDialog({ children }: { children: ReactNode }) {
+    const t = useTranslations('coupons');
     const [open, setOpen] = useState(false);
     const utils = trpc.useUtils();
     const createMutation = trpc.coupons.create.useMutation({
         onSuccess: () => {
-            toast.success('تم إنشاء الكوبون بنجاح');
+            toast.success(t('toasts.created'));
             utils.coupons.list.invalidate();
             setOpen(false);
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : 'حدث خطأ أثناء إنشاء الكوبون');
+            toast.error(err instanceof Error ? err.message : t('errors.createCoupon'));
         }
     });
 
@@ -56,39 +58,39 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle className="text-start">إضافة كوبون جديد</DialogTitle>
+                    <DialogTitle className="text-start">{t('createDialog.title')}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="code" className="text-start block">كود الكوبون</Label>
+                        <Label htmlFor="code" className="text-start block">{t('form.code')}</Label>
                         <Input
                             id="code"
                             required
                             value={formData.code}
                             onChange={(e: { target: { value: string } }) => setFormData(p => ({ ...p, code: e.target.value.toUpperCase() }))}
-                            placeholder="مثال: SUMMER20"
+                            placeholder={t('form.codePlaceholder')}
                             dir="ltr"
                             className="text-left uppercase"
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="type" className="text-start block">نوع الخصم</Label>
+                        <Label htmlFor="type" className="text-start block">{t('form.type')}</Label>
                         <Select
                             value={formData.type}
                             onValueChange={(val: 'percentage' | 'fixed' | 'free_shipping') => setFormData(p => ({ ...p, type: val }))}
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="اختر النوع" />
+                                <SelectValue placeholder={t('form.typePlaceholder')} />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="percentage">خصم نسبة مئوية</SelectItem>
-                                <SelectItem value="fixed">خصم ثابت</SelectItem>
-                                <SelectItem value="free_shipping">شحن مجاني</SelectItem>
+                                <SelectItem value="percentage">{t('types.percentage')}</SelectItem>
+                                <SelectItem value="fixed">{t('types.fixed')}</SelectItem>
+                                <SelectItem value="free_shipping">{t('types.freeShipping')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="value" className="text-start block">القيمة</Label>
+                        <Label htmlFor="value" className="text-start block">{t('form.value')}</Label>
                         <Input
                             id="value"
                             type="number"
@@ -96,13 +98,13 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                             required={formData.type !== 'free_shipping'}
                             value={formData.value}
                             onChange={(e: { target: { value: string } }) => setFormData(p => ({ ...p, value: e.target.value }))}
-                            placeholder="القيمة"
+                            placeholder={t('form.value')}
                             dir="ltr"
                             className="text-left"
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="minOrderAmount" className="text-start block">الحد الأدنى للطلب (اختياري)</Label>
+                        <Label htmlFor="minOrderAmount" className="text-start block">{t('form.minOrderAmount')}</Label>
                         <Input
                             id="minOrderAmount"
                             type="number"
@@ -114,7 +116,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="maxUses" className="text-start block">الحد الأقصى للاستخدامات (اختياري)</Label>
+                        <Label htmlFor="maxUses" className="text-start block">{t('form.maxUses')}</Label>
                         <Input
                             id="maxUses"
                             type="number"
@@ -125,7 +127,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="expiresAt" className="text-start block">تاريخ الانتهاء (اختياري)</Label>
+                        <Label htmlFor="expiresAt" className="text-start block">{t('form.expiresAt')}</Label>
                         <Input
                             id="expiresAt"
                             type="date"
@@ -136,7 +138,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="description" className="text-start block">الوصف (اختياري)</Label>
+                        <Label htmlFor="description" className="text-start block">{t('form.description')}</Label>
                         <Textarea
                             id="description"
                             value={formData.description}
@@ -145,7 +147,7 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
                     </div>
                     <DialogFooter className="sm:justify-start">
                         <Button type="submit" disabled={createMutation.isPending} className="w-full sm:w-auto bg-[var(--emerald)] hover:bg-emerald/80">
-                            {createMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
+                            {createMutation.isPending ? t('actions.saving') : t('actions.save')}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -155,14 +157,15 @@ export function CreateCouponDialog({ children }: { children: ReactNode }) {
 }
 
 export function ToggleCouponButton({ id, isActive }: { id: string, isActive: boolean }) {
+    const t = useTranslations('coupons');
     const utils = trpc.useUtils();
     const toggleMutation = trpc.coupons.toggleActive.useMutation({
         onSuccess: () => {
-            toast.success('تم تغيير حالة الكوبون');
+            toast.success(t('toasts.statusChanged'));
             utils.coupons.list.invalidate();
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : 'حدث خطأ');
+            toast.error(err instanceof Error ? err.message : t('errors.generic'));
         }
     });
 
@@ -174,28 +177,29 @@ export function ToggleCouponButton({ id, isActive }: { id: string, isActive: boo
             disabled={toggleMutation.isPending}
             className={isActive ? 'text-[var(--crimson)] hover:text-[var(--crimson)]' : 'text-[var(--emerald)] hover:text-[var(--emerald)]'}
         >
-            {toggleMutation.isPending ? '...' : isActive ? 'تعطيل' : 'تفعيل'}
+            {toggleMutation.isPending ? t('actions.pending') : isActive ? t('actions.disable') : t('actions.enable')}
         </Button>
     );
 }
 
 export function DeleteCouponButton({ id }: { id: string }) {
+    const t = useTranslations('coupons');
     const utils = trpc.useUtils();
     const deleteMutation = trpc.coupons.delete.useMutation({
         onSuccess: () => {
-            toast.success('تم حذف الكوبون');
+            toast.success(t('toasts.deleted'));
             utils.coupons.list.invalidate();
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : 'حدث خطأ');
+            toast.error(err instanceof Error ? err.message : t('errors.generic'));
         }
     });
 
     return (
         <ConfirmDialog
-            title="حذف الكوبون"
-            description="هل أنت متأكد من حذف هذا الكوبون؟ لا يمكن التراجع عن هذا الإجراء."
-            confirmLabel="حذف"
+            title={t('confirm.deleteTitle')}
+            description={t('confirm.deleteDescription')}
+            confirmLabel={t('actions.delete')}
             pending={deleteMutation.isPending}
             onConfirm={() => deleteMutation.mutate({ id })}
         >
@@ -204,7 +208,7 @@ export function DeleteCouponButton({ id }: { id: string }) {
                 size="sm"
                 disabled={deleteMutation.isPending}
             >
-                حذف
+                {t('actions.delete')}
             </Button>
         </ConfirmDialog>
     );

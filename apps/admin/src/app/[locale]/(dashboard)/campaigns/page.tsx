@@ -1,9 +1,15 @@
+import { getTranslations } from 'next-intl/server';
 import { serverCaller } from '@/server/caller';
 import CampaignsClient, { type Campaign, type CampaignSummary } from './CampaignsClient';
 
-export const metadata = { title: 'الحملات التسويقية | IRTH' };
+export async function generateMetadata() {
+  const t = await getTranslations('campaigns');
+  return { title: t('metadata.title') };
+}
 
 export default async function CampaignsPage() {
+  const t = await getTranslations('campaigns');
+
   try {
     const caller = await serverCaller();
     const [listRes, summaryRes] = await Promise.all([
@@ -23,7 +29,7 @@ export default async function CampaignsPage() {
     console.error('Failed to fetch campaigns:', error);
     return (
       <div className="p-8 text-center" style={{ color: 'var(--crimson)' }}>
-        حدث خطأ في تحميل الحملات
+        {t('errors.loadCampaigns')}
       </div>
     );
   }
