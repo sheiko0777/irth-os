@@ -8,6 +8,7 @@ import { ExportButton } from "@/components/ExportButton";
 import { PaginationNav } from "@/components/ui/PaginationNav";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { StatBox } from "@/components/ui/StatBox";
+import { getTranslations } from "next-intl/server";
 
 const PAGE_SIZE = 50;
 
@@ -16,6 +17,7 @@ export default async function CustomersPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const t = await getTranslations("customers");
   const { page: pageStr } = await searchParams;
   const page = Math.max(1, parseInt(pageStr ?? '1', 10));
 
@@ -24,7 +26,7 @@ export default async function CustomersPage({
   const summary = await caller.customers.summary();
 
   if (response.error) {
-    return <ErrorState message="تعذّر تحميل قائمة العملاء." />;
+    return <ErrorState message={t("errors.loadCustomers")} />;
   }
 
   const customerList = response.data;
@@ -32,17 +34,17 @@ export default async function CustomersPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">العملاء</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
         <div className="flex items-center gap-2">
-          <ExportButton type="customers" label="تصدير العملاء" />
+          <ExportButton type="customers" label={t("actions.export")} />
           <CustomerActions actionType="create" />
         </div>
       </div>
 
       {summary.data && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
-          <StatBox label="إجمالي العملاء" value={summary.data.totalCustomers} />
-          <StatBox label="نقاط الولاء المتراكمة" value={summary.data.totalLoyaltyPoints} valueClassName="text-[var(--gold)]" />
+          <StatBox label={t("summary.totalCustomers")} value={summary.data.totalCustomers} />
+          <StatBox label={t("summary.totalLoyaltyPoints")} value={summary.data.totalLoyaltyPoints} valueClassName="text-[var(--gold)]" />
         </div>
       )}
 
@@ -50,19 +52,19 @@ export default async function CustomersPage({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>الاسم</TableHead>
-              <TableHead>البريد الإلكتروني</TableHead>
-              <TableHead>الهاتف</TableHead>
-              <TableHead>نقاط الولاء</TableHead>
-              <TableHead>الطلبات</TableHead>
-              <TableHead>الإجمالي</TableHead>
-              <TableHead className="text-end">الإجراءات</TableHead>
+              <TableHead>{t("table.name")}</TableHead>
+              <TableHead>{t("table.email")}</TableHead>
+              <TableHead>{t("table.phone")}</TableHead>
+              <TableHead>{t("table.loyaltyPoints")}</TableHead>
+              <TableHead>{t("table.orders")}</TableHead>
+              <TableHead>{t("table.total")}</TableHead>
+              <TableHead className="text-end">{t("table.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {customerList.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="p-0"><EmptyState title="لا يوجد عملاء" hint="العميل بيتسجّل تلقائياً مع أول طلب، أو ضيفه يدوي." /></TableCell>
+                <TableCell colSpan={7} className="p-0"><EmptyState title={t("empty.title")} hint={t("empty.hint")} /></TableCell>
               </TableRow>
             ) : (
               customerList.map((customer) => (

@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc';
 import { SegmentList } from './SegmentList';
 import { SegmentMembersPanel } from './SegmentMembersPanel';
 import { CreateSegmentModal } from './CreateSegmentModal';
+import { useTranslations } from 'next-intl';
 
 export type CustomerSegment = {
   id: string;
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export default function CustomerSegmentsClient({ initialSegments }: Props) {
+  const t = useTranslations('customerSegments');
   const utils = trpc.useUtils();
   const [segments, setSegments] = useState<CustomerSegment[]>(initialSegments);
   const [showCreate, setShowCreate] = useState(false);
@@ -90,7 +92,7 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
   });
 
   const handleCreate = (data: { name: string; color: string; description?: string }) => {
-    if (!data.name.trim()) { setCreateError('اسم الشريحة مطلوب'); return; }
+    if (!data.name.trim()) { setCreateError(t('validation.nameRequired')); return; }
     createMutation.mutate(data);
   };
 
@@ -108,14 +110,14 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
     <div className="p-6" style={{ color: 'var(--t1)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '4px' }}>شرائح العملاء</h1>
-          <p style={{ fontSize: '13px', color: 'var(--t2)' }}>تجميع العملاء في مجموعات للحملات والتسويق المستهدف</p>
+          <h1 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '4px' }}>{t('title')}</h1>
+          <p style={{ fontSize: '13px', color: 'var(--t2)' }}>{t('subtitle')}</p>
         </div>
         <button
           className="bg-[var(--gold)] text-void border-none rounded-lg px-[18px] py-2 text-[13px] font-semibold cursor-pointer"
           onClick={() => setShowCreate(true)}
         >
-          + شريحة جديدة
+          {t('actions.new')}
         </button>
       </div>
 
