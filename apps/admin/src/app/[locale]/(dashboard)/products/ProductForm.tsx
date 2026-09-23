@@ -13,21 +13,24 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
-const productSchema = z.object({
-    name: z.string().min(1, "اسم المنتج مطلوب"),
+const createProductSchema = (t: ReturnType<typeof useTranslations<"products">>) => z.object({
+    name: z.string().min(1, t("validation.nameRequired")),
     nameAr: z.string().optional(),
-    sku: z.string().min(1, "رمز المنتج (SKU) مطلوب"),
+    sku: z.string().min(1, t("validation.skuRequired")),
     categoryId: z.string().uuid().optional(),
     description: z.string().optional(),
     descriptionAr: z.string().optional(),
-    price: z.preprocess((val) => Number(val), z.number().min(0, "السعر يجب أن يكون 0 أو أكثر")),
+    price: z.preprocess((val) => Number(val), z.number().min(0, t("validation.priceMin"))),
     currency: z.string().default("USD"),
-    stock: z.preprocess((val) => Number(val), z.number().int().min(0, "المخزون يجب أن يكون 0 أو أكثر")),
+    stock: z.preprocess((val) => Number(val), z.number().int().min(0, t("validation.stockMin"))),
     status: z.string().default("active"),
 });
 
-export function ProductForm({ initialData, categories }: { initialData?: z.infer<typeof productSchema> & { id?: string }, categories?: { id: string; name: string }[] }) {
+type ProductFormValues = z.infer<ReturnType<typeof createProductSchema>>;
+
+export function ProductForm({ initialData, categories }: { initialData?: ProductFormValues & { id?: string }, categories?: { id: string; name: string }[] }) {
     const t = useTranslations("products");
+    const productSchema = createProductSchema(t);
     const router = useRouter();
 
     const form = useForm({
@@ -48,27 +51,27 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
 
     const createMutation = trpc.products.create.useMutation({
         onSuccess: () => {
-            toast.success("تم إضافة المنتج بنجاح");
+            toast.success(t("toasts.added"));
             router.push("/ar/products");
             router.refresh();
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء إضافة المنتج");
+            toast.error(err instanceof Error ? err.message : t("errors.addProduct"));
         },
     });
 
     const updateMutation = trpc.products.update.useMutation({
         onSuccess: () => {
-            toast.success("تم تحديث المنتج بنجاح");
+            toast.success(t("toasts.updated"));
             router.push("/ar/products");
             router.refresh();
         },
         onError: (err: unknown) => {
-            toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء تحديث المنتج");
+            toast.error(err instanceof Error ? err.message : t("errors.updateProduct"));
         },
     });
 
-    const onSubmit = (data: z.infer<typeof productSchema>) => {
+    const onSubmit = (data: ProductFormValues) => {
         if (initialData?.id) {
             updateMutation.mutate({ id: initialData.id, ...data });
         } else {
@@ -111,7 +114,7 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
                         onValueChange={(val) => form.setValue("categoryId", val)}
                     >
                         <SelectTrigger>
-                            <SelectValue placeholder="Select Category" />
+                            <SelectValue placeholder={t("form.categoryPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
                             {categories?.map((c) => (
@@ -180,7 +183,7 @@ export function ProductForm({ initialData, categories }: { initialData?: z.infer
                     type="submit"
                     disabled={createMutation.isPending || updateMutation.isPending || form.formState.isSubmitting}
                 >
-                    {(createMutation.isPending || updateMutation.isPending) ? "جاري الحفظ..." : t("form.submit")}
+                    {(createMutation.isPending || updateMutation.isPending) ? t("form.saving") : t("form.submit")}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => router.push("/ar/products")}>
                     {t("form.cancel")}

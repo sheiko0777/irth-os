@@ -11,23 +11,24 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
-const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+const createFormSchema = (t: ReturnType<typeof useTranslations<"products">>) => z.object({
+  name: z.string().min(1, t("validation.nameRequired")),
   description: z.string().optional(),
   brand: z.enum(["irth"]).default("irth"),
   variants: z.array(z.object({
-    sku: z.string().min(1, "SKU is required"),
-    price: z.string().min(1, "Price is required"),
-    stock: z.coerce.number().int().min(0, "Stock must be 0 or more")
+    sku: z.string().min(1, t("validation.skuRequired")),
+    price: z.string().min(1, t("validation.priceRequired")),
+    stock: z.coerce.number().int().min(0, t("validation.stockMin"))
   }))
 });
 
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = z.infer<ReturnType<typeof createFormSchema>>;
 
-type FormDefaultValues = z.input<typeof formSchema>;
+type FormDefaultValues = z.input<ReturnType<typeof createFormSchema>>;
 
 export function CreateProductForm() {
-    const t = useTranslations("products.form");
+    const t = useTranslations("products");
+    const formSchema = createFormSchema(t);
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
 
@@ -50,7 +51,7 @@ export function CreateProductForm() {
         startTransition(async () => {
             const res = await createProductAction(data);
             if (res?.error) {
-                alert("Error creating product: " + res.error);
+                alert(t("errors.createProductWithMessage", { error: res.error }));
             } else {
                 router.push("/ar/products");
                 router.refresh();
@@ -62,20 +63,20 @@ export function CreateProductForm() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
             <Card>
                 <CardHeader>
-                    <CardTitle>معلومات المنتج الأساسية</CardTitle>
+                    <CardTitle>{t("form.basicInfo")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">{t("name")}</label>
+                        <label className="text-sm font-medium">{t("form.name")}</label>
                         <Input {...register("name")} />
                         {errors.name && <span className="text-sm text-crimson">{errors.name.message}</span>}
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">{t("description")}</label>
+                        <label className="text-sm font-medium">{t("form.description")}</label>
                         <Input {...register("description")} />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">{t("brand")}</label>
+                        <label className="text-sm font-medium">{t("form.brand")}</label>
                         <Input {...register("brand")} disabled />
                     </div>
                 </CardContent>
@@ -83,26 +84,26 @@ export function CreateProductForm() {
 
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>{t("variants")}</CardTitle>
+                    <CardTitle>{t("form.variants")}</CardTitle>
                     <Button type="button" variant="outline" size="sm" onClick={() => append({ sku: "", price: "0", stock: 0 })}>
-                        {t("addVariant")}
+                        {t("form.addVariant")}
                     </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {fields.map((field, index) => (
                         <div key={field.id} className="flex items-end gap-4 border p-4 rounded-md">
                             <div className="flex-1 space-y-2">
-                                <label className="text-xs">{t("sku")}</label>
+                                <label className="text-xs">{t("form.sku")}</label>
                                 <Input {...register(`variants.${index}.sku` as const)} />
                                 {errors.variants?.[index]?.sku && <span className="text-xs text-crimson">{errors.variants[index]?.sku?.message}</span>}
                             </div>
                             <div className="flex-1 space-y-2">
-                                <label className="text-xs">{t("price")}</label>
+                                <label className="text-xs">{t("form.price")}</label>
                                 <Input type="number" step="0.01" {...register(`variants.${index}.price` as const)} />
                                 {errors.variants?.[index]?.price && <span className="text-xs text-crimson">{errors.variants[index]?.price?.message}</span>}
                             </div>
                             <div className="flex-1 space-y-2">
-                                <label className="text-xs">{t("stock")}</label>
+                                <label className="text-xs">{t("form.stock")}</label>
                                 <Input type="number" {...register(`variants.${index}.stock` as const)} />
                                 {errors.variants?.[index]?.stock && <span className="text-xs text-crimson">{errors.variants[index]?.stock?.message}</span>}
                             </div>
@@ -113,8 +114,8 @@ export function CreateProductForm() {
                     ))}
                 </CardContent>
                 <CardFooter className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => router.back()} disabled={isPending}>{t("cancel")}</Button>
-                    <Button type="submit" disabled={isPending}>{isPending ? "..." : t("submit")}</Button>
+                    <Button type="button" variant="outline" onClick={() => router.back()} disabled={isPending}>{t("form.cancel")}</Button>
+                    <Button type="submit" disabled={isPending}>{isPending ? t("form.saving") : t("form.submit")}</Button>
                 </CardFooter>
             </Card>
         </form>
