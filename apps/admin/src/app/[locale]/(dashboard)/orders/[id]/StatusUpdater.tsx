@@ -9,7 +9,7 @@ import { orderStatusMap } from "@/lib/statusMaps";
 import { toast } from "sonner";
 
 export function StatusUpdater({ orderId, currentStatus }: { orderId: string, currentStatus: string }) {
-    const t = useTranslations("orders.status");
+    const t = useTranslations("orders");
     const [isPending, startTransition] = useTransition();
 
     return (
@@ -20,15 +20,15 @@ export function StatusUpdater({ orderId, currentStatus }: { orderId: string, cur
                     startTransition(async () => {
                         try {
                             await updateOrderStatusAction(orderId, val as OrderStatus);
-                            toast.success('تم تحديث حالة الطلب بنجاح');
+                            toast.success(t("detail.statusUpdater.success"));
                         } catch {
-                            toast.error('حدث خطأ أثناء تحديث الحالة');
+                            toast.error(t("detail.statusUpdater.error"));
                         }
                     });
                 }}
             >
                 <SelectTrigger className="w-[180px]" disabled={isPending}>
-                    <SelectValue placeholder="Status" />
+                    <SelectValue placeholder={t("detail.statusUpdater.placeholder")} />
                 </SelectTrigger>
                 <SelectContent>
                     {Object.entries(orderStatusMap).map(([id, { label }]) => (
@@ -36,7 +36,7 @@ export function StatusUpdater({ orderId, currentStatus }: { orderId: string, cur
                     ))}
                 </SelectContent>
             </Select>
-            {isPending && <span className="text-sm text-muted-foreground">جاري التحديث...</span>}
+            {isPending && <span className="text-sm text-muted-foreground">{t("detail.statusUpdater.loading")}</span>}
         </div>
     );
 }

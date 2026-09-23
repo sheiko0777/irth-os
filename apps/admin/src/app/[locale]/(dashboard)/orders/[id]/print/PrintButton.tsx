@@ -1,6 +1,10 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 export function PrintButton() {
+    const t = useTranslations('orders');
+
     return (
         <button
             onClick={() => window.print()}
@@ -15,7 +19,7 @@ export function PrintButton() {
                 fontFamily: 'Cairo, sans-serif',
             }}
         >
-            طباعة
+            {t('actions.print')}
         </button>
     );
 }
