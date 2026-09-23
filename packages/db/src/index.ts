@@ -72,6 +72,7 @@ export * from './idempotency';
 export * from './orgContext';
 export * from './invites';
 export * from './etaOrderInput';
+export * from './etaClaim';
 export * from './shopify';
 // The outbox WRITER, beside './schema/outbox' which is the table. Same split as
 // idempotency.ts / schema/idempotency.ts: producers import emitOutboxEvent, the

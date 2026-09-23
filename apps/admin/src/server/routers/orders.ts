@@ -228,6 +228,16 @@ export const ordersRouter = router({
                     }
                 }
 
+                // Same as apps/api's PATCH /:id/status and the Bosta webhook:
+                // a delivery marked here must file its ETA tax invoice too.
+                if (input.status === 'delivered' && previousStatus !== input.status) {
+                    await emitOutboxEvent(tx, {
+                        orgId: ctx.orgId,
+                        eventType: 'eta.invoice.issue',
+                        payload: { orgId: ctx.orgId, orderId: order.id },
+                    });
+                }
+
                 // Revenue, VAT and COGS, recognised together at the point
                 // the sale becomes final. The posting, and the transition
                 // guard in front of it, live in @irth/db's

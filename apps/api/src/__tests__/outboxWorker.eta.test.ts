@@ -9,7 +9,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('@irth/db', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@irth/db')>();
-  return { ...actual, buildEtaOrderInput: vi.fn() };
+  return { ...actual, buildEtaOrderInput: vi.fn(), claimEtaIssuance: vi.fn() };
 });
 vi.mock('@irth/domain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@irth/domain')>();
@@ -18,7 +18,7 @@ vi.mock('@irth/domain', async (importOriginal) => {
 vi.mock('../services/integrations', () => ({ sendWhatsAppTemplate: vi.fn(), sendTransactionalEmail: vi.fn() }));
 vi.mock('../services/shopify', () => ({ upsertShopifyProduct: vi.fn(), statusFromLocal: vi.fn() }));
 
-import { buildEtaOrderInput } from '@irth/db';
+import { buildEtaOrderInput, claimEtaIssuance } from '@irth/db';
 import { issueInvoice } from '@irth/domain';
 import { processOutbox } from '../workers/outboxWorker';
 
@@ -64,6 +64,7 @@ function mockDatabase(selectSequence: unknown[]) {
 beforeEach(() => {
   vi.mocked(buildEtaOrderInput).mockReset();
   vi.mocked(issueInvoice).mockReset();
+  vi.mocked(claimEtaIssuance).mockReset().mockResolvedValue('claimed');
 });
 
 describe('processOutbox — eta.invoice.issue', () => {
@@ -75,8 +76,31 @@ describe('processOutbox — eta.invoice.issue', () => {
 
     await processOutbox(db as never);
 
+    expect(issueInvoice).toHaveBeenCalledTimes(1);
     expect(db.insert).toHaveBeenCalled();
     expect(db.update).toHaveBeenCalled(); // marks the outbox event processed
+  });
+
+  it('already issued: never calls ETA again and marks the event processed', async () => {
+    const db = mockDatabase([[pendingEvent()], []]);
+    vi.mocked(buildEtaOrderInput).mockResolvedValue({ id: ORDER_ID, orgId: ORG_ID, orderNumber: 'IRT-0001', items: [] });
+    vi.mocked(claimEtaIssuance).mockResolvedValue('already_issued');
+
+    await processOutbox(db as never);
+
+    expect(issueInvoice).not.toHaveBeenCalled();
+    expect(db.update).toHaveBeenCalled();
+  });
+
+  it('claim in flight elsewhere: never calls ETA and leaves the event for the next tick', async () => {
+    const db = mockDatabase([[pendingEvent()], []]);
+    vi.mocked(buildEtaOrderInput).mockResolvedValue({ id: ORDER_ID, orgId: ORG_ID, orderNumber: 'IRT-0001', items: [] });
+    vi.mocked(claimEtaIssuance).mockResolvedValue('in_flight');
+
+    await processOutbox(db as never);
+
+    expect(issueInvoice).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
   });
 
   it('retryable failure: sets nextRetryAt via exponential backoff and rethrows so the outer catch bumps attempts', async () => {
