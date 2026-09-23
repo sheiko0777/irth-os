@@ -17,7 +17,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'admin'): Context {
 
 function chainOf(value: unknown) {
   const chain: Record<string, unknown> = {};
-  for (const m of ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'leftJoin', 'innerJoin', 'groupBy', 'update', 'set', 'insert', 'values']) {
+  for (const m of ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'leftJoin', 'innerJoin', 'groupBy', 'update', 'set', 'insert', 'values', 'returning']) {
     chain[m] = vi.fn(() => chain);
   }
   chain.then = (resolve: (v: unknown) => void) => Promise.resolve(value).then(resolve);
@@ -69,7 +69,8 @@ describe('inventory router — scanner & barcode features', () => {
     ];
 
     mockDb.select.mockReturnValueOnce(chainOf(existingItems));
-    mockDb.update.mockReturnValue(chainOf([]));
+    // Each guarded UPDATE ... RETURNING matches its row.
+    mockDb.update.mockReturnValue(chainOf([{ id: existingItems[0].id }]));
     mockDb.insert.mockReturnValue(chainOf([]));
 
     const result = await caller.batchAdjust({
