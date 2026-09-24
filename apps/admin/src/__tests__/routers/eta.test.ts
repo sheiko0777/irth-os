@@ -3,6 +3,17 @@ import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
+vi.mock('@irth/db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@irth/db')>()),
+  claimEtaIssuance: vi.fn(),
+}));
+vi.mock('@irth/domain', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@irth/domain')>()),
+  issueInvoice: vi.fn(),
+}));
+
+const { claimEtaIssuance } = await import('@irth/db');
+const { issueInvoice } = await import('@irth/domain');
 const { etaRouter } = await import('@/server/routers/eta');
 
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
@@ -80,15 +91,27 @@ describe('eta', () => {
       .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderNumber: 'IRT-2026-0001', currency: 'EGP', customerId: null }]))
       .mockImplementationOnce(() => chainOf([{ quantity: 1, priceMinor: 10000n, productName: 'Widget', sku: 'SKU-1' }]))
       .mockImplementationOnce(() => chainOf([submitted]));
-    const insertSpy = vi.fn(() => chainOf([]));
-    mockDb.insert = insertSpy;
+    vi.mocked(claimEtaIssuance).mockResolvedValueOnce('already_issued');
 
     const res = await etaRouter.createCaller(ctx()).submit({ orderId: UUID });
 
     expect(res.data).toMatchObject({ status: 'submitted' });
     expect(res.error).toBeNull();
-    // Returning early means nothing was written on this path.
-    expect(insertSpy).not.toHaveBeenCalled();
+    expect(issueInvoice).not.toHaveBeenCalled();
+  });
+
+  it('submit does NOT call ETA while another issuer holds the claim', async () => {
+    mockDb.select = vi.fn()
+      .mockImplementationOnce(() => chainOf([{ id: UUID, orgId: 'org-1', orderNumber: 'IRT-2026-0001', currency: 'EGP', customerId: null }]))
+      .mockImplementationOnce(() => chainOf([{ quantity: 1, priceMinor: 10000n, productName: 'Widget', sku: 'SKU-1' }]))
+      .mockImplementationOnce(() => chainOf([{ id: UUID, orderId: UUID, orgId: 'org-1', status: 'submitting' }]));
+    vi.mocked(claimEtaIssuance).mockResolvedValueOnce('in_flight');
+
+    const res = await etaRouter.createCaller(ctx()).submit({ orderId: UUID });
+
+    expect(res.data).toBeNull();
+    expect(res.error).toMatch(/in progress/);
+    expect(issueInvoice).not.toHaveBeenCalled();
   });
 
   it('checkStatus rejects a malformed id with BAD_REQUEST', async () => {

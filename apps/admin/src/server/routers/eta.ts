@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure } from '../trpc';
-import { etaInvoices, orders, buildEtaOrderInput } from '@irth/db';
-import { eq, and, desc, isNull, or } from 'drizzle-orm';
+import { etaInvoices, orders, buildEtaOrderInput, claimEtaIssuance } from '@irth/db';
+import { eq, and, desc, isNull, or, lte } from 'drizzle-orm';
 import { issueInvoice, getInvoiceStatus, cancelInvoice, buildEtaConfig } from '@irth/domain';
 
 // Config is process.env directly here (not envVar() from apps/api/src/utils/
@@ -36,8 +36,12 @@ export const etaRouter = router({
                 .from(etaInvoices)
                 .where(and(eq(etaInvoices.orderId, input.orderId), eq(etaInvoices.orgId, ctx.orgId)))
                 .limit(1);
-            if (existing?.status === 'submitted') {
-                return { data: existing, error: null, meta: null };
+            const claim = await ctx.withOrg((tx) => claimEtaIssuance(tx, ctx.orgId, input.orderId));
+            if (claim === 'already_issued') {
+                return { data: existing ?? null, error: null, meta: null };
+            }
+            if (claim === 'in_flight') {
+                return { data: null, error: 'ETA submission already in progress for this order', meta: null };
             }
 
             // issueInvoice makes external HTTP calls (auth, submission). Kept
@@ -155,7 +159,16 @@ export const etaRouter = router({
                 .leftJoin(etaInvoices, eq(etaInvoices.orderId, orders.id))
                 .where(and(
                     eq(orders.orgId, ctx.orgId),
-                    or(isNull(etaInvoices.id), eq(etaInvoices.status, 'error')),
+                    // A tax invoice is filed for a completed sale, same point
+                    // the outbox event fires at — never for an undelivered order.
+                    eq(orders.status, 'delivered'),
+                    or(
+                        isNull(etaInvoices.id),
+                        and(
+                            eq(etaInvoices.status, 'error'),
+                            or(isNull(etaInvoices.nextRetryAt), lte(etaInvoices.nextRetryAt, new Date())),
+                        ),
+                    ),
                 ))
                 .limit(20);
 
@@ -163,6 +176,8 @@ export const etaRouter = router({
             for (const { id: orderId } of pendingOrders) {
                 const etaInput = await buildEtaOrderInput(ctx.db, ctx.orgId, orderId);
                 if (!etaInput) continue;
+                const claim = await ctx.withOrg((tx) => claimEtaIssuance(tx, ctx.orgId, orderId));
+                if (claim !== 'claimed') continue;
 
                 const result = await issueInvoice(etaInput, etaConfig());
                 if (result.ok) {

@@ -1,5 +1,5 @@
 import { db } from '@irth/db';
-import { outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
+import { outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
@@ -152,6 +152,15 @@ async function handleEtaInvoiceIssue(database: typeof db, event: OutboxEvent): P
         await markProcessed(database, event.id);
         return;
     }
+
+    // A repeated event (delivered → returned → delivered) or an admin
+    // "Submit" racing this tick must not file a second tax invoice.
+    const claim = await claimEtaIssuance(database, orgId, orderId);
+    if (claim === 'already_issued') {
+        await markProcessed(database, event.id);
+        return;
+    }
+    if (claim === 'in_flight') return;
 
     const result = await issueInvoice(etaInput, buildEtaConfig(envVar));
 

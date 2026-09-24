@@ -269,15 +269,18 @@ describe('orders.updateStatus — outbox producer', () => {
     expect(insertCalls()).toEqual([]);
   });
 
-  it('writes nothing for a status the worker has no branch for', async () => {
-    // 'delivered' would be polled, match neither branch, and be marked
-    // processed having sent nothing — indistinguishable from a real send.
+  it('delivered queues no customer notification, only the ETA invoice issue', async () => {
+    // 'delivered' has no notification branch in the worker, so no customer
+    // event — but, like apps/api and the Bosta webhook, it must file the ETA
+    // tax invoice.
     stubOrder({ id: ORDER_UUID, orderNumber: 'IRT-2026-0005', status: 'shipped', customerId: CUSTOMER_UUID });
     queueSelects([[CONTACT]]);
 
     await caller.updateStatus({ id: ORDER_UUID, status: 'delivered' });
 
-    expect(outboxRows()).toEqual([]);
+    const rows = outboxRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ eventType: 'eta.invoice.issue' });
   });
 
   it('writes nothing when the order has no customer record to reach', async () => {
