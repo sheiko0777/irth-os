@@ -7,7 +7,7 @@ Closes #
 - [ ] Packet ID in PR title (e.g., `[DL-03]`)
 - [ ] `Closes #n` included in description
 - [ ] Gate command executed (`node pnpm.cjs turbo lint typecheck test`) and counts reported
-- [ ] Migration checks (if applicable): numbered above main / schema updated / new-migration skill used
+- [ ] Migrations (if applicable): checklist in `docs/db/MIGRATIONS.md` followed (number above main in title, RLS, Drizzle mirrored)
 - [ ] RLS policy enabled/forced/policied for new tables
 - [ ] Money amounts stored as bigint minor units
 - [ ] Writes executed via `withOrg`
