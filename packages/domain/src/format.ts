@@ -22,6 +22,7 @@ import {
  */
 const SYMBOLS: Record<KnownCurrencyCode, string> = {
   EGP: 'ج.م',
+  EUR: '€',
   USD: '$',
   SAR: 'ر.س',
   AED: 'د.إ',
