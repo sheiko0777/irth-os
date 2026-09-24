@@ -16,7 +16,7 @@ export interface ProductQrItem {
   nameAr?: string | null;
   sku: string;
   priceMinor?: bigint | number | null;
-  brand?: string;
+  brand?: string | null;
   binLocation?: string | null;
 }
 

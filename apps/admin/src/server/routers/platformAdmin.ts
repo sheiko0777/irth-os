@@ -16,7 +16,6 @@ export const platformAdminRouter = router({
           id: organizations.id,
           name: organizations.name,
           slug: organizations.slug,
-          brand: organizations.brand,
           memberCount: count(orgMembers.id),
         })
         .from(organizations)
@@ -98,7 +97,7 @@ export const platformAdminRouter = router({
 
       const org = await ctx.dbUnscoped.transaction(async (tx) => {
         const [org] = await tx.insert(organizations)
-          .values({ name: input.name, slug: input.slug, brand: 'irth' })
+          .values({ name: input.name, slug: input.slug })
           .returning();
 
         await tx.insert(orgFeatureFlags).values({

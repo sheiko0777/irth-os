@@ -4,7 +4,6 @@
 // Number on the way.
 import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
 
-export const brandEnum = pgEnum('brand', ['irth']);
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
 export const shippingProviderEnum = pgEnum('shipping_provider', ['bosta', 'mylerz']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cod', 'online']);
@@ -21,7 +20,12 @@ export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  brand: brandEnum("brand").notNull().default("irth"),
+  // 0069. Default dimensions are created by a DB trigger on insert, which also
+  // sets stock_owner_entity_id; nullable only for that instant. FK to
+  // legal_entities(id, org_id) lives in the migration (not declared here to
+  // avoid a schema.ts <-> dimensions.ts import cycle).
+  presentationCurrency: char("presentation_currency", { length: 3 }).notNull().default("EGP"),
+  stockOwnerEntityId: uuid("stock_owner_entity_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -82,7 +86,9 @@ export const products = pgTable('products', {
   stock: integer('stock').notNull().default(0),
   status: text('status').notNull().default('active'), // 'active' | 'draft' | 'archived'
   images: jsonb('images').default([]),
-  brand: brandEnum('brand').default('irth').notNull(), // Single-tenant brand enum; always 'irth' today.
+  // 0069: FK (brand_id, org_id) -> brands(id, org_id) in the migration.
+  // Nullable: shared ingredients/packaging belong to no brand.
+  brandId: uuid('brand_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

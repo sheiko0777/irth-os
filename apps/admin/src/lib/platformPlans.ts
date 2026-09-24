@@ -15,7 +15,6 @@ export type OrgRow = {
   id: string;
   name: string;
   slug: string;
-  brand: string;
   memberCount: number;
   config: OrgConfig | null;
 };

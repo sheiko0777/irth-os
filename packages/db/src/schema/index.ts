@@ -14,3 +14,4 @@ export * from './giftCards';
 export * from './customerSegments';
 export * from './orgFeatureFlags';
 export * from './paymob';
+export * from './dimensions';
