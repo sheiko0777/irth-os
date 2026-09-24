@@ -1,3 +1,5 @@
+> **Superseded (2026-09-24).** The current plan is [docs/superpowers/specs/2026-09-17-irth-os-bos-design.md](docs/superpowers/specs/2026-09-17-irth-os-bos-design.md). Status claims below are historical — e.g. the database is Neon, not Supabase; tRPC wiring, RBAC and the deploy migrate step are already fixed.
+
 # irth-os Mind Map
 
 Below is a comprehensive structural and conceptual mind map of **irth-os**, mapped out by functional layers, core architectural concepts, and dependencies.

@@ -1,3 +1,5 @@
+> **Superseded (2026-09-24).** The current plan is [docs/superpowers/specs/2026-09-17-irth-os-bos-design.md](docs/superpowers/specs/2026-09-17-irth-os-bos-design.md). Status claims below are historical — e.g. the database is Neon, not Supabase; tRPC wiring, RBAC and the deploy migrate step are already fixed.
+
 # IRTH OS — Project Master Plan
 
 > **Document purpose**: single source of truth for project architecture, current state,
