@@ -18,6 +18,7 @@ import { LogOut, Search, Shield, X } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { buildNavGroups } from "@/lib/navigation";
 import { routeLabels } from "@/lib/routeLabels";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { AlertPanel } from "./AlertPanel";
 import { NotificationBell } from "./NotificationBell";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -270,6 +271,7 @@ export function CarbonShell({
               <span>{ar ? "بحث أو انتقال سريع" : "Search or jump to…"}</span>
               <kbd>Ctrl K</kbd>
             </button>
+            <ThemeToggle locale={locale} />
             <NotificationBell />
           </HeaderGlobalBar>
         </Header>

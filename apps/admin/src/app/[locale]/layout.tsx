@@ -1,7 +1,7 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
 import { headers } from 'next/headers';
-import { IBM_Plex_Sans_Arabic, Cairo } from 'next/font/google';
+import { IBM_Plex_Sans, IBM_Plex_Sans_Arabic } from 'next/font/google';
 import { ReactNode } from 'react';
 import { Toaster } from 'sonner';
 import type { Metadata, Viewport } from 'next';
@@ -33,22 +33,27 @@ export async function generateMetadata({
 }
 
 export const viewport: Viewport = {
-  themeColor: '#060a10',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#F6F5F2' },
+    { media: '(prefers-color-scheme: dark)', color: '#191917' },
+  ],
 };
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
   subsets: ['arabic'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600'],
   variable: '--font-ibm-plex-sans-arabic',
   display: 'swap',
 });
 
-const cairo = Cairo({
-  subsets: ['arabic'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-cairo',
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-ibm-plex-sans',
   display: 'swap',
 });
+
+const themeInitializer = `(function(){try{var value=localStorage.getItem('irth-theme');var theme=value==='light'||value==='dark'||value==='system'?value:'system';document.documentElement.setAttribute('data-theme',theme);}catch(_){document.documentElement.setAttribute('data-theme','system');}})();`;
 
 export default async function LocaleLayout({
   children,
@@ -85,8 +90,16 @@ export default async function LocaleLayout({
   const isLogin = pathname.includes("/login");
 
   return (
-    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} className={`${ibmPlexSansArabic.variable} ${cairo.variable}`}>
-      <body className="bg-[var(--ink)] text-[var(--t2)] font-sans antialiased">
+    <html
+      lang={locale}
+      dir={locale === 'ar' ? 'rtl' : 'ltr'}
+      className={`${ibmPlexSansArabic.variable} ${ibmPlexSans.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitializer }} />
+      </head>
+      <body className="font-sans antialiased">
         <NextIntlClientProvider messages={messages}>
           <TrpcProvider>
             {children}
@@ -96,8 +109,8 @@ export default async function LocaleLayout({
           position="top-center"
           richColors
           dir={locale === 'ar' ? 'rtl' : 'ltr'}
-          theme="dark"
-          toastOptions={{ style: { fontFamily: 'var(--font-display)' } }}
+          theme="system"
+          toastOptions={{ style: { fontFamily: 'var(--font-family)' } }}
         />
       </body>
     </html>
