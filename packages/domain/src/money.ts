@@ -16,7 +16,7 @@
 /** ISO 4217 code. Branded so a bare string cannot be passed as a currency. */
 export type Currency = string & { readonly __brand: 'Currency' };
 
-export const KNOWN_CURRENCIES = ['EGP', 'USD', 'SAR', 'AED', 'KWD', 'BHD', 'OMR'] as const;
+export const KNOWN_CURRENCIES = ['EGP', 'EUR', 'USD', 'SAR', 'AED', 'KWD', 'BHD', 'OMR'] as const;
 export type KnownCurrencyCode = (typeof KNOWN_CURRENCIES)[number];
 
 /**
@@ -26,6 +26,7 @@ export type KnownCurrencyCode = (typeof KNOWN_CURRENCIES)[number];
  */
 const EXPONENTS: Record<KnownCurrencyCode, number> = {
   EGP: 2,
+  EUR: 2,
   USD: 2,
   SAR: 2,
   AED: 2,
@@ -52,12 +53,8 @@ export class UnsupportedCurrencyError extends Error {
   }
 }
 
-/**
- * See docs/implementation/BASELINE.md Phase 0 section: the system is temporarily
- * restricted to an EGP-primary baseline for correctness fixes. Multi-currency
- * is an explicit, separate, later phase. This allowlist is meant to grow.
- */
-export const SUPPORTED_CURRENCIES = ['EGP'] as const satisfies readonly KnownCurrencyCode[];
+/** Currencies the group trades in (DM-02): Egypt, the EU entity, and the Gulf. */
+export const SUPPORTED_CURRENCIES = ['EGP', 'EUR', 'SAR', 'AED'] as const satisfies readonly KnownCurrencyCode[];
 
 export function assertSupportedCurrency(code: string): Currency {
   const c = currency(code);
@@ -198,6 +195,37 @@ export function divideRoundHalfEven(numerator: bigint, denominator: bigint): big
   }
 
   return negative ? -rounded : rounded;
+}
+
+/**
+ * An exchange rate as an exact fraction: 1 unit of `base` = num/den units of
+ * `quote`. Stored as two bigints (exchange_rates.rate_num / rate_den) so no
+ * rate ever passes through a float.
+ */
+export interface FxRate {
+  readonly base: Currency;
+  readonly quote: Currency;
+  readonly num: bigint;
+  readonly den: bigint;
+}
+
+/** amountMinor × num / den, rounded once, half-even. Identity when num == den. */
+export function convertMinor(amountMinor: bigint, rateNum: bigint, rateDen: bigint): bigint {
+  if (rateNum <= 0n || rateDen <= 0n) throw new RangeError('Exchange rate parts must be positive');
+  if (rateNum === rateDen) return amountMinor;
+  return divideRoundHalfEven(amountMinor * rateNum, rateDen);
+}
+
+/** Convert Money into the rate's quote currency, adjusting for differing minor-unit exponents. */
+export function convert(m: Money, rate: FxRate): Money {
+  if (m.currency !== rate.base) {
+    throw new RangeError(`Rate is ${rate.base}->${rate.quote} but amount is ${m.currency}`);
+  }
+  const shift = exponentOf(rate.quote) - exponentOf(rate.base);
+  const scale = 10n ** BigInt(Math.abs(shift));
+  const num = shift >= 0 ? rate.num * scale : rate.num;
+  const den = shift >= 0 ? rate.den : rate.den * scale;
+  return { minor: convertMinor(m.minor, num, den), currency: rate.quote };
 }
 
 /** One basis point is 1/100th of a percent. 14% VAT is 1400 bp. */

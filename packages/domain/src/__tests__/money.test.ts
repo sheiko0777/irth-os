@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { symbolOf } from '../format';
+import { SUPPORTED_CURRENCIES, convert, convertMinor } from '../money';
 import {
   EGP,
   EGYPT_VAT_BP,
@@ -406,5 +407,60 @@ describe('isBalanced', () => {
       { debitMinor: 0n, creditMinor: net.minor },
       { debitMinor: 0n, creditMinor: vat.minor },
     ])).toBe(true);
+  });
+});
+
+describe('multi-currency (DM-02)', () => {
+  it('supports EGP, EUR, SAR and AED and still rejects USD', () => {
+    expect([...SUPPORTED_CURRENCIES]).toEqual(['EGP', 'EUR', 'SAR', 'AED']);
+    for (const c of SUPPORTED_CURRENCIES) expect(assertSupportedCurrency(c)).toBe(c);
+    expect(() => assertSupportedCurrency('USD')).toThrow(UnsupportedCurrencyError);
+  });
+
+  it('convertMinor is the identity when num == den', () => {
+    expect(convertMinor(12345n, 7n, 7n)).toBe(12345n);
+  });
+
+  it('convertMinor rounds ties to even', () => {
+    expect(convertMinor(5n, 1n, 2n)).toBe(2n);
+    expect(convertMinor(15n, 1n, 2n)).toBe(8n);
+    expect(convertMinor(-5n, 1n, 2n)).toBe(-2n);
+  });
+
+  it('convertMinor rejects non-positive rates', () => {
+    expect(() => convertMinor(1n, 0n, 1n)).toThrow(RangeError);
+    expect(() => convertMinor(1n, 1n, -2n)).toThrow(RangeError);
+  });
+
+  it('converting parts sums to within 1 minor unit of converting the whole', () => {
+    fc.assert(
+      fc.property(
+        fc.bigInt({ min: 0n, max: 10n ** 15n }),
+        fc.bigInt({ min: 0n, max: 10n ** 15n }),
+        fc.bigInt({ min: 1n, max: 10n ** 9n }),
+        fc.bigInt({ min: 1n, max: 10n ** 9n }),
+        (a, b, num, den) => {
+          const diff = convertMinor(a, num, den) + convertMinor(b, num, den) - convertMinor(a + b, num, den);
+          return diff >= -1n && diff <= 1n;
+        },
+      ),
+    );
+  });
+
+  it('convert adjusts for minor-unit exponents', () => {
+    // 10.00 EUR at 1 EUR = 0.335 KWD -> 3.350 KWD (2dp -> 3dp)
+    const kwd = convert(fromMinor(1000n, currency('EUR')), {
+      base: currency('EUR'), quote: currency('KWD'), num: 335n, den: 1000n,
+    });
+    expect(kwd).toEqual({ minor: 3350n, currency: 'KWD' });
+    // 100.00 EUR at 1 EUR = 53.1234 EGP -> 5312.34 EGP
+    const egp = convert(fromMinor(10000n, currency('EUR')), {
+      base: currency('EUR'), quote: EGP, num: 531234n, den: 10000n,
+    });
+    expect(egp).toEqual({ minor: 531234n, currency: 'EGP' });
+  });
+
+  it('convert refuses an amount in the wrong currency', () => {
+    expect(() => convert(fromMinor(1n, EGP), { base: currency('EUR'), quote: EGP, num: 1n, den: 1n })).toThrow(RangeError);
   });
 });
