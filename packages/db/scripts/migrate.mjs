@@ -101,6 +101,12 @@ async function main() {
     return;
   }
 
+  if (process.argv.includes('--dry-run')) {
+    console.log(`${pending.length} of ${files.length} migrations pending (dry run, nothing applied):`);
+    for (const file of pending) console.log(`  pending  ${file}`);
+    return;
+  }
+
   console.log(`applying ${pending.length} of ${files.length} migrations`);
 
   for (const file of pending) {
