@@ -54,6 +54,12 @@ export default async function OrdersPage({
 
     const caller = await serverCaller();
     const response = await caller.orders.list({ page, pageSize: PAGE_SIZE, status, search });
+    // A failed list used to render as an empty table — "no orders" — which
+    // tells the owner there is no work when the load simply failed. Let the
+    // dashboard error boundary say so instead.
+    if (response.error) {
+        throw new Error(`orders.list failed: ${String(response.error)}`);
+    }
     const total = response.meta?.total ?? 0;
 
     const counts = new Map(
@@ -73,15 +79,13 @@ export default async function OrdersPage({
         })),
     ];
 
-    const orders: OrderRow[] = response.error
-        ? []
-        : response.data.map((o) => ({
-            id: o.id,
-            orderNumber: o.orderNumber,
-            status: o.status,
-            totalAmountMinor: o.totalAmountMinor,
-            createdAt: o.createdAt,
-        }));
+    const orders: OrderRow[] = response.data.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        totalAmountMinor: o.totalAmountMinor,
+        createdAt: o.createdAt,
+    }));
 
     return (
         <div className="space-y-4">

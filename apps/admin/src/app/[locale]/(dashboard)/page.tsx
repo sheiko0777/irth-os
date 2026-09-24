@@ -47,13 +47,12 @@ export default async function DashboardPage({
     caller.dashboard.getRecentOrders(),
   ]);
 
+  // Hand the failure to the dashboard error boundary (localised, with retry)
+  // instead of a hard-coded Arabic line with no way to recover.
   if (stats.error) {
-    return (
-      <div className="text-[var(--crimson)]">
-        حدث خطأ أثناء تحميل إحصائيات لوحة القيادة
-      </div>
-    );
+    throw new Error(`dashboard.getStats failed: ${String(stats.error)}`);
   }
+  const tCommon = await getTranslations("common.error");
 
   const {
     ordersToday,
@@ -161,7 +160,12 @@ export default async function DashboardPage({
           </Link>
         </div>
 
-        {recentOrders.length === 0 ? (
+        {recent.error ? (
+          // A failed recent-orders query is not "no orders yet".
+          <p role="alert" data-testid="recent-orders-error" className="px-6 py-8 text-sm text-[var(--crimson)]">
+            {tCommon("section")}
+          </p>
+        ) : recentOrders.length === 0 ? (
           <EmptyState
             icon={ShoppingCart}
             title="لا توجد طلبات بعد"
