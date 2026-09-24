@@ -374,6 +374,10 @@ export const stocktakingRouter = router({
           )
           .limit(1);
 
+        if ((existingItem?.actualQuantity ?? 0) + input.quantityDelta < 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'لا يمكن أن يصبح العدد الفعلي أقل من صفر' });
+        }
+
         if (existingItem) {
           const currentActual = existingItem.actualQuantity ?? 0;
           const newActual = currentActual + input.quantityDelta;

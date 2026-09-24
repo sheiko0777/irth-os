@@ -99,3 +99,37 @@ describe('inventory.list', () => {
     }
   });
 });
+
+describe('inventory out adjustments never go negative', () => {
+  const caller = inventoryRouter.createCaller(ctx('owner'));
+  const itemId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+
+  function updateReturning(rows: unknown[]) {
+    const chain: Record<string, unknown> = {};
+    for (const m of ['set', 'where', 'returning']) chain[m] = vi.fn(() => chain);
+    chain.then = (resolve: (v: unknown) => void) => Promise.resolve(rows).then(resolve);
+    mockDb.update = vi.fn(() => chain) as never;
+  }
+
+  it('adjust: rejects an out larger than on-hand (guarded update matched no row)', async () => {
+    queueSelects([[{ id: itemId, orgId: 'org-1', quantity: 2 }]]);
+    updateReturning([]);
+    await expect(caller.adjust({ itemId, type: 'out', quantity: 5 })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('adjust: applies an out that on-hand covers', async () => {
+    queueSelects([[{ id: itemId, orgId: 'org-1', quantity: 5 }]]);
+    updateReturning([{ id: itemId, quantity: 3 }]);
+    const res = await caller.adjust({ itemId, type: 'out', quantity: 2 });
+    expect(res.data.newQuantity).toBe(3);
+  });
+
+  it('batchAdjust: rejects the whole batch when one out is short', async () => {
+    queueSelects([[{ id: itemId, orgId: 'org-1', quantity: 1 }]]);
+    updateReturning([]);
+    await expect(
+      caller.batchAdjust({ type: 'out', items: [{ itemId, quantity: 3 }] }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});

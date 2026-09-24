@@ -175,8 +175,14 @@ export const inventoryRouter = router({
                 .where(and(
                   eq(inventoryItems.id, parsedInput.itemId),
                   eq(inventoryItems.orgId, ctx.orgId),
+                  parsedInput.type === 'out'
+                    ? sql`${inventoryItems.quantity} >= ${parsedInput.quantity}`
+                    : undefined,
                 ))
                 .returning();
+              if (!updated) {
+                throw new TRPCError({ code: 'BAD_REQUEST', message: 'الكمية المتاحة لا تكفي لهذا الصرف' });
+              }
               return updated;
             },
             {
@@ -345,15 +351,25 @@ export const inventoryRouter = router({
           else if (input.type === 'out') newQuantity -= line.quantity;
           else newQuantity = line.quantity;
 
-          await tx
+          const [updated] = await tx
             .update(inventoryItems)
             .set({ quantity: quantityUpdate, updatedAt: new Date() })
             .where(
               and(
                 eq(inventoryItems.id, line.itemId),
-                eq(inventoryItems.orgId, ctx.orgId)
+                eq(inventoryItems.orgId, ctx.orgId),
+                input.type === 'out'
+                  ? sql`${inventoryItems.quantity} >= ${line.quantity}`
+                  : undefined,
               )
-            );
+            )
+            .returning({ id: inventoryItems.id });
+          if (!updated) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `الكمية المتاحة للعنصر ${line.itemId} لا تكفي لهذا الصرف`,
+            });
+          }
 
           await tx.insert(inventoryMovements).values({
             orgId: ctx.orgId,
