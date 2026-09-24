@@ -1,4 +1,4 @@
--- 0067: inventory_items.quantity can never go below zero.
+-- 0071: inventory_items.quantity can never go below zero.
 --
 -- Every order path already refuses to oversell (apps/api orders.ts guarded
 -- UPDATE ... WHERE quantity >= n; Shopify webhook clamps to on-hand). The
