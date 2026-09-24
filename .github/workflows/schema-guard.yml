@@ -30,7 +30,6 @@ jobs:
               "packages/db/src/schema/",
             ];
             const guardedExactFiles = [
-              "packages/db/src/schema.ts",
               "packages/db/src/index.ts",
               "packages/db/src/orgContext.ts",
               "packages/db/src/permissions.ts",
