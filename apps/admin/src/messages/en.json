@@ -749,6 +749,13 @@
       }
     }
   },
+  "sectionStatus": {
+    "loaded": "Loaded",
+    "not_applicable": "Not applicable",
+    "not_exposed_by_provider": "Not exposed by provider",
+    "permission_denied": "Permission denied",
+    "fetch_failed": "Failed to load"
+  },
   "giftCards": {
     "metadata": {
       "title": "Gift cards | IRTH"

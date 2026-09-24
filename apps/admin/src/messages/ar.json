@@ -749,6 +749,13 @@
       }
     }
   },
+  "sectionStatus": {
+    "loaded": "تم التحميل",
+    "not_applicable": "لا ينطبق",
+    "not_exposed_by_provider": "غير متاح من مزود الخدمة",
+    "permission_denied": "ليس لديك صلاحية لعرض هذا القسم",
+    "fetch_failed": "تعذر التحميل"
+  },
   "giftCards": {
     "metadata": {
       "title": "بطاقات الهدايا | IRTH"
