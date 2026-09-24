@@ -71,6 +71,8 @@
 
 :root {
   color-scheme: light;
+  /* Default for FormDialog; each dialog overrides it inline via its `width` prop. */
+  --form-dialog-width: 480px;
   --canvas: #f6f5f2;
   --surface: #ffffff;
   --raised: #efeee9;
