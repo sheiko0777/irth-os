@@ -59,7 +59,7 @@ describe('org dimension defaults (0069)', () => {
         brandId: brandB.id,
         sellingEntityId: entityA.id,
       }),
-    ).rejects.toThrow(/channels_brand_same_org_fk/);
+    ).rejects.toMatchObject({ cause: { constraint_name: 'channels_brand_same_org_fk' } });
   });
 
   it('rejects a channel whose selling entity belongs to another org', async () => {
@@ -75,6 +75,6 @@ describe('org dimension defaults (0069)', () => {
         brandId: brandA.id,
         sellingEntityId: entityB.id,
       }),
-    ).rejects.toThrow(/channels_entity_same_org_fk/);
+    ).rejects.toMatchObject({ cause: { constraint_name: 'channels_entity_same_org_fk' } });
   });
 });
