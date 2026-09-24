@@ -1,6 +1,7 @@
 import { formatDate, formatMoney, fromMinor, multiply, sum } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
+import { TRPCError } from "@trpc/server";
 import { ArrowRight, PackageSearch } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { serverCaller } from "@/server/caller";
@@ -14,9 +15,26 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     const t = await getTranslations("orders");
     const caller = await serverCaller();
 
-    const response = await caller.orders.getById({ id });
+    // Only a genuinely missing order (or a malformed id in the URL) is "not
+    // found". Every other failure is rethrown to the dashboard error boundary:
+    // telling an operator a real order does not exist because the database
+    // blipped is worse than admitting the page failed to load.
+    let response: Awaited<ReturnType<typeof caller.orders.getById>> | null;
+    try {
+        response = await caller.orders.getById({ id });
+    } catch (err) {
+        if (err instanceof TRPCError && (err.code === "NOT_FOUND" || err.code === "BAD_REQUEST")) {
+            response = null;
+        } else {
+            throw err;
+        }
+    }
 
-    if (response.error || !response.data) {
+    if (response?.error) {
+        throw new Error(`orders.getById failed: ${String(response.error)}`);
+    }
+
+    if (!response?.data) {
         // Was a bare English <div>Order not found</div> with no way back — a
         // dead end on a URL an operator can easily reach from a stale link.
         return (

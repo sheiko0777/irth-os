@@ -316,6 +316,13 @@
     }
   },
   "common": {
+    "error": {
+      "title": "This page could not load",
+      "hint": "Something went wrong while fetching the data. Nothing was changed. Try again, or come back in a minute.",
+      "retry": "Try again",
+      "section": "This section could not load. The rest of the page is up to date."
+    },
+    "loading": "Loading…",
     "view": "View",
     "edit": "Edit",
     "delete": "Delete",
