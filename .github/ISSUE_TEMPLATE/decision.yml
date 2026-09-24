@@ -1,0 +1,43 @@
+name: Decision
+description: Raise a decision issue needed by tasks
+title: "[Decision] "
+labels: ["needs:owner"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What decision is needed?
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: Available options to choose from.
+    validations:
+      required: true
+  - type: textarea
+    id: default_if_unanswered
+    attributes:
+      label: Default-if-unanswered
+      description: Fallback option if no decision is made by the deadline.
+    validations:
+      required: true
+  - type: textarea
+    id: needed_by
+    attributes:
+      label: Needed-by task IDs
+      description: Task IDs blocked or affected by this decision.
+    validations:
+      required: true
+  - type: dropdown
+    id: decision_owner
+    attributes:
+      label: Target Decision Owner
+      description: Select target decision owner label (`needs:owner` or `needs:accountant`).
+      options:
+        - needs:owner
+        - needs:accountant
+    validations:
+      required: true

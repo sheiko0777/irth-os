@@ -1,0 +1,129 @@
+name: Task Packet
+description: Create a task packet for an executor (Jules, Codex, Hermes, Claude, etc.)
+title: "[PREFIX-nn] Imperative summary"
+labels: ["task"]
+body:
+  - type: input
+    id: packet_id
+    attributes:
+      label: Packet ID
+      description: The ID of the packet (e.g., DL-03, OR-01)
+      placeholder: DL-03
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One paragraph summary of the user-visible outcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: slice
+    attributes:
+      label: Slice
+      options:
+        - S0
+        - S1
+        - S2
+        - S3
+        - S4
+        - S5
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Domain
+      options:
+        - DM
+        - OR
+        - IN
+        - CX
+        - AN
+        - DL
+        - UI
+    validations:
+      required: true
+  - type: dropdown
+    id: executor
+    attributes:
+      label: Executor
+      options:
+        - claude
+        - codex
+        - jules
+        - hermes
+        - owner
+        - accountant
+        - ui
+    validations:
+      required: true
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size
+      options:
+        - S
+        - M
+        - L
+    validations:
+      required: true
+  - type: textarea
+    id: context_pointers
+    attributes:
+      label: Context pointers
+      description: Domain docs, slice epic, plan sections locking decisions, owner facts A1–A4 when relevant.
+    validations:
+      required: false
+  - type: textarea
+    id: files
+    attributes:
+      label: Files
+      description: Exact paths affected; use `new:` prefix for files that do not exist yet.
+    validations:
+      required: true
+  - type: textarea
+    id: reuse
+    attributes:
+      label: Reuse
+      description: Existing functions/patterns to build on, with paths.
+    validations:
+      required: false
+  - type: textarea
+    id: do_not_touch
+    attributes:
+      label: Do-not-touch
+      description: Paths that stay untouched; plus, unless exec:claude: no migrations, no pnpm-lock.yaml, no .env*, no auth config.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: Checkable bullets (a reviewer can answer yes/no to each).
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests
+      description: Unit / integration on the disposable Postgres branch / RLS coverage / Playwright, with file paths.
+    validations:
+      required: true
+  - type: textarea
+    id: depends_on
+    attributes:
+      label: Depends_on
+      description: Issue references or published dependencies.
+    validations:
+      required: false
+  - type: textarea
+    id: report_contract
+    attributes:
+      label: Report contract
+      description: What the PR body must contain (evidence row, gate output counts, deviations from packet).
+      value: |
+        Evidence row (`ID | status | PR | commit | evidence/tests | migration | blocker | next`), gate output counts (`node pnpm.cjs turbo lint typecheck test`), deviations from the packet.
+    validations:
+      required: true
