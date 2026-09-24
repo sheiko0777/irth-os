@@ -9,4 +9,7 @@
 -- loudly instead of silently recording negative stock.
 --
 -- Checked before writing: production had 0 rows with quantity < 0.
+-- DROP IF EXISTS first: the shared integration DB already ran this file under
+-- its earlier number (0067), so a plain ADD would fail there as a duplicate.
+ALTER TABLE "inventory_items" DROP CONSTRAINT IF EXISTS "inventory_items_quantity_nonnegative";--> statement-breakpoint
 ALTER TABLE "inventory_items" ADD CONSTRAINT "inventory_items_quantity_nonnegative" CHECK ("quantity" >= 0);
