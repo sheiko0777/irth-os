@@ -42,7 +42,7 @@ export interface Product {
     stock: number;
     status: string;
     category: string | null;
-    brand: "irth";
+    brand: string | null;
 }
 
 export interface Category {

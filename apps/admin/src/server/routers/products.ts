@@ -1,5 +1,5 @@
 import { router, requirePermission } from '../trpc';
-import { products, productVariants, categories, brandEnum, paginationOffset, paginationMeta } from '@irth/db';
+import { products, productVariants, categories, brands, paginationOffset, paginationMeta } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, count, ilike } from 'drizzle-orm';
 import { z } from 'zod';
@@ -37,10 +37,11 @@ export const productsRouter = router({
                         stock: products.stock,
                         status: products.status,
                         category: categories.name,
-                        brand: products.brand,
+                        brand: brands.code,
                     })
                     .from(products)
                     .leftJoin(categories, eq(products.categoryId, categories.id))
+                    .leftJoin(brands, eq(products.brandId, brands.id))
                     .where(and(...conditions))
                     .orderBy(desc(products.createdAt))
                     .limit(pageSize)
@@ -98,7 +99,6 @@ export const productsRouter = router({
             currency: z.string().default('USD'),
             stock: z.number().int().min(0),
             status: z.string().default('active'),
-            brand: z.enum(brandEnum.enumValues).default('irth'),
         }))
         .mutation(async ({ ctx, input }) => {
             const priceMinor = parseDecimal(String(input.price), EGP).minor;
@@ -119,7 +119,6 @@ export const productsRouter = router({
                             currency: input.currency,
                             stock: input.stock,
                             status: input.status,
-                            brand: input.brand,
                         })
                         .returning();
 

@@ -12,9 +12,13 @@ main = "src/index.ts"
 name = "RATE_LIMITER"
 class_name = "RateLimiterDO"
 
+# SQLite-backed: the Workers free plan rejects KV-backed Durable Objects
+# (`new_classes`) with code 10097, which failed every Deploy API run from #372
+# on. The v1 tag never applied, so switching it here is safe. The DO's
+# storage.get/put/transaction calls work unchanged on SQLite storage.
 [[migrations]]
 tag = "v1"
-new_classes = ["RateLimiterDO"]
+new_sqlite_classes = ["RateLimiterDO"]
 
 [vars]
 NODE_ENV = "production"
