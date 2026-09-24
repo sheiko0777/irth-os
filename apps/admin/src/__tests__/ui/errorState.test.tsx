@@ -20,10 +20,10 @@ describe("ErrorState", () => {
     const onRetry = vi.fn();
     render(<ErrorState title="T" message="M" onRetry={onRetry} retryLabel="Try again" />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent("T");
+    expect(screen.getByRole("alert").textContent).toContain("T");
     fireEvent.click(screen.getByTestId("error-retry"));
     expect(onRetry).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("error-retry")).toHaveTextContent("Try again");
+    expect(screen.getByTestId("error-retry").textContent).toContain("Try again");
   });
 
   it("renders no retry button without onRetry", () => {
@@ -43,7 +43,7 @@ describe("dashboard error boundary", () => {
       </NextIntlClientProvider>,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent(messages.common.error.title);
+    expect(screen.getByRole("alert").textContent).toContain(messages.common.error.title);
     fireEvent.click(screen.getByRole("button", { name: messages.common.error.retry }));
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(reset).toHaveBeenCalledTimes(1);
