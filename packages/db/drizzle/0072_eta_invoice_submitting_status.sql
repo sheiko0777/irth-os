@@ -1,4 +1,4 @@
--- 0068: 'submitting' claim state for eta_invoices (+ ETA's own 'invalid').
+-- 0072: 'submitting' claim state for eta_invoices (+ ETA's own 'invalid').
 --
 -- Every issuer (outbox worker, admin submit, admin submitPending) now claims
 -- the row with status 'submitting' BEFORE calling ETA -- see
