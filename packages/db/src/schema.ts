@@ -2,7 +2,8 @@
 // `mode: 'bigint'` makes Drizzle hand back a JS bigint rather than a string, so
 // values flow straight into @irth/domain's Money without a lossy hop through
 // Number on the way.
-import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex, index, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
 export const shippingProviderEnum = pgEnum('shipping_provider', ['bosta', 'mylerz']);
@@ -126,6 +127,23 @@ export const productVariants = pgTable('product_variants', {
   orgShopifyInventoryItemIdIdx: uniqueIndex('product_variants_org_id_shopify_inventory_item_id_idx').on(table.orgId, table.shopifyInventoryItemId),
 }));
 
+export interface OrderBuyerSnapshot {
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+export interface OrderAddressSnapshot {
+  name: string | null;
+  phone: string | null;
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  province: string | null;
+  zip: string | null;
+  country: string | null;
+}
+
 export const orders = pgTable("orders", {
   ...baseColumns,
   // Unique per ORG, not globally — see the table-level constraint below and
@@ -146,7 +164,27 @@ export const orders = pgTable("orders", {
   // webhook). NULL for orders placed through the dashboard itself — see
   // migration 0041.
   shopifyOrderId: text("shopify_order_id"),
+  // 0073. 'blocked' = the provider sent lines this org could not map to a
+  // variant, so no items were written and no stock moved. A blocked order
+  // cannot advance except to 'cancelled' (transitionOrderStatus). Never a
+  // partial import: either every line is on the order or none is.
+  importStatus: text("import_status").notNull().default('complete'),
+  blockedReason: text("blocked_reason"),
+  // The provider's order as received, so a blocked order can be re-imported
+  // once its lines are mapped. NULL for dashboard-created orders.
+  sourcePayload: jsonb("source_payload"),
+  // Snapshots at order time. NULL = not captured (pre-0073 rows), not empty.
+  buyer: jsonb("buyer").$type<OrderBuyerSnapshot>(),
+  shippingAddress: jsonb("shipping_address").$type<OrderAddressSnapshot>(),
+  billingAddress: jsonb("billing_address").$type<OrderAddressSnapshot>(),
+  subtotalMinor: bigint("subtotal_minor", { mode: 'bigint' }),
+  discountMinor: bigint("discount_minor", { mode: 'bigint' }),
+  shippingMinor: bigint("shipping_minor", { mode: 'bigint' }),
+  taxMinor: bigint("tax_minor", { mode: 'bigint' }),
+  customerNote: text("customer_note"),
 }, (table) => ({
+  importStatusCheck: check('orders_import_status_check', sql`${table.importStatus} IN ('complete', 'blocked')`),
+  orgBlockedIdx: index('orders_org_id_blocked_idx').on(table.orgId).where(sql`${table.importStatus} = 'blocked'`),
   // Per tenant, not global (0035). A bare .unique() on order_number meant the
   // second org ever to place an order collided with the first org's
   // IRT-2026-0001 and was locked out of ordering entirely.

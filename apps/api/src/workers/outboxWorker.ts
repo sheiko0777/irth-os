@@ -8,6 +8,7 @@ import { renderCampaignEmail, renderOrgInviteEmail, renderOrderConfirmedEmail } 
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
 import { envVar } from '../utils/env';
+import { handleShopifyOrderReimport } from './shopifyOrderReimport';
 
 interface OrderPayload {
     customerPhone: string;
@@ -433,6 +434,8 @@ async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<v
         case 'order.confirmed':
         case 'order.shipped':
             return handleOrderNotification(database, event);
+        case 'shopify.order.reimport':
+            return handleShopifyOrderReimport(database, event);
         default:
             throw new Error(`Unknown outbox event type: ${event.eventType}`);
     }

@@ -15,6 +15,8 @@ export interface OrderRow {
     id: string;
     orderNumber: string;
     status: string;
+    /** Imported with unmapped lines (0073) — no items, no stock moved yet. */
+    blocked?: boolean;
     totalAmountMinor: bigint;
     createdAt: string | Date;
 }
@@ -116,6 +118,11 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             <StatusBadge status={order.status} domain="order" />
+                                            {order.blocked && (
+                                                <span className="ms-2 rounded-full border border-[var(--warning)] px-2 py-0.5 text-xs text-[var(--warning)]">
+                                                    {t('detail.blocked.badge')}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t1)]" dir="ltr">
                                             {formatMoney(fromMinor(order.totalAmountMinor))}

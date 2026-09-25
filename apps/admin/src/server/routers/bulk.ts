@@ -62,6 +62,10 @@ export const bulkRouter = router({
                                 WHERE id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
                                   AND org_id = ${ctx.orgId}
                                   AND status != ${status}
+                                  -- Same guard as transitionOrderStatus: a blocked
+                                  -- import (0073) has no items, so it may only be
+                                  -- cancelled. Skipped rows are not in RETURNING.
+                                  AND (import_status = 'complete' OR ${status} = 'cancelled')
                                 FOR UPDATE
                             )
                             UPDATE orders
