@@ -30,10 +30,16 @@ test('a blocked Shopify order is visible, complete, and can be resolved', async 
   await page.goto('/ar/orders');
   const blockedLink = page.getByRole('link', { name: /الطلبات المتوقفة/ });
   await expect(blockedLink).toBeVisible();
-  await blockedLink.click();
-  await expect(page).toHaveURL(/blocked=1/);
+  await expect(blockedLink).toHaveAttribute('href', /blocked=1/);
 
+  // Open the filtered list as a full page load, not by clicking the link. A
+  // client-side transition can update the URL before its content arrives; a
+  // click on the still-visible old list then gets overtaken by that pending
+  // transition and the page never leaves the list (seen on the slower CI
+  // runner, never locally).
+  await page.goto('/ar/orders?blocked=1');
   await page.getByRole('row', { name: new RegExp(BLOCKED_ORDER_NUMBER) }).getByRole('link', { name: 'عرض' }).click();
+  await page.waitForURL(/\/ar\/orders\/[0-9a-f-]{36}$/);
 
   // The order page: why it is blocked, who bought it, every line as received.
   await expect(page.getByRole('alert').getByText('الطلب متوقف')).toBeVisible();
