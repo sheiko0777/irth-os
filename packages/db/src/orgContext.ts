@@ -1,7 +1,8 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { organizations, orgMembers } from './schema';
+import { accessRoles } from './schema/access';
 import { user } from './schema/auth';
-import type { Role } from './permissions';
+import { effectiveAccess, type EffectiveAccess, type Role } from './permissions';
 import type { DbInstance } from './index';
 
 /**
@@ -118,4 +119,45 @@ export async function listMembershipsForUser(
     .orderBy(asc(orgMembers.createdAt));
 
   return rows.map((r) => ({ orgId: r.orgId, orgName: r.orgName, role: r.role as Role }));
+}
+
+/**
+ * A member's effective permissions in one org (0074): their role's list —
+ * the code matrix for a system role — plus per-person grants, minus revokes;
+ * nothing at all if suspended. Null when the user is not a member.
+ *
+ * Not yet used for authorization (requirePermission still reads
+ * org_members.role); see the note on effectiveAccess in permissions.ts.
+ */
+export async function resolveEffectiveAccess(
+  db: Pick<DbInstance, 'select'>,
+  orgId: string,
+  userId: string,
+): Promise<EffectiveAccess | null> {
+  const [row] = await db
+    .select({
+      role: orgMembers.role,
+      principalKind: orgMembers.principalKind,
+      status: orgMembers.status,
+      overrides: orgMembers.overrides,
+      systemKey: accessRoles.systemKey,
+      rolePermissions: accessRoles.permissions,
+    })
+    .from(orgMembers)
+    .leftJoin(accessRoles, and(eq(accessRoles.id, orgMembers.accessRoleId), eq(accessRoles.orgId, orgMembers.orgId)))
+    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, userId)))
+    .limit(1);
+
+  if (!row) return null;
+  // A member not (yet) linked to a role row falls back to their text role —
+  // the same authority requirePermission uses today — never to "nothing"
+  // and never to "everything".
+  const legacy = ['owner', 'admin', 'member'].includes(row.role) ? (row.role as Role) : null;
+  return effectiveAccess({
+    systemKey: row.systemKey ?? (row.rolePermissions ? null : legacy),
+    rolePermissions: row.rolePermissions ?? undefined,
+    overrides: row.overrides,
+    principalKind: row.principalKind,
+    status: row.status,
+  });
 }

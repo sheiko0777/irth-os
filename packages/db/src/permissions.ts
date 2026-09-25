@@ -107,3 +107,98 @@ export function canAssignRole(actorRole: Role, targetRole: Role): boolean {
   }
   return false;
 }
+
+// ---------------------------------------------------------------------------
+// Effective access (0074, owner decision A5)
+//
+// A member's authority = their role's permission list, plus any per-person
+// grants, minus any per-person revokes. System roles (owner/admin/member) have
+// no stored list — theirs is exactly the matrix above, derived here — so moving
+// the checks onto roles changes nothing for anyone on a system role.
+//
+// NOT YET USED FOR AUTHORIZATION: requirePermission still calls can(role, …).
+// The next step switches it to canAccess(); the integration test
+// accessControl.test.ts proves the two agree for every system role today.
+//
+// Kept import-free for the same reason as the rest of this file: the admin's
+// browser bundle deep-imports it.
+// ---------------------------------------------------------------------------
+
+export type PrincipalKindName = 'staff' | 'delivery_rep' | 'sales_rep' | 'supplier';
+
+/** {resource: [action, ...]} as stored on a custom role or in overrides. */
+export type PermissionListInput = Readonly<Record<string, readonly string[]>>;
+
+export interface EffectiveAccess {
+  /** The owner holds every permission and cannot be restricted by overrides. */
+  readonly isOwner: boolean;
+  readonly principalKind: PrincipalKindName;
+  readonly suspended: boolean;
+  /** "resource.action" keys. Empty for a suspended member. */
+  readonly perms: ReadonlySet<string>;
+}
+
+const key = (resource: string, action: string) => `${resource}.${action}`;
+
+/** Only pairs the matrix declares survive: a stored typo or a removed action grants nothing. */
+function knownPairs(list: PermissionListInput | undefined): string[] {
+  if (!list) return [];
+  const out: string[] = [];
+  for (const [resource, actions] of Object.entries(list)) {
+    const declared = PERMISSIONS[resource as Resource] as Record<string, readonly Role[]> | undefined;
+    if (!declared || !Array.isArray(actions)) continue;
+    for (const action of actions) {
+      if (typeof action === 'string' && Object.prototype.hasOwnProperty.call(declared, action)) {
+        out.push(key(resource, action));
+      }
+    }
+  }
+  return out;
+}
+
+/** Every declared resource.action — what the owner holds. */
+export function allPermissionKeys(): string[] {
+  return Object.entries(PERMISSIONS).flatMap(([resource, actions]) =>
+    Object.keys(actions).map((action) => key(resource, action)));
+}
+
+/** A system role's permissions, as a list, derived from the matrix above. */
+export function permissionsForRole(role: Role): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [resource, actions] of Object.entries(PERMISSIONS)) {
+    const granted = Object.entries(actions as Record<string, readonly Role[]>)
+      .filter(([, roles]) => roles.includes(role))
+      .map(([action]) => action);
+    if (granted.length > 0) out[resource] = granted;
+  }
+  return out;
+}
+
+export function effectiveAccess(input: {
+  systemKey: Role | null;
+  rolePermissions?: PermissionListInput;
+  overrides?: { grant?: PermissionListInput; revoke?: PermissionListInput };
+  principalKind?: PrincipalKindName;
+  status?: 'active' | 'suspended';
+}): EffectiveAccess {
+  const principalKind = input.principalKind ?? 'staff';
+  const suspended = input.status === 'suspended';
+  const isOwner = input.systemKey === 'owner' && !suspended;
+
+  if (suspended) return { isOwner: false, principalKind, suspended, perms: new Set() };
+  if (isOwner) return { isOwner, principalKind, suspended, perms: new Set(allPermissionKeys()) };
+
+  const base = input.systemKey ? permissionsForRole(input.systemKey) : input.rolePermissions;
+  const perms = new Set(knownPairs(base));
+  for (const k of knownPairs(input.overrides?.grant)) perms.add(k);
+  for (const k of knownPairs(input.overrides?.revoke)) perms.delete(k);
+  return { isOwner, principalKind, suspended, perms };
+}
+
+export function canAccess<R extends Resource>(access: EffectiveAccess, resource: R, action: ActionFor<R>): boolean {
+  // The owner's set already holds every declared pair, so membership alone
+  // decides — and an undeclared action fails closed for everyone, owner
+  // included, exactly as can() does.
+  if (access.suspended) return false;
+  return access.perms.has(key(resource, String(action)));
+}

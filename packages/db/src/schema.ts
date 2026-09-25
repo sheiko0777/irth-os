@@ -2,7 +2,7 @@
 // `mode: 'bigint'` makes Drizzle hand back a JS bigint rather than a string, so
 // values flow straight into @irth/domain's Money without a lossy hop through
 // Number on the way.
-import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex, index, check } from "drizzle-orm/pg-core";
+import { pgTable, uuid, timestamp, varchar, text, jsonb, bigint, char, boolean, integer, pgEnum, uniqueIndex, index, check, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled']);
@@ -36,11 +36,24 @@ export const orgMembers = pgTable("org_members", {
   userId: text("user_id").notNull(),
   role: text("role").notNull().default("member"),
   createdAt: timestamp("created_at").defaultNow(),
+  // 0074 (owner decision A5). Not yet read for authorization — role above is
+  // still the authority, and a trigger keeps accessRoleId pointing at the
+  // org's system role for it. FK (access_role_id, org_id) -> access_roles is
+  // in the migration (schema/access.ts imports this file).
+  accessRoleId: uuid("access_role_id"),
+  principalKind: text("principal_kind").$type<'staff' | 'delivery_rep' | 'sales_rep' | 'supplier'>().notNull().default('staff'),
+  status: text("status").$type<'active' | 'suspended'>().notNull().default('active'),
+  overrides: jsonb("overrides").$type<{ grant?: Record<string, string[]>; revoke?: Record<string, string[]> }>().notNull().default({ grant: {}, revoke: {} }),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
 }, (table) => ({
   // The exact column both org-context resolvers filter on (packages/db/src/
   // orgContext.ts) had no index at all until migration 0043.
   userIdIdx: index('org_members_user_id_idx').on(table.userId),
   orgUserUniqueIdx: uniqueIndex('org_members_org_id_user_id_idx').on(table.orgId, table.userId),
+  accessRoleIdx: index('org_members_access_role_id_idx').on(table.accessRoleId),
+  idOrgUq: unique('org_members_id_org_uq').on(table.id, table.orgId),
+  principalKindCheck: check('org_members_principal_kind_check', sql`${table.principalKind} IN ('staff', 'delivery_rep', 'sales_rep', 'supplier')`),
+  statusCheck: check('org_members_status_check', sql`${table.status} IN ('active', 'suspended')`),
 }));
 
 export const orgInvites = pgTable("org_invites", {

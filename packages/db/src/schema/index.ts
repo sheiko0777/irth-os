@@ -15,6 +15,7 @@ export * from './customerSegments';
 export * from './orgFeatureFlags';
 export * from './paymob';
 export * from './dimensions';
+export * from './access';
 export * from './exchangeRates';
 export * from './auth';
 export * from './customers';
