@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import * as Sentry from '@sentry/cloudflare'
 import { sql, eq, and, lte } from 'drizzle-orm'
 import { campaigns, snapshotAndEnqueueCampaign, sweepIdempotencyKeys, UnresolvedSegmentError } from '@irth/db'
 import { auth } from './auth'
@@ -26,6 +27,7 @@ import { envVar } from './utils/env'
 import { processOutbox, OUTBOX_BATCH_SIZE } from './workers/outboxWorker'
 import { rollupStorefrontMetrics } from './workers/storefrontRollup'
 import { metricsSnapshot } from './lib/metrics'
+import { sentryOptions } from './lib/sentry'
 
 export { RateLimiterDO } from './durableObjects/RateLimiterDO'
 
@@ -195,6 +197,10 @@ app.on(['POST', 'GET'], '/api/auth/*', (c) => {
  * scrubs the message in production and is env-aware on Workers.
  */
 app.onError((err, c) => {
+  // Handled here, so Sentry's fetch wrapper never sees it as a throw — report
+  // it explicitly or every 500 the API returns is invisible (no-op without
+  // SENTRY_DSN; see lib/sentry.ts).
+  Sentry.captureException(err)
   return c.json({ data: null, error: handleError(err), meta: null }, 500)
 })
 
@@ -229,7 +235,7 @@ app.route('/api/ai', aiChatRouter)
  */
 const OUTBOX_MAX_BATCHES_PER_TICK = 10
 
-export default {
+const handler = {
   fetch: app.fetch,
 
   /**
@@ -316,3 +322,13 @@ export default {
     })());
   },
 }
+
+/**
+ * Error reporting for every fetch and cron invocation: uncaught throws in
+ * `scheduled` (outbox drain, campaign dispatch) are captured along with
+ * anything reported explicitly. Off without the SENTRY_DSN secret.
+ */
+export default Sentry.withSentry(
+  (env) => sentryOptions(env as Record<string, unknown>),
+  handler as ExportedHandler,
+)
