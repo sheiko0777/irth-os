@@ -77,6 +77,7 @@ export * from './invites';
 export * from './etaOrderInput';
 export * from './etaClaim';
 export * from './shopify';
+export * from './revenueReport';
 // The outbox WRITER, beside './schema/outbox' which is the table. Same split as
 // idempotency.ts / schema/idempotency.ts: producers import emitOutboxEvent, the
 // worker imports outboxEvents, and neither has to know where the other lives.

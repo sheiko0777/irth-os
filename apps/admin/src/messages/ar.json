@@ -181,7 +181,7 @@
   "dashboard": {
     "title": "نظرة عامة",
     "ordersToday": "طلبات اليوم",
-    "revenueToday": "أرباح اليوم (ج.م)",
+    "revenueToday": "صافي مبيعات اليوم (ج.م، بدون الضريبة)",
     "pendingOrders": "الطلبات المعلقة",
     "activeProducts": "المنتجات النشطة"
   },

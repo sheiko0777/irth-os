@@ -141,7 +141,7 @@
   "dashboard": {
     "title": "Overview",
     "ordersToday": "Orders Today",
-    "revenueToday": "Revenue Today (EGP)",
+    "revenueToday": "Net Sales Today (ج.م, ex-VAT)",
     "pendingOrders": "Pending Orders",
     "activeProducts": "Active Products"
   },

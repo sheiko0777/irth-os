@@ -1,17 +1,19 @@
 import { z } from 'zod';
-import { and, asc, count, desc, eq, gte, ilike, lte, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, lte } from 'drizzle-orm';
 import {
   can,
   inventoryItems,
   orders,
   products,
   productVariants,
+  salesTotals,
   type ActionFor,
   type DbTx,
   type Resource,
   type Role,
 } from '@irth/db';
 import { OrderStatusSchema } from '@irth/types';
+import { formatMoney, fromMinor } from '@irth/domain';
 import type { AiRequestContext, AiToolDefinition, AiToolResult } from './types';
 
 type ToolPermission = { resource: Resource; action: ActionFor<Resource> };
@@ -226,21 +228,24 @@ export const AI_TOOLS: AiTool[] = [
       const start = new Date();
       start.setDate(start.getDate() - args.days);
 
-      const [allRows, deliveredRows, pendingRows, cancelledRows] = await Promise.all([
-        ctx.db.select({ count: count(), total: sum(orders.totalAmountMinor) }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start))),
-        ctx.db.select({ count: count(), total: sum(orders.totalAmountMinor) }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'delivered'))),
+      // Revenue from the ledger (CLAUDE.md rule 2): net sales ex-VAT, less
+      // returns. Order counts stay on `orders` — they count intent, not value.
+      const [allRows, deliveredRows, pendingRows, cancelledRows, sales] = await Promise.all([
+        ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start))),
+        ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'delivered'))),
         ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'pending'))),
         ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'cancelled'))),
+        salesTotals(ctx.db, ctx.orgId, { from: start }),
       ]);
 
-      const deliveredTotal = asMinor(deliveredRows[0]?.total as string | null);
+      const netSales = asMinor(sales.netSalesMinor);
       const totalOrders = allRows[0]?.count ?? 0;
       const deliveredCount = deliveredRows[0]?.count ?? 0;
       const pendingCount = pendingRows[0]?.count ?? 0;
       const cancelledCount = cancelledRows[0]?.count ?? 0;
 
       return {
-        summary: `${totalOrders} order(s), ${deliveredCount} delivered, ${pendingCount} pending, delivered revenue ${deliveredTotal} minor units.`,
+        summary: `${totalOrders} order(s), ${deliveredCount} delivered, ${pendingCount} pending, net sales (ledger, ex-VAT, after returns) ${netSales} minor units.`,
         cards: [{
           type: 'sales_summary',
           title: ctx.locale === 'ar' ? `ملخص آخر ${args.days} يوم` : `Last ${args.days} days`,
@@ -249,10 +254,10 @@ export const AI_TOOLS: AiTool[] = [
             { label: ctx.locale === 'ar' ? 'طلبات مسلّمة' : 'Delivered orders', value: String(deliveredCount), tone: 'good' },
             { label: ctx.locale === 'ar' ? 'طلبات معلقة' : 'Pending orders', value: String(pendingCount), tone: 'warning' },
             { label: ctx.locale === 'ar' ? 'طلبات ملغية' : 'Cancelled orders', value: String(cancelledCount) },
-            { label: ctx.locale === 'ar' ? 'إيراد مسلّم' : 'Delivered revenue', value: `${deliveredTotal} EGP minor` },
+            { label: ctx.locale === 'ar' ? 'صافي المبيعات (بدون الضريبة)' : 'Net sales (ex-VAT)', value: formatMoney(fromMinor(sales.netSalesMinor)) },
           ],
         }],
-        data: { days: args.days, totalOrders, deliveredCount, pendingCount, cancelledCount, deliveredRevenueMinor: deliveredTotal },
+        data: { days: args.days, totalOrders, deliveredCount, pendingCount, cancelledCount, netSalesMinor: netSales },
       };
     },
   },

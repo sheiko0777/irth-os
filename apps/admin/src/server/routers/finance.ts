@@ -1,7 +1,7 @@
 import { router, requirePermission } from '../trpc';
-import { orders, orderItems, products, productVariants, journalLines, journalEntries, accounts, ACCOUNT_CODES, type DbTx } from '@irth/db';
+import { orders, orderItems, products, productVariants, journalLines, journalEntries, accounts, ACCOUNT_CODES, salesTotals, type DbTx } from '@irth/db';
 import { eq, and, desc, count, sum, gte, lte } from 'drizzle-orm';
-import { EGYPT_VAT_BP, divideRoundHalfEven, formatMoney, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
+import { divideRoundHalfEven, formatMoney, fromMinor } from '@irth/domain';
 import { z } from 'zod';
 
 /**
@@ -44,17 +44,10 @@ const ASK_AI_INTENTS: Array<{
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const revRes = await db
-        .select({ total: sum(orders.totalAmountMinor) })
-        .from(orders)
-        .where(and(
-          eq(orders.orgId, orgId),
-          eq(orders.status, 'delivered'),
-          gte(orders.createdAt, thirtyDaysAgo)
-        ));
-
-      const rev = fromMinor(BigInt((revRes[0]?.total as string | null) ?? '0'));
-      return `إجمالي الإيرادات في آخر 30 يوماً: ${formatMoney(rev)}`;
+      // From the ledger, not orders (CLAUDE.md rule 2): refunds are
+      // subtracted and only recognised sales count.
+      const { netSalesMinor } = await salesTotals(db, orgId, { from: thirtyDaysAgo });
+      return `صافي المبيعات في آخر 30 يوماً (بدون الضريبة، بعد المرتجعات): ${formatMoney(fromMinor(netSalesMinor))}`;
     },
   },
   {
@@ -250,23 +243,28 @@ export const financeRouter = router({
             const end = new Date(input.endDate);
             end.setHours(23, 59, 59, 999);
 
-            const result = await ctx.db
-                .select({
-                    total: sum(orders.totalAmountMinor),
-                    count: count(),
-                })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, start),
-                    lte(orders.createdAt, end),
-                    eq(orders.status, 'delivered')
-                ));
+            // VAT as the ledger booked it (VAT Payable 2030, net of returns),
+            // not re-derived from order totals: the VAT a return reversed has
+            // to come off, and a delivered order whose sale was never posted
+            // owes no VAT in the books. `end` is inclusive to the millisecond.
+            const exclusiveEnd = new Date(end.getTime() + 1);
+            const [totals, countRows] = await Promise.all([
+                ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: start, to: exclusiveEnd })),
+                ctx.withOrg((tx) => tx
+                    .select({ count: count() })
+                    .from(orders)
+                    .where(and(
+                        eq(orders.orgId, ctx.orgId),
+                        gte(orders.createdAt, start),
+                        lte(orders.createdAt, end),
+                        eq(orders.status, 'delivered')
+                    ))),
+            ]);
 
-            const grossRevenue = fromMinor(BigInt((result[0]?.total as string | null) ?? '0'));
-            const orderCount = result[0]?.count ?? 0;
-            const vatAmount = taxIncludedIn(grossRevenue, EGYPT_VAT_BP);
-            const netRevenue = netOfTax(grossRevenue, EGYPT_VAT_BP);
+            const grossRevenue = fromMinor(totals.grossSalesMinor);
+            const orderCount = countRows[0]?.count ?? 0;
+            const vatAmount = fromMinor(totals.vatMinor);
+            const netRevenue = fromMinor(totals.netSalesMinor);
 
             return {
                 data: {

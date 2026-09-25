@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from '../trpc';
-import { orders, products, inventoryItems, orderReturns } from '@irth/db';
-import { eq, and, desc, sql, count, sum, gte, lt, or, inArray, lte as lteOp } from 'drizzle-orm';
+import { orders, products, inventoryItems, orderReturns, salesTotals, dailyNetSales } from '@irth/db';
+import { eq, and, desc, sql, count, gte, lt, or, inArray, lte as lteOp } from 'drizzle-orm';
 import { fromMinor } from '@irth/domain';
 import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
@@ -11,9 +11,6 @@ import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
  * than a hunt through query predicates.
  */
 const LATE_ORDER_HOURS = 48;
-function bigintTotal(value: unknown): bigint {
-    return BigInt((value as string | null) ?? '0');
-}
 
 export const dashboardRouter = router({
     getStats: protectedProcedure.query(async ({ ctx }) => {
@@ -60,10 +57,9 @@ export const dashboardRouter = router({
                 .select({ count: count() })
                 .from(orders)
                 .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay))),
-            ctx.db
-                .select({ total: sum(orders.totalAmountMinor) })
-                .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay), eq(orders.status, 'delivered'))),
+            // Revenue reads the ledger (CLAUDE.md rule 2), never orders: net
+            // sales ex-VAT, less returns, dated when the sale was recognised.
+            ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfDay })),
             ctx.db
                 .select({ count: count() })
                 .from(orders)
@@ -80,15 +76,7 @@ export const dashboardRouter = router({
                     gte(orders.createdAt, startOfYesterday),
                     lt(orders.createdAt, startOfDay),
                 )),
-            ctx.db
-                .select({ total: sum(orders.totalAmountMinor) })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, startOfYesterday),
-                    lt(orders.createdAt, startOfDay),
-                    eq(orders.status, 'delivered'),
-                )),
+            ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfYesterday, to: startOfDay })),
             ctx.db
                 .select({
                     day: sql<string>`${dayBucket}::date::text`,
@@ -98,23 +86,9 @@ export const dashboardRouter = router({
                 .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, sparkFrom)))
                 .groupBy(dayBucket)
                 .orderBy(dayBucket),
-            // Revenue series filters to delivered, matching revenueToday. One
-            // shared query here silently summed every status, so the headline
-            // and its own trend line measured different things — caught by
-            // adversarial review.
-            ctx.db
-                .select({
-                    day: sql<string>`${dayBucket}::date::text`,
-                    revenue: sum(orders.totalAmountMinor),
-                })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, sparkFrom),
-                    eq(orders.status, 'delivered'),
-                ))
-                .groupBy(dayBucket)
-                .orderBy(dayBucket),
+            // Same source as revenueToday so the headline and its trend line
+            // measure the same thing.
+            ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: sparkFrom })),
             ctx.db
                 .select({ status: orders.status, count: count() })
                 .from(orders)
@@ -125,11 +99,8 @@ export const dashboardRouter = router({
         const ordersToday = ordersTodayQuery[0]?.count ?? 0;
         const ordersYesterday = ordersYesterdayQuery[0]?.count ?? 0;
 
-        // Drizzle's sum() over a bigint column returns a numeric STRING (and null
-        // when no rows matched). BigInt() keeps it exact; parseFloat would put
-        // revenue back on a float the moment it left the database.
-        const revenueTodayMinor = bigintTotal(revenueTodayQuery[0]?.total);
-        const revenueYesterdayMinor = bigintTotal(revenueYesterdayQuery[0]?.total);
+        const revenueTodayMinor = revenueTodayQuery.netSalesMinor;
+        const revenueYesterdayMinor = revenueYesterdayQuery.netSalesMinor;
 
         // Percent change against the same window a day earlier. Null rather than
         // a fabricated 0% or an Infinity when there is no prior value to divide by.
@@ -141,7 +112,7 @@ export const dashboardRouter = router({
         // The grouped queries only emit rows for days that actually traded, so
         // fill the gaps — a sparkline needs a point per day or it misreads the shape.
         const ordersByDay = new Map(dailyOrdersQuery.map((r) => [r.day, r.orderCount]));
-        const revenueByDay = new Map(dailyRevenueQuery.map((r) => [r.day, r.revenue]));
+        const revenueByDay = dailyRevenueQuery;
         const ordersSeries: number[] = [];
         const revenueSeries: number[] = [];
         for (let i = 0; i < 7; i++) {
@@ -149,7 +120,7 @@ export const dashboardRouter = router({
             d.setUTCDate(d.getUTCDate() + i);
             const key = d.toISOString().slice(0, 10);
             ordersSeries.push(ordersByDay.get(key) ?? 0);
-            revenueSeries.push(wholeMajorUnits(bigintTotal(revenueByDay.get(key))));
+            revenueSeries.push(wholeMajorUnits(revenueByDay.get(key) ?? 0n));
         }
 
         return {

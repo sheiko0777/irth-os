@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from '../trpc';
-import { orders, products, inventoryItems } from '@irth/db';
-import { eq, and, sql, count, sum, gte, lte } from 'drizzle-orm';
+import { orders, products, inventoryItems, salesTotals, dailyNetSales } from '@irth/db';
+import { eq, and, sql, count, gte } from 'drizzle-orm';
 import { z } from 'zod';
 import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
@@ -13,7 +13,10 @@ export function daysAgoIso(days: number): string {
 
 export const analyticsRouter = router({
   /**
-   * Daily revenue (delivered orders) for last N days.
+   * Daily net sales (from the ledger) and delivered-order counts for the last
+   * N days. Revenue is the ledger's net sales (4010 less 4020, ex-VAT) dated
+   * at recognition — not a sum over orders (CLAUDE.md rule 2). The order
+   * count is a count of intent and stays on `orders`.
    */
   revenue: protectedProcedure
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
@@ -26,24 +29,27 @@ export const analyticsRouter = router({
       // everyone, always.
       const sinceIso = daysAgoIso(input.days);
 
-      const rows = await ctx.db.execute(sql`
-        SELECT
-          date_trunc('day', created_at)::date AS day,
-          COUNT(*)::int                        AS orders,
-          COALESCE(SUM(total_amount_minor), 0)::numeric AS revenue
-        FROM orders
-        WHERE org_id = ${ctx.orgId}
-          AND created_at >= ${sinceIso}
-          AND status = 'delivered'
-        GROUP BY 1
-        ORDER BY 1 ASC
-      `);
+      const [rows, netByDay] = await Promise.all([
+        ctx.db.execute(sql`
+          SELECT
+            (date_trunc('day', created_at)::date)::text AS day,
+            COUNT(*)::int                               AS orders
+          FROM orders
+          WHERE org_id = ${ctx.orgId}
+            AND created_at >= ${sinceIso}
+            AND status = 'delivered'
+          GROUP BY 1
+        `),
+        ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: new Date(sinceIso) })),
+      ]);
 
-      type Row = { day: string; orders: number; revenue: string };
-      const data = (rows as unknown as Row[]).map((r) => ({
-        day: r.day,
-        orders: Number(r.orders),
-        revenue: wholeMajorUnits(r.revenue),
+      type Row = { day: string; orders: number };
+      const ordersByDay = new Map((rows as unknown as Row[]).map((r) => [r.day, Number(r.orders)]));
+      const days = [...new Set([...ordersByDay.keys(), ...netByDay.keys()])].sort();
+      const data = days.map((day) => ({
+        day,
+        orders: ordersByDay.get(day) ?? 0,
+        revenue: wholeMajorUnits(netByDay.get(day) ?? 0n),
       }));
 
       return { data, error: null, meta: null };
@@ -156,23 +162,10 @@ export const analyticsRouter = router({
         .select({ count: count() })
         .from(orders)
         .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart))),
-      ctx.db
-        .select({ total: sum(orders.totalAmountMinor) })
-        .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart), eq(orders.status, 'delivered'))),
-      ctx.db
-        .select({ total: sum(orders.totalAmountMinor) })
-        .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, thisMonthStart), eq(orders.status, 'delivered'))),
-      ctx.db
-        .select({ total: sum(orders.totalAmountMinor) })
-        .from(orders)
-        .where(and(
-          eq(orders.orgId, ctx.orgId),
-          gte(orders.createdAt, lastMonthStart),
-          lte(orders.createdAt, thisMonthStart),
-          eq(orders.status, 'delivered')
-        )),
+      // Net sales from the ledger (CLAUDE.md rule 2); see `revenue` above.
+      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: todayStart })),
+      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: thisMonthStart })),
+      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: lastMonthStart, to: thisMonthStart })),
       ctx.db
         .select({ count: count() })
         .from(orders)
@@ -186,9 +179,9 @@ export const analyticsRouter = router({
         )),
     ]);
 
-    const todayRevMinor = BigInt((todayRevenue[0]?.total as string | null) ?? '0');
-    const monthRevMinor = BigInt((monthRevenue[0]?.total as string | null) ?? '0');
-    const lastRevMinor = BigInt((lastMonthRevenue[0]?.total as string | null) ?? '0');
+    const todayRevMinor = todayRevenue.netSalesMinor;
+    const monthRevMinor = monthRevenue.netSalesMinor;
+    const lastRevMinor = lastMonthRevenue.netSalesMinor;
     const revenueGrowth = percentDelta(monthRevMinor, lastRevMinor);
 
     return {
