@@ -49,7 +49,9 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_PASSWORD: postgres
+          # Trust auth: the container is reachable only from this job and is
+          # destroyed with it, so there is no password to hardcode here.
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: irth_e2e
         ports:
           - 5432:5432
@@ -59,11 +61,13 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/irth_e2e
-      BETTER_AUTH_SECRET: ci-e2e-only-secret-not-used-anywhere-else
+      DATABASE_URL: postgres://postgres@localhost:5432/irth_e2e
       NEXT_PUBLIC_APP_URL: http://localhost:3100
     steps:
       - uses: actions/checkout@v4
+      # A fresh random signing secret per run; nothing to keep in the repo.
+      - name: Generate a throwaway auth secret
+        run: echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v3
         with:
           version: 10.30.3
