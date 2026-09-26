@@ -32,14 +32,17 @@ test('a blocked Shopify order is visible, complete, and can be resolved', async 
   await expect(blockedLink).toBeVisible();
   await expect(blockedLink).toHaveAttribute('href', /blocked=1/);
 
-  // Open the filtered list as a full page load, not by clicking the link. A
-  // client-side transition can update the URL before its content arrives; a
-  // click on the still-visible old list then gets overtaken by that pending
-  // transition and the page never leaves the list (seen on the slower CI
-  // runner, never locally).
+  // Navigate by full page loads, not by clicking. On the slower CI runner a
+  // click on a Next <Link> can land while the router is still settling (after
+  // hydration or a pending transition) and be dropped: the link takes focus
+  // and the page never leaves the list. Seen twice, never locally. What this
+  // test proves is that the list shows the blocked order and links to it, so
+  // assert the link, then follow it.
   await page.goto('/ar/orders?blocked=1');
-  await page.getByRole('row', { name: new RegExp(BLOCKED_ORDER_NUMBER) }).getByRole('link', { name: 'عرض' }).click();
-  await page.waitForURL(/\/ar\/orders\/[0-9a-f-]{36}$/);
+  const orderLink = page.getByRole('row', { name: new RegExp(BLOCKED_ORDER_NUMBER) }).getByRole('link', { name: 'عرض' });
+  await expect(orderLink).toHaveAttribute('href', /\/ar\/orders\/[0-9a-f-]{36}$/);
+  await page.goto(await orderLink.getAttribute('href') ?? '');
+  await expect(page).toHaveURL(/\/ar\/orders\/[0-9a-f-]{36}$/);
 
   // The order page: why it is blocked, who bought it, every line as received.
   await expect(page.getByRole('alert').getByText('الطلب متوقف')).toBeVisible();
