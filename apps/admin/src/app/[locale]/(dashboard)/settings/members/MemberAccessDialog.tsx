@@ -8,6 +8,7 @@ import { FormDialog } from "@/components/ui/FormDialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RESOURCE_LABELS, actionLabel, catalog } from "@/lib/permissionCatalog";
+import { MemberScopeEditor } from "./MemberScopeEditor";
 
 type Mode = "role" | "grant" | "revoke";
 type List = Record<string, string[]>;
@@ -73,6 +74,9 @@ export function MemberAccessDialog({
             {" · "}يقدر يعمل {held.size} عملية دلوقتي
             {effective.data?.data.status === "suspended" && " · الحساب موقوف"}
           </p>
+          {effective.data && (
+            <MemberScopeEditor memberId={memberId} initial={effective.data.data.scopes} canEdit={canEdit} />
+          )}
           <div className="max-h-[55vh] overflow-y-auto rounded-md border border-[var(--rim1)]">
             <table className="w-full text-sm">
               <caption className="sr-only">صلاحيات العضو لكل شاشة</caption>

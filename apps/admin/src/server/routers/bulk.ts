@@ -1,4 +1,5 @@
 import { router, requirePermission } from '../trpc';
+import { brandScope } from '../scopes';
 import { orders, customers, inventoryItems, productVariants, products, orderStatusEnum, withAudit,
          emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
          postOrderDeliveredEntry } from '@irth/db';
@@ -169,7 +170,7 @@ export const bulkRouter = router({
 
     exportInventory: requirePermission('inventory', 'export')
         .query(async ({ ctx }) => {
-            const rows = await ctx.db
+            const rows = await ctx.withOrg((tx) => tx
                 .select({
                     productName: products.name,
                     variantName: productVariants.name,
@@ -181,8 +182,8 @@ export const bulkRouter = router({
                 .from(inventoryItems)
                 .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
                 .innerJoin(products, eq(productVariants.productId, products.id))
-                .where(eq(inventoryItems.orgId, ctx.orgId))
-                .limit(5000);
+                .where(and(eq(inventoryItems.orgId, ctx.orgId), brandScope(ctx, products.brandId)))
+                .limit(5000));
 
             return { data: rows, error: null, meta: null };
         }),

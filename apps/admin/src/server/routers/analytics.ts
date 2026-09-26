@@ -61,7 +61,8 @@ export const analyticsRouter = router({
   topProducts: requirePermission('analytics', 'view')
     .input(z.object({ limit: z.number().min(5).max(20).default(10) }))
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.db.execute(sql`
+      // Inside withOrg so a brand-scoped member (PR-1e) only ranks their brands.
+      const rows = await ctx.withOrg((tx) => tx.execute(sql`
         SELECT
           p.name                               AS product,
           SUM(oi.quantity)::int                AS units,
@@ -75,7 +76,7 @@ export const analyticsRouter = router({
         GROUP BY p.id, p.name
         ORDER BY revenue DESC
         LIMIT ${input.limit}
-      `);
+      `));
 
       type Row = { product: string; units: number; revenue: string };
       const data = (rows as unknown as Row[]).map((r) => ({
@@ -97,7 +98,7 @@ export const analyticsRouter = router({
       // Same raw-execute Date binding trap as `revenue` above.
       const sinceIso = daysAgoIso(input.days);
 
-      const rows = await ctx.db.execute(sql`
+      const rows = await ctx.withOrg((tx) => tx.execute(sql`
         SELECT
           pv.name                                         AS variant,
           p.name                                          AS product,
@@ -113,7 +114,7 @@ export const analyticsRouter = router({
         GROUP BY pv.name, p.name, ii.quantity, ii.reorder_point
         ORDER BY ii.quantity ASC
         LIMIT 20
-      `);
+      `));
 
       type Row = {
         variant: string;
@@ -170,13 +171,13 @@ export const analyticsRouter = router({
         .select({ count: count() })
         .from(orders)
         .where(eq(orders.orgId, ctx.orgId)),
-      ctx.db
+      ctx.withOrg((tx) => tx
         .select({ count: count() })
         .from(inventoryItems)
         .where(and(
           eq(inventoryItems.orgId, ctx.orgId),
           sql`${inventoryItems.quantity} <= ${inventoryItems.reorderPoint}`
-        )),
+        ))),
     ]);
 
     const todayRevMinor = todayRevenue.netSalesMinor;

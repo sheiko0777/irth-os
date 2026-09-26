@@ -146,5 +146,7 @@ export function withOrg<T>(c: Context, fn: (tx: DbTx) => Promise<T>): Promise<T>
         'return 401 before reaching the database.',
     );
   }
-  return withOrgContext(getDb(), orgId, fn);
+  // The member's data scopes (PR-1e), when the request has a member.
+  const access = c.get('access') as { scopes?: { brand: readonly string[]; supplier: readonly string[] } } | undefined;
+  return withOrgContext(getDb(), orgId, fn, access?.scopes);
 }

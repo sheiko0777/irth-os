@@ -19,6 +19,7 @@ import { aiChatRouter } from './ai/route'
 import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
+import { redactResponse } from './middlewares/redactResponse';
 import { authContext } from './middlewares/authContext'
 import { requestContext } from './middlewares/requestContext'
 import { handleError } from './utils/errors'
@@ -58,6 +59,11 @@ app.use('/ready', rateLimit(60, 60_000, trustedProxyCount))
 // Establish trusted identity (userId/orgId/role) from the session before
 // route handlers run. Skips /api/auth, webhooks, and /health internally.
 app.use('*', authContext())
+
+// Sensitive fields (PR-1e): removed from every JSON response a member may not
+// see them in. Registered after authContext, which sets `access`; it acts on
+// the response on the way out.
+app.use('/api/*', redactResponse())
 
 // Real DB-connectivity check, not a hardcoded 'ok' — a load balancer that
 // trusts this without one keeps routing traffic to a Worker that can't reach

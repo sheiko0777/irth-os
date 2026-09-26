@@ -9,7 +9,9 @@ export { can, PERMISSIONS } from '@irth/db/src/permissions';
 import type { ActionFor, Resource } from '@irth/db/src/permissions';
 export type { ActionFor, Resource };
 import type { Role } from '@irth/db/src/permissions';
+import { useMemo } from 'react';
 import { trpc } from './trpc';
+import { buildNavGroups, filterNavGroups, type NavGroup } from './navigation';
 
 /**
  * The caller's role in the active organisation.
@@ -51,4 +53,26 @@ export function useCan(): <R extends Resource>(resource: R, action: ActionFor<R>
 export function useRole(): Role | null {
   const { data } = useMe();
   return (data?.data.role as Role | undefined) ?? null;
+}
+/**
+ * The navigation this member may use (PR-1e): entries needing a permission
+ * they lack are left out. While permissions load, the full list shows rather
+ * than an empty sidebar; the pages and the server refuse regardless.
+ */
+export function useVisibleNavGroups(locale: string): NavGroup[] {
+  const { data } = useMe();
+  const permissions = data?.data.permissions;
+  return useMemo(() => {
+    const groups = buildNavGroups(locale);
+    if (!permissions) return groups;
+    const perms = new Set(permissions);
+    return filterNavGroups(groups, (p) => perms.has(p));
+  }, [locale, permissions]);
+}
+
+/** The member's "resource.action" keys, or null while they load. */
+export function usePermissionKeys(): ReadonlySet<string> | null {
+  const { data } = useMe();
+  const permissions = data?.data.permissions;
+  return useMemo(() => (permissions ? new Set(permissions) : null), [permissions]);
 }

@@ -54,17 +54,13 @@ const UNSCOPED_READ = /(^|[^.\w])(ctx\s*\.\s*)?db\s*\.\s*(?:(?:select(?:Distinct
  */
 const UNSCOPED_READ_BASELINE = [
   'analytics.ts:33',
-  'analytics.ts:64',
-  'analytics.ts:100',
-  'analytics.ts:161',
-  'analytics.ts:169',
-  'analytics.ts:173',
-  'analytics.ts:223',
-  'analytics.ts:252',
-  'analytics.ts:274',
-  'bulk.ts:153',
-  'bulk.ts:172',
-  'bulk.ts:192',
+  'analytics.ts:162',
+  'analytics.ts:170',
+  'analytics.ts:224',
+  'analytics.ts:253',
+  'analytics.ts:275',
+  'bulk.ts:154',
+  'bulk.ts:193',
   'campaigns.ts:14',
   'campaigns.ts:21',
   'campaigns.ts:36',
@@ -84,12 +80,10 @@ const UNSCOPED_READ_BASELINE = [
   'customerSegments.ts:175',
   'dashboard.ts:56',
   'dashboard.ts:63',
-  'dashboard.ts:67',
   'dashboard.ts:71',
   'dashboard.ts:80',
   'dashboard.ts:92',
   'dashboard.ts:156',
-  'dashboard.ts:164',
   'dashboard.ts:171',
   'dashboard.ts:192',
   // Both reads filter explicitly by eq(outboxDeadLetters.orgId, ctx.orgId),
@@ -101,9 +95,6 @@ const UNSCOPED_READ_BASELINE = [
   'eta.ts:107',
   'eta.ts:134',
   'eta.ts:156',
-  'finance.ts:24',
-  'finance.ts:56',
-  'finance.ts:71',
   'finance.ts:110',
   'finance.ts:126',
   'finance.ts:134',
@@ -119,10 +110,6 @@ const UNSCOPED_READ_BASELINE = [
   'integrations.ts:42',
   'integrations.ts:90',
   'integrations.ts:154',
-  'inventory.ts:30',
-  'inventory.ts:46',
-  'inventory.ts:68',
-  'inventory.ts:94',
   'notifications.ts:15',
   'notifications.ts:22',
   'notifications.ts:56',
@@ -192,6 +179,40 @@ describe('tenancy gate', () => {
       'Unscoped reads bypass RLS. Move new reads to ctx.withOrg(async (tx) => …); ' +
         'remove fixed sites from UNSCOPED_READ_BASELINE. Current sites: ' + offenders.join(', '),
     ).toEqual([...UNSCOPED_READ_BASELINE].sort());
+  });
+
+  /**
+   * PR-1e: the tables 0076 narrows to a member's brand or supplier scope. A
+   * read of them through ctx.db runs as the BYPASSRLS owner and ignores the
+   * scope entirely, so — unlike the legacy baseline above — none is allowed,
+   * not even one already there.
+   */
+  it('never reads a scope-restricted table (0076) outside ctx.withOrg', () => {
+    const SCOPED = /\b(products|productVariants|inventoryItems|suppliers|purchaseOrders|purchaseOrderItems|product_variants|inventory_items|purchase_orders|purchase_order_items)\b/;
+    const offenders: string[] = [];
+    for (const file of routerFiles()) {
+      if (CROSS_ORG_BY_DESIGN.has(file)) continue;
+      const source = readFileSync(path.join(ROUTERS, file), 'utf8');
+      for (const m of source.matchAll(UNSCOPED_READ)) {
+        const start = m.index ?? 0;
+        let depth = 0;
+        let end = source.length;
+        for (let i = start; i < source.length; i++) {
+          const c = source[i];
+          if (c === '(' || c === '[' || c === '{') depth++;
+          else if (c === ')' || c === ']' || c === '}') { if (depth === 0) { end = i; break; } depth--; }
+          else if ((c === ';' || c === ',') && depth === 0) { end = i; break; }
+        }
+        if (SCOPED.test(source.slice(start, end))) {
+          offenders.push(`${file}:${source.slice(0, start).split('\n').length}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      'These reads of brand/supplier-scoped tables bypass the scope policies. Move them into ctx.withOrg:\n  '
+        + offenders.join('\n  '),
+    ).toEqual([]);
   });
 
   it('detects unscoped read shapes across whitespace', () => {

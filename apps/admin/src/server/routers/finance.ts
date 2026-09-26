@@ -16,12 +16,12 @@ import { z } from 'zod';
  */
 const ASK_AI_INTENTS: Array<{
   matches: (q: string) => boolean;
-  handle: (db: Pick<DbTx, 'select'>, orgId: string) => Promise<string>;
+  handle: (tx: Pick<DbTx, 'select'>, orgId: string) => Promise<string>;
 }> = [
   {
     matches: (q) => q.includes('اكثر') || q.includes('top') || q.includes('best'),
-    handle: async (db, orgId) => {
-      const topProducts = await db
+    handle: async (tx, orgId) => {
+      const topProducts = await tx
         .select({ name: products.name, orderCount: count(orderItems.id) })
         .from(orderItems)
         .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
@@ -40,20 +40,20 @@ const ASK_AI_INTENTS: Array<{
   },
   {
     matches: (q) => q.includes('revenue') || q.includes('ايراد'),
-    handle: async (db, orgId) => {
+    handle: async (tx, orgId) => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       // From the ledger, not orders (CLAUDE.md rule 2): refunds are
       // subtracted and only recognised sales count.
-      const { netSalesMinor } = await salesTotals(db, orgId, { from: thirtyDaysAgo });
+      const { netSalesMinor } = await salesTotals(tx, orgId, { from: thirtyDaysAgo });
       return `صافي المبيعات في آخر 30 يوماً (بدون الضريبة، بعد المرتجعات): ${formatMoney(fromMinor(netSalesMinor))}`;
     },
   },
   {
     matches: (q) => q.includes('pending') || q.includes('معلق'),
-    handle: async (db, orgId) => {
-      const pendRes = await db
+    handle: async (tx, orgId) => {
+      const pendRes = await tx
         .select({ count: count() })
         .from(orders)
         .where(and(eq(orders.orgId, orgId), eq(orders.status, 'pending')));
@@ -64,11 +64,11 @@ const ASK_AI_INTENTS: Array<{
 ];
 
 /** Falls back to today's order count when no intent above matches. */
-async function askAiDefault(db: Pick<DbTx, 'select'>, orgId: string): Promise<string> {
+async function askAiDefault(tx: Pick<DbTx, 'select'>, orgId: string): Promise<string> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const todayRes = await db
+  const todayRes = await tx
     .select({ count: count() })
     .from(orders)
     .where(and(eq(orders.orgId, orgId), gte(orders.createdAt, startOfDay)));
@@ -288,8 +288,8 @@ export const financeRouter = router({
             const q = input.question.toLowerCase();
             const intent = ASK_AI_INTENTS.find((candidate) => candidate.matches(q));
             const resultData = intent
-                ? await intent.handle(ctx.db, ctx.orgId)
-                : await askAiDefault(ctx.db, ctx.orgId);
+                ? await ctx.withOrg((tx) => intent.handle(tx, ctx.orgId))
+                : await ctx.withOrg((tx) => askAiDefault(tx, ctx.orgId));
 
             return {
                 data: {

@@ -64,10 +64,10 @@ export const dashboardRouter = router({
                 .select({ count: count() })
                 .from(orders)
                 .where(and(eq(orders.orgId, ctx.orgId), eq(orders.status, 'pending'))),
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(products)
-                .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active'))),
+                .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active')))),
             ctx.db
                 .select({ count: count() })
                 .from(orders)
@@ -161,13 +161,13 @@ export const dashboardRouter = router({
                     inArray(orders.status, ['pending', 'confirmed']),
                     lt(orders.createdAt, lateBefore),
                 )),
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(inventoryItems)
                 .where(and(
                     eq(inventoryItems.orgId, ctx.orgId),
                     lteOp(inventoryItems.quantity, 0),
-                )),
+                ))),
             ctx.db
                 .select({ count: count() })
                 .from(orderReturns)

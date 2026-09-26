@@ -16,8 +16,14 @@ import { OrderStatusSchema } from '@irth/types';
 import { formatMoney, fromMinor } from '@irth/domain';
 import type { AiRequestContext, AiToolDefinition, AiToolResult } from './types';
 
-type ToolPermission = { resource: Resource; action: ActionFor<Resource> };
+type ToolPermission = { [R in Resource]: { resource: R; action: ActionFor<R> } }[Resource];
 type ToolExecuteContext = AiRequestContext & { db: DbTx };
+
+// One place that widens the correlated (resource, action) pair for canAccess,
+// which cannot see through the union above.
+function allows(access: EffectiveAccess, permission: ToolPermission): boolean {
+  return canAccess(access, permission.resource as 'orders', permission.action as 'view');
+}
 
 type AiTool = {
   definition: AiToolDefinition;
@@ -265,7 +271,7 @@ export const AI_TOOLS: AiTool[] = [
 
 export function allowedAiToolDefinitions(access: EffectiveAccess): AiToolDefinition[] {
   return AI_TOOLS
-    .filter((tool) => canAccess(access, tool.permission.resource, tool.permission.action))
+    .filter((tool) => allows(access, tool.permission))
     .map((tool) => tool.definition);
 }
 
@@ -275,7 +281,7 @@ export async function executeAiTool(name: string, args: unknown, ctx: ToolExecut
     throw new Error(`Unknown AI tool: ${name}`);
   }
 
-  if (!canAccess(ctx.access, tool.permission.resource, tool.permission.action)) {
+  if (!allows(ctx.access, tool.permission)) {
     throw new Error(`Forbidden AI tool: ${name}`);
   }
 

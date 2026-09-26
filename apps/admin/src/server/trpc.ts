@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, resolveActiveOrgMembership, resolveEffectiveAccess, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, canAccess, auditLog, type ActionFor, type Resource } from '@irth/db';
+import { db, resolveActiveOrgMembership, resolveEffectiveAccess, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, canAccess, auditLog, hiddenKeys, redact, type ActionFor, type Resource } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
@@ -77,7 +77,7 @@ export const createContext = async () => {
                     await markIdempotencyEffect(tx, activeIdempotencyClaimId, orgId);
                 }
                 return fn(tx);
-            }),
+            }, access.scopes),
 
         /**
          * The deliberate cross-tenant escape hatch, for `platformAdminProcedure`
@@ -170,7 +170,7 @@ const t = initTRPC.context<Context>().meta<ProcedureMeta>().create({
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
+export const protectedProcedure = t.procedure.use(async ({ ctx, next, path }) => {
     if (!ctx.session || !ctx.session.user) {
         throw new TRPCError({ code: 'UNAUTHORIZED' });
     }
@@ -180,7 +180,7 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'No organization scope available.' });
     }
 
-    return next({
+    const result = await next({
         ctx: {
             ...ctx,
             // Enforce non-null types for protected routes
@@ -191,6 +191,13 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
             access: ctx.access,
         },
     });
+
+    // Sensitive fields (PR-1e): strip what this member may not see from every
+    // response, on the server — see packages/db/src/redaction.ts. Every procedure is built on
+    // this one, so none can forget it.
+    if (!result.ok) return result;
+    const hidden = hiddenKeys(ctx.access, path);
+    return hidden.size === 0 ? result : { ...result, data: redact(result.data, hidden) };
 });
 
 /**

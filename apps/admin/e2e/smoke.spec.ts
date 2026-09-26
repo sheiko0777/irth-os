@@ -108,4 +108,13 @@ test('the owner creates an account by mobile number; the person signs in with it
   await page.getByRole('button', { name: 'احفظ كلمة السر' }).click();
   await page.waitForURL(/\/ar\/?$/);
   await expect(page.getByText('صافي مبيعات اليوم')).toBeVisible();
+
+  // A موظف's sidebar has no finance or roles screens (PR-1e) — and a direct
+  // link to finance shows "no access" rather than the page.
+  const nav = page.getByRole('navigation', { name: 'التنقل الرئيسي' });
+  await expect(nav.getByRole('link', { name: 'الطلبات', exact: true })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'المالية', exact: true })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'الأدوار والصلاحيات' })).toHaveCount(0);
+  await page.goto('/ar/finance');
+  await expect(page.getByText('مالكش صلاحية على الشاشة دي')).toBeVisible();
 });

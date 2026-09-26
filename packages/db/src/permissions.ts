@@ -136,6 +136,15 @@ export const PERMISSIONS = {
     view: ['owner', 'admin'] as Role[],
     manage: ['owner'] as Role[],
   },
+  // PR-1e: fields, not screens. Without the permission the server removes
+  // the fields from every response (see redaction in apps/admin's trpc.ts),
+  // it never refuses the request. Owner decision: cost and supplier prices
+  // are hidden from موظف by default; customer contact stays visible to all.
+  sensitive: {
+    cost: ['owner', 'admin'] as Role[],
+    supplierPrice: ['owner', 'admin'] as Role[],
+    customerContact: ['owner', 'admin', 'member'] as Role[],
+  },
 } as const;
 
 export type Resource = keyof typeof PERMISSIONS;
@@ -204,7 +213,20 @@ export interface EffectiveAccess {
   readonly mustChangePassword: boolean;
   /** "resource.action" keys. Empty for a suspended member. */
   readonly perms: ReadonlySet<string>;
+  /**
+   * Data scopes (PR-1e): the brands and suppliers this member is limited to.
+   * An empty list means unrestricted for that kind. Enforced twice — by RLS
+   * through withOrgContext's settings, and by an explicit WHERE in the code.
+   */
+  readonly scopes: MemberScopes;
 }
+
+export interface MemberScopes {
+  readonly brand: readonly string[];
+  readonly supplier: readonly string[];
+}
+
+export const NO_SCOPES: MemberScopes = { brand: [], supplier: [] };
 
 const key = (resource: string, action: string) => `${resource}.${action}`;
 
@@ -249,20 +271,23 @@ export function effectiveAccess(input: {
   principalKind?: PrincipalKindName;
   status?: 'active' | 'suspended';
   mustChangePassword?: boolean;
+  scopes?: MemberScopes;
 }): EffectiveAccess {
   const principalKind = input.principalKind ?? 'staff';
   const suspended = input.status === 'suspended';
   const mustChangePassword = input.mustChangePassword === true;
+  // The owner is never scoped: they see the whole org.
+  const scopes = input.systemKey === 'owner' ? NO_SCOPES : input.scopes ?? NO_SCOPES;
   const isOwner = input.systemKey === 'owner' && !suspended;
 
-  if (suspended) return { isOwner: false, principalKind, suspended, mustChangePassword, perms: new Set() };
-  if (isOwner) return { isOwner, principalKind, suspended, mustChangePassword, perms: new Set(allPermissionKeys()) };
+  if (suspended) return { isOwner: false, principalKind, suspended, mustChangePassword, scopes, perms: new Set() };
+  if (isOwner) return { isOwner, principalKind, suspended, mustChangePassword, scopes, perms: new Set(allPermissionKeys()) };
 
   const base = input.systemKey ? permissionsForRole(input.systemKey) : input.rolePermissions;
   const perms = new Set(knownPairs(base));
   for (const k of knownPairs(input.overrides?.grant)) perms.add(k);
   for (const k of knownPairs(input.overrides?.revoke)) perms.delete(k);
-  return { isOwner, principalKind, suspended, mustChangePassword, perms };
+  return { isOwner, principalKind, suspended, mustChangePassword, scopes, perms };
 }
 
 export function canAccess<R extends Resource>(access: EffectiveAccess, resource: R, action: ActionFor<R>): boolean {
@@ -302,5 +327,19 @@ export function covers(actor: EffectiveAccess, target: EffectiveAccess): boolean
   if (actor.suspended || actor.mustChangePassword) return false;
   if (actor.isOwner) return true;
   if (target.isOwner) return false;
-  return canDelegate(actor, target.perms);
+  return canDelegate(actor, target.perms) && withinScopes(actor.scopes, target.scopes);
+}
+
+/**
+ * Is `inner` no wider than `outer`? For each kind: an unrestricted outer
+ * allows anything; a restricted outer allows only a non-empty subset (an
+ * empty inner would mean "unrestricted", which is wider).
+ */
+export function withinScopes(outer: MemberScopes, inner: MemberScopes): boolean {
+  for (const kind of ['brand', 'supplier'] as const) {
+    if (outer[kind].length === 0) continue;
+    if (inner[kind].length === 0) return false;
+    if (!inner[kind].every((id) => outer[kind].includes(id))) return false;
+  }
+  return true;
 }

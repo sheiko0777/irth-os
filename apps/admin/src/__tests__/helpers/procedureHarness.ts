@@ -47,5 +47,5 @@ export async function outcomeOf(router: typeof AppRouterValue, ctx: Context, pro
 
 /** Access holding exactly these "resource.action" keys — a custom role, not suspended. */
 export function accessWith(perms: Iterable<string>): EffectiveAccess {
-  return { isOwner: false, principalKind: 'staff', suspended: false, mustChangePassword: false, perms: new Set(perms) };
+  return { isOwner: false, principalKind: 'staff', suspended: false, mustChangePassword: false, scopes: { brand: [], supplier: [] }, perms: new Set(perms) };
 }

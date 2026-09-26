@@ -1,4 +1,5 @@
 import { CarbonShell } from "@/components/layout/CarbonShell";
+import { ScreenGuard } from "@/components/layout/ScreenGuard";
 import { ChatBot } from "@/components/chatbot/ChatBot";
 import { CommandPalette } from "@/components/CommandPalette";
 import type { ReactNode } from "react";
@@ -30,7 +31,9 @@ export default async function DashboardLayout({
 
   return (
     <>
-      <CarbonShell locale={locale}>{children}</CarbonShell>
+      <CarbonShell locale={locale}>
+        <ScreenGuard locale={locale}>{children}</ScreenGuard>
+      </CarbonShell>
       <ChatBot locale={locale} />
       <CommandPalette locale={locale} />
     </>

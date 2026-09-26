@@ -30,6 +30,7 @@ export const RESOURCE_LABELS: Record<Resource, string> = {
   members: 'الأعضاء',
   roles: 'الأدوار والصلاحيات',
   audit: 'سجلات الرقابة',
+  sensitive: 'حقول حساسة',
 };
 
 /** Shared names; a resource-specific entry in ACTION_OVERRIDES wins. */
@@ -55,6 +56,7 @@ const ACTION_OVERRIDES: Partial<Record<Resource, Record<string, string>>> = {
   integrations: { manage: 'تغيير إعدادات الربط', recover: 'إعادة إرسال الأحداث الفاشلة' },
   roles: { manage: 'إنشاء وتعديل وحذف الأدوار' },
   eta: { submit: 'إرسال للمصلحة' },
+  sensitive: { cost: 'رؤية التكلفة والهامش', supplierPrice: 'رؤية أسعار الموردين', customerContact: 'رؤية بيانات تواصل العملاء' },
 };
 
 export function actionLabel(resource: Resource, action: string): string {

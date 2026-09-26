@@ -1,9 +1,10 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { hashPassword } from 'better-auth/crypto';
 import {
-  accessRoles, account, canDelegate, covers, effectiveAccess, orgMembers, permissionKeys, permissionsForRole,
+  accessRoles, account, brands, canDelegate, covers, effectiveAccess, memberScopes, orgMembers, permissionKeys, permissionsForRole,
+  suppliers, withinScopes, type MemberScopes,
   session, user, withAudit, type DbTx, type EffectiveAccess, type PermissionList,
 } from '@irth/db';
 import { router, requirePermission, type Context } from '../trpc';
@@ -63,11 +64,20 @@ async function loadMember(tx: Tx, orgId: string, memberId: string) {
     .leftJoin(accessRoles, and(eq(accessRoles.id, orgMembers.accessRoleId), eq(accessRoles.orgId, orgMembers.orgId)))
     .where(and(eq(orgMembers.id, memberId), eq(orgMembers.orgId, orgId)));
   if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'العضو غير موجود.' });
+  const scopeRows = await tx
+    .select({ kind: memberScopes.scopeKind, id: memberScopes.scopeId })
+    .from(memberScopes)
+    .where(and(eq(memberScopes.orgId, orgId), eq(memberScopes.memberId, memberId)));
+  const scopes: MemberScopes = {
+    brand: scopeRows.filter((r) => r.kind === 'brand').map((r) => r.id).sort(),
+    supplier: scopeRows.filter((r) => r.kind === 'supplier').map((r) => r.id).sort(),
+  };
   const base = {
     systemKey: row.systemKey ?? null,
     rolePermissions: row.rolePermissions ?? undefined,
     overrides: row.member.overrides,
     principalKind: row.member.principalKind,
+    scopes,
   };
   return {
     ...row,
@@ -149,6 +159,16 @@ export const accountsRouter = router({
                 principalKind: role.principalKind,
                 mustChangePassword: true,
               }).returning();
+              // A member limited to some brands or suppliers (PR-1e) cannot
+              // create someone who sees more: the new account inherits the
+              // creator's scopes. The owner and unscoped members add none.
+              const inherited = [
+                ...ctx.access.scopes.brand.map((id) => ({ scopeKind: 'brand' as const, scopeId: id })),
+                ...ctx.access.scopes.supplier.map((id) => ({ scopeKind: 'supplier' as const, scopeId: id })),
+              ];
+              if (inherited.length > 0) {
+                await tx.insert(memberScopes).values(inherited.map((sc) => ({ ...sc, orgId: ctx.orgId, memberId: row.id })));
+              }
               return row;
             },
             {
@@ -293,6 +313,66 @@ export const accountsRouter = router({
       return { data: { temporaryPassword: password }, error: null, meta: null };
     }),
 
+  /** The brands and suppliers a scope can name — as far as the caller can see them. */
+  scopeOptions: requirePermission('members', 'changeRole').query(async ({ ctx }) => {
+    const [brandRows, supplierRows] = await ctx.withOrg((tx) => Promise.all([
+      tx.select({ id: brands.id, name: brands.name }).from(brands).where(eq(brands.orgId, ctx.orgId)).orderBy(asc(brands.name)),
+      tx.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(eq(suppliers.orgId, ctx.orgId)).orderBy(asc(suppliers.name)),
+    ]));
+    return { data: { brands: brandRows, suppliers: supplierRows }, error: null, meta: null };
+  }),
+
+  /**
+   * Limit a member to some brands and/or suppliers (PR-1e); an empty list
+   * lifts that limit. Enforced by 0076's policies and the routers' explicit
+   * filters. Nobody sets a scope wider than their own.
+   */
+  setScopes: requirePermission('members', 'changeRole')
+    .input(memberIdSchema.extend({
+      brand: z.array(z.string().uuid()).max(100),
+      supplier: z.array(z.string().uuid()).max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const next: MemberScopes = { brand: [...new Set(input.brand)].sort(), supplier: [...new Set(input.supplier)].sort() };
+      if (!withinScopes(ctx.access.scopes, next)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك منح نطاق أوسع من نطاقك.' });
+      }
+      const row = await ctx.withOrg(async (tx) => {
+        const target = await loadMember(tx, ctx.orgId, input.memberId);
+        assertMayManage(ctx, target);
+        // Every id must be a brand or supplier of this org (and visible to the caller).
+        const [foundBrands, foundSuppliers] = await Promise.all([
+          next.brand.length ? tx.select({ id: brands.id }).from(brands).where(and(eq(brands.orgId, ctx.orgId), inArray(brands.id, next.brand))) : [],
+          next.supplier.length ? tx.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.orgId, ctx.orgId), inArray(suppliers.id, next.supplier))) : [],
+        ]);
+        if (foundBrands.length !== next.brand.length || foundSuppliers.length !== next.supplier.length) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'براند أو مورد غير موجود.' });
+        }
+
+        return withAudit(
+          tx,
+          async () => {
+            await tx.delete(memberScopes).where(and(
+              eq(memberScopes.orgId, ctx.orgId),
+              eq(memberScopes.memberId, input.memberId),
+              inArray(memberScopes.scopeKind, ['brand', 'supplier']),
+            ));
+            const values = [
+              ...next.brand.map((id) => ({ scopeKind: 'brand' as const, scopeId: id })),
+              ...next.supplier.map((id) => ({ scopeKind: 'supplier' as const, scopeId: id })),
+            ].map((v) => ({ ...v, orgId: ctx.orgId, memberId: input.memberId }));
+            if (values.length > 0) await tx.insert(memberScopes).values(values);
+            return { id: input.memberId };
+          },
+          {
+            orgId: ctx.orgId, userId: ctx.userId, action: 'SET_MEMBER_SCOPES', tableName: 'member_scopes',
+            changes: { memberId: input.memberId, from: target.authority.scopes, to: next },
+          },
+        );
+      });
+      return { data: row, error: null, meta: null };
+    }),
+
   /** What this member can actually do: their role, their exceptions, and the result. */
   effective: requirePermission('members', 'view')
     .input(memberIdSchema)
@@ -303,6 +383,7 @@ export const accountsRouter = router({
           roleName: target.roleName,
           status: target.member.status,
           overrides: target.member.overrides,
+          scopes: target.authority.scopes,
           permissions: [...target.access.perms].sort(),
         },
         error: null,

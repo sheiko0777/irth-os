@@ -38,6 +38,7 @@ import { auditLog } from './schema';
 export * from './crypto';
 export * from './json';
 export * from './permissions';
+export * from './redaction';
 export * from './pagination';
 export * from './schema';
 // Better Auth's tables. Exported here so consumers join against them by name
@@ -161,12 +162,31 @@ export async function withOrgContext<T>(
   dbInstance: DbInstance,
   orgId: string,
   fn: (tx: Parameters<Parameters<DbInstance['transaction']>[0]>[0]) => Promise<T>,
+  /**
+   * The member's data scopes (PR-1e). Set transaction-locally beside
+   * app.org_id so 0076's restrictive policies can narrow what this
+   * transaction sees; omitted or empty means unrestricted (system work,
+   * webhooks, unscoped members).
+   */
+  scopes?: { brand: readonly string[]; supplier: readonly string[] },
 ): Promise<T> {
   // Fail before opening a transaction rather than handing a malformed value to
   // a policy comparison, where it would surface as a confusing cast error.
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)) {
     throw new TypeError(`withOrgContext requires a uuid orgId, got ${JSON.stringify(orgId)}`);
   }
+
+  const uuidList = (ids: readonly string[] | undefined) => {
+    const list = ids ?? [];
+    for (const id of list) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        throw new TypeError(`withOrgContext scope ids must be uuids, got ${JSON.stringify(id)}`);
+      }
+    }
+    return list.join(',');
+  };
+  const brandIds = uuidList(scopes?.brand);
+  const supplierIds = uuidList(scopes?.supplier);
 
   return dbInstance.transaction(async (tx) => {
     // One statement, not two. `SET LOCAL ROLE x` is just `SET LOCAL role = x`,
@@ -181,8 +201,14 @@ export async function withOrgContext<T>(
     //
     // Both are transaction-local, so nothing leaks to the next request sharing
     // this pooled connection — asserted in integration/tenantIsolation.test.ts.
+    //
+    // app.brand_ids / app.supplier_ids (PR-1e) ride the same statement: the
+    // member's data scopes as comma-separated uuids, '' for unrestricted.
+    // Always set, even when empty, so a pooled connection never carries a
+    // previous transaction's value — they are transaction-local anyway.
     await tx.execute(
-      sql`SELECT set_config('role', 'irth_app', true), set_config('app.org_id', ${orgId}, true)`,
+      sql`SELECT set_config('role', 'irth_app', true), set_config('app.org_id', ${orgId}, true),
+                 set_config('app.brand_ids', ${brandIds}, true), set_config('app.supplier_ids', ${supplierIds}, true)`,
     );
     return fn(tx);
   });

@@ -1,8 +1,8 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { organizations, orgMembers } from './schema';
-import { accessRoles } from './schema/access';
+import { accessRoles, memberScopes } from './schema/access';
 import { user } from './schema/auth';
-import { effectiveAccess, type EffectiveAccess, type Role } from './permissions';
+import { effectiveAccess, type EffectiveAccess, type MemberScopes, type Role } from './permissions';
 import type { DbInstance } from './index';
 
 /**
@@ -145,6 +145,7 @@ export async function resolveEffectiveAccess(
 ): Promise<EffectiveAccess | null> {
   const [row] = await db
     .select({
+      memberId: orgMembers.id,
       role: orgMembers.role,
       principalKind: orgMembers.principalKind,
       status: orgMembers.status,
@@ -159,6 +160,14 @@ export async function resolveEffectiveAccess(
     .limit(1);
 
   if (!row) return null;
+  const scopeRows = await db
+    .select({ kind: memberScopes.scopeKind, id: memberScopes.scopeId })
+    .from(memberScopes)
+    .where(and(eq(memberScopes.orgId, orgId), eq(memberScopes.memberId, row.memberId)));
+  const scopes: MemberScopes = {
+    brand: scopeRows.filter((r) => r.kind === 'brand').map((r) => r.id).sort(),
+    supplier: scopeRows.filter((r) => r.kind === 'supplier').map((r) => r.id).sort(),
+  };
   // A member not (yet) linked to a role row falls back to their text role —
   // the same authority requirePermission uses today — never to "nothing"
   // and never to "everything".
@@ -170,5 +179,6 @@ export async function resolveEffectiveAccess(
     principalKind: row.principalKind,
     status: row.status,
     mustChangePassword: row.mustChangePassword,
+    scopes,
   });
 }
