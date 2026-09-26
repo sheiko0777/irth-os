@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { priceLists, priceListItems } from '@irth/db';
 import { eq, and, desc, count, getTableColumns } from 'drizzle-orm';
 
 export const pricelistsRouter = router({
-  list: protectedProcedure
+  list: requirePermission('pricelists', 'view')
     .input(z.object({}).optional())
     .query(async ({ ctx }) => {
       const lists = await ctx.db
@@ -32,7 +32,7 @@ export const pricelistsRouter = router({
       return listsWithCounts;
     }),
 
-  create: adminProcedure
+  create: requirePermission('pricelists', 'write')
     .input(
       z.object({
         name: z.string().min(1),
@@ -62,7 +62,7 @@ export const pricelistsRouter = router({
       return pl;
     }),
 
-  delete: ownerProcedure
+  delete: requirePermission('pricelists', 'delete')
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       await ctx.withOrg(async (tx) => tx
@@ -71,7 +71,7 @@ export const pricelistsRouter = router({
       return { success: true };
     }),
 
-  getItems: protectedProcedure
+  getItems: requirePermission('pricelists', 'view')
     .input(z.object({ pricelistId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const items = await ctx.db

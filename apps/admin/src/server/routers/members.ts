@@ -55,7 +55,7 @@ export const membersRouter = router({
   // workers.dev origin no matter what CORS/credentials config the fetch
   // carries — cookies are domain-scoped, not something a client can forward
   // across origins. Same-origin tRPC, reusing the request's own session
-  // (already verified by `protectedProcedure`/`adminProcedure`), is the actual
+  // (already verified by `requirePermission`), is the actual
   // fix — not a CORS tweak.
   invite: requirePermission('members', 'invite')
     .input(z.object({

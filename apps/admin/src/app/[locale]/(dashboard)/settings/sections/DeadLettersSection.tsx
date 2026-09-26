@@ -19,8 +19,8 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
  * unprocessed, in `outbox_events`. Account-level ops surface, not an
  * SETTING_KEYS org setting — self-contained like TwoFactorSection.
  *
- * Hidden for a member: `deadLetters.list`/`.replay` are both
- * `adminProcedure`-gated server-side (payloads here can carry secrets, e.g.
+ * Hidden for a member: `deadLetters.list`/`.replay` both require
+ * `integrations.recover` server-side (payloads here can carry secrets, e.g.
  * an org invite's otpCode), so a member's query would just come back
  * FORBIDDEN — `enabled` skips firing it, and the role check below skips
  * rendering the empty shell around it.

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { journalEntries, orders, orderReturns, organizations, withOrgContext } from '@irth/db';
+import { journalEntries, orders, orderReturns, organizations, withOrgContext, effectiveAccess } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
 
@@ -26,7 +26,7 @@ async function fixture(count = 1) {
   }))).returning();
   expect(returns.every(row => row.refundPostedAt === null)).toBe(true);
   const caller = returnsRouter.createCaller({
-    db: testDb, orgId, userId: 'refund-user', role: 'owner',
+    db: testDb, orgId, userId: 'refund-user', role: 'owner', access: effectiveAccess({ systemKey: 'owner' }),
     session: { user: { id: 'refund-user', email: 'refund@test.com' } },
     withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
   } as unknown as Context);

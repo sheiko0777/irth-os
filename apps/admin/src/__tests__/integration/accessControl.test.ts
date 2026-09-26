@@ -9,14 +9,24 @@
  * resource.action, exactly what can(role, …) gives today. Switching
  * requirePermission onto resolveEffectiveAccess is therefore a no-op for every
  * existing member.
+ *
+ * The last block goes end to end: a real createContext for a signed-in user,
+ * then a procedure called directly — the hostile-client path CLAUDE.md rule 4
+ * assumes — decided by the member's custom role and per-person overrides.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
 import {
-  accessRoles, can, canAccess, memberScopes, orgMembers, organizations, PERMISSIONS,
+  accessRoles, can, canAccess, memberScopes, orgMembers, orders, organizations, PERMISSIONS,
   resolveEffectiveAccess, warehouses, withOrgContext, type Resource,
 } from '@irth/db';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
+
+vi.mock('@/lib/auth', () => ({ verifySession: vi.fn() }));
+const { verifySession } = await import('@/lib/auth');
+const { createContext } = await import('@/server/trpc');
+const { appRouter } = await import('@/server/routers/_app');
 
 let orgA: string;
 let orgB: string;
@@ -167,5 +177,73 @@ describe('tenant isolation on the new tables', () => {
     const visible = await withOrgContext(testDb, orgA, (tx) => tx.select({ orgId: accessRoles.orgId }).from(accessRoles));
     expect(visible.length).toBeGreaterThan(0);
     expect(visible.every((r) => r.orgId === orgA)).toBe(true);
+  });
+});
+
+describe('end to end: createContext → requirePermission', () => {
+  async function callerFor(userId: string) {
+    vi.mocked(verifySession).mockResolvedValue({ user: { id: userId, email: `${userId}@test.com` } } as never);
+    return appRouter.createCaller(await createContext());
+  }
+
+  async function forbidden(p: Promise<unknown>) {
+    await expect(p).rejects.toSatisfy((e: unknown) => e instanceof TRPCError && e.code === 'FORBIDDEN');
+  }
+
+  it('a member whose custom role lacks orders.write is refused updateStatus when calling it directly; a per-person grant lets them', async () => {
+    const [keeper] = await testDb.insert(accessRoles).values({
+      orgId: orgA, name: 'أمين مخزن 2', permissions: { inventory: ['view', 'write'], orders: ['view'] },
+    }).returning();
+    const m = await addMember(orgA, 'member');
+    await testDb.update(orgMembers).set({ accessRoleId: keeper.id }).where(eq(orgMembers.id, m.memberId));
+    const [order] = await testDb.insert(orders).values({
+      orgId: orgA, orderNumber: `ACL-${++seq}`, status: 'pending', totalAmountMinor: 1000n, currency: 'EGP',
+    }).returning();
+
+    await forbidden((await callerFor(m.userId)).orders.updateStatus({ id: order.id, status: 'confirmed' }));
+    const [unchanged] = await testDb.select({ status: orders.status }).from(orders).where(eq(orders.id, order.id));
+    expect(unchanged.status).toBe('pending');
+
+    await testDb.update(orgMembers).set({ overrides: { grant: { orders: ['write'] }, revoke: {} } })
+      .where(eq(orgMembers.id, m.memberId));
+    await (await callerFor(m.userId)).orders.updateStatus({ id: order.id, status: 'confirmed' });
+    const [moved] = await testDb.select({ status: orders.status }).from(orders).where(eq(orders.id, order.id));
+    expect(moved.status).toBe('confirmed');
+  });
+
+  it('a revoke takes a permission from an admin, even though their role has it', async () => {
+    const m = await addMember(orgA, 'admin');
+    await testDb.update(orgMembers).set({ overrides: { grant: {}, revoke: { finance: ['view'] } } })
+      .where(eq(orgMembers.id, m.memberId));
+    const today = new Date().toISOString().slice(0, 10);
+    await forbidden((await callerFor(m.userId)).finance.vatReport({ startDate: today, endDate: today }));
+  });
+
+  it('a suspended member is refused before any procedure runs, self-service ones included', async () => {
+    const m = await addMember(orgA, 'owner');
+    await testDb.update(orgMembers).set({ status: 'suspended' }).where(eq(orgMembers.id, m.memberId));
+    vi.mocked(verifySession).mockResolvedValue({ user: { id: m.userId, email: 'x@test.com' } } as never);
+    await expect(createContext()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('suspended in one org, active in another: lands in the active one and cannot switch back', async () => {
+    const m = await addMember(orgA, 'admin');
+    await testDb.insert(orgMembers).values({ orgId: orgB, userId: m.userId, role: 'member' });
+    await testDb.update(orgMembers).set({ status: 'suspended' }).where(eq(orgMembers.id, m.memberId));
+
+    const caller = await callerFor(m.userId);
+    const { data } = await caller.me.get();
+    expect(data.orgId).toBe(orgB);
+    expect(data.orgs.map((o) => o.orgId)).toEqual([orgB]);
+    await expect(caller.me.switchOrg({ orgId: orgA })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('a member holding no permissions can still use self-service procedures', async () => {
+    const [nothing] = await testDb.insert(accessRoles).values({ orgId: orgA, name: 'بلا صلاحيات', permissions: {} }).returning();
+    const m = await addMember(orgA, 'member');
+    await testDb.update(orgMembers).set({ accessRoleId: nothing.id }).where(eq(orgMembers.id, m.memberId));
+    const caller = await callerFor(m.userId);
+    await expect(caller.notifications.unreadCount()).resolves.toBeDefined();
+    await forbidden(caller.dashboard.getStats());
   });
 });

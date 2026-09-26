@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getTableName, type SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { TRPCError } from '@trpc/server';
-import { outboxEvents } from '@irth/db';
+import { outboxEvents, effectiveAccess } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { ordersRouter } from '@/server/routers/orders';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
@@ -64,6 +64,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 

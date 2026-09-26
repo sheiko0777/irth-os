@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { orgSettings, auditLog } from '@irth/db';
+import { orgSettings, auditLog, effectiveAccess } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { SETTING_KEYS, SENSITIVE_KEYS, settingKeySchema, type SettingKey } from '@/lib/settings';
 import { settingsRouter, encryptSettingValue, decryptSettingValue } from '@/server/routers/settings';
@@ -47,7 +47,7 @@ function settingsHarness() {
     return result;
   });
   const caller = settingsRouter.createCaller({
-    orgId: ORG_ID, userId: 'settings-user', role: 'admin', withOrg,
+    orgId: ORG_ID, userId: 'settings-user', role: 'admin', access: effectiveAccess({ systemKey: 'admin' }), withOrg,
     session: { user: { id: 'settings-user', email: 'settings@test.com' } },
   } as unknown as Context);
   return {

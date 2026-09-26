@@ -1,3 +1,4 @@
+import { effectiveAccess } from '@irth/db';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import { type SQL } from 'drizzle-orm';
@@ -17,6 +18,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 

@@ -23,8 +23,8 @@ import { trpc } from './trpc';
  * It now reads `me.get`, which returns the role createContext already derives
  * per request.
  *
- * This gates UI affordances only. The server procedures (adminProcedure,
- * ownerProcedure) remain the authorization boundary — a client that lies about
+ * This gates UI affordances only. The server procedures (requirePermission
+ * in server/trpc.ts) remain the authorization boundary — a client that lies about
  * its role still gets rejected there.
  */
 export function useRole(): Role | null {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { protectedProcedure, router, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { stocktakingSessions, stocktakingItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
 import { eq, and, desc, count, sql, ne, isNotNull, inArray, getTableColumns } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -7,7 +7,7 @@ import { assertSupportedCurrency } from '@irth/domain';
 
 export const stocktakingRouter = router({
   sessions: router({
-    list: protectedProcedure
+    list: requirePermission('inventory', 'view')
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
         const sessions = await ctx.db
@@ -34,7 +34,7 @@ export const stocktakingRouter = router({
         return { data: sessionsWithCounts, error: null };
       }),
 
-    create: adminProcedure
+    create: requirePermission('inventory', 'write')
       .input(z.object({ notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
         const [session] = await ctx.withOrg(async (tx) => {
@@ -49,7 +49,7 @@ export const stocktakingRouter = router({
         return { data: session, error: null };
       }),
 
-    complete: adminProcedure
+    complete: requirePermission('inventory', 'write')
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         // Completing a stocktake applies the counted quantities to inventory.
@@ -292,7 +292,7 @@ export const stocktakingRouter = router({
         return { data: result.session, summary: result.summary, error: null };
       }),
 
-    getItems: protectedProcedure
+    getItems: requirePermission('inventory', 'view')
       .input(z.object({ sessionId: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
         const items = await ctx.db
@@ -309,7 +309,7 @@ export const stocktakingRouter = router({
       }),
   }),
 
-  summary: protectedProcedure.query(async ({ ctx }) => {
+  summary: requirePermission('inventory', 'view').query(async ({ ctx }) => {
     const allSessions = await ctx.db
       .select({
         status: stocktakingSessions.status,
@@ -329,7 +329,7 @@ export const stocktakingRouter = router({
     return { data: { totalSessions, activeSessions, lastCompletedAt }, error: null };
   }),
 
-  recordScan: protectedProcedure
+  recordScan: requirePermission('inventory', 'count')
     .input(z.object({
       sessionId: z.string().uuid(),
       code: z.string().min(1),

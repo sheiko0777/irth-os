@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { orders, products, inventoryItems, orderReturns, salesTotals, dailyNetSales } from '@irth/db';
 import { eq, and, desc, sql, count, gte, lt, or, inArray, lte as lteOp } from 'drizzle-orm';
 import { fromMinor } from '@irth/domain';
@@ -13,7 +13,7 @@ import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 const LATE_ORDER_HOURS = 48;
 
 export const dashboardRouter = router({
-    getStats: protectedProcedure.query(async ({ ctx }) => {
+    getStats: requirePermission('dashboard', 'view').query(async ({ ctx }) => {
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
 
@@ -149,7 +149,7 @@ export const dashboardRouter = router({
      * worklist. Bundling them would force the whole dashboard to refetch
      * whenever the alert counts refresh.
      */
-    getAlerts: protectedProcedure.query(async ({ ctx }) => {
+    getAlerts: requirePermission('dashboard', 'view').query(async ({ ctx }) => {
         const lateBefore = new Date(Date.now() - LATE_ORDER_HOURS * 60 * 60 * 1000);
 
         const [lateOrdersQuery, outOfStockQuery, pendingReturnsQuery] = await Promise.all([
@@ -188,7 +188,7 @@ export const dashboardRouter = router({
         };
     }),
 
-    getRecentOrders: protectedProcedure.query(async ({ ctx }) => {
+    getRecentOrders: requirePermission('dashboard', 'view').query(async ({ ctx }) => {
         const recentOrders = await ctx.db
             .select({
                 id: orders.id,

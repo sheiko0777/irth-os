@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { and, asc, count, desc, eq, gte, ilike, lte } from 'drizzle-orm';
 import {
-  can,
+  canAccess,
   inventoryItems,
   orders,
   products,
@@ -9,8 +9,8 @@ import {
   salesTotals,
   type ActionFor,
   type DbTx,
+  type EffectiveAccess,
   type Resource,
-  type Role,
 } from '@irth/db';
 import { OrderStatusSchema } from '@irth/types';
 import { formatMoney, fromMinor } from '@irth/domain';
@@ -263,9 +263,9 @@ export const AI_TOOLS: AiTool[] = [
   },
 ];
 
-export function allowedAiToolDefinitions(role: Role): AiToolDefinition[] {
+export function allowedAiToolDefinitions(access: EffectiveAccess): AiToolDefinition[] {
   return AI_TOOLS
-    .filter((tool) => can(role, tool.permission.resource, tool.permission.action))
+    .filter((tool) => canAccess(access, tool.permission.resource, tool.permission.action))
     .map((tool) => tool.definition);
 }
 
@@ -275,7 +275,7 @@ export async function executeAiTool(name: string, args: unknown, ctx: ToolExecut
     throw new Error(`Unknown AI tool: ${name}`);
   }
 
-  if (!can(ctx.role, tool.permission.resource, tool.permission.action)) {
+  if (!canAccess(ctx.access, tool.permission.resource, tool.permission.action)) {
     throw new Error(`Forbidden AI tool: ${name}`);
   }
 

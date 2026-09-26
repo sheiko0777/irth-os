@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { orders, products, inventoryItems, salesTotals, dailyNetSales } from '@irth/db';
 import { eq, and, sql, count, gte } from 'drizzle-orm';
 import { z } from 'zod';
@@ -18,7 +18,7 @@ export const analyticsRouter = router({
    * at recognition — not a sum over orders (CLAUDE.md rule 2). The order
    * count is a count of intent and stays on `orders`.
    */
-  revenue: protectedProcedure
+  revenue: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       // Bound as an ISO string, not a Date. The query builder converts Date
@@ -58,7 +58,7 @@ export const analyticsRouter = router({
   /**
    * Top 10 products by delivered revenue.
    */
-  topProducts: protectedProcedure
+  topProducts: requirePermission('analytics', 'view')
     .input(z.object({ limit: z.number().min(5).max(20).default(10) }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.db.execute(sql`
@@ -91,7 +91,7 @@ export const analyticsRouter = router({
    * Inventory turnover: for each variant, outbound movements / current stock.
    * Returns low-stock items and overall turnover ratio.
    */
-  inventoryTurnover: protectedProcedure
+  inventoryTurnover: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       // Same raw-execute Date binding trap as `revenue` above.
@@ -139,7 +139,7 @@ export const analyticsRouter = router({
   /**
    * KPI summary cards — fast parallel queries.
    */
-  kpiSummary: protectedProcedure.query(async ({ ctx }) => {
+  kpiSummary: requirePermission('analytics', 'view').query(async ({ ctx }) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
@@ -211,7 +211,7 @@ export const analyticsRouter = router({
    * with no Shopify connection or no traffic yet — this is a normal,
    * expected state for most orgs today, not a failure.
    */
-  storefrontOverview: protectedProcedure
+  storefrontOverview: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
@@ -244,7 +244,7 @@ export const analyticsRouter = router({
    * event/session tables (not the daily rollup, which doesn't break these
    * dimensions out) so it stays useful even on the rollup's very first day.
    */
-  storefrontSources: protectedProcedure
+  storefrontSources: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
@@ -266,7 +266,7 @@ export const analyticsRouter = router({
       return { data, error: null, meta: null };
     }),
 
-  storefrontTopPages: protectedProcedure
+  storefrontTopPages: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30), limit: z.number().min(5).max(30).default(10) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
@@ -290,7 +290,7 @@ export const analyticsRouter = router({
    * Real-time & Abandoned Cart Monitor.
    * Analyzes cart_viewed, product_added_to_cart, checkout_started, and checkout_completed events.
    */
-  cartMonitor: protectedProcedure
+  cartMonitor: requirePermission('analytics', 'view')
     .input(z.object({
       days: z.number().min(1).max(90).default(7),
       status: z.enum(['all', 'abandoned', 'active', 'converted']).default('all'),
@@ -498,7 +498,7 @@ export const analyticsRouter = router({
    * 5-Stage Customer Conversion Funnel:
    * Sessions -> Product Viewed -> Cart Added -> Checkout Started -> Orders Completed
    */
-  customerFunnel: protectedProcedure
+  customerFunnel: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(1).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
@@ -570,7 +570,7 @@ export const analyticsRouter = router({
   /**
    * Live customer activity stream (last N storefront events).
    */
-  customerActivityStream: protectedProcedure
+  customerActivityStream: requirePermission('analytics', 'view')
     .input(z.object({ limit: z.number().min(10).max(100).default(30) }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.withOrg(async (tx) => tx.execute(sql`
@@ -635,7 +635,7 @@ export const analyticsRouter = router({
   /**
    * Top products abandoned in carts without purchase.
    */
-  abandonedProducts: protectedProcedure
+  abandonedProducts: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(1).max(90).default(30), limit: z.number().min(5).max(30).default(10) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);

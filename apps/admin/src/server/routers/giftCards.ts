@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES, MAX_IDEMPOTENCY_KEY_LENGTH, paginationOffset, paginationMeta } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, sql, ne, count } from 'drizzle-orm';
@@ -21,7 +21,7 @@ function generateCode(): string {
 }
 
 export const giftCardsRouter = router({
-  list: protectedProcedure
+  list: requirePermission('giftCards', 'view')
     .input(z.object(paginationInputSchema(200)))
     .query(async ({ ctx, input }) => {
       const offset = paginationOffset(input.page, input.pageSize);
@@ -45,7 +45,7 @@ export const giftCardsRouter = router({
       };
     }),
 
-  summary: protectedProcedure.query(async ({ ctx }) => {
+  summary: requirePermission('giftCards', 'view').query(async ({ ctx }) => {
     const rows = await ctx.db
       .select({
         status: giftCards.status,
@@ -73,7 +73,7 @@ export const giftCardsRouter = router({
     };
   }),
 
-  create: adminProcedure
+  create: requirePermission('giftCards', 'write')
     .input(
       z.object({
         initialAmount: moneyInput,
@@ -151,7 +151,7 @@ export const giftCardsRouter = router({
       return { data: card, error: null };
     }),
 
-  topup: adminProcedure
+  topup: requirePermission('giftCards', 'write')
     .input(z.object({
       id: z.string().uuid(),
       amount: moneyInput,
@@ -232,7 +232,7 @@ export const giftCardsRouter = router({
   // gift_card_tx_type already carried 'redeem' (both from the schema this
   // table shipped with), but nothing ever transitioned a card into either —
   // a card could be issued, topped up and cancelled, never actually spent.
-  redeem: adminProcedure
+  redeem: requirePermission('giftCards', 'write')
     .input(z.object({
       id: z.string().uuid(),
       amount: moneyInput,
@@ -334,7 +334,7 @@ export const giftCardsRouter = router({
       return { data: updated, error: null };
     })),
 
-  cancel: ownerProcedure
+  cancel: requirePermission('giftCards', 'delete')
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [card] = await ctx.db
@@ -378,7 +378,7 @@ export const giftCardsRouter = router({
       return { data: updated, error: null };
     }),
 
-  getTransactions: protectedProcedure
+  getTransactions: requirePermission('giftCards', 'view')
     .input(z.object({ giftCardId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.db

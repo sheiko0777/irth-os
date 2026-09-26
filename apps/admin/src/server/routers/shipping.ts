@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { shippingZones, shippingRates } from '@irth/db';
 import { eq, and, count, getTableColumns } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -7,7 +7,7 @@ import { EGP, fromMinor, parseDecimal } from '@irth/domain';
 
 export const shippingRouter = router({
   zones: router({
-    list: protectedProcedure
+    list: requirePermission('shipping', 'view')
       .input(z.object({}).optional())
       .query(async ({ ctx }) => {
         const zones = await ctx.db
@@ -32,7 +32,7 @@ export const shippingRouter = router({
         return { data: zonesWithCounts, error: null };
       }),
 
-    create: adminProcedure
+    create: requirePermission('shipping', 'write')
       .input(
         z.object({
           name: z.string().min(1),
@@ -47,7 +47,7 @@ export const shippingRouter = router({
         return { data: zone, error: null };
       }),
 
-    setActive: adminProcedure
+    setActive: requirePermission('shipping', 'write')
       .input(z.object({ id: z.string().uuid(), isActive: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const [zone] = await ctx.withOrg(async (tx) => tx
@@ -61,7 +61,7 @@ export const shippingRouter = router({
   }),
 
   rates: router({
-    list: protectedProcedure
+    list: requirePermission('shipping', 'view')
       .input(z.object({ zoneId: z.string().uuid() }))
       .query(async ({ ctx, input }) => {
         const rates = await ctx.db
@@ -88,7 +88,7 @@ export const shippingRouter = router({
         };
       }),
 
-    create: adminProcedure
+    create: requirePermission('shipping', 'write')
       .input(
         z.object({
           zoneId: z.string().uuid(),
@@ -123,7 +123,7 @@ export const shippingRouter = router({
         return { data: rate, error: null };
       }),
 
-    delete: ownerProcedure
+    delete: requirePermission('shipping', 'delete')
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx, input }) => {
         await ctx.withOrg(async (tx) => tx

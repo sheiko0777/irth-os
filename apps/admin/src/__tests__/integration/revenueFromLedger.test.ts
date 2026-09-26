@@ -12,7 +12,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  orderReturns, orders, organizations, postOrderDeliveredEntry, salesTotals, withOrgContext,
+  orderReturns, orders, organizations, postOrderDeliveredEntry, salesTotals, withOrgContext, effectiveAccess,
 } from '@irth/db';
 import { EGP, EGYPT_VAT_BP, formatMoney, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
 import type { Context } from '@/server/trpc';
@@ -33,7 +33,7 @@ let seq = 0;
 
 function ctxFor(orgId: string) {
   return {
-    db: testDb, orgId, userId: 'owner-user', role: 'owner',
+    db: testDb, orgId, userId: 'owner-user', role: 'owner', access: effectiveAccess({ systemKey: 'owner' }),
     session: { user: { id: 'owner-user', email: 'owner@test.com' } },
     withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
   } as unknown as Context;

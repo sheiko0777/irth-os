@@ -1,3 +1,4 @@
+import { effectiveAccess } from '@irth/db';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Context } from '@/server/trpc';
 import { integrationsRouter } from '@/server/routers/integrations';
@@ -14,6 +15,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 
@@ -73,7 +75,7 @@ function retryContext(eventBelongsToOrg: boolean) {
     db: {},
     withOrg: (callback: (transaction: typeof tx) => unknown) => callback(tx),
     session: { user: { id: 'admin-1', email: 'admin@test.com' }, session: {} },
-    orgId: 'org-1', userId: 'admin-1', role: 'admin',
+    orgId: 'org-1', userId: 'admin-1', role: 'admin', access: effectiveAccess({ systemKey: 'admin' }),
   } as unknown as Context;
   return { ctx, set, auditValues };
 }

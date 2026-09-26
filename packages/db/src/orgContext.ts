@@ -47,7 +47,11 @@ export class NotAMemberError extends Error {
  * user's very first org is the one they land in until they explicitly
  * choose otherwise.
  *
- * Returns `null` only when the user has zero memberships anywhere — the
+ * Suspended memberships (0074) are skipped entirely: a member suspended in
+ * one org lands in another org they are active in, rather than being locked
+ * out of all of them by the org they happened to be pinned to.
+ *
+ * Returns `null` only when the user has zero active memberships anywhere — the
  * onboarding case. Callers decide whether that is fatal (createContext
  * throws FORBIDDEN) or not (authContext.ts leaves orgId/role unset; routes
  * that need one guard via requireRole).
@@ -66,7 +70,11 @@ export async function resolveActiveOrgMembership(
     const [membership] = await db
       .select({ orgId: orgMembers.orgId, role: orgMembers.role })
       .from(orgMembers)
-      .where(and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, pinned.lastActiveOrgId)))
+      .where(and(
+        eq(orgMembers.userId, userId),
+        eq(orgMembers.orgId, pinned.lastActiveOrgId),
+        eq(orgMembers.status, 'active'),
+      ))
       .limit(1);
 
     if (membership) return { orgId: membership.orgId, role: membership.role as Role };
@@ -77,7 +85,7 @@ export async function resolveActiveOrgMembership(
   const [oldest] = await db
     .select({ orgId: orgMembers.orgId, role: orgMembers.role })
     .from(orgMembers)
-    .where(eq(orgMembers.userId, userId))
+    .where(and(eq(orgMembers.userId, userId), eq(orgMembers.status, 'active')))
     .orderBy(asc(orgMembers.createdAt))
     .limit(1);
 
@@ -85,8 +93,9 @@ export async function resolveActiveOrgMembership(
 }
 
 /**
- * Records a user's choice of active org, after verifying they are actually a
- * member — a client cannot switch into an org it does not belong to.
+ * Records a user's choice of active org, after verifying they are actually an
+ * active member — a client cannot switch into an org it does not belong to, or
+ * one that has suspended it.
  */
 export async function setActiveOrg(
   db: DbInstance,
@@ -96,7 +105,7 @@ export async function setActiveOrg(
   const [membership] = await db
     .select({ orgId: orgMembers.orgId, role: orgMembers.role })
     .from(orgMembers)
-    .where(and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, orgId)))
+    .where(and(eq(orgMembers.userId, userId), eq(orgMembers.orgId, orgId), eq(orgMembers.status, 'active')))
     .limit(1);
 
   if (!membership) throw new NotAMemberError(orgId);
@@ -106,7 +115,7 @@ export async function setActiveOrg(
   return { orgId: membership.orgId, role: membership.role as Role };
 }
 
-/** Every org a user belongs to, for a switcher UI. */
+/** Every org a user is an active member of, for a switcher UI. */
 export async function listMembershipsForUser(
   db: Pick<DbInstance, 'select'>,
   userId: string,
@@ -115,7 +124,7 @@ export async function listMembershipsForUser(
     .select({ orgId: orgMembers.orgId, orgName: organizations.name, role: orgMembers.role })
     .from(orgMembers)
     .innerJoin(organizations, eq(organizations.id, orgMembers.orgId))
-    .where(eq(orgMembers.userId, userId))
+    .where(and(eq(orgMembers.userId, userId), eq(orgMembers.status, 'active')))
     .orderBy(asc(orgMembers.createdAt));
 
   return rows.map((r) => ({ orgId: r.orgId, orgName: r.orgName, role: r.role as Role }));
@@ -126,8 +135,8 @@ export async function listMembershipsForUser(
  * the code matrix for a system role — plus per-person grants, minus revokes;
  * nothing at all if suspended. Null when the user is not a member.
  *
- * Not yet used for authorization (requirePermission still reads
- * org_members.role); see the note on effectiveAccess in permissions.ts.
+ * The authority every request is checked against — see the note on
+ * effectiveAccess in permissions.ts.
  */
 export async function resolveEffectiveAccess(
   db: Pick<DbInstance, 'select'>,

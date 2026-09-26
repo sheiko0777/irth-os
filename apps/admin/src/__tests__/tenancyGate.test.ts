@@ -94,8 +94,8 @@ const UNSCOPED_READ_BASELINE = [
   'dashboard.ts:192',
   // Both reads filter explicitly by eq(outboxDeadLetters.orgId, ctx.orgId),
   // same shape as eta.ts's own baseline entries below.
-  'deadLetters.ts:22',
-  'deadLetters.ts:34',
+  'deadLetters.ts:23',
+  'deadLetters.ts:35',
   'eta.ts:19',
   'eta.ts:34',
   'eta.ts:107',

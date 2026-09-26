@@ -1,4 +1,4 @@
-import { router, protectedProcedure, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { orders, customers, inventoryItems, productVariants, products, orderStatusEnum, withAudit,
          emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
          postOrderDeliveredEntry } from '@irth/db';
@@ -6,7 +6,7 @@ import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const bulkRouter = router({
-    bulkUpdateOrderStatus: adminProcedure
+    bulkUpdateOrderStatus: requirePermission('orders', 'write')
         .input(z.object({
             ids: z.array(z.string().uuid()).min(1).max(100),
             status: z.enum(orderStatusEnum.enumValues),
@@ -135,7 +135,7 @@ export const bulkRouter = router({
             return { data: { updated: changed }, error: null, meta: null };
         }),
 
-    exportOrders: protectedProcedure
+    exportOrders: requirePermission('orders', 'export')
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
@@ -167,7 +167,7 @@ export const bulkRouter = router({
             return { data: rows, error: null, meta: null };
         }),
 
-    exportInventory: protectedProcedure
+    exportInventory: requirePermission('inventory', 'export')
         .query(async ({ ctx }) => {
             const rows = await ctx.db
                 .select({
@@ -187,7 +187,7 @@ export const bulkRouter = router({
             return { data: rows, error: null, meta: null };
         }),
 
-    exportCustomers: protectedProcedure
+    exportCustomers: requirePermission('customers', 'export')
         .query(async ({ ctx }) => {
             const rows = await ctx.db
                 .select({

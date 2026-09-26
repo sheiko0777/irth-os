@@ -23,6 +23,7 @@ export const PERMISSIONS = {
     view: ['owner', 'admin', 'member'] as Role[],
     write: ['owner', 'admin'] as Role[],
     delete: ['owner'] as Role[],
+    export: ['owner', 'admin', 'member'] as Role[],
   },
   coupons: {
     view: ['owner', 'admin', 'member'] as Role[],
@@ -38,6 +39,9 @@ export const PERMISSIONS = {
     view: ['owner', 'admin', 'member'] as Role[],
     write: ['owner', 'admin'] as Role[],
     delete: ['owner'] as Role[],
+    export: ['owner', 'admin', 'member'] as Role[],
+    // Record a stocktake scan — every role could before PR-1b.
+    count: ['owner', 'admin', 'member'] as Role[],
   },
   returns: {
     view: ['owner', 'admin', 'member'] as Role[],
@@ -58,6 +62,7 @@ export const PERMISSIONS = {
     view: ['owner', 'admin', 'member'] as Role[],
     write: ['owner', 'admin'] as Role[],
     delete: ['owner'] as Role[],
+    export: ['owner', 'admin', 'member'] as Role[],
   },
   courier: {
     view: ['owner', 'admin', 'member'] as Role[],
@@ -74,6 +79,47 @@ export const PERMISSIONS = {
     view: ['owner', 'admin', 'member'] as Role[],
     connect: ['owner', 'admin'] as Role[],
     manage: ['owner'] as Role[],
+    // Retry a failed outbox event, and read/replay the dead-letter queue.
+    recover: ['owner', 'admin'] as Role[],
+  },
+
+  // PR-1b: every procedure now names a resource.action. The entries below
+  // cover the routers that used to gate on a role tier (protectedProcedure =
+  // every role, adminProcedure = owner+admin, ownerProcedure = owner), and each
+  // role list reproduces that tier exactly — permissionParity.test.ts holds the
+  // before/after proof. `export` and `count` likewise match what every role
+  // could already do; a custom role or a per-person revoke can now take them away.
+  dashboard: {
+    view: ['owner', 'admin', 'member'] as Role[],
+  },
+  analytics: {
+    view: ['owner', 'admin', 'member'] as Role[],
+  },
+  audit: {
+    view: ['owner', 'admin'] as Role[],
+  },
+  eta: {
+    view: ['owner', 'admin', 'member'] as Role[],
+    submit: ['owner', 'admin'] as Role[],
+  },
+  giftCards: {
+    view: ['owner', 'admin', 'member'] as Role[],
+    write: ['owner', 'admin'] as Role[],
+    delete: ['owner'] as Role[],
+  },
+  pricelists: {
+    view: ['owner', 'admin', 'member'] as Role[],
+    write: ['owner', 'admin'] as Role[],
+    delete: ['owner'] as Role[],
+  },
+  settings: {
+    view: ['owner', 'admin', 'member'] as Role[],
+    write: ['owner', 'admin'] as Role[],
+  },
+  shipping: {
+    view: ['owner', 'admin', 'member'] as Role[],
+    write: ['owner', 'admin'] as Role[],
+    delete: ['owner'] as Role[],
   },
 } as const;
 
@@ -116,9 +162,10 @@ export function canAssignRole(actorRole: Role, targetRole: Role): boolean {
 // no stored list — theirs is exactly the matrix above, derived here — so moving
 // the checks onto roles changes nothing for anyone on a system role.
 //
-// NOT YET USED FOR AUTHORIZATION: requirePermission still calls can(role, …).
-// The next step switches it to canAccess(); the integration test
-// accessControl.test.ts proves the two agree for every system role today.
+// This is what authorizes every request (PR-1b): createContext and the API's
+// authContext resolve it once per request, and requirePermission checks
+// canAccess(). can(role, …) remains for callers that only hold a role.
+// accessControl.test.ts proves the two agree for every system role.
 //
 // Kept import-free for the same reason as the rest of this file: the admin's
 // browser bundle deep-imports it.

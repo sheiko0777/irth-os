@@ -15,7 +15,7 @@ import { listMembershipsForUser, setActiveOrg, NotAMemberError } from '@irth/db'
  *
  * createContext already resolves orgId and role per request, so this just
  * surfaces what it computed. It is not an authorization decision: the server
- * procedures (adminProcedure, ownerProcedure) remain the enforcement point.
+ * procedures (requirePermission) remain the enforcement point.
  * This only tells the UI which affordances are worth drawing.
  */
 export const meRouter = router({

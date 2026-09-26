@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
 import {
   inventoryItems, orderItems, orders, organizations, outboxEvents, products, productVariants,
-  transitionOrderStatus, withOrgContext,
+  transitionOrderStatus, withOrgContext, effectiveAccess,
 } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
@@ -58,7 +58,7 @@ afterAll(async () => { await closeTestDb(); });
 
 function ctx() {
   return {
-    db: testDb, orgId, userId: 'ops-user', role: 'owner',
+    db: testDb, orgId, userId: 'ops-user', role: 'owner', access: effectiveAccess({ systemKey: 'owner' }),
     session: { user: { id: 'ops-user', email: 'ops@test.com' } },
     withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
   } as unknown as Context;
@@ -66,7 +66,7 @@ function ctx() {
 
 function caller() {
   return ordersRouter.createCaller({
-    db: testDb, orgId, userId: 'ops-user', role: 'owner',
+    db: testDb, orgId, userId: 'ops-user', role: 'owner', access: effectiveAccess({ systemKey: 'owner' }),
     session: { user: { id: 'ops-user', email: 'ops@test.com' } },
     withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
   } as unknown as Context);
