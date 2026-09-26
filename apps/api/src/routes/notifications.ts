@@ -1,111 +1,152 @@
 import { handleError } from "../utils/errors";
-import { Hono } from 'hono';
-import { db } from '../db';
-import { notifications, activityLog, jsonSafe } from '@irth/db';
-import { eq, and, desc } from 'drizzle-orm';
-import { z } from 'zod';
-import { requireOrgId } from '../middlewares/requireOrgId';
-import { requireRole } from '../middlewares/requireRole';
+import { Hono } from "hono";
+import { db } from "../db";
+import { notifications, activityLog, jsonSafe } from "@irth/db";
+import { eq, and, desc } from "drizzle-orm";
+import { z } from "zod";
+import { requireOrgId } from "../middlewares/requireOrgId";
+import { requireRole } from "../middlewares/requireRole";
 
 export const notificationsRouter = new Hono();
 
 // GET / - List unread notifications for current user
-notificationsRouter.get('/', requireOrgId(), async (c) => {
-  const orgId = c.get('orgId') as string;
-  const userId = (c.get('userId') as string | undefined) ?? 'system';
+notificationsRouter.get(
+  "/",
+  requireOrgId(),
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const orgId = c.get("orgId") as string;
+    const userId = (c.get("userId") as string | undefined) ?? "system";
 
-  try {
-    const data = await db
-      .select()
-      .from(notifications)
-      .where(and(
-        eq(notifications.orgId, orgId),
-        eq(notifications.userId, userId),
-        eq(notifications.read, false)
-      ))
-      .orderBy(desc(notifications.createdAt));
+    try {
+      const data = await db
+        .select()
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.orgId, orgId),
+            eq(notifications.userId, userId),
+            eq(notifications.read, false),
+          ),
+        )
+        .orderBy(desc(notifications.createdAt));
 
-    return c.json({ data: jsonSafe(data), error: null, meta: null });
-  } catch (error: unknown) {
-    return c.json({ error: handleError(error), data: null, meta: null }, 400);
-  }
-});
+      return c.json({ data: jsonSafe(data), error: null, meta: null });
+    } catch (error: unknown) {
+      return c.json({ error: handleError(error), data: null, meta: null }, 400);
+    }
+  },
+);
 
 // PATCH /:id/read - Mark single notification as read
-notificationsRouter.patch('/:id/read', requireOrgId(), async (c) => {
-  const orgId = c.get('orgId') as string;
-  const userId = (c.get('userId') as string | undefined) ?? 'system';
-  const notificationId = c.req.param('id');
+notificationsRouter.patch(
+  "/:id/read",
+  requireOrgId(),
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const orgId = c.get("orgId") as string;
+    const userId = (c.get("userId") as string | undefined) ?? "system";
+    const notificationId = c.req.param("id");
 
-  try {
-    const result = await db
-      .update(notifications)
-      .set({ read: true })
-      .where(and(
-        eq(notifications.id, notificationId),
-        eq(notifications.orgId, orgId),
-        eq(notifications.userId, userId)
-      ))
-      .returning();
+    try {
+      const result = await db
+        .update(notifications)
+        .set({ read: true })
+        .where(
+          and(
+            eq(notifications.id, notificationId),
+            eq(notifications.orgId, orgId),
+            eq(notifications.userId, userId),
+          ),
+        )
+        .returning();
 
-    if (result.length === 0) {
-      return c.json({ error: 'Notification not found', data: null, meta: null }, 404);
+      if (result.length === 0) {
+        return c.json(
+          { error: "Notification not found", data: null, meta: null },
+          404,
+        );
+      }
+
+      return c.json({ data: jsonSafe(result[0]), error: null, meta: null });
+    } catch (error: unknown) {
+      return c.json({ error: handleError(error), data: null, meta: null }, 400);
     }
-
-    return c.json({ data: jsonSafe(result[0]), error: null, meta: null });
-  } catch (error: unknown) {
-    return c.json({ error: handleError(error), data: null, meta: null }, 400);
-  }
-});
+  },
+);
 
 // PATCH /read-all - Mark all unread as read
-notificationsRouter.patch('/read-all', requireOrgId(), async (c) => {
-  const orgId = c.get('orgId') as string;
-  const userId = (c.get('userId') as string | undefined) ?? 'system';
+notificationsRouter.patch(
+  "/read-all",
+  requireOrgId(),
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const orgId = c.get("orgId") as string;
+    const userId = (c.get("userId") as string | undefined) ?? "system";
 
-  try {
-    await db
-      .update(notifications)
-      .set({ read: true })
-      .where(and(
-        eq(notifications.orgId, orgId),
-        eq(notifications.userId, userId),
-        eq(notifications.read, false)
-      ));
+    try {
+      await db
+        .update(notifications)
+        .set({ read: true })
+        .where(
+          and(
+            eq(notifications.orgId, orgId),
+            eq(notifications.userId, userId),
+            eq(notifications.read, false),
+          ),
+        );
 
-    return c.json({ data: jsonSafe({ success: true }), error: null, meta: null });
-  } catch (error: unknown) {
-    return c.json({ error: handleError(error), data: null, meta: null }, 400);
-  }
-});
+      return c.json({
+        data: jsonSafe({ success: true }),
+        error: null,
+        meta: null,
+      });
+    } catch (error: unknown) {
+      return c.json({ error: handleError(error), data: null, meta: null }, 400);
+    }
+  },
+);
 
 const activityQuerySchema = z.object({
-  page: z.string().optional().default('1').transform(val => parseInt(val, 10)),
-  limit: z.string().optional().default('20').transform(val => parseInt(val, 10)),
+  page: z
+    .string()
+    .optional()
+    .default("1")
+    .transform((val) => parseInt(val, 10)),
+  limit: z
+    .string()
+    .optional()
+    .default("20")
+    .transform((val) => parseInt(val, 10)),
 });
 
 // GET /activity - List activity log entries (paginated)
-notificationsRouter.get('/activity', requireOrgId(), requireRole('owner', 'admin'), async (c) => {
-  const orgId = c.get('orgId') as string;
+notificationsRouter.get(
+  "/activity",
+  requireOrgId(),
+  requireRole("owner", "admin"),
+  async (c) => {
+    const orgId = c.get("orgId") as string;
 
-  try {
-    const query = activityQuerySchema.parse(c.req.query());
-    const offset = (query.page - 1) * query.limit;
+    try {
+      const query = activityQuerySchema.parse(c.req.query());
+      const offset = (query.page - 1) * query.limit;
 
-    const data = await db
-      .select()
-      .from(activityLog)
-      .where(eq(activityLog.orgId, orgId))
-      .orderBy(desc(activityLog.createdAt))
-      .limit(query.limit)
-      .offset(offset);
+      const data = await db
+        .select()
+        .from(activityLog)
+        .where(eq(activityLog.orgId, orgId))
+        .orderBy(desc(activityLog.createdAt))
+        .limit(query.limit)
+        .offset(offset);
 
-    return c.json({
-      data: jsonSafe(data),
-      error: null,
-      meta: { page: query.page, limit: query.limit }
-    });
-  } catch (error: unknown) {
-    return c.json({ error: handleError(error), data: null, meta: null }, 400);
-  }
-});
+      return c.json({
+        data: jsonSafe(data),
+        error: null,
+        meta: { page: query.page, limit: query.limit },
+      });
+    } catch (error: unknown) {
+      return c.json({ error: handleError(error), data: null, meta: null }, 400);
+    }
+  },
+);
