@@ -53,21 +53,9 @@ const UNSCOPED_READ = /(^|[^.\w])(ctx\s*\.\s*)?db\s*\.\s*(?:(?:select(?:Distinct
  * follow-up gate/migration (orders, products, categories, orgs, shipping).
  */
 const UNSCOPED_READ_BASELINE = [
-  'analytics.ts:29',
-  'analytics.ts:58',
-  'analytics.ts:94',
-  'analytics.ts:155',
-  'analytics.ts:159',
-  'analytics.ts:163',
-  'analytics.ts:167',
-  'analytics.ts:176',
-  'analytics.ts:180',
-  'analytics.ts:230',
-  'analytics.ts:259',
-  'analytics.ts:281',
-  'bulk.ts:149',
-  'bulk.ts:168',
-  'bulk.ts:188',
+  'analytics.ts:224',
+  'analytics.ts:253',
+  'analytics.ts:275',
   'campaigns.ts:14',
   'campaigns.ts:21',
   'campaigns.ts:36',
@@ -80,43 +68,18 @@ const UNSCOPED_READ_BASELINE = [
   'coupons.ts:210',
   'customerSegments.ts:11',
   'customerSegments.ts:87',
-  'customerSegments.ts:94',
   'customerSegments.ts:121',
   'customerSegments.ts:161',
-  'customerSegments.ts:169',
-  'customerSegments.ts:175',
-  'dashboard.ts:59',
-  'dashboard.ts:63',
-  'dashboard.ts:67',
-  'dashboard.ts:71',
-  'dashboard.ts:75',
-  'dashboard.ts:83',
-  'dashboard.ts:92',
-  'dashboard.ts:105',
-  'dashboard.ts:118',
-  'dashboard.ts:185',
-  'dashboard.ts:193',
-  'dashboard.ts:200',
-  'dashboard.ts:221',
+  'dashboard.ts:171',
   // Both reads filter explicitly by eq(outboxDeadLetters.orgId, ctx.orgId),
   // same shape as eta.ts's own baseline entries below.
-  'deadLetters.ts:22',
-  'deadLetters.ts:34',
+  'deadLetters.ts:23',
+  'deadLetters.ts:35',
   'eta.ts:19',
   'eta.ts:34',
   'eta.ts:107',
   'eta.ts:134',
-  'eta.ts:156',
-  'finance.ts:24',
-  'finance.ts:47',
-  'finance.ts:63',
-  'finance.ts:78',
-  'finance.ts:117',
-  'finance.ts:133',
-  'finance.ts:141',
-  'finance.ts:150',
-  'finance.ts:218',
-  'finance.ts:253',
+  'finance.ts:110',
   'giftCards.ts:29',
   'giftCards.ts:36',
   'giftCards.ts:49',
@@ -127,15 +90,9 @@ const UNSCOPED_READ_BASELINE = [
   'integrations.ts:42',
   'integrations.ts:90',
   'integrations.ts:154',
-  'inventory.ts:30',
-  'inventory.ts:46',
-  'inventory.ts:68',
-  'inventory.ts:94',
   'notifications.ts:15',
   'notifications.ts:22',
   'notifications.ts:56',
-  'pricelists.ts:10',
-  'pricelists.ts:77',
   'returns.ts:136',
   'returns.ts:142',
   'returns.ts:165',
@@ -200,6 +157,43 @@ describe('tenancy gate', () => {
       'Unscoped reads bypass RLS. Move new reads to ctx.withOrg(async (tx) => …); ' +
         'remove fixed sites from UNSCOPED_READ_BASELINE. Current sites: ' + offenders.join(', '),
     ).toEqual([...UNSCOPED_READ_BASELINE].sort());
+  });
+
+  /**
+   * PR-1e: the tables 0076 narrows to a member's brand or supplier scope —
+   * and, since PR-2b, those 0077/0078 narrow to a rep or a price-list scope. A
+   * read of them through ctx.db runs as the BYPASSRLS owner and ignores the
+   * scope entirely, so — unlike the legacy baseline above — none is allowed,
+   * not even one already there.
+   */
+  it('never reads a scope-restricted table (0076) outside ctx.withOrg', () => {
+    // PR-2b adds the tables 0077/0078 narrow to a rep (orders, their lines,
+    // customers, quotes) and to a price-list scope.
+    const SCOPED = /\b(products|productVariants|inventoryItems|suppliers|purchaseOrders|purchaseOrderItems|product_variants|inventory_items|purchase_orders|purchase_order_items|orders|orderItems|order_items|customers|priceLists|priceListItems|price_lists|price_list_items|salesQuotes|salesQuoteItems|sales_quotes|sales_quote_items|purchaseOrderShipments|purchaseOrderShipmentItems|supplierPayments|purchase_order_shipments|purchase_order_shipment_items|supplier_payments)\b/;
+    const offenders: string[] = [];
+    for (const file of routerFiles()) {
+      if (CROSS_ORG_BY_DESIGN.has(file)) continue;
+      const source = readFileSync(path.join(ROUTERS, file), 'utf8');
+      for (const m of source.matchAll(UNSCOPED_READ)) {
+        const start = m.index ?? 0;
+        let depth = 0;
+        let end = source.length;
+        for (let i = start; i < source.length; i++) {
+          const c = source[i];
+          if (c === '(' || c === '[' || c === '{') depth++;
+          else if (c === ')' || c === ']' || c === '}') { if (depth === 0) { end = i; break; } depth--; }
+          else if ((c === ';' || c === ',') && depth === 0) { end = i; break; }
+        }
+        if (SCOPED.test(source.slice(start, end))) {
+          offenders.push(`${file}:${source.slice(0, start).split('\n').length}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      'These reads of brand/supplier-scoped tables bypass the scope policies. Move them into ctx.withOrg:\n  '
+        + offenders.join('\n  '),
+    ).toEqual([]);
   });
 
   it('detects unscoped read shapes across whitespace', () => {
@@ -271,6 +265,15 @@ describe('tenancy gate', () => {
    * INSERTs are excluded: they carry orgId in values(), not in a WHERE, and
    * the WITH CHECK half of each policy already gates the post-image.
    */
+  /**
+   * Better Auth's identity tables have no org_id — a password or a session
+   * belongs to a person, not to a tenant (PR-1d). Writes to them are scoped by
+   * the user instead: the caller themselves (me.changePassword), or a target
+   * the procedure first proved is a member of this org and of no other
+   * (accounts.resetPassword). Only these two tables are exempt.
+   */
+  const IDENTITY_TABLES = /^(?:tx|ctx\.db|db)\s*\.\s*(?:update|delete)\s*\(\s*(?:account|session)\s*\)/;
+
   it('scopes every UPDATE and DELETE by orgId, not just by id', () => {
     const offenders: string[] = [];
 
@@ -296,6 +299,7 @@ describe('tenancy gate', () => {
         // is not what this test is about and would be a deliberate mass update.
         if (!/\.where\s*\(/.test(stmt)) continue;
         if (/orgId/.test(stmt)) continue;
+        if (IDENTITY_TABLES.test(stmt)) continue;
 
         const line = source.slice(0, start).split('\n').length;
         offenders.push(`${file}:${line} (${m[1]})`);

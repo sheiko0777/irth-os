@@ -1,7 +1,8 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getTranslations } from "next-intl/server";
 import { InviteForm } from "./InviteForm";
-import { MemberRoleSelect } from "./MemberRoleSelect";
+import { MemberActions } from "./MemberActions";
+import { CreateAccountForm } from "./CreateAccountForm";
 import { RemoveMemberButton } from "./RemoveMemberButton";
 import { PendingInvitesList } from "./PendingInvitesList";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -13,7 +14,7 @@ export default async function MembersPage() {
   const t = await getTranslations("settings");
 
   const caller = await serverCaller();
-  const res = await caller.members.list();
+  const [res, me] = await Promise.all([caller.members.list(), caller.me.get()]);
   const members = res.data;
 
   return (
@@ -21,7 +22,7 @@ export default async function MembersPage() {
       <h1 className="text-3xl font-bold tracking-tight">{t("members")}</h1>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
+        <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>الأعضاء الحاليين</CardTitle>
           </CardHeader>
@@ -30,7 +31,7 @@ export default async function MembersPage() {
               {members.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between gap-3 border-b border-[var(--rim1)] pb-2"
+                  className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--rim1)] pb-2"
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span
@@ -45,15 +46,29 @@ export default async function MembersPage() {
                       <p className="truncate text-sm text-[var(--t1)]">
                         {member.name ?? member.email ?? 'مستخدم غير معروف'}
                       </p>
-                      {member.email && (
+                      {/* A directly created account has a username and a
+                          placeholder email that never delivers — show the
+                          username instead. */}
+                      {(member.username || member.email) && (
                         <p className="truncate text-xs text-[var(--t3)]" dir="ltr">
-                          {member.email}
+                          {member.username ?? member.email}
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <MemberRoleSelect memberId={member.id} role={member.role} />
+                    <MemberActions
+                      isSelf={member.userId === me.data.userId}
+                      member={{
+                        id: member.id,
+                        name: member.name ?? member.username ?? member.email ?? 'عضو',
+                        accessRoleId: member.accessRoleId,
+                        roleName: member.roleName,
+                        systemKey: member.systemKey,
+                        status: member.status,
+                        mustChangePassword: member.mustChangePassword,
+                      }}
+                    />
                     <RemoveMemberButton memberId={member.id} role={member.role} />
                   </div>
                 </div>
@@ -68,6 +83,17 @@ export default async function MembersPage() {
             </div>
           </CardContent>
         </Card>
+
+        <PermissionGate resource="members" action="create">
+          <Card>
+            <CardHeader>
+              <CardTitle>إنشاء حساب مباشر</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CreateAccountForm />
+            </CardContent>
+          </Card>
+        </PermissionGate>
 
         <PermissionGate resource="members" action="invite">
           <Card>

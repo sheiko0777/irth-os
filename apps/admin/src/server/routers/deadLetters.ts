@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { outboxDeadLetters, outboxEvents } from '@irth/db';
 import { eq, and, desc } from 'drizzle-orm';
 
@@ -10,13 +10,14 @@ import { eq, and, desc } from 'drizzle-orm';
  * schema from the start for exactly this — this is what finally reads and
  * writes them.
  *
- * `adminProcedure`, matching the bar this codebase already sets for other
- * manual-retry ops actions (eta.ts's submit/cancel/submitPending) — a
- * replay can re-trigger a real external side effect (send an email, push
- * to Shopify), the same reason those are gated past `protectedProcedure`.
+ * `integrations.recover` (owner and admin by default), matching the bar this
+ * codebase already sets for other manual-retry ops actions (eta.ts's
+ * submit/cancel/submitPending) — a replay can re-trigger a real external side
+ * effect (send an email, push to Shopify), the same reason those are not
+ * open to every role.
  */
 export const deadLettersRouter = router({
-    list: adminProcedure
+    list: requirePermission('integrations', 'recover')
         .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }).optional())
         .query(async ({ ctx, input }) => {
             const rows = await ctx.db
@@ -28,7 +29,7 @@ export const deadLettersRouter = router({
             return { data: rows, error: null, meta: null };
         }),
 
-    replay: adminProcedure
+    replay: requirePermission('integrations', 'recover')
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             const [letter] = await ctx.db

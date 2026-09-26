@@ -1,6 +1,6 @@
-import { router, protectedProcedure } from '../trpc';
-import { orders, products, inventoryItems } from '@irth/db';
-import { eq, and, sql, count, sum, gte, lte } from 'drizzle-orm';
+import { router, requirePermission } from '../trpc';
+import { orders, products, inventoryItems, salesTotals, dailyNetSales } from '@irth/db';
+import { eq, and, sql, count, gte } from 'drizzle-orm';
 import { z } from 'zod';
 import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
@@ -13,9 +13,12 @@ export function daysAgoIso(days: number): string {
 
 export const analyticsRouter = router({
   /**
-   * Daily revenue (delivered orders) for last N days.
+   * Daily net sales (from the ledger) and delivered-order counts for the last
+   * N days. Revenue is the ledger's net sales (4010 less 4020, ex-VAT) dated
+   * at recognition — not a sum over orders (CLAUDE.md rule 2). The order
+   * count is a count of intent and stays on `orders`.
    */
-  revenue: protectedProcedure
+  revenue: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       // Bound as an ISO string, not a Date. The query builder converts Date
@@ -26,24 +29,27 @@ export const analyticsRouter = router({
       // everyone, always.
       const sinceIso = daysAgoIso(input.days);
 
-      const rows = await ctx.db.execute(sql`
-        SELECT
-          date_trunc('day', created_at)::date AS day,
-          COUNT(*)::int                        AS orders,
-          COALESCE(SUM(total_amount_minor), 0)::numeric AS revenue
-        FROM orders
-        WHERE org_id = ${ctx.orgId}
-          AND created_at >= ${sinceIso}
-          AND status = 'delivered'
-        GROUP BY 1
-        ORDER BY 1 ASC
-      `);
+      const [rows, netByDay] = await Promise.all([
+        ctx.withOrg((tx) => tx.execute(sql`
+          SELECT
+            (date_trunc('day', created_at)::date)::text AS day,
+            COUNT(*)::int                               AS orders
+          FROM orders
+          WHERE org_id = ${ctx.orgId}
+            AND created_at >= ${sinceIso}
+            AND status = 'delivered'
+          GROUP BY 1
+        `)),
+        ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: new Date(sinceIso) })),
+      ]);
 
-      type Row = { day: string; orders: number; revenue: string };
-      const data = (rows as unknown as Row[]).map((r) => ({
-        day: r.day,
-        orders: Number(r.orders),
-        revenue: wholeMajorUnits(r.revenue),
+      type Row = { day: string; orders: number };
+      const ordersByDay = new Map((rows as unknown as Row[]).map((r) => [r.day, Number(r.orders)]));
+      const days = [...new Set([...ordersByDay.keys(), ...netByDay.keys()])].sort();
+      const data = days.map((day) => ({
+        day,
+        orders: ordersByDay.get(day) ?? 0,
+        revenue: wholeMajorUnits(netByDay.get(day) ?? 0n),
       }));
 
       return { data, error: null, meta: null };
@@ -52,10 +58,11 @@ export const analyticsRouter = router({
   /**
    * Top 10 products by delivered revenue.
    */
-  topProducts: protectedProcedure
+  topProducts: requirePermission('analytics', 'view')
     .input(z.object({ limit: z.number().min(5).max(20).default(10) }))
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.db.execute(sql`
+      // Inside withOrg so a brand-scoped member (PR-1e) only ranks their brands.
+      const rows = await ctx.withOrg((tx) => tx.execute(sql`
         SELECT
           p.name                               AS product,
           SUM(oi.quantity)::int                AS units,
@@ -69,7 +76,7 @@ export const analyticsRouter = router({
         GROUP BY p.id, p.name
         ORDER BY revenue DESC
         LIMIT ${input.limit}
-      `);
+      `));
 
       type Row = { product: string; units: number; revenue: string };
       const data = (rows as unknown as Row[]).map((r) => ({
@@ -85,13 +92,13 @@ export const analyticsRouter = router({
    * Inventory turnover: for each variant, outbound movements / current stock.
    * Returns low-stock items and overall turnover ratio.
    */
-  inventoryTurnover: protectedProcedure
+  inventoryTurnover: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       // Same raw-execute Date binding trap as `revenue` above.
       const sinceIso = daysAgoIso(input.days);
 
-      const rows = await ctx.db.execute(sql`
+      const rows = await ctx.withOrg((tx) => tx.execute(sql`
         SELECT
           pv.name                                         AS variant,
           p.name                                          AS product,
@@ -107,7 +114,7 @@ export const analyticsRouter = router({
         GROUP BY pv.name, p.name, ii.quantity, ii.reorder_point
         ORDER BY ii.quantity ASC
         LIMIT 20
-      `);
+      `));
 
       type Row = {
         variant: string;
@@ -133,7 +140,7 @@ export const analyticsRouter = router({
   /**
    * KPI summary cards — fast parallel queries.
    */
-  kpiSummary: protectedProcedure.query(async ({ ctx }) => {
+  kpiSummary: requirePermission('analytics', 'view').query(async ({ ctx }) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
@@ -152,43 +159,30 @@ export const analyticsRouter = router({
       totalOrders,
       lowStockCount,
     ] = await Promise.all([
-      ctx.db
+      ctx.withOrg((tx) => tx
         .select({ count: count() })
         .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart))),
-      ctx.db
-        .select({ total: sum(orders.totalAmountMinor) })
-        .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart), eq(orders.status, 'delivered'))),
-      ctx.db
-        .select({ total: sum(orders.totalAmountMinor) })
-        .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, thisMonthStart), eq(orders.status, 'delivered'))),
-      ctx.db
-        .select({ total: sum(orders.totalAmountMinor) })
-        .from(orders)
-        .where(and(
-          eq(orders.orgId, ctx.orgId),
-          gte(orders.createdAt, lastMonthStart),
-          lte(orders.createdAt, thisMonthStart),
-          eq(orders.status, 'delivered')
-        )),
-      ctx.db
+        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart)))),
+      // Net sales from the ledger (CLAUDE.md rule 2); see `revenue` above.
+      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: todayStart })),
+      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: thisMonthStart })),
+      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: lastMonthStart, to: thisMonthStart })),
+      ctx.withOrg((tx) => tx
         .select({ count: count() })
         .from(orders)
-        .where(eq(orders.orgId, ctx.orgId)),
-      ctx.db
+        .where(eq(orders.orgId, ctx.orgId))),
+      ctx.withOrg((tx) => tx
         .select({ count: count() })
         .from(inventoryItems)
         .where(and(
           eq(inventoryItems.orgId, ctx.orgId),
           sql`${inventoryItems.quantity} <= ${inventoryItems.reorderPoint}`
-        )),
+        ))),
     ]);
 
-    const todayRevMinor = BigInt((todayRevenue[0]?.total as string | null) ?? '0');
-    const monthRevMinor = BigInt((monthRevenue[0]?.total as string | null) ?? '0');
-    const lastRevMinor = BigInt((lastMonthRevenue[0]?.total as string | null) ?? '0');
+    const todayRevMinor = todayRevenue.netSalesMinor;
+    const monthRevMinor = monthRevenue.netSalesMinor;
+    const lastRevMinor = lastMonthRevenue.netSalesMinor;
     const revenueGrowth = percentDelta(monthRevMinor, lastRevMinor);
 
     return {
@@ -218,7 +212,7 @@ export const analyticsRouter = router({
    * with no Shopify connection or no traffic yet — this is a normal,
    * expected state for most orgs today, not a failure.
    */
-  storefrontOverview: protectedProcedure
+  storefrontOverview: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
@@ -251,7 +245,7 @@ export const analyticsRouter = router({
    * event/session tables (not the daily rollup, which doesn't break these
    * dimensions out) so it stays useful even on the rollup's very first day.
    */
-  storefrontSources: protectedProcedure
+  storefrontSources: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
@@ -273,7 +267,7 @@ export const analyticsRouter = router({
       return { data, error: null, meta: null };
     }),
 
-  storefrontTopPages: protectedProcedure
+  storefrontTopPages: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(7).max(90).default(30), limit: z.number().min(5).max(30).default(10) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
@@ -297,7 +291,7 @@ export const analyticsRouter = router({
    * Real-time & Abandoned Cart Monitor.
    * Analyzes cart_viewed, product_added_to_cart, checkout_started, and checkout_completed events.
    */
-  cartMonitor: protectedProcedure
+  cartMonitor: requirePermission('analytics', 'view')
     .input(z.object({
       days: z.number().min(1).max(90).default(7),
       status: z.enum(['all', 'abandoned', 'active', 'converted']).default('all'),
@@ -505,7 +499,7 @@ export const analyticsRouter = router({
    * 5-Stage Customer Conversion Funnel:
    * Sessions -> Product Viewed -> Cart Added -> Checkout Started -> Orders Completed
    */
-  customerFunnel: protectedProcedure
+  customerFunnel: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(1).max(90).default(30) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
@@ -577,7 +571,7 @@ export const analyticsRouter = router({
   /**
    * Live customer activity stream (last N storefront events).
    */
-  customerActivityStream: protectedProcedure
+  customerActivityStream: requirePermission('analytics', 'view')
     .input(z.object({ limit: z.number().min(10).max(100).default(30) }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.withOrg(async (tx) => tx.execute(sql`
@@ -642,7 +636,7 @@ export const analyticsRouter = router({
   /**
    * Top products abandoned in carts without purchase.
    */
-  abandonedProducts: protectedProcedure
+  abandonedProducts: requirePermission('analytics', 'view')
     .input(z.object({ days: z.number().min(1).max(90).default(30), limit: z.number().min(5).max(30).default(10) }))
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);

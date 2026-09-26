@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { twoFactor } from 'better-auth/plugins';
+import { twoFactor, username } from 'better-auth/plugins';
 import { db } from '@irth/db';
 import * as authSchema from '@irth/db/src/schema/auth';
 import { resolveAppBaseUrl } from './appUrl';
@@ -82,7 +82,33 @@ function createAuth() {
         // The org name shown in the authenticator app entry.
         issuer: 'IRTH OS',
       }),
+      /**
+       * Sign-in by username (PR-1d): accounts the owner creates directly —
+       * reps and suppliers, often without email — sign in with a username,
+       * usually their mobile number. Columns from migration 0075. The 2FA
+       * hook covers /sign-in/username as it does /sign-in/email.
+       */
+      username(),
     ],
+    rateLimit: {
+      customRules: {
+        /**
+         * Session reads are not rate-limited. verifySession (lib/auth.ts)
+         * checks every page request (middleware), every render and every
+         * tRPC call by fetching this endpoint from the server, and that
+         * server-to-server fetch carries no client IP — so Better Auth puts
+         * all of them, for every user, in ONE shared bucket (100 per 10 s
+         * by default). A few busy screens at once and everyone's session
+         * "expires" with a 401. Found by the rep e2e flow (PR-2a), which
+         * made that many calls in one burst.
+         *
+         * A session read needs a valid, high-entropy session token, so the
+         * limit protected nothing here. Sign-in, sign-up and password
+         * endpoints keep Better Auth's strict limits.
+         */
+        '/get-session': false,
+      },
+    },
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: resolveAppBaseUrl(),
   });

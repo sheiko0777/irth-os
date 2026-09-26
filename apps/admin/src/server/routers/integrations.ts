@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { randomBytes, createHash } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure, adminProcedure, requirePermission } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { outboxEvents, SHOPIFY_API_VERSION, shopifyConnections, shopifyOAuthStates, withAudit } from '@irth/db';
 import { desc, eq, and } from 'drizzle-orm';
 
@@ -31,7 +31,7 @@ function normalizeShopDomain(value: string): string | null {
  * cross-origin concern doesn't apply there.
  */
 export const integrationsRouter = router({
-    outboxList: protectedProcedure
+    outboxList: requirePermission('integrations', 'view')
         .input(z.object({ showProcessed: z.boolean().default(false) }))
         .query(async ({ ctx, input }) => {
             const baseCondition = eq(outboxEvents.orgId, ctx.orgId);
@@ -49,7 +49,7 @@ export const integrationsRouter = router({
             return { data: events, error: null, meta: null };
         }),
 
-    outboxRetry: adminProcedure
+    outboxRetry: requirePermission('integrations', 'recover')
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             const event = await ctx.withOrg((tx) => withAudit(
@@ -86,7 +86,7 @@ export const integrationsRouter = router({
             return { data: event, error: null, meta: null };
         }),
 
-    shopifyStatus: protectedProcedure.query(async ({ ctx }) => {
+    shopifyStatus: requirePermission('integrations', 'view').query(async ({ ctx }) => {
         const [connection] = await ctx.db
             .select({
                 shopDomain: shopifyConnections.shopDomain,
@@ -150,7 +150,7 @@ export const integrationsRouter = router({
      * already duplicated between apps/api's Cloudflare secrets and this
      * app's Vercel env) — decryption happens wherever the ciphertext is read.
      */
-    shopifyLocations: protectedProcedure.query(async ({ ctx }) => {
+    shopifyLocations: requirePermission('integrations', 'view').query(async ({ ctx }) => {
         const [connection] = await ctx.db
             .select({
                 shopDomain: shopifyConnections.shopDomain,
@@ -203,7 +203,7 @@ export const integrationsRouter = router({
             return { data: connection, error: null, meta: null };
         }),
 
-    shopifyPixelSnippet: protectedProcedure.query(async ({ ctx }) => {
+    shopifyPixelSnippet: requirePermission('integrations', 'view').query(async ({ ctx }) => {
         const [connection] = await ctx.withOrg(async (tx) => tx
             .select({
                 shopDomain: shopifyConnections.shopDomain,

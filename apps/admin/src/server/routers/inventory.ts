@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { router, requirePermission } from '../trpc';
+import { brandScope } from '../scopes';
 import { inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
 import { eq, and, desc, asc, lte, gt, sql, count, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -27,23 +28,24 @@ export const inventoryRouter = router({
         : input?.stock === 'ok' ? gt(inventoryItems.quantity, inventoryItems.reorderPoint)
         : undefined;
 
-      const base = ctx.db
-        .select({
-          item: inventoryItems,
-          variant: productVariants,
-          product: products,
-        })
-        .from(inventoryItems)
-        .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
-        .innerJoin(products, eq(productVariants.productId, products.id));
+      // Brand scope (PR-1e) in the WHERE; 0076's policies hold it too.
+      const inScope = and(scope, brandScope(ctx, products.brandId));
 
       // Counts always span the whole org, never the active filter — a tab that
       // showed its own filtered count would read zero on every other tab.
-      const [items, tally] = await Promise.all([
-        base
-          .where(stockFilter ? and(scope, stockFilter) : scope)
+      const [items, tally] = await ctx.withOrg((tx) => Promise.all([
+        tx
+          .select({
+            item: inventoryItems,
+            variant: productVariants,
+            product: products,
+          })
+          .from(inventoryItems)
+          .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
+          .innerJoin(products, eq(productVariants.productId, products.id))
+          .where(stockFilter ? and(inScope, stockFilter) : inScope)
           .orderBy(asc(inventoryItems.quantity)),
-        ctx.db
+        tx
           .select({
             out: sql<number>`count(*) filter (where ${inventoryItems.quantity} <= 0)`.mapWith(Number),
             low: sql<number>`count(*) filter (where ${inventoryItems.quantity} > 0 and ${inventoryItems.quantity} <= ${inventoryItems.reorderPoint})`.mapWith(Number),
@@ -51,8 +53,10 @@ export const inventoryRouter = router({
             all: count(),
           })
           .from(inventoryItems)
-          .where(scope),
-      ]);
+          .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
+          .innerJoin(products, eq(productVariants.productId, products.id))
+          .where(inScope),
+      ]));
 
       return {
         data: items,
@@ -65,7 +69,7 @@ export const inventoryRouter = router({
 
   alerts: requirePermission('inventory', 'view')
     .query(async ({ ctx }) => {
-      const items = await ctx.db
+      const items = await ctx.withOrg((tx) => tx
         .select({
           item: inventoryItems,
           variant: productVariants,
@@ -77,10 +81,11 @@ export const inventoryRouter = router({
         .where(
           and(
             eq(inventoryItems.orgId, ctx.orgId),
-            lte(inventoryItems.quantity, inventoryItems.reorderPoint)
+            lte(inventoryItems.quantity, inventoryItems.reorderPoint),
+            brandScope(ctx, products.brandId),
           )
         )
-        .orderBy(asc(inventoryItems.quantity));
+        .orderBy(asc(inventoryItems.quantity)));
 
       return { data: items, error: null, meta: null };
     }),
@@ -91,17 +96,32 @@ export const inventoryRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const parsedInput = z.object({ itemId: z.string().uuid() }).parse(input);
-      const movements = await ctx.db
-        .select()
-        .from(inventoryMovements)
-        .where(
-          and(
-            eq(inventoryMovements.orgId, ctx.orgId),
-            eq(inventoryMovements.itemId, parsedInput.itemId)
+      // Movements carry no brand of their own: they are visible exactly when
+      // their stock row is (PR-1e), so the item's visibility is checked first.
+      const movements = await ctx.withOrg(async (tx) => {
+        const [item] = await tx
+          .select({ id: inventoryItems.id })
+          .from(inventoryItems)
+          .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
+          .innerJoin(products, eq(productVariants.productId, products.id))
+          .where(and(
+            eq(inventoryItems.orgId, ctx.orgId),
+            eq(inventoryItems.id, parsedInput.itemId),
+            brandScope(ctx, products.brandId),
+          ));
+        if (!item) return [];
+        return tx
+          .select()
+          .from(inventoryMovements)
+          .where(
+            and(
+              eq(inventoryMovements.orgId, ctx.orgId),
+              eq(inventoryMovements.itemId, parsedInput.itemId)
+            )
           )
-        )
-        .orderBy(desc(inventoryMovements.createdAt))
-        .limit(50);
+          .orderBy(desc(inventoryMovements.createdAt))
+          .limit(50);
+      });
 
       return { data: movements, error: null, meta: null };
     }),

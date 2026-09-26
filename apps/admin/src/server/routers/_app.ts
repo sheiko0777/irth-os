@@ -1,6 +1,10 @@
 import { router } from '../trpc';
 import { dashboardRouter } from './dashboard';
 import { ordersRouter } from './orders';
+import { deliveriesRouter } from './deliveries';
+import { repCashRouter } from './repCash';
+import { salesRouter } from './sales';
+import { portalRouter } from './portal';
 import { productsRouter } from './products';
 import { categoriesRouter } from './categories';
 import { inventoryRouter } from './inventory';
@@ -27,12 +31,18 @@ import { platformAdminRouter } from './platformAdmin';
 import { meRouter } from './me';
 import { deadLettersRouter } from './deadLetters';
 import { auditRouter } from './audit';
+import { rolesRouter } from './roles';
+import { accountsRouter } from './accounts';
 
 export const appRouter = router({
     audit: auditRouter,
     me: meRouter,
     dashboard: dashboardRouter,
     orders: ordersRouter,
+    deliveries: deliveriesRouter,
+    repCash: repCashRouter,
+    sales: salesRouter,
+    portal: portalRouter,
     products: productsRouter,
     categories: categoriesRouter,
     inventory: inventoryRouter,
@@ -53,6 +63,8 @@ export const appRouter = router({
     shipping: shippingRouter,
     campaigns: campaignsRouter,
     members: membersRouter,
+    roles: rolesRouter,
+    accounts: accountsRouter,
     giftCards: giftCardsRouter,
     customerSegments: customerSegmentsRouter,
     platformAdmin: platformAdminRouter,

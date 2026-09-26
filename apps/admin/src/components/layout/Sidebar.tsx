@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { AlertPanel } from '@/components/layout/AlertPanel';
 import { OrgSwitcher } from '@/components/layout/OrgSwitcher';
 import { LogOut, Shield, X } from 'lucide-react';
-import { buildNavGroups } from '@/lib/navigation';
+import { useVisibleNavGroups } from '@/lib/permissions';
 
 /** Collapsed-rail width. Wide enough for a centered 15px icon with breathing room. */
 const RAIL = 'w-16';
@@ -45,7 +45,7 @@ export function Sidebar({ locale }: { locale: string }) {
   }, [pathname]);
 
   // Single source shared with the command palette — see lib/navigation.ts.
-  const groups = buildNavGroups(locale);
+  const groups = useVisibleNavGroups(locale);
 
   const handleLogout = async () => {
     await signOut();

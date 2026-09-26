@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/cloudflare';
 import { db } from '@irth/db';
 import { outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
@@ -8,6 +9,7 @@ import { renderCampaignEmail, renderOrgInviteEmail, renderOrderConfirmedEmail } 
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
 import { envVar } from '../utils/env';
+import { handleShopifyOrderReimport } from './shopifyOrderReimport';
 
 interface OrderPayload {
     customerPhone: string;
@@ -433,6 +435,8 @@ async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<v
         case 'order.confirmed':
         case 'order.shipped':
             return handleOrderNotification(database, event);
+        case 'shopify.order.reimport':
+            return handleShopifyOrderReimport(database, event);
         default:
             throw new Error(`Unknown outbox event type: ${event.eventType}`);
     }
@@ -474,6 +478,14 @@ async function recordEventFailure(database: typeof db, event: OutboxEvent, error
     const permanentlyUnrecoverable = error instanceof SyntaxError;
 
     if (permanentlyUnrecoverable || attemptsAfterThis >= OUTBOX_MAX_ATTEMPTS) {
+        // A dead letter is a customer message never sent, an ETA invoice
+        // never filed or a blocked order never re-imported. It must reach a
+        // person, not just sit in a table. Ids only — the payload can hold
+        // customer contact details.
+        Sentry.captureException(error, {
+            tags: { outbox_event_type: event.eventType },
+            extra: { outboxEventId: event.id, orgId: event.orgId, attempts: attemptsAfterThis },
+        });
         await deadLetterEvent(database, event, errorMessage, attemptsAfterThis);
         // Domain-specific failure marking, orthogonal to the generic
         // dead-letter record above: this is what keeps the campaign's own

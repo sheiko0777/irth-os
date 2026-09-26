@@ -5,6 +5,7 @@ import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { BulkOrderActions } from '@/components/BulkOrderActions';
+import { RepName } from '@/components/orders/AssignRep';
 import { ExportButton } from '@/components/ExportButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PaginationNav } from '@/components/ui/PaginationNav';
@@ -15,8 +16,12 @@ export interface OrderRow {
     id: string;
     orderNumber: string;
     status: string;
+    /** Imported with unmapped lines (0073) — no items, no stock moved yet. */
+    blocked?: boolean;
     totalAmountMinor: bigint;
     createdAt: string | Date;
+    /** The delivery rep this order is assigned to (PR-2a). */
+    assignedRepMemberId?: string | null;
 }
 
 interface Props {
@@ -78,13 +83,14 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                 <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.status')}</th>
                                 <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.totalAmount')}</th>
                                 <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.date')}</th>
+                                <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">المندوب</th>
                                 <th className="px-4 py-3 text-sm font-medium text-[var(--t2)]">{t('table.actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--rim1)]">
                             {orders.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="p-0">
+                                    <td colSpan={7} className="p-0">
                                         {/* "Nothing here" and "nothing matched"
                                             are different problems and need
                                             different next steps. */}
@@ -116,6 +122,11 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             <StatusBadge status={order.status} domain="order" />
+                                            {order.blocked && (
+                                                <span className="ms-2 rounded-full border border-[var(--warning)] px-2 py-0.5 text-xs text-[var(--warning)]">
+                                                    {t('detail.blocked.badge')}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t1)]" dir="ltr">
                                             {formatMoney(fromMinor(order.totalAmountMinor))}
@@ -124,6 +135,9 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                             {order.createdAt
                                                 ? formatDate(order.createdAt)
                                                 : '—'}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-[var(--t2)]">
+                                            <RepName memberId={order.assignedRepMemberId ?? null} />
                                         </td>
                                         <td className="px-4 py-3 text-sm">
                                             <div className="flex gap-2 justify-end">

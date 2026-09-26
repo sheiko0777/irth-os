@@ -35,6 +35,65 @@ jobs:
       - name: Run migration check
         run: node packages/db/scripts/check-migrations.mjs
 
+  # Browser smoke test: a production build of the admin against a throwaway
+  # Postgres (a service container created and destroyed with this job, never a
+  # shared or production database), every migration applied, a real login.
+  # It walks the screens an operator uses on day one — dashboard, orders, a
+  # blocked Shopify order and its resolution — so a page that fails to render
+  # turns CI red instead of being found in production. See
+  # apps/admin/playwright.config.ts and apps/admin/e2e/.
+  e2e:
+    runs-on: ubuntu-latest
+    needs: test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Trust auth: the container is reachable only from this job and is
+          # destroyed with it, so there is no password to hardcode here.
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: irth_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres@localhost:5432/irth_e2e
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+    steps:
+      - uses: actions/checkout@v4
+      # A fresh random signing secret per run; nothing to keep in the repo.
+      - name: Generate a throwaway auth secret
+        run: echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Apply every migration to the throwaway database
+        run: pnpm --filter @irth/db db:migrate
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @irth/admin exec playwright install --with-deps chromium
+      - name: Production build of the admin
+        run: pnpm --filter @irth/admin build
+      - name: Playwright smoke
+        run: pnpm --filter @irth/admin test:e2e
+      - name: Keep the report when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/admin/playwright-report
+            apps/admin/test-results
+          retention-days: 7
+
   # Runs against a real Postgres branch. The unit suite above mocks `db`
   # wholesale, so it cannot exercise a constraint, a trigger, or an RLS policy —
   # every rule the database is supposed to enforce is invisible to it.

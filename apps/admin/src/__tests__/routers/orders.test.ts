@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getTableName, type SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { TRPCError } from '@trpc/server';
-import { outboxEvents } from '@irth/db';
+import { outboxEvents, effectiveAccess } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { ordersRouter } from '@/server/routers/orders';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
@@ -64,6 +64,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 
@@ -76,7 +77,7 @@ function chainOf(value: unknown) {
   return chain;
 }
 
-/** list fires three queries in Promise.all: rows, total, then the status tally. */
+/** list fires four queries in Promise.all: rows, total, the status tally, then the blocked-import count. */
 function queueSelects(results: unknown[]) {
   let i = 0;
   mockDb.select = vi.fn(() => chainOf(results[i++] ?? []));
@@ -90,11 +91,12 @@ describe('orders.list', () => {
   const caller = ordersRouter.createCaller(ctx('owner'));
 
   it('yields an empty page with an empty status tally', async () => {
-    queueSelects([[], [{ count: 0 }], []]);
+    queueSelects([[], [{ count: 0 }], [], [{ count: 0 }]]);
     const res = await caller.list({ page: 1, pageSize: 50 });
     expect(res.data).toEqual([]);
     expect(res.meta.total).toBe(0);
     expect(res.meta.statusCounts).toEqual([]);
+    expect(res.meta.blockedCount).toBe(0);
   });
 
   it('reports counts for every status while filtered to one', async () => {
@@ -109,11 +111,14 @@ describe('orders.list', () => {
         { status: 'delivered', count: 40 },
         { status: 'cancelled', count: 3 },
       ],
+      [{ count: 2 }],
     ]);
     const res = await caller.list({ page: 1, pageSize: 50, status: 'pending' });
     expect(res.meta.total).toBe(12);
     expect(res.meta.statusCounts).toHaveLength(3);
     expect(res.meta.statusCounts.find((s) => s.status === 'delivered')?.count).toBe(40);
+    // Org-wide: a blocked import is surfaced whatever tab is open.
+    expect(res.meta.blockedCount).toBe(2);
   });
 
   it('rejects a status outside the schema enum', async () => {

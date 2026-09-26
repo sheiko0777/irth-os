@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { requirePermission, router } from '../trpc';
 import { eq, and, desc } from 'drizzle-orm';
-import { orgMembers, orgInvites, organizations, user, withAudit, canAssignRole, emitOutboxEvent, generateInviteOtp } from '@irth/db';
+import { pgCode } from '../permissionInput';
+import { accessRoles, orgMembers, orgInvites, organizations, user, withAudit, canAssignRole, emitOutboxEvent, generateInviteOtp } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -37,9 +38,17 @@ export const membersRouter = router({
         createdAt: orgMembers.createdAt,
         name: user.name,
         email: user.email,
+        username: user.username,
+        accessRoleId: orgMembers.accessRoleId,
+        roleName: accessRoles.name,
+        systemKey: accessRoles.systemKey,
+        principalKind: orgMembers.principalKind,
+        status: orgMembers.status,
+        mustChangePassword: orgMembers.mustChangePassword,
       })
       .from(orgMembers)
       .leftJoin(user, eq(user.id, orgMembers.userId))
+      .leftJoin(accessRoles, and(eq(accessRoles.id, orgMembers.accessRoleId), eq(accessRoles.orgId, orgMembers.orgId)))
       .where(eq(orgMembers.orgId, ctx.orgId)));
 
     return { data: members, error: null, meta: { orgId: ctx.orgId } };
@@ -55,7 +64,7 @@ export const membersRouter = router({
   // workers.dev origin no matter what CORS/credentials config the fetch
   // carries — cookies are domain-scoped, not something a client can forward
   // across origins. Same-origin tRPC, reusing the request's own session
-  // (already verified by `protectedProcedure`/`adminProcedure`), is the actual
+  // (already verified by `requirePermission`), is the actual
   // fix — not a CORS tweak.
   invite: requirePermission('members', 'invite')
     .input(z.object({
@@ -331,6 +340,8 @@ export const membersRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'You cannot remove yourself.' });
       }
 
+      // A rep with delivery or cash history cannot be removed (0077's
+      // foreign keys keep that history attached to them); suspend instead.
       const removed = await ctx.withOrg((tx) => withAudit(
         tx,
         async () => {
@@ -347,7 +358,12 @@ export const membersRouter = router({
           tableName: 'org_members',
           changes: { memberId: input.memberId, removedUserId: target.userId, role: target.role },
         },
-      ));
+      )).catch((err: unknown) => {
+        if (pgCode(err) === '23503') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'العضو ده عليه توصيلات أو عهدة مسجّلة. أوقف حسابه بدل ما تمسحه.' });
+        }
+        throw err;
+      });
 
       return { data: removed, error: null, meta: null };
     }),

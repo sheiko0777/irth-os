@@ -14,7 +14,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
-import { orders, organizations, withOrgContext } from '@irth/db';
+import { orders, organizations, withOrgContext, effectiveAccess } from '@irth/db';
 import { ordersRouter } from '@/server/routers/orders';
 import type { Context } from '@/server/trpc';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
@@ -56,7 +56,7 @@ describe('tenant isolation', () => {
   function callerFor(orgId: string) {
     return ordersRouter.createCaller({
       db: testDb,
-      orgId, userId: 'integration-user', role: 'owner',
+      orgId, userId: 'integration-user', role: 'owner', access: effectiveAccess({ systemKey: 'owner' }),
       session: { user: { id: 'integration-user', email: 'integration@example.com' } },
       withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) =>
         withOrgContext(testDb, orgId, fn),

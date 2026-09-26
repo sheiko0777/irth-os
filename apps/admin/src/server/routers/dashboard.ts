@@ -1,6 +1,6 @@
-import { router, protectedProcedure } from '../trpc';
-import { orders, products, inventoryItems, orderReturns } from '@irth/db';
-import { eq, and, desc, sql, count, sum, gte, lt, or, inArray, lte as lteOp } from 'drizzle-orm';
+import { router, requirePermission } from '../trpc';
+import { orders, products, inventoryItems, orderReturns, salesTotals, dailyNetSales } from '@irth/db';
+import { eq, and, desc, sql, count, gte, lt, or, inArray, lte as lteOp } from 'drizzle-orm';
 import { fromMinor } from '@irth/domain';
 import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
 
@@ -11,12 +11,9 @@ import { wholeMajorUnits, percentDelta } from '../lib/moneyDisplay';
  * than a hunt through query predicates.
  */
 const LATE_ORDER_HOURS = 48;
-function bigintTotal(value: unknown): bigint {
-    return BigInt((value as string | null) ?? '0');
-}
 
 export const dashboardRouter = router({
-    getStats: protectedProcedure.query(async ({ ctx }) => {
+    getStats: requirePermission('dashboard', 'view').query(async ({ ctx }) => {
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
 
@@ -56,40 +53,31 @@ export const dashboardRouter = router({
             dailyRevenueQuery,
             pipelineQuery,
         ] = await Promise.all([
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay))),
-            ctx.db
-                .select({ total: sum(orders.totalAmountMinor) })
-                .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay), eq(orders.status, 'delivered'))),
-            ctx.db
+                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay)))),
+            // Revenue reads the ledger (CLAUDE.md rule 2), never orders: net
+            // sales ex-VAT, less returns, dated when the sale was recognised.
+            ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfDay })),
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), eq(orders.status, 'pending'))),
-            ctx.db
+                .where(and(eq(orders.orgId, ctx.orgId), eq(orders.status, 'pending')))),
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(products)
-                .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active'))),
-            ctx.db
+                .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active')))),
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
                 .where(and(
                     eq(orders.orgId, ctx.orgId),
                     gte(orders.createdAt, startOfYesterday),
                     lt(orders.createdAt, startOfDay),
-                )),
-            ctx.db
-                .select({ total: sum(orders.totalAmountMinor) })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, startOfYesterday),
-                    lt(orders.createdAt, startOfDay),
-                    eq(orders.status, 'delivered'),
-                )),
-            ctx.db
+                ))),
+            ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfYesterday, to: startOfDay })),
+            ctx.withOrg((tx) => tx
                 .select({
                     day: sql<string>`${dayBucket}::date::text`,
                     orderCount: count(),
@@ -97,39 +85,22 @@ export const dashboardRouter = router({
                 .from(orders)
                 .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, sparkFrom)))
                 .groupBy(dayBucket)
-                .orderBy(dayBucket),
-            // Revenue series filters to delivered, matching revenueToday. One
-            // shared query here silently summed every status, so the headline
-            // and its own trend line measured different things — caught by
-            // adversarial review.
-            ctx.db
-                .select({
-                    day: sql<string>`${dayBucket}::date::text`,
-                    revenue: sum(orders.totalAmountMinor),
-                })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, sparkFrom),
-                    eq(orders.status, 'delivered'),
-                ))
-                .groupBy(dayBucket)
-                .orderBy(dayBucket),
-            ctx.db
+                .orderBy(dayBucket)),
+            // Same source as revenueToday so the headline and its trend line
+            // measure the same thing.
+            ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: sparkFrom })),
+            ctx.withOrg((tx) => tx
                 .select({ status: orders.status, count: count() })
                 .from(orders)
                 .where(eq(orders.orgId, ctx.orgId))
-                .groupBy(orders.status),
+                .groupBy(orders.status)),
         ]);
 
         const ordersToday = ordersTodayQuery[0]?.count ?? 0;
         const ordersYesterday = ordersYesterdayQuery[0]?.count ?? 0;
 
-        // Drizzle's sum() over a bigint column returns a numeric STRING (and null
-        // when no rows matched). BigInt() keeps it exact; parseFloat would put
-        // revenue back on a float the moment it left the database.
-        const revenueTodayMinor = bigintTotal(revenueTodayQuery[0]?.total);
-        const revenueYesterdayMinor = bigintTotal(revenueYesterdayQuery[0]?.total);
+        const revenueTodayMinor = revenueTodayQuery.netSalesMinor;
+        const revenueYesterdayMinor = revenueYesterdayQuery.netSalesMinor;
 
         // Percent change against the same window a day earlier. Null rather than
         // a fabricated 0% or an Infinity when there is no prior value to divide by.
@@ -141,7 +112,7 @@ export const dashboardRouter = router({
         // The grouped queries only emit rows for days that actually traded, so
         // fill the gaps — a sparkline needs a point per day or it misreads the shape.
         const ordersByDay = new Map(dailyOrdersQuery.map((r) => [r.day, r.orderCount]));
-        const revenueByDay = new Map(dailyRevenueQuery.map((r) => [r.day, r.revenue]));
+        const revenueByDay = dailyRevenueQuery;
         const ordersSeries: number[] = [];
         const revenueSeries: number[] = [];
         for (let i = 0; i < 7; i++) {
@@ -149,7 +120,7 @@ export const dashboardRouter = router({
             d.setUTCDate(d.getUTCDate() + i);
             const key = d.toISOString().slice(0, 10);
             ordersSeries.push(ordersByDay.get(key) ?? 0);
-            revenueSeries.push(wholeMajorUnits(bigintTotal(revenueByDay.get(key))));
+            revenueSeries.push(wholeMajorUnits(revenueByDay.get(key) ?? 0n));
         }
 
         return {
@@ -178,25 +149,25 @@ export const dashboardRouter = router({
      * worklist. Bundling them would force the whole dashboard to refetch
      * whenever the alert counts refresh.
      */
-    getAlerts: protectedProcedure.query(async ({ ctx }) => {
+    getAlerts: requirePermission('dashboard', 'view').query(async ({ ctx }) => {
         const lateBefore = new Date(Date.now() - LATE_ORDER_HOURS * 60 * 60 * 1000);
 
         const [lateOrdersQuery, outOfStockQuery, pendingReturnsQuery] = await Promise.all([
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
                 .where(and(
                     eq(orders.orgId, ctx.orgId),
                     inArray(orders.status, ['pending', 'confirmed']),
                     lt(orders.createdAt, lateBefore),
-                )),
-            ctx.db
+                ))),
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(inventoryItems)
                 .where(and(
                     eq(inventoryItems.orgId, ctx.orgId),
                     lteOp(inventoryItems.quantity, 0),
-                )),
+                ))),
             ctx.db
                 .select({ count: count() })
                 .from(orderReturns)
@@ -217,8 +188,8 @@ export const dashboardRouter = router({
         };
     }),
 
-    getRecentOrders: protectedProcedure.query(async ({ ctx }) => {
-        const recentOrders = await ctx.db
+    getRecentOrders: requirePermission('dashboard', 'view').query(async ({ ctx }) => {
+        const recentOrders = await ctx.withOrg((tx) => tx
             .select({
                 id: orders.id,
                 orderNumber: orders.orderNumber,
@@ -229,7 +200,7 @@ export const dashboardRouter = router({
             .from(orders)
             .where(eq(orders.orgId, ctx.orgId))
             .orderBy(desc(orders.createdAt))
-            .limit(6);
+            .limit(6));
 
         return { data: recentOrders, error: null, meta: null };
     }),

@@ -3,7 +3,7 @@ import {
   Box, FolderOpen, Warehouse, ClipboardList, ShoppingBag, RotateCcw,
   DollarSign, PieChart, Tag, List, Megaphone, Gift,
   Truck, MapPin, FileText, Plug2,
-  Settings, UserCog, BrainCircuit, ShieldCheck,
+  Settings, UserCog, BrainCircuit, ShieldCheck, KeyRound, PackageCheck, Wallet, Briefcase,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -15,8 +15,71 @@ export type NavItem = {
    * keyboard layout is active; "orders" must find الطلبات without switching.
    */
   keywords?: string;
+  /**
+   * The "resource.action" a member needs to see this entry (PR-1e). Hiding
+   * it is UX only — the page and its procedures refuse on their own.
+   * Absent = everyone (the caller's own notifications, the assistant).
+   */
+  requires?: string;
 };
 export type NavGroup = { label: string; items: NavItem[] };
+
+/** Screen → permission, keyed by the path after the locale. */
+const REQUIRES: Record<string, string> = {
+  '': 'dashboard.view',
+  orders: 'orders.view',
+  customers: 'customers.view',
+  'customer-segments': 'customers.view',
+  products: 'products.view',
+  categories: 'categories.view',
+  inventory: 'inventory.view',
+  stocktaking: 'inventory.view',
+  purchasing: 'purchasing.view',
+  returns: 'returns.view',
+  finance: 'finance.view',
+  analytics: 'analytics.view',
+  coupons: 'coupons.view',
+  pricelists: 'pricelists.view',
+  campaigns: 'campaigns.view',
+  'gift-cards': 'giftCards.view',
+  courier: 'courier.view',
+  rep: 'deliveries.view',
+  sales: 'sales.view',
+  'rep-cash': 'repCash.view',
+  shipping: 'shipping.view',
+  eta: 'eta.view',
+  integrations: 'integrations.view',
+  settings: 'settings.view',
+  'settings/members': 'members.view',
+  'settings/roles': 'roles.view',
+  audit: 'audit.view',
+};
+
+function withRequirement(locale: string, item: NavItem): NavItem {
+  const path = item.href.slice(`/${locale}`.length).split('?')[0].replace(/^\//, '');
+  return { ...item, requires: REQUIRES[path] };
+}
+
+/**
+ * The permission a screen needs, from its URL — the deepest matching entry,
+ * so /settings/members needs members.view, not settings.view. Undefined for
+ * screens anyone may open.
+ */
+export function screenRequirement(locale: string, pathname: string): string | undefined {
+  const path = pathname.slice(`/${locale}`.length).replace(/^\//, '').replace(/\/$/, '');
+  if (path === '') return REQUIRES[''];
+  const match = Object.keys(REQUIRES)
+    .filter((k) => k !== '' && (path === k || path.startsWith(`${k}/`)))
+    .sort((a, b) => b.length - a.length)[0];
+  return match === undefined ? undefined : REQUIRES[match];
+}
+
+/** Only the entries this member may open; groups left empty are dropped. */
+export function filterNavGroups(groups: NavGroup[], allowed: (permission: string) => boolean): NavGroup[] {
+  return groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.requires || allowed(i.requires)) }))
+    .filter((g) => g.items.length > 0);
+}
 
 /**
  * The single source of navigation truth. Sidebar and CommandPalette both
@@ -24,13 +87,14 @@ export type NavGroup = { label: string; items: NavItem[] };
  * which is exactly how a palette and a nav drift apart one route at a time.
  */
 export function buildNavGroups(locale: string): NavGroup[] {
-  return [
+  const groups: NavGroup[] = [
     {
       label: 'عام',
       items: [
         { href: `/${locale}`, label: 'الرئيسية', icon: Home, keywords: 'home dashboard' },
         { href: `/${locale}/orders`, label: 'الطلبات', icon: ShoppingCart, keywords: 'orders' },
         { href: `/${locale}/customers`, label: 'العملاء', icon: Users, keywords: 'customers' },
+        { href: `/${locale}/sales`, label: 'مبيعاتي', icon: Briefcase, keywords: 'sales rep quotes مبيعات مندوب عروض أسعار' },
         { href: `/${locale}/customer-segments`, label: 'شرائح العملاء', icon: UsersRound, keywords: 'segments' },
         { href: `/${locale}/notifications`, label: 'الإشعارات', icon: Bell, keywords: 'notifications' },
         { href: `/${locale}/intelligence`, label: locale === 'ar' ? 'ذكاء إرث' : 'IRTH Intelligence', icon: BrainCircuit, keywords: 'ai assistant intelligence chatbot' },
@@ -62,6 +126,8 @@ export function buildNavGroups(locale: string): NavGroup[] {
     {
       label: 'العمليات',
       items: [
+        { href: `/${locale}/rep`, label: 'توصيلاتي', icon: PackageCheck, keywords: 'deliveries rep driver مندوب توصيل' },
+        { href: `/${locale}/rep-cash`, label: 'عهدة المناديب', icon: Wallet, keywords: 'rep cash custody cod عهدة مناديب' },
         { href: `/${locale}/courier`, label: 'الشحن والتسوية', icon: Truck, keywords: 'courier shipping cod' },
         { href: `/${locale}/shipping`, label: 'مناطق الشحن', icon: MapPin, keywords: 'zones rates' },
         { href: `/${locale}/eta`, label: 'الفواتير الإلكترونية', icon: FileText, keywords: 'eta invoices tax' },
@@ -73,8 +139,10 @@ export function buildNavGroups(locale: string): NavGroup[] {
       items: [
         { href: `/${locale}/settings`, label: 'الإعدادات', icon: Settings, keywords: 'settings' },
         { href: `/${locale}/settings/members`, label: 'الأعضاء', icon: UserCog, keywords: 'members team users' },
+        { href: `/${locale}/settings/roles`, label: 'الأدوار والصلاحيات', icon: KeyRound, keywords: 'roles permissions access أدوار صلاحيات' },
         { href: `/${locale}/audit`, label: 'سجلات الرقابة والنشاط', icon: ShieldCheck, keywords: 'audit logs activity history security رقابة سجلات حركات' },
       ],
     },
   ];
+  return groups.map((g) => ({ ...g, items: g.items.map((i) => withRequirement(locale, i)) }));
 }

@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
-import { auditLog, organizations, orgSettings, withOrgContext } from '@irth/db';
+import { auditLog, organizations, orgSettings, withOrgContext, effectiveAccess } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { SETTING_KEYS, SENSITIVE_KEYS } from '@/lib/settings';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
@@ -22,7 +22,7 @@ afterAll(closeTestDb);
 
 function caller() {
   return settingsRouter.createCaller({
-    db: testDb, orgId, userId: 'settings-test-user', role: 'admin',
+    db: testDb, orgId, userId: 'settings-test-user', role: 'admin', access: effectiveAccess({ systemKey: 'admin' }),
     session: { user: { id: 'settings-test-user', email: 'settings@test.com' } },
     withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
   } as unknown as Context);

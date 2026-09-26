@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { createDb, withOrgContext, type DbInstance, type DbTx } from '@irth/db';
+import { createDb, withOrgContext, transactionSettings, type DbInstance, type DbTx, type EffectiveAccess } from '@irth/db';
 
 /**
  * Database handle for the Worker, built from the request's `env` binding.
@@ -146,5 +146,8 @@ export function withOrg<T>(c: Context, fn: (tx: DbTx) => Promise<T>): Promise<T>
         'return 401 before reaching the database.',
     );
   }
-  return withOrgContext(getDb(), orgId, fn);
+  // The member's data scopes (PR-1e) and identity (PR-2a), when the request
+  // has a member.
+  const access = c.get('access') as EffectiveAccess | undefined;
+  return withOrgContext(getDb(), orgId, fn, access ? transactionSettings(access) : undefined);
 }

@@ -1,3 +1,4 @@
+import { effectiveAccess } from '@irth/db';
 import { EGP, zero } from '@irth/domain';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Context } from '@/server/trpc';
@@ -13,6 +14,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 
@@ -73,18 +75,20 @@ describe('dashboard router', () => {
   it('getStats: pads the sparkline to seven points when days have no orders', async () => {
     queueSelects([
       [{ count: 5 }],                       // ordersToday
-      [{ total: '90000' }],                 // revenueToday — minor units (900.00 EGP)
+      [{ code: '4010', amount: '90000' }],  // revenueToday — ledger net sales, minor units (900.00)
       [{ count: 2 }],                       // pendingOrders
       [{ count: 40 }],                      // activeProducts
       [{ count: 4 }],                       // ordersYesterday
-      [{ total: '60000' }],                 // revenueYesterday — minor units
+      [{ code: '4010', amount: '60000' }],  // revenueYesterday — ledger net sales, minor units
       [                                     // daily orders — only two of seven days traded
         { day: utcDayKey(-6), orderCount: 3 },
         { day: utcDayKey(0), orderCount: 5 },
       ],
-      [                                     // daily revenue — delivered only
-        { day: utcDayKey(-6), revenue: '30000' },
-        { day: utcDayKey(0), revenue: '90000' },
+      [                                     // daily net sales from the ledger; returns (4020) subtract, VAT (2030) is excluded
+        { day: utcDayKey(-6), code: '4010', amount: '30000' },
+        { day: utcDayKey(0), code: '4010', amount: '95000' },
+        { day: utcDayKey(0), code: '4020', amount: '-5000' },
+        { day: utcDayKey(0), code: '2030', amount: '13300' },
       ],
       [{ status: 'pending', count: 2 }],    // pipeline
     ]);
@@ -101,11 +105,11 @@ describe('dashboard router', () => {
   it('getStats: computes day-over-day deltas against the prior window', async () => {
     queueSelects([
       [{ count: 5 }],
-      [{ total: '90000' }],
+      [{ code: '4010', amount: '90000' }],
       [{ count: 0 }],
       [{ count: 0 }],
       [{ count: 4 }],      // 4 -> 5 is +25%
-      [{ total: '60000' }],  // 600 -> 900 is +50%
+      [{ code: '4010', amount: '60000' }],  // 600 -> 900 is +50%
       [],
       [],
       [],
@@ -119,11 +123,11 @@ describe('dashboard router', () => {
   it('getStats: reports a fall as a negative delta', async () => {
     queueSelects([
       [{ count: 3 }],
-      [{ total: '250' }],
+      [{ code: '4010', amount: '250' }],
       [{ count: 0 }],
       [{ count: 0 }],
       [{ count: 6 }],      // 6 -> 3 is -50%
-      [{ total: '500' }],  // 500 -> 250 is -50%
+      [{ code: '4010', amount: '500' }],  // 500 -> 250 is -50%
       [],
       [],
       [],

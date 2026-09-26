@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { protectedProcedure, router, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { eq } from 'drizzle-orm';
 import { orgSettings, withAudit } from '@irth/db';
 import { DEFAULT_SETTINGS, SENSITIVE_KEYS, settingInputSchema } from '../../lib/settings';
@@ -49,7 +49,7 @@ export function decryptSettingValue(value: string, orgId: string, key: string): 
 }
 
 export const settingsRouter = router({
-  getAll: protectedProcedure.query(async ({ ctx }) => {
+  getAll: requirePermission('settings', 'view').query(async ({ ctx }) => {
     const dbSettings = await ctx.withOrg(tx => tx
       .select()
       .from(orgSettings)
@@ -72,7 +72,7 @@ export const settingsRouter = router({
     return { data: settingsMap, error: null, meta: null };
   }),
 
-  set: adminProcedure
+  set: requirePermission('settings', 'write')
     .input(settingInputSchema)
     .mutation(async ({ ctx, input }) => {
       if (isSensitive(input.key) && input.value === MASK_STRING) {
@@ -101,7 +101,7 @@ export const settingsRouter = router({
       return { data: { success: true }, error: null, meta: null };
     }),
 
-  setMany: adminProcedure
+  setMany: requirePermission('settings', 'write')
     .input(settingInputSchema.array())
     .mutation(async ({ ctx, input }) => {
       const items = input.filter(item => !(isSensitive(item.key) && item.value === MASK_STRING));

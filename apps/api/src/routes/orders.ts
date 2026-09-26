@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db, getDb, withOrg } from '../db';
-import { orders, orderItems, productVariants, products, nextDocumentNumber, formatDocumentNumber, jsonSafe, inventoryItems, inventoryMovements, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postOrderDeliveredEntry } from '@irth/db';
+import { orders, orderItems, productVariants, products, jsonSafe, placeOrder, InsufficientStockError, orderRepCondition, type EffectiveAccess, withIdempotency, IdempotencyError, emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS, postOrderDeliveredEntry } from '@irth/db';
 import { withAudit, transitionOrderStatus } from '@irth/db';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { EGP, add, fromMinor, multiply, zero } from '@irth/domain';
@@ -10,17 +10,19 @@ import { OrderStatusSchema } from '@irth/types';
 import { requirePermission } from '../middlewares/requirePermission';
 import { requireOrgId } from '../middlewares/requireOrgId';
 
-/** Thrown inside the order transaction so the whole thing rolls back. */
-class InsufficientStockError extends Error {
-  constructor(readonly variantId: string) {
-    super(`Insufficient stock for variant ${variantId}`);
-    this.name = 'InsufficientStockError';
-  }
-}
-
 const ordersRoute = new Hono();
 
 const getUserId = (c: Context): string => c.get('userId') as string;
+
+/**
+ * A rep's narrowing (PR-2a/2b): these reads run on the unscoped connection,
+ * where 0077/0078's policies do not apply, so the same condition the admin
+ * uses goes into the query itself. Undefined for staff.
+ */
+const repCondition = (c: Context) => {
+  const access = c.get('access') as EffectiveAccess | undefined;
+  return access ? orderRepCondition(access) : undefined;
+};
 
 const createOrderSchema = z.object({
   // Optional so existing callers keep working; a client opts in by sending one.
@@ -107,116 +109,22 @@ ordersRoute.post('/', requireOrgId(), requirePermission('orders', 'write'), asyn
     newOrder = await withIdempotency(
       getDb(),
       { orgId, operation: 'orders.create', key: data.idempotencyKey, request: data },
-      () => withOrg(c, async (tx) => {
-        // Claimed inside the transaction, so a rollback releases the number
-        // rather than burning it. See nextDocumentNumber for why this is not a
-        // Postgres SEQUENCE.
-        const seq = await nextDocumentNumber(tx, orgId, 'order');
-        const orderNumber = formatDocumentNumber('order', seq);
-
-        // STOCK FIRST, and in the UPDATE's WHERE.
-        //
-        // There was previously no stock decrement anywhere on this path — an
-        // order could always be placed for any quantity of anything, and
-        // inventory only moved when someone adjusted it by hand.
-        //
-        // `quantity >= n` lives in the WHERE rather than a SELECT before it, so
-        // the check and the decrement are one statement and cannot be split by
-        // a concurrent order. A read-then-write here is precisely how two
-        // buyers both pass a "5 in stock" check and both take 5.
-        //
-        // Zero rows updated means either no inventory record or not enough on
-        // hand; both are a refusal, and throwing rolls back the number and the
-        // order with it.
-        // Cost basis per LINE (not per variant — the same variant can appear
-        // as two separate lines with different quantities, and a variantId
-        // keyed map would let the second overwrite the first's cost).
-        // Captured at the moment stock leaves, see 0039. Merged onto
-        // order_items by index below, so finance's order-delivered posting
-        // can SUM it directly instead of reconstructing it later from
-        // movements.
-        const lineCostsMinor: (bigint | null)[] = [];
-
-        for (const item of itemsToInsert) {
-          const updated = await tx
-            .update(inventoryItems)
-            .set({
-              quantity: sql`${inventoryItems.quantity} - ${item.quantity}`,
-              updatedAt: new Date(),
-            })
-            .where(and(
-              eq(inventoryItems.orgId, orgId),
-              eq(inventoryItems.variantId, item.variantId),
-              sql`${inventoryItems.quantity} >= ${item.quantity}`,
-            ))
-            .returning({ id: inventoryItems.id, quantity: inventoryItems.quantity, averageCostMinor: inventoryItems.averageCostMinor });
-
-          if (updated.length === 0) {
-            throw new InsufficientStockError(item.variantId);
-          }
-
-          // The average is unaffected by an OUTGOING movement — only receipts
-          // move it (packages/db/src/costing.ts) — so the item's current
-          // average IS this line's cost basis. NULL means nothing has ever
-          // been received into this item with a known cost: the line's COGS
-          // is genuinely unknown, not free, and stays NULL rather than 0.
-          const avg = updated[0].averageCostMinor;
-          const lineCostMinor = avg == null ? null : avg * BigInt(item.quantity);
-          lineCostsMinor.push(lineCostMinor);
-
-          // Ledger row, matching inventory.adjust and returns.restock: a stock
-          // change absent from the movements table is invisible to any audit
-          // and makes the on-hand figure underivable.
-          await tx.insert(inventoryMovements).values({
-            orgId,
-            itemId: updated[0].id,
-            type: 'out',
-            quantity: item.quantity,
-            costMinor: lineCostMinor,
-            note: `Order ${orderNumber}`,
-          });
-        }
-
-        return withAudit(tx, async () => {
-          const [insertedOrder] = await tx.insert(orders).values({
-            orgId,
-            orderNumber,
-            status: 'pending',
-            paymentMethod: data.paymentMethod ?? 'cod',
-            totalAmountMinor: total.minor,
-            currency: total.currency,
-            // NOT `customerId: userId`. customer_id is uuid and refers to
-            // customers.id, while Better Auth user ids are text (0034) — so
-            // this raised 22P02 and order creation through the API could never
-            // succeed. It was also the wrong relationship: the session user
-            // PLACED the order, which is what the audit row records; the
-            // customer is a separate entity that may not exist yet.
-            customerId: null,
-          }).returning();
-
-          if (itemsToInsert.length > 0) {
-            await tx.insert(orderItems).values(
-              itemsToInsert.map((item, i) => ({
-                ...item,
-                orderId: insertedOrder.id,
-                // Index-aligned with the stock-decrement loop above, which
-                // built lineCostsMinor in the same order it iterated
-                // itemsToInsert — not looked up by variantId, since a variant
-                // can appear as two separate lines with different quantities.
-                costMinor: lineCostsMinor[i] ?? null,
-              })),
-            );
-          }
-
-          return insertedOrder;
-        }, {
-          orgId,
-          userId,
-          action: 'CREATE',
-          tableName: 'orders',
-          changes: { items: itemsToInsert }
-        });
-      }),
+      // Number, stock, order, lines and audit row: @irth/db's placeOrder, the
+      // one implementation shared with the sales rep's order (PR-2b). Before
+      // it, this route claimed numbers with count(*)+1, committed the lines
+      // separately from the order, never moved stock, and created a second
+      // order on a retry — see placeOrder for what each guard is for.
+      () => withOrg(c, async (tx) => placeOrder(tx, {
+        orgId,
+        userId,
+        lines: itemsToInsert,
+        currency: total.currency,
+        totalAmountMinor: total.minor,
+        paymentMethod: data.paymentMethod ?? 'cod',
+        // Not the session user: customer_id refers to customers.id (0034).
+        customerId: null,
+        auditChanges: { items: itemsToInsert },
+      })),
     );
   } catch (err) {
     if (err instanceof InsufficientStockError) {
@@ -245,8 +153,8 @@ ordersRoute.get('/', requireOrgId(), requirePermission('orders', 'view'), async 
   const offset = (page - 1) * limit;
 
   const [list, countResult] = await Promise.all([
-    db.select().from(orders).where(eq(orders.orgId, orgId)).limit(limit).offset(offset).orderBy(desc(orders.createdAt)),
-    db.select({ count: sql<number>`count(*)` }).from(orders).where(eq(orders.orgId, orgId))
+    db.select().from(orders).where(and(eq(orders.orgId, orgId), repCondition(c))).limit(limit).offset(offset).orderBy(desc(orders.createdAt)),
+    db.select({ count: sql<number>`count(*)` }).from(orders).where(and(eq(orders.orgId, orgId), repCondition(c)))
   ]);
 
   const totalCount = Number(countResult[0]?.count || 0);
@@ -257,7 +165,7 @@ ordersRoute.get('/', requireOrgId(), requirePermission('orders', 'view'), async 
 ordersRoute.get('/:id', requireOrgId(), requirePermission('orders', 'view'), async (c: Context) => {
   const orgId = c.get('orgId') as string;
   const id = c.req.param('id');
-  const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
+  const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId), repCondition(c)));
   
   if (!order) {
     return c.json({ data: null, error: 'not_found', meta: null }, 404);
@@ -285,7 +193,7 @@ ordersRoute.patch('/:id/status', requireOrgId(), requirePermission('orders', 'wr
   
   const { status } = updateStatusSchema.parse(body);
 
-  const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId)));
+  const [order] = await db.select().from(orders).where(and(eq(orders.id, id as string), eq(orders.orgId, orgId), repCondition(c)));
   
   if (!order) {
     return c.json({ data: null, error: 'not_found', meta: null }, 404);

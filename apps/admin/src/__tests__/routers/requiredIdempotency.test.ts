@@ -1,3 +1,4 @@
+import { effectiveAccess } from '@irth/db';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
@@ -27,6 +28,7 @@ function dedupingContext() {
     orgId: 'org-1',
     userId: 'user-1',
     role: 'owner',
+    access: effectiveAccess({ systemKey: 'owner' }),
   } as unknown as Context;
   return { context, idempotent, executions: () => executions };
 }

@@ -141,7 +141,7 @@
   "dashboard": {
     "title": "Overview",
     "ordersToday": "Orders Today",
-    "revenueToday": "Revenue Today (EGP)",
+    "revenueToday": "Net Sales Today (ج.م, ex-VAT)",
     "pendingOrders": "Pending Orders",
     "activeProducts": "Active Products"
   },
@@ -203,6 +203,48 @@
         "success": "Order status updated successfully",
         "error": "An error occurred while updating the status",
         "loading": "Updating..."
+      },
+      "blocked": {
+        "title": "Order blocked",
+        "hint": "Some Shopify lines are not linked to a product here, so no items were recorded and no stock moved. Link each line to its product, then re-import.",
+        "reason": "Reason",
+        "mapTo": "Link to",
+        "search": "Search by SKU or name",
+        "noResults": "No unlinked products match",
+        "submit": "Link and re-import",
+        "submitting": "Linking...",
+        "queued": "Linked. The import will finish within a minute.",
+        "error": "Linking failed",
+        "customItem": "Custom line with no Shopify product — cancel the order or fix it in Shopify",
+        "mapped": "Linked",
+        "badge": "Blocked"
+      },
+      "sourceLines": {
+        "title": "Lines as received from Shopify",
+        "item": "Item",
+        "sku": "SKU",
+        "quantity": "Qty",
+        "unitPrice": "Unit price",
+        "status": "Link"
+      },
+      "buyer": {
+        "title": "Customer & delivery",
+        "name": "Name",
+        "email": "Email",
+        "phone": "Phone",
+        "shipping": "Shipping address",
+        "billing": "Billing address",
+        "note": "Customer note",
+        "notCaptured": "Not captured"
+      },
+      "totals": {
+        "title": "Totals",
+        "subtotal": "Subtotal",
+        "discount": "Discount",
+        "shipping": "Shipping",
+        "tax": "Tax",
+        "total": "Total",
+        "unknown": "Unknown"
       }
     },
     "print": {
@@ -226,7 +268,8 @@
       "shipped": "Shipped",
       "delivered": "Delivered",
       "cancelled": "Cancelled"
-    }
+    },
+    "blockedFilter": "Blocked orders"
   },
   "products": {
     "title": "Products",
@@ -345,6 +388,7 @@
   },
   "auth": {
     "email": "Email",
+    "identifier": "Email or username",
     "password": "Password",
     "name": "Full Name",
     "login": "Sign in",

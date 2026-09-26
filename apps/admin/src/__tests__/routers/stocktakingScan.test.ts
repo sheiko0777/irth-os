@@ -1,3 +1,4 @@
+import { effectiveAccess } from '@irth/db';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Context } from '@/server/trpc';
 import { stocktakingRouter } from '@/server/routers/stocktaking';
@@ -12,6 +13,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'admin'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 

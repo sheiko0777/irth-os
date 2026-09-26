@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { protectedProcedure, router, adminProcedure, ownerProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { customerSegments, customerSegmentMembers, customers } from '@irth/db';
 import { eq, and, desc, count, inArray, not } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const customerSegmentsRouter = router({
-  list: protectedProcedure
+  list: requirePermission('customers', 'view')
     .input(z.object({}).optional())
     .query(async ({ ctx }) => {
       const segments = await ctx.db
@@ -29,7 +29,7 @@ export const customerSegmentsRouter = router({
       return { data: segments, error: null };
     }),
 
-  create: adminProcedure
+  create: requirePermission('customers', 'write')
     .input(
       z.object({
         name: z.string().min(1).max(100),
@@ -50,7 +50,7 @@ export const customerSegmentsRouter = router({
       return { data: segment, error: null };
     }),
 
-  update: adminProcedure
+  update: requirePermission('customers', 'write')
     .input(
       z.object({
         id: z.string().uuid(),
@@ -70,7 +70,7 @@ export const customerSegmentsRouter = router({
       return { data: updated, error: null };
     }),
 
-  delete: ownerProcedure
+  delete: requirePermission('customers', 'delete')
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [deleted] = await ctx.withOrg(async (tx) => tx
@@ -81,7 +81,7 @@ export const customerSegmentsRouter = router({
       return { data: deleted, error: null };
     }),
 
-  getMembers: protectedProcedure
+  getMembers: requirePermission('customers', 'view')
     .input(z.object({ segmentId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const seg = await ctx.db
@@ -91,7 +91,7 @@ export const customerSegmentsRouter = router({
         .limit(1);
       if (!seg.length) throw new TRPCError({ code: 'NOT_FOUND' });
 
-      const members = await ctx.db
+      const members = await ctx.withOrg((tx) => tx
         .select({
           memberId: customerSegmentMembers.id,
           customerId: customerSegmentMembers.customerId,
@@ -103,12 +103,12 @@ export const customerSegmentsRouter = router({
         .from(customerSegmentMembers)
         .innerJoin(customers, eq(customers.id, customerSegmentMembers.customerId))
         .where(eq(customerSegmentMembers.segmentId, input.segmentId))
-        .orderBy(desc(customerSegmentMembers.addedAt));
+        .orderBy(desc(customerSegmentMembers.addedAt)));
 
       return { data: members, error: null };
     }),
 
-  addMembers: adminProcedure
+  addMembers: requirePermission('customers', 'write')
     .input(z.object({ segmentId: z.string().uuid(), customerIds: z.array(z.string().uuid()).min(1) }))
     .mutation(async ({ ctx, input }) => {
       // Stays a separate read on purpose. The condition is about
@@ -139,7 +139,7 @@ export const customerSegmentsRouter = router({
       return { data: { added: input.customerIds.length }, error: null };
     }),
 
-  removeMember: adminProcedure
+  removeMember: requirePermission('customers', 'write')
     .input(z.object({ memberId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [deleted] = await ctx.withOrg(async (tx) => tx
@@ -155,7 +155,7 @@ export const customerSegmentsRouter = router({
       return { data: deleted, error: null };
     }),
 
-  getCustomersNotInSegment: protectedProcedure
+  getCustomersNotInSegment: requirePermission('customers', 'view')
     .input(z.object({ segmentId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const memberIds = await ctx.db
@@ -166,18 +166,18 @@ export const customerSegmentsRouter = router({
       const excludeIds = memberIds.map((m) => m.customerId);
 
       const rows = excludeIds.length
-        ? await ctx.db
+        ? await ctx.withOrg((tx) => tx
             .select({ id: customers.id, name: customers.name, email: customers.email })
             .from(customers)
             .where(and(eq(customers.orgId, ctx.orgId), not(inArray(customers.id, excludeIds))))
             .orderBy(customers.name)
-            .limit(200)
-        : await ctx.db
+            .limit(200))
+        : await ctx.withOrg((tx) => tx
             .select({ id: customers.id, name: customers.name, email: customers.email })
             .from(customers)
             .where(eq(customers.orgId, ctx.orgId))
             .orderBy(customers.name)
-            .limit(200);
+            .limit(200));
 
       return { data: rows, error: null };
     }),

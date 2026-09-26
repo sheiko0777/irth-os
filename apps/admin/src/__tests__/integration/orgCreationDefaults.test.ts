@@ -13,7 +13,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { organizations, orgInvites, shippingZones, shippingRates, priceLists } from '@irth/db';
+import { organizations, orgInvites, shippingZones, shippingRates, priceLists, effectiveAccess } from '@irth/db';
 import { EGP, parseDecimal } from '@irth/domain';
 import { platformAdminRouter } from '@/server/routers/platformAdmin';
 import type { Context } from '@/server/trpc';
@@ -31,6 +31,7 @@ function ctx(): Context {
     orgId: 'unused-platform-admin-has-no-tenant-scope',
     userId: 'admin-user',
     role: 'owner',
+    access: effectiveAccess({ systemKey: 'owner' }),
     // createOrg never calls these — platform administration is intentionally
     // cross-tenant (see caller.ts's comment on dbUnscoped), so there is no
     // real org to scope `withOrg` to here.

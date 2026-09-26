@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { type SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { purchaseOrders, purchaseOrderItems } from '@irth/db';
+import { purchaseOrders, purchaseOrderItems, effectiveAccess } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
@@ -17,6 +17,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 

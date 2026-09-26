@@ -1,4 +1,4 @@
-import { router, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { auditLog, user, orgMembers, session, paginationOffset } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, sql, inArray, gte, lte, or, ilike } from 'drizzle-orm';
@@ -11,7 +11,7 @@ export const auditRouter = router({
    * List paginated audit logs with multi-field filtering and client device enrichment.
    * STRICTLY READ-ONLY.
    */
-  list: adminProcedure
+  list: requirePermission('audit', 'view')
     .input(
       z.object({
         ...paginationInputSchema(25, 100),
@@ -198,7 +198,7 @@ export const auditRouter = router({
    * Aggregated KPI statistics for the audit dashboard.
    * STRICTLY READ-ONLY.
    */
-  stats: adminProcedure.query(async ({ ctx }) => {
+  stats: requirePermission('audit', 'view').query(async ({ ctx }) => {
     return await ctx.withOrg(async (tx) => {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -247,7 +247,7 @@ export const auditRouter = router({
    * Get single audit record details for deep changeset inspection.
    * STRICTLY READ-ONLY.
    */
-  getById: adminProcedure
+  getById: requirePermission('audit', 'view')
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       return await ctx.withOrg(async (tx) => {

@@ -1,3 +1,6 @@
+// Deep import: this file mocks '@irth/db', and a static import of the root
+// would evaluate the mock factory before its dependencies initialise.
+import { effectiveAccess } from '@irth/db/src/permissions';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -31,6 +34,7 @@ function ctx(withOrg: unknown = withOrgMock): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role: 'owner',
+    access: effectiveAccess({ systemKey: 'owner' }),
   } as unknown as Context;
 }
 

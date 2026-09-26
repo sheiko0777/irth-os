@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import {
   ACCOUNT_CODES, accounts, inventoryItems, inventoryMovements, journalEntries, journalLines,
   orders, orderItems, orderReturns, returnItems, organizations, products, productVariants,
-  withOrgContext,
+  withOrgContext, effectiveAccess,
 } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
@@ -53,7 +53,7 @@ afterAll(async () => { await closeTestDb(); });
 describe('return restock - concurrent router calls', () => {
   it('claims once, increments stock once and reverses cost once', async () => {
     const caller = returnsRouter.createCaller({
-      db: testDb, orgId, userId: 'return-race-user', role: 'owner',
+      db: testDb, orgId, userId: 'return-race-user', role: 'owner', access: effectiveAccess({ systemKey: 'owner' }),
       session: { user: { id: 'return-race-user', email: 'returns@test.com' } },
       withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
     } as unknown as Context);
@@ -113,7 +113,7 @@ describe('return restock - linkage failures', () => {
         unitPriceMinor: 1000n, condition: 'good', restock: false,
       }).returning();
       const caller = returnsRouter.createCaller({
-        db: testDb, orgId, userId: 'return-race-user', role: 'owner',
+        db: testDb, orgId, userId: 'return-race-user', role: 'owner', access: effectiveAccess({ systemKey: 'owner' }),
         session: { user: { id: 'return-race-user', email: 'returns@test.com' } },
         withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
       } as unknown as Context);

@@ -1,7 +1,7 @@
 import { EGP, zero } from '@irth/domain';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { getTableName } from 'drizzle-orm';
-import { outboxEvents } from '@irth/db';
+import { outboxEvents, effectiveAccess } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
 import { courierRouter } from '@/server/routers/courier';
@@ -25,6 +25,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
     withOrg: withOrgMock,
     idempotent: idempotentMock,
   } as unknown as Context;
