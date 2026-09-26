@@ -27,6 +27,7 @@ import { platformAdminRouter } from './platformAdmin';
 import { meRouter } from './me';
 import { deadLettersRouter } from './deadLetters';
 import { auditRouter } from './audit';
+import { rolesRouter } from './roles';
 
 export const appRouter = router({
     audit: auditRouter,
@@ -53,6 +54,7 @@ export const appRouter = router({
     shipping: shippingRouter,
     campaigns: campaignsRouter,
     members: membersRouter,
+    roles: rolesRouter,
     giftCards: giftCardsRouter,
     customerSegments: customerSegmentsRouter,
     platformAdmin: platformAdminRouter,

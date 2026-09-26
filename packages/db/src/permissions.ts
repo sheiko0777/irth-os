@@ -121,6 +121,14 @@ export const PERMISSIONS = {
     write: ['owner', 'admin'] as Role[],
     delete: ['owner'] as Role[],
   },
+  // PR-1c: the roles screen. `manage` (create, edit, copy, delete a custom
+  // role) is owner-only by default: whoever holds it can write any permission
+  // into a role, their own included, so it is as strong as ownership. The
+  // owner can still grant it to someone deliberately.
+  roles: {
+    view: ['owner', 'admin'] as Role[],
+    manage: ['owner'] as Role[],
+  },
 } as const;
 
 export type Resource = keyof typeof PERMISSIONS;

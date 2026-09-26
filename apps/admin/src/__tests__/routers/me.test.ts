@@ -47,6 +47,8 @@ describe('me router', () => {
       userId: 'user-1',
       orgId: 'org-1',
       role: 'owner',
+      principalKind: 'staff',
+      permissions: [...effectiveAccess({ systemKey: 'owner' }).perms].sort(),
       orgs: [
         { orgId: 'org-1', orgName: 'IRTH Group', role: 'owner' },
         { orgId: 'org-2', orgName: 'Second Co', role: 'member' },

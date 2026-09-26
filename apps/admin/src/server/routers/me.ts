@@ -24,6 +24,10 @@ export const meRouter = router({
             userId: ctx.userId,
             orgId: ctx.orgId,
             role: ctx.role,
+            principalKind: ctx.access.principalKind,
+            // Effective "resource.action" keys — role plus per-person
+            // overrides — so the UI hides exactly what the server refuses.
+            permissions: [...ctx.access.perms].sort(),
             orgs: await listMembershipsForUser(ctx.db, ctx.userId),
         },
         error: null,

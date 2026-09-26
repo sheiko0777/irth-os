@@ -36,6 +36,8 @@ setup('seed an owner, an org and a blocked Shopify order', async ({ request }) =
     await sql`
       INSERT INTO org_members (org_id, user_id, role) VALUES (${org.id}, ${user.id}, 'owner')
       ON CONFLICT (org_id, user_id) DO NOTHING`;
+    // Roles a previous run created through the roles screen.
+    await sql`DELETE FROM access_roles WHERE org_id = ${org.id} AND system_key IS NULL`;
 
     // Re-runnable against the same database: put the scenario back to its
     // starting state (the unlinked variant unlinked, the order blocked, no

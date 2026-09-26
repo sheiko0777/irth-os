@@ -3,7 +3,7 @@ import {
   Box, FolderOpen, Warehouse, ClipboardList, ShoppingBag, RotateCcw,
   DollarSign, PieChart, Tag, List, Megaphone, Gift,
   Truck, MapPin, FileText, Plug2,
-  Settings, UserCog, BrainCircuit, ShieldCheck,
+  Settings, UserCog, BrainCircuit, ShieldCheck, KeyRound,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -73,6 +73,7 @@ export function buildNavGroups(locale: string): NavGroup[] {
       items: [
         { href: `/${locale}/settings`, label: 'الإعدادات', icon: Settings, keywords: 'settings' },
         { href: `/${locale}/settings/members`, label: 'الأعضاء', icon: UserCog, keywords: 'members team users' },
+        { href: `/${locale}/settings/roles`, label: 'الأدوار والصلاحيات', icon: KeyRound, keywords: 'roles permissions access أدوار صلاحيات' },
         { href: `/${locale}/audit`, label: 'سجلات الرقابة والنشاط', icon: ShieldCheck, keywords: 'audit logs activity history security رقابة سجلات حركات' },
       ],
     },

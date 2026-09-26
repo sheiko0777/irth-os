@@ -3,7 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
-import { useRole } from "@/lib/permissions";
+import { useCan } from "@/lib/permissions";
 import { toast } from "sonner";
 import { formatDate } from "@irth/domain";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -22,14 +22,14 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
  * Hidden for a member: `deadLetters.list`/`.replay` both require
  * `integrations.recover` server-side (payloads here can carry secrets, e.g.
  * an org invite's otpCode), so a member's query would just come back
- * FORBIDDEN — `enabled` skips firing it, and the role check below skips
+ * FORBIDDEN — `enabled` skips firing it, and the permission check below skips
  * rendering the empty shell around it.
  */
 export function DeadLettersSection() {
   const t = useTranslations("settings.deadLetters");
-  const role = useRole();
+  const can = useCan();
   const utils = trpc.useUtils();
-  const canManage = role === "owner" || role === "admin";
+  const canManage = can("integrations", "recover");
 
   const { data, isLoading } = trpc.deadLetters.list.useQuery(
     { limit: 50 },

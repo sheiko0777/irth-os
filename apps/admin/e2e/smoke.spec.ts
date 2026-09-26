@@ -56,3 +56,25 @@ test('a blocked Shopify order is visible, complete, and can be resolved', async 
   await page.getByRole('button', { name: 'اربط وأعد الاستيراد' }).click();
   await expect(page.getByText('تم الربط')).toBeVisible();
 });
+
+test('the owner builds a role on the roles screen and it is listed with its permissions', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/ar/settings/roles');
+
+  // The three system roles are there and cannot be edited, only viewed.
+  const cards = page.getByTestId('role-card');
+  await expect(cards).toHaveCount(3);
+  await expect(cards.filter({ hasText: 'مدير' }).getByRole('button', { name: 'عرض الصلاحيات' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'دور جديد' }).click();
+  await page.getByLabel('اسم الدور').fill('أمين مخزن');
+  await page.getByLabel('المخزون والجرد: عرض').check();
+  await page.getByLabel('المخزون والجرد: إضافة وتعديل').check();
+  await page.getByLabel('الطلبات: عرض').check();
+  await page.getByRole('button', { name: 'حفظ الدور' }).click();
+
+  const created = cards.filter({ hasText: 'أمين مخزن' });
+  await expect(created).toBeVisible();
+  await expect(created).toContainText('3 صلاحية');
+  await expect(created).toContainText('0 عضو');
+});
