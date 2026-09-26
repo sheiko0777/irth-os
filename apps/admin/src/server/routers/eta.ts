@@ -153,7 +153,7 @@ export const etaRouter = router({
 
     submitPending: requirePermission('eta', 'submit')
         .mutation(async ({ ctx }) => {
-            const pendingOrders = await ctx.db
+            const pendingOrders = await ctx.withOrg((tx) => tx
                 .select({ id: orders.id })
                 .from(orders)
                 .leftJoin(etaInvoices, eq(etaInvoices.orderId, orders.id))
@@ -170,7 +170,7 @@ export const etaRouter = router({
                         ),
                     ),
                 ))
-                .limit(20);
+                .limit(20));
 
             let submitted = 0;
             for (const { id: orderId } of pendingOrders) {

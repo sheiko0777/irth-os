@@ -3,6 +3,7 @@ import { dashboardRouter } from './dashboard';
 import { ordersRouter } from './orders';
 import { deliveriesRouter } from './deliveries';
 import { repCashRouter } from './repCash';
+import { salesRouter } from './sales';
 import { productsRouter } from './products';
 import { categoriesRouter } from './categories';
 import { inventoryRouter } from './inventory';
@@ -39,6 +40,7 @@ export const appRouter = router({
     orders: ordersRouter,
     deliveries: deliveriesRouter,
     repCash: repCashRouter,
+    sales: salesRouter,
     products: productsRouter,
     categories: categoriesRouter,
     inventory: inventoryRouter,

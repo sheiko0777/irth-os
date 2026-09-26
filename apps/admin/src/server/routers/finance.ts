@@ -123,15 +123,15 @@ export const financeRouter = router({
                         lte(journalEntries.entryDate, end),
                     ))
                     .groupBy(accounts.code, accounts.normalBalance),
-                ctx.db
+                ctx.withOrg((tx) => tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(
                         eq(orders.orgId, ctx.orgId),
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end)
-                    )),
-                ctx.db
+                    ))),
+                ctx.withOrg((tx) => tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(
@@ -139,8 +139,8 @@ export const financeRouter = router({
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end),
                         eq(orders.status, 'cancelled')
-                    )),
-                ctx.db
+                    ))),
+                ctx.withOrg((tx) => tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(
@@ -148,7 +148,7 @@ export const financeRouter = router({
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end),
                         eq(orders.status, 'pending')
-                    )),
+                    ))),
             ]);
 
             const byCode = new Map(ledgerRows.map((r) => [r.code, accountBalanceMinor(r)]));
@@ -208,7 +208,7 @@ export const financeRouter = router({
             const end = new Date(input.endDate);
             end.setHours(23, 59, 59, 999);
 
-            const rows = await ctx.db
+            const rows = await ctx.withOrg((tx) => tx
                 .select({
                     orderId: orders.id,
                     orderNumber: orders.orderNumber,
@@ -224,7 +224,7 @@ export const financeRouter = router({
                     eq(orders.status, 'delivered'),
                     eq(orders.paymentMethod, 'cod')
                 ))
-                .orderBy(desc(orders.createdAt));
+                .orderBy(desc(orders.createdAt)));
 
             return {
                 data: rows,

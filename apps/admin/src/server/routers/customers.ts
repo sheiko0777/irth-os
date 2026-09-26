@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { eq, and, desc, sql, count, ilike, or, gte } from 'drizzle-orm';
 import { customers, loyaltyTransactions, paginationMeta, paginationOffset, withAudit, MAX_IDEMPOTENCY_KEY_LENGTH } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
+import { customerRepScope } from '../scopes';
+import { customerAssignmentProcedures } from './customerAssignment';
 import { TRPCError } from '@trpc/server';
 import { EGP, parseDecimal } from '@irth/domain';
 
 export const customersRouter = router({
+  ...customerAssignmentProcedures,
   list: requirePermission('customers', 'view')
     .input(
       z.object({
@@ -17,16 +20,18 @@ export const customersRouter = router({
     .query(async ({ ctx, input }) => {
       const offset = paginationOffset(input.page, input.pageSize);
 
-      const whereClause = input.search
-        ? and(
-            eq(customers.orgId, ctx.orgId),
-            or(
+      // A sales rep granted customers.view sees only their own (PR-2b).
+      const whereClause = and(
+        eq(customers.orgId, ctx.orgId),
+        customerRepScope(ctx),
+        input.search
+          ? or(
               ilike(customers.name, `%${input.search}%`),
               ilike(customers.email, `%${input.search}%`),
               ilike(customers.phone, `%${input.search}%`)
             )
-          )
-        : eq(customers.orgId, ctx.orgId);
+          : undefined,
+      );
 
       // Execute list and count queries concurrently to reduce latency
       const [data, totalRowResult] = await Promise.all([
@@ -56,7 +61,7 @@ export const customersRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const customer = await ctx.withOrg(async (tx) => tx.query.customers.findFirst({
-        where: and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId)),
+        where: and(eq(customers.id, input.id), eq(customers.orgId, ctx.orgId), customerRepScope(ctx)),
       }));
 
       if (!customer) throw new TRPCError({ code: 'NOT_FOUND' });
@@ -311,7 +316,7 @@ export const customersRouter = router({
         totalPoints: sql<number>`COALESCE(SUM(${customers.loyaltyPoints}), 0)::int`,
       })
       .from(customers)
-      .where(eq(customers.orgId, ctx.orgId)));
+      .where(and(eq(customers.orgId, ctx.orgId), customerRepScope(ctx))));
 
     return {
       data: {

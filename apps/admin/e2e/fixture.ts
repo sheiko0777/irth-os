@@ -28,3 +28,9 @@ export const COD_ORDER_NUMBER = 'E2E-COD-1';
  * test signing in through the form would trip it; only the login test does.
  */
 export const OWNER_STATE = 'e2e/.auth/owner.json';
+
+/** The sales rep the owner creates from the role template (PR-2b), their customer and price list. */
+export const SELLER_USERNAME = '01000000099';
+export const SELLER_PASSWORD = 'Seller-Password-2026';
+export const SALES_CUSTOMER = 'صيدلية النور';
+export const SALES_PRICE_LIST = 'جملة 10%';

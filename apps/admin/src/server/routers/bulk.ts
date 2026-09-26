@@ -151,7 +151,7 @@ export const bulkRouter = router({
             ];
             if (status) conditions.push(eq(orders.status, status));
 
-            const rows = await ctx.db
+            const rows = await ctx.withOrg((tx) => tx
                 .select({
                     orderNumber: orders.orderNumber,
                     customerName: customers.name,
@@ -163,7 +163,7 @@ export const bulkRouter = router({
                 .from(orders)
                 .leftJoin(customers, eq(orders.customerId, customers.id))
                 .where(and(...conditions))
-                .limit(5000);
+                .limit(5000));
 
             return { data: rows, error: null, meta: null };
         }),
@@ -190,7 +190,7 @@ export const bulkRouter = router({
 
     exportCustomers: requirePermission('customers', 'export')
         .query(async ({ ctx }) => {
-            const rows = await ctx.db
+            const rows = await ctx.withOrg((tx) => tx
                 .select({
                     name: customers.name,
                     email: customers.email,
@@ -202,7 +202,7 @@ export const bulkRouter = router({
                 })
                 .from(customers)
                 .where(eq(customers.orgId, ctx.orgId))
-                .limit(5000);
+                .limit(5000));
 
             return { data: rows, error: null, meta: null };
         }),

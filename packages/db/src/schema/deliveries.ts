@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, bigint, char, unique, index, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, bigint, char, unique, index, check, varchar, integer } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { organizations } from '../schema';
 
@@ -59,4 +59,49 @@ export const repCashCollections = pgTable('rep_cash_collections', {
 }, (t) => [
   unique('rep_cash_collections_org_order_uq').on(t.orgId, t.orderId),
   check('rep_cash_collections_amount_check', sql`${t.amountMinor} > 0`),
+]);
+
+// ---------------------------------------------------------------------------
+// Sales reps (0078, PR-2b). Quotes live here beside the delivery tables: both
+// are a rep's own work, narrowed by the same member-id settings.
+// ---------------------------------------------------------------------------
+
+export const QUOTE_STATUSES = ['open', 'converted', 'cancelled'] as const;
+export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
+
+/** A priced proposal. Moves no stock and posts nothing until it becomes an order. */
+export const salesQuotes = pgTable('sales_quotes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
+  quoteNumber: varchar('quote_number', { length: 50 }).notNull(),
+  customerId: uuid('customer_id').notNull(),
+  createdByMemberId: uuid('created_by_member_id'),
+  priceListId: uuid('price_list_id'),
+  currency: char('currency', { length: 3 }).notNull(),
+  subtotalMinor: bigint('subtotal_minor', { mode: 'bigint' }).notNull(),
+  discountMinor: bigint('discount_minor', { mode: 'bigint' }).notNull(),
+  totalMinor: bigint('total_minor', { mode: 'bigint' }).notNull(),
+  status: text('status').$type<QuoteStatus>().notNull().default('open'),
+  validUntil: timestamp('valid_until').notNull(),
+  convertedOrderId: uuid('converted_order_id'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [
+  unique('sales_quotes_id_org_id_key').on(t.id, t.orgId),
+  unique('sales_quotes_org_number_uq').on(t.orgId, t.quoteNumber),
+  index('sales_quotes_org_created_by_idx').on(t.orgId, t.createdByMemberId),
+  check('sales_quotes_status_check', sql`${t.status} IN ('open', 'converted', 'cancelled')`),
+]);
+
+export const salesQuoteItems = pgTable('sales_quote_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
+  quoteId: uuid('quote_id').notNull(),
+  variantId: uuid('variant_id').notNull(),
+  quantity: integer('quantity').notNull(),
+  listPriceMinor: bigint('list_price_minor', { mode: 'bigint' }).notNull(),
+  unitPriceMinor: bigint('unit_price_minor', { mode: 'bigint' }).notNull(),
+}, (t) => [
+  index('sales_quote_items_org_quote_idx').on(t.orgId, t.quoteId),
 ]);

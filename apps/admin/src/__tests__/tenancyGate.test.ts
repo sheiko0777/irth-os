@@ -53,14 +53,9 @@ const UNSCOPED_READ = /(^|[^.\w])(ctx\s*\.\s*)?db\s*\.\s*(?:(?:select(?:Distinct
  * follow-up gate/migration (orders, products, categories, orgs, shipping).
  */
 const UNSCOPED_READ_BASELINE = [
-  'analytics.ts:33',
-  'analytics.ts:162',
-  'analytics.ts:170',
   'analytics.ts:224',
   'analytics.ts:253',
   'analytics.ts:275',
-  'bulk.ts:154',
-  'bulk.ts:193',
   'campaigns.ts:14',
   'campaigns.ts:21',
   'campaigns.ts:36',
@@ -73,19 +68,9 @@ const UNSCOPED_READ_BASELINE = [
   'coupons.ts:210',
   'customerSegments.ts:11',
   'customerSegments.ts:87',
-  'customerSegments.ts:94',
   'customerSegments.ts:121',
   'customerSegments.ts:161',
-  'customerSegments.ts:169',
-  'customerSegments.ts:175',
-  'dashboard.ts:56',
-  'dashboard.ts:63',
-  'dashboard.ts:71',
-  'dashboard.ts:80',
-  'dashboard.ts:92',
-  'dashboard.ts:156',
   'dashboard.ts:171',
-  'dashboard.ts:192',
   // Both reads filter explicitly by eq(outboxDeadLetters.orgId, ctx.orgId),
   // same shape as eta.ts's own baseline entries below.
   'deadLetters.ts:23',
@@ -94,12 +79,7 @@ const UNSCOPED_READ_BASELINE = [
   'eta.ts:34',
   'eta.ts:107',
   'eta.ts:134',
-  'eta.ts:156',
   'finance.ts:110',
-  'finance.ts:126',
-  'finance.ts:134',
-  'finance.ts:143',
-  'finance.ts:211',
   'giftCards.ts:29',
   'giftCards.ts:36',
   'giftCards.ts:49',
@@ -113,8 +93,6 @@ const UNSCOPED_READ_BASELINE = [
   'notifications.ts:15',
   'notifications.ts:22',
   'notifications.ts:56',
-  'pricelists.ts:10',
-  'pricelists.ts:77',
   'returns.ts:136',
   'returns.ts:142',
   'returns.ts:165',
@@ -182,13 +160,16 @@ describe('tenancy gate', () => {
   });
 
   /**
-   * PR-1e: the tables 0076 narrows to a member's brand or supplier scope. A
+   * PR-1e: the tables 0076 narrows to a member's brand or supplier scope —
+   * and, since PR-2b, those 0077/0078 narrow to a rep or a price-list scope. A
    * read of them through ctx.db runs as the BYPASSRLS owner and ignores the
    * scope entirely, so — unlike the legacy baseline above — none is allowed,
    * not even one already there.
    */
   it('never reads a scope-restricted table (0076) outside ctx.withOrg', () => {
-    const SCOPED = /\b(products|productVariants|inventoryItems|suppliers|purchaseOrders|purchaseOrderItems|product_variants|inventory_items|purchase_orders|purchase_order_items)\b/;
+    // PR-2b adds the tables 0077/0078 narrow to a rep (orders, their lines,
+    // customers, quotes) and to a price-list scope.
+    const SCOPED = /\b(products|productVariants|inventoryItems|suppliers|purchaseOrders|purchaseOrderItems|product_variants|inventory_items|purchase_orders|purchase_order_items|orders|orderItems|order_items|customers|priceLists|priceListItems|price_lists|price_list_items|salesQuotes|salesQuoteItems|sales_quotes|sales_quote_items)\b/;
     const offenders: string[] = [];
     for (const file of routerFiles()) {
       if (CROSS_ORG_BY_DESIGN.has(file)) continue;

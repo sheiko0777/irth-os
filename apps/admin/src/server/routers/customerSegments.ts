@@ -91,7 +91,7 @@ export const customerSegmentsRouter = router({
         .limit(1);
       if (!seg.length) throw new TRPCError({ code: 'NOT_FOUND' });
 
-      const members = await ctx.db
+      const members = await ctx.withOrg((tx) => tx
         .select({
           memberId: customerSegmentMembers.id,
           customerId: customerSegmentMembers.customerId,
@@ -103,7 +103,7 @@ export const customerSegmentsRouter = router({
         .from(customerSegmentMembers)
         .innerJoin(customers, eq(customers.id, customerSegmentMembers.customerId))
         .where(eq(customerSegmentMembers.segmentId, input.segmentId))
-        .orderBy(desc(customerSegmentMembers.addedAt));
+        .orderBy(desc(customerSegmentMembers.addedAt)));
 
       return { data: members, error: null };
     }),
@@ -166,18 +166,18 @@ export const customerSegmentsRouter = router({
       const excludeIds = memberIds.map((m) => m.customerId);
 
       const rows = excludeIds.length
-        ? await ctx.db
+        ? await ctx.withOrg((tx) => tx
             .select({ id: customers.id, name: customers.name, email: customers.email })
             .from(customers)
             .where(and(eq(customers.orgId, ctx.orgId), not(inArray(customers.id, excludeIds))))
             .orderBy(customers.name)
-            .limit(200)
-        : await ctx.db
+            .limit(200))
+        : await ctx.withOrg((tx) => tx
             .select({ id: customers.id, name: customers.name, email: customers.email })
             .from(customers)
             .where(eq(customers.orgId, ctx.orgId))
             .orderBy(customers.name)
-            .limit(200);
+            .limit(200));
 
       return { data: rows, error: null };
     }),

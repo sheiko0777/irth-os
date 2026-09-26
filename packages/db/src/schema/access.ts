@@ -10,7 +10,7 @@ import { organizations } from '../schema';
 export const PRINCIPAL_KINDS = ['staff', 'delivery_rep', 'sales_rep', 'supplier'] as const;
 export type PrincipalKind = (typeof PRINCIPAL_KINDS)[number];
 
-export const SCOPE_KINDS = ['warehouse', 'brand', 'channel', 'supplier'] as const;
+export const SCOPE_KINDS = ['warehouse', 'brand', 'channel', 'supplier', 'pricelist'] as const;
 export type ScopeKind = (typeof SCOPE_KINDS)[number];
 
 /** {resource: [action, ...]} — the shape a custom role stores. */
@@ -53,5 +53,5 @@ export const memberScopes = pgTable('member_scopes', {
 }, (t) => [
   unique('member_scopes_member_kind_scope_uq').on(t.memberId, t.scopeKind, t.scopeId),
   index('member_scopes_org_id_idx').on(t.orgId),
-  check('member_scopes_kind_check', sql`${t.scopeKind} IN ('warehouse', 'brand', 'channel', 'supplier')`),
+  check('member_scopes_kind_check', sql`${t.scopeKind} IN ('warehouse', 'brand', 'channel', 'supplier', 'pricelist')`),
 ]);

@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { hashPassword } from 'better-auth/crypto';
 import {
   accessRoles, account, brands, canDelegate, covers, effectiveAccess, memberScopes, orgMembers, permissionKeys, permissionsForRole,
-  suppliers, withinScopes, type MemberScopes,
+  priceLists, suppliers, withinScopes, type MemberScopes,
   session, user, withAudit, type DbTx, type EffectiveAccess, type PermissionList,
 } from '@irth/db';
 import { router, requirePermission, type Context } from '../trpc';
@@ -71,6 +71,7 @@ async function loadMember(tx: Tx, orgId: string, memberId: string) {
   const scopes: MemberScopes = {
     brand: scopeRows.filter((r) => r.kind === 'brand').map((r) => r.id).sort(),
     supplier: scopeRows.filter((r) => r.kind === 'supplier').map((r) => r.id).sort(),
+    pricelist: scopeRows.filter((r) => r.kind === 'pricelist').map((r) => r.id).sort(),
   };
   const base = {
     systemKey: row.systemKey ?? null,
@@ -165,6 +166,7 @@ export const accountsRouter = router({
               const inherited = [
                 ...ctx.access.scopes.brand.map((id) => ({ scopeKind: 'brand' as const, scopeId: id })),
                 ...ctx.access.scopes.supplier.map((id) => ({ scopeKind: 'supplier' as const, scopeId: id })),
+                ...ctx.access.scopes.pricelist.map((id) => ({ scopeKind: 'pricelist' as const, scopeId: id })),
               ];
               if (inherited.length > 0) {
                 await tx.insert(memberScopes).values(inherited.map((sc) => ({ ...sc, orgId: ctx.orgId, memberId: row.id })));
@@ -313,13 +315,14 @@ export const accountsRouter = router({
       return { data: { temporaryPassword: password }, error: null, meta: null };
     }),
 
-  /** The brands and suppliers a scope can name — as far as the caller can see them. */
+  /** The brands, suppliers and price lists a scope can name — as far as the caller can see them. */
   scopeOptions: requirePermission('members', 'changeRole').query(async ({ ctx }) => {
-    const [brandRows, supplierRows] = await ctx.withOrg((tx) => Promise.all([
+    const [brandRows, supplierRows, pricelistRows] = await ctx.withOrg((tx) => Promise.all([
       tx.select({ id: brands.id, name: brands.name }).from(brands).where(eq(brands.orgId, ctx.orgId)).orderBy(asc(brands.name)),
       tx.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(eq(suppliers.orgId, ctx.orgId)).orderBy(asc(suppliers.name)),
+      tx.select({ id: priceLists.id, name: priceLists.name }).from(priceLists).where(eq(priceLists.orgId, ctx.orgId)).orderBy(asc(priceLists.name)),
     ]));
-    return { data: { brands: brandRows, suppliers: supplierRows }, error: null, meta: null };
+    return { data: { brands: brandRows, suppliers: supplierRows, pricelists: pricelistRows }, error: null, meta: null };
   }),
 
   /**
@@ -331,9 +334,15 @@ export const accountsRouter = router({
     .input(memberIdSchema.extend({
       brand: z.array(z.string().uuid()).max(100),
       supplier: z.array(z.string().uuid()).max(100),
+      // PR-2b. Optional so a caller that predates it keeps its meaning.
+      pricelist: z.array(z.string().uuid()).max(100).default([]),
     }))
     .mutation(async ({ ctx, input }) => {
-      const next: MemberScopes = { brand: [...new Set(input.brand)].sort(), supplier: [...new Set(input.supplier)].sort() };
+      const next: MemberScopes = {
+        brand: [...new Set(input.brand)].sort(),
+        supplier: [...new Set(input.supplier)].sort(),
+        pricelist: [...new Set(input.pricelist)].sort(),
+      };
       if (!withinScopes(ctx.access.scopes, next)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك منح نطاق أوسع من نطاقك.' });
       }
@@ -341,12 +350,13 @@ export const accountsRouter = router({
         const target = await loadMember(tx, ctx.orgId, input.memberId);
         assertMayManage(ctx, target);
         // Every id must be a brand or supplier of this org (and visible to the caller).
-        const [foundBrands, foundSuppliers] = await Promise.all([
+        const [foundBrands, foundSuppliers, foundPricelists] = await Promise.all([
           next.brand.length ? tx.select({ id: brands.id }).from(brands).where(and(eq(brands.orgId, ctx.orgId), inArray(brands.id, next.brand))) : [],
           next.supplier.length ? tx.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.orgId, ctx.orgId), inArray(suppliers.id, next.supplier))) : [],
+          next.pricelist.length ? tx.select({ id: priceLists.id }).from(priceLists).where(and(eq(priceLists.orgId, ctx.orgId), inArray(priceLists.id, next.pricelist))) : [],
         ]);
-        if (foundBrands.length !== next.brand.length || foundSuppliers.length !== next.supplier.length) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'براند أو مورد غير موجود.' });
+        if (foundBrands.length !== next.brand.length || foundSuppliers.length !== next.supplier.length || foundPricelists.length !== next.pricelist.length) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'براند أو مورد أو قائمة أسعار غير موجودة.' });
         }
 
         return withAudit(
@@ -355,11 +365,12 @@ export const accountsRouter = router({
             await tx.delete(memberScopes).where(and(
               eq(memberScopes.orgId, ctx.orgId),
               eq(memberScopes.memberId, input.memberId),
-              inArray(memberScopes.scopeKind, ['brand', 'supplier']),
+              inArray(memberScopes.scopeKind, ['brand', 'supplier', 'pricelist']),
             ));
             const values = [
               ...next.brand.map((id) => ({ scopeKind: 'brand' as const, scopeId: id })),
               ...next.supplier.map((id) => ({ scopeKind: 'supplier' as const, scopeId: id })),
+              ...next.pricelist.map((id) => ({ scopeKind: 'pricelist' as const, scopeId: id })),
             ].map((v) => ({ ...v, orgId: ctx.orgId, memberId: input.memberId }));
             if (values.length > 0) await tx.insert(memberScopes).values(values);
             return { id: input.memberId };

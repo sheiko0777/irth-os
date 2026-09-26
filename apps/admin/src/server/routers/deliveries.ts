@@ -28,7 +28,9 @@ const OPEN_STATUSES = ['confirmed', 'shipped'] as const;
 type Ctx = Pick<Context, 'access' | 'orgId'>;
 
 function me(ctx: Ctx): string {
-  if (!ctx.access.memberId) throw new TRPCError({ code: 'FORBIDDEN' });
+  // Not a permission question: the permission was already checked. An access
+  // with no membership row (system work) has no book of its own to act on.
+  if (!ctx.access.memberId) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'No membership to act as.' });
   return ctx.access.memberId;
 }
 

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { db } from '../db';
-import { orders } from '@irth/db';
+import { orders, orderRepCondition, type EffectiveAccess } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireOrgId } from '../middlewares/requireOrgId';
 import { requirePermission } from '../middlewares/requirePermission';
@@ -40,7 +40,9 @@ shippingRoute.post('/create', requireOrgId(), requirePermission('courier', 'writ
 
   const { orderId } = createShippingSchema.parse(body);
 
-  const [order] = await db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.orgId, orgId)));
+  // A rep's narrowing (PR-2a/2b) on this unscoped read, as in routes/orders.ts.
+  const access = c.get('access') as EffectiveAccess | undefined;
+  const [order] = await db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.orgId, orgId), access ? orderRepCondition(access) : undefined));
 
   if (!order) {
     return c.json({ data: null, error: 'order_not_found', meta: null }, 404);

@@ -172,6 +172,8 @@ export async function withOrgContext<T>(
   scopes?: {
     brand: readonly string[];
     supplier: readonly string[];
+    /** PR-2b: price lists this member may use (0078); empty = unrestricted. */
+    pricelist?: readonly string[];
     /**
      * Who is acting (PR-2a), for 0077's delivery-rep policies: a
      * 'delivery_rep' sees only the orders assigned to memberId and their own
@@ -198,6 +200,7 @@ export async function withOrgContext<T>(
   };
   const brandIds = uuidList(scopes?.brand);
   const supplierIds = uuidList(scopes?.supplier);
+  const pricelistIds = uuidList(scopes?.pricelist);
   const memberId = uuidList(scopes?.memberId ? [scopes.memberId] : []);
   const principalKind = scopes?.principalKind ?? '';
   if (!['', 'staff', 'delivery_rep', 'sales_rep', 'supplier'].includes(principalKind)) {
@@ -229,7 +232,8 @@ export async function withOrgContext<T>(
     await tx.execute(
       sql`SELECT set_config('role', 'irth_app', true), set_config('app.org_id', ${orgId}, true),
                  set_config('app.brand_ids', ${brandIds}, true), set_config('app.supplier_ids', ${supplierIds}, true),
-                 set_config('app.member_id', ${memberId}, true), set_config('app.principal_kind', ${principalKind}, true)`,
+                 set_config('app.member_id', ${memberId}, true), set_config('app.principal_kind', ${principalKind}, true),
+                 set_config('app.pricelist_ids', ${pricelistIds}, true)`,
     );
     return fn(tx);
   });
@@ -283,7 +287,7 @@ export async function withAudit<T extends { id?: string }>(
 }
 
 /** Document kinds with their own per-tenant number series. */
-export type DocumentKind = 'order' | 'return' | 'purchase_order';
+export type DocumentKind = 'order' | 'return' | 'purchase_order' | 'quote';
 
 /**
  * Claims the next document number for a tenant, atomically.
@@ -365,6 +369,13 @@ export function formatDocumentNumber(kind: DocumentKind, value: number, year?: n
         // shape and break the 0036 seed's continuity with them.
         case 'purchase_order':
             return `PO-${year ?? new Date().getFullYear()}-${seq}`;
+        // PR-2b: a sales rep's quote. Its own series; a converted quote's
+        // order takes the next order number, not this one.
+        case 'quote':
+            return `QT-${year ?? new Date().getFullYear()}-${seq}`;
     }
 }
 export * from './campaignDispatch';
+export * from './orderPlacement';
+export * from './salesPricing';
+export * from './repScopes';

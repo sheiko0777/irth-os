@@ -98,11 +98,11 @@ describe('brand scope', () => {
   });
 
   it('the database alone holds the scope: a query with no scope WHERE still sees one brand', async () => {
-    const seen = await withOrgContext(testDb, org, (tx) => tx.select({ name: products.name }).from(products), { brand: [ids.B1], supplier: [] });
+    const seen = await withOrgContext(testDb, org, (tx) => tx.select({ name: products.name }).from(products), { brand: [ids.B1], supplier: [], pricelist: [] });
     expect(seen.map((p) => p.name)).toEqual(['P1']);
-    const stock = await withOrgContext(testDb, org, (tx) => tx.select({ id: inventoryItems.id }).from(inventoryItems), { brand: [ids.B1], supplier: [] });
+    const stock = await withOrgContext(testDb, org, (tx) => tx.select({ id: inventoryItems.id }).from(inventoryItems), { brand: [ids.B1], supplier: [], pricelist: [] });
     expect(stock.map((s) => s.id)).toEqual([ids.P1item]);
-    await expect(withOrgContext(testDb, org, (tx) => tx.insert(products).values({ orgId: org, name: 'X', sku: 'X', priceMinor: 1n, brandId: ids.B2 }), { brand: [ids.B1], supplier: [] }))
+    await expect(withOrgContext(testDb, org, (tx) => tx.insert(products).values({ orgId: org, name: 'X', sku: 'X', priceMinor: 1n, brandId: ids.B2 }), { brand: [ids.B1], supplier: [], pricelist: [] }))
       .rejects.toBeTruthy();
   });
 });
@@ -125,8 +125,8 @@ describe('assigning scopes', () => {
   it('the owner sets a scope; nobody sets one wider than their own; accounts they create inherit it', async () => {
     const target = await member('member', { accessRoleId: ids.keeperRole });
     const owner = await as('scope-owner');
-    await owner.accounts.setScopes({ memberId: target.memberId, brand: [ids.B1], supplier: [] });
-    expect((await owner.accounts.effective({ memberId: target.memberId })).data.scopes).toEqual({ brand: [ids.B1], supplier: [] });
+    await owner.accounts.setScopes({ memberId: target.memberId, brand: [ids.B1], supplier: [], pricelist: [] });
+    expect((await owner.accounts.effective({ memberId: target.memberId })).data.scopes).toEqual({ brand: [ids.B1], supplier: [], pricelist: [] });
     const [audit] = await testDb.select().from(auditLog).where(and(eq(auditLog.orgId, org), eq(auditLog.action, 'SET_MEMBER_SCOPES')));
     expect(audit).toBeTruthy();
 
@@ -137,13 +137,13 @@ describe('assigning scopes', () => {
     const mgr = await member('member', { accessRoleId: mgrRole.id, brand: [ids.B1] });
     const other = await member('member', { accessRoleId: ids.keeperRole, brand: [ids.B1] });
     const m = await as(mgr.userId);
-    expect(await code(m.accounts.setScopes({ memberId: other.memberId, brand: [ids.B1, ids.B2], supplier: [] }))).toBe('FORBIDDEN');
-    expect(await code(m.accounts.setScopes({ memberId: other.memberId, brand: [], supplier: [] }))).toBe('FORBIDDEN');
-    expect(await code(m.accounts.setScopes({ memberId: other.memberId, brand: [ids.B1], supplier: [] }))).toBe('OK');
+    expect(await code(m.accounts.setScopes({ memberId: other.memberId, brand: [ids.B1, ids.B2], supplier: [], pricelist: [] }))).toBe('FORBIDDEN');
+    expect(await code(m.accounts.setScopes({ memberId: other.memberId, brand: [], supplier: [], pricelist: [] }))).toBe('FORBIDDEN');
+    expect(await code(m.accounts.setScopes({ memberId: other.memberId, brand: [ids.B1], supplier: [], pricelist: [] }))).toBe('OK');
     // …and cannot manage someone unscoped (who sees more than the manager).
-    expect(await code(m.accounts.setScopes({ memberId: target.memberId, brand: [ids.B1], supplier: [] }))).toBe('OK');
+    expect(await code(m.accounts.setScopes({ memberId: target.memberId, brand: [ids.B1], supplier: [], pricelist: [] }))).toBe('OK');
     const unscoped = await member('member', { accessRoleId: ids.keeperRole });
-    expect(await code(m.accounts.setScopes({ memberId: unscoped.memberId, brand: [ids.B1], supplier: [] }))).toBe('FORBIDDEN');
+    expect(await code(m.accounts.setScopes({ memberId: unscoped.memberId, brand: [ids.B1], supplier: [], pricelist: [] }))).toBe('FORBIDDEN');
 
     const { data } = await m.accounts.create({ name: 'تابع', username: 'scoped_child', accessRoleId: ids.keeperRole });
     const inherited = await testDb.select().from(memberScopes).where(eq(memberScopes.memberId, data.memberId));

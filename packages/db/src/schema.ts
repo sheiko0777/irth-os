@@ -199,6 +199,10 @@ export const orders = pgTable("orders", {
   // composite same-org FK lives in the migration; a rep sees only these rows
   // (orders_delivery_rep_scope).
   assignedRepMemberId: uuid("assigned_rep_member_id"),
+  // 0078. The member who placed this order in the dashboard (a sales rep
+  // placing it for their customer, or staff). NULL for storefront and API
+  // orders. A sales rep sees the orders they placed and their customers'.
+  createdByMemberId: uuid("created_by_member_id"),
 }, (table) => ({
   importStatusCheck: check('orders_import_status_check', sql`${table.importStatus} IN ('complete', 'blocked')`),
   orgBlockedIdx: index('orders_org_id_blocked_idx').on(table.orgId).where(sql`${table.importStatus} = 'blocked'`),

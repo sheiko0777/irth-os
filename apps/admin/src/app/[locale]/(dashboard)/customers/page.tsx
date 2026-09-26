@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 import CustomerActions from "./CustomerActions";
+import { SalesRepCell } from "@/components/customers/SalesRepCell";
 import { ExportButton } from "@/components/ExportButton";
 import { PaginationNav } from "@/components/ui/PaginationNav";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -58,13 +59,14 @@ export default async function CustomersPage({
               <TableHead>{t("table.loyaltyPoints")}</TableHead>
               <TableHead>{t("table.orders")}</TableHead>
               <TableHead>{t("table.total")}</TableHead>
+              <TableHead>مندوب المبيعات</TableHead>
               <TableHead className="text-end">{t("table.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {customerList.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="p-0"><EmptyState title={t("empty.title")} hint={t("empty.hint")} /></TableCell>
+                <TableCell colSpan={8} className="p-0"><EmptyState title={t("empty.title")} hint={t("empty.hint")} /></TableCell>
               </TableRow>
             ) : (
               customerList.map((customer) => (
@@ -81,6 +83,9 @@ export default async function CustomersPage({
                   {/* Was `${customer.totalSpent} ج.م` — the raw column value,
                       so it printed ungrouped ("1234.56 ج.م"). */}
                   <TableCell>{customer.totalSpentMinor ? formatMoney(fromMinor(customer.totalSpentMinor)) : '-'}</TableCell>
+                  <TableCell>
+                    <SalesRepCell customerId={customer.id} customerName={customer.name} memberId={customer.salesRepMemberId ?? null} />
+                  </TableCell>
                   <TableCell className="text-end">
                     <div className="flex justify-end gap-2">
                       <CustomerActions actionType="addPoints" customerId={customer.id} customerName={customer.name} currentPoints={customer.loyaltyPoints ?? 0} />

@@ -6,23 +6,24 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
-type Kind = "brand" | "supplier";
-const KIND_LABELS: Record<Kind, string> = { brand: "البراندات", supplier: "الموردين" };
+type Kind = "brand" | "supplier" | "pricelist";
+const KIND_LABELS: Record<Kind, string> = { brand: "البراندات", supplier: "الموردين", pricelist: "قوائم الأسعار" };
 
 /**
- * نطاق البيانات (PR-1e): limit a member to some brands and/or suppliers. None
+ * نطاق البيانات (PR-1e, price lists PR-2b): limit a member to some brands,
+ * suppliers and/or price lists. None
  * ticked means no limit. Enforced by the database (0076) and the server, not
  * by this screen. Warehouse and channel scopes come once stock and orders
  * carry those columns.
  */
 export function MemberScopeEditor({
   memberId, initial, canEdit,
-}: { memberId: string; initial: { brand: readonly string[]; supplier: readonly string[] }; canEdit: boolean }) {
+}: { memberId: string; initial: { brand: readonly string[]; supplier: readonly string[]; pricelist: readonly string[] }; canEdit: boolean }) {
   const router = useRouter();
   const utils = trpc.useUtils();
   const options = trpc.accounts.scopeOptions.useQuery(undefined, { enabled: canEdit });
   const [picked, setPicked] = useState<Record<Kind, Set<string>>>({
-    brand: new Set(initial.brand), supplier: new Set(initial.supplier),
+    brand: new Set(initial.brand), supplier: new Set(initial.supplier), pricelist: new Set(initial.pricelist),
   });
 
   const save = trpc.accounts.setScopes.useMutation({
@@ -41,13 +42,14 @@ export function MemberScopeEditor({
   });
 
   if (!canEdit) {
-    const count = initial.brand.length + initial.supplier.length;
+    const count = initial.brand.length + initial.supplier.length + initial.pricelist.length;
     return <p className="text-sm text-[var(--t3)]">النطاق: {count === 0 ? "كل البيانات" : `${count} عنصر محدد`}</p>;
   }
 
   const lists: Record<Kind, Array<{ id: string; name: string }>> = {
     brand: options.data?.data.brands ?? [],
     supplier: options.data?.data.suppliers ?? [],
+    pricelist: options.data?.data.pricelists ?? [],
   };
 
   return (
@@ -74,7 +76,7 @@ export function MemberScopeEditor({
       ))}
       <Button
         type="button" size="sm" variant="outline" disabled={save.isPending}
-        onClick={() => save.mutate({ memberId, brand: [...picked.brand], supplier: [...picked.supplier] })}
+        onClick={() => save.mutate({ memberId, brand: [...picked.brand], supplier: [...picked.supplier], pricelist: [...picked.pricelist] })}
       >
         {save.isPending ? "جارٍ الحفظ…" : "حفظ النطاق"}
       </Button>

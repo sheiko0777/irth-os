@@ -34,6 +34,18 @@ const DELIVERY_REP_TEMPLATE: RoleDraft = {
   },
 };
 
+// PR-2b: a sales rep — their own customers, orders and quotes, and the
+// customer's contact details. Which price lists they may use is a data scope
+// on the member (نطاق البيانات), not part of the role.
+const SALES_REP_TEMPLATE: RoleDraft = {
+  name: "مندوب مبيعات",
+  principalKind: "sales_rep",
+  permissions: {
+    sales: ["view", "customers", "order", "quote"],
+    sensitive: ["customerContact"],
+  },
+};
+
 function countPermissions(list: Record<string, string[]>): number {
   return Object.values(list).reduce((n, actions) => n + actions.length, 0);
 }
@@ -91,6 +103,9 @@ export function RolesManager() {
         </Button>
         <Button variant="outline" onClick={() => open({ mode: "create", initial: DELIVERY_REP_TEMPLATE })}>
           قالب مندوب توصيل
+        </Button>
+        <Button variant="outline" onClick={() => open({ mode: "create", initial: SALES_REP_TEMPLATE })}>
+          قالب مندوب مبيعات
         </Button>
         </div>
       )}

@@ -167,6 +167,7 @@ export async function resolveEffectiveAccess(
   const scopes: MemberScopes = {
     brand: scopeRows.filter((r) => r.kind === 'brand').map((r) => r.id).sort(),
     supplier: scopeRows.filter((r) => r.kind === 'supplier').map((r) => r.id).sort(),
+    pricelist: scopeRows.filter((r) => r.kind === 'pricelist').map((r) => r.id).sort(),
   };
   // A member not (yet) linked to a role row falls back to their text role —
   // the same authority requirePermission uses today — never to "nothing"

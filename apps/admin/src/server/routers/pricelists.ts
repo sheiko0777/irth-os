@@ -7,7 +7,7 @@ export const pricelistsRouter = router({
   list: requirePermission('pricelists', 'view')
     .input(z.object({}).optional())
     .query(async ({ ctx }) => {
-      const lists = await ctx.db
+      const lists = await ctx.withOrg((tx) => tx
         .select({
             ...getTableColumns(priceLists),
             itemCount: count(priceListItems.id),
@@ -16,7 +16,7 @@ export const pricelistsRouter = router({
         .leftJoin(priceListItems, eq(priceLists.id, priceListItems.priceListId))
         .where(eq(priceLists.orgId, ctx.orgId))
         .groupBy(priceLists.id)
-        .orderBy(desc(priceLists.createdAt));
+        .orderBy(desc(priceLists.createdAt)));
 
       const listsWithCounts = lists.map((pl) => {
         return {
@@ -74,7 +74,7 @@ export const pricelistsRouter = router({
   getItems: requirePermission('pricelists', 'view')
     .input(z.object({ pricelistId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      const items = await ctx.db
+      const items = await ctx.withOrg((tx) => tx
         .select()
         .from(priceListItems)
         .where(
@@ -82,7 +82,7 @@ export const pricelistsRouter = router({
             eq(priceListItems.priceListId, input.pricelistId),
             eq(priceListItems.orgId, ctx.orgId)
           )
-        );
+        ));
       return items;
     }),
 });

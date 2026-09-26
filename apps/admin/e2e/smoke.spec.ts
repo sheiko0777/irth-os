@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
-  BLOCKED_ORDER_NUMBER, BUYER_NAME, COD_ORDER_NUMBER, DRIVER_PASSWORD, DRIVER_USERNAME, OWNER, OWNER_STATE, REP_NEW_PASSWORD, REP_USERNAME, UNMAPPED_LINE,
+  BLOCKED_ORDER_NUMBER, BUYER_NAME, COD_ORDER_NUMBER, DRIVER_PASSWORD, DRIVER_USERNAME, OWNER, OWNER_STATE, REP_NEW_PASSWORD, REP_USERNAME,
+  SALES_CUSTOMER, SALES_PRICE_LIST, SELLER_PASSWORD, SELLER_USERNAME, UNMAPPED_LINE,
 } from './fixture';
 
 /**
@@ -178,4 +179,52 @@ test('a delivery rep delivers a cash order, collects it and hands the cash over;
   await expect(row.getByRole('button', { name: 'تأكيد الاستلام' })).toHaveCount(0);
   await expect(row).toContainText('500');
   await office.close();
+});
+
+test('a sales rep sells to their own customer at their price list, and turns a quote into an order', async ({ page }) => {
+  await page.goto('/ar/settings/roles');
+  await page.getByRole('button', { name: 'قالب مندوب مبيعات' }).click();
+  await page.getByRole('button', { name: 'حفظ الدور' }).click();
+  await expect(page.getByTestId('role-card').filter({ hasText: 'مندوب مبيعات' })).toBeVisible();
+
+  await page.goto('/ar/settings/members');
+  await page.getByLabel('الاسم', { exact: true }).fill('بياع الاختبار');
+  await page.getByLabel('اسم المستخدم أو رقم الموبايل').fill(SELLER_USERNAME);
+  await page.locator('#account-role').selectOption({ label: 'مندوب مبيعات — مندوب مبيعات' });
+  await page.getByRole('button', { name: 'إنشاء الحساب' }).click();
+  const temporary = (await page.getByTestId('temp-password').textContent())?.trim() ?? '';
+
+  // The office hands them the customer.
+  await page.goto('/ar/customers');
+  const repSelect = page.getByLabel(`مندوب مبيعات ${SALES_CUSTOMER}`);
+  await repSelect.selectOption({ label: 'بياع الاختبار' });
+  await expect(page.getByText('اتغيّر مندوب المبيعات')).toBeVisible();
+
+  // Better Auth allows 3 sign-ins per 10 s; the tests above used them.
+  await page.waitForTimeout(10_500);
+  await page.context().clearCookies();
+  await signIn(page, SELLER_USERNAME, temporary);
+  await page.waitForURL(/\/ar\/change-password$/);
+  await page.getByLabel('كلمة السر المؤقتة').fill(temporary);
+  await page.getByLabel('كلمة السر الجديدة', { exact: true }).fill(SELLER_PASSWORD);
+  await page.getByLabel('أكّد كلمة السر الجديدة').fill(SELLER_PASSWORD);
+  await page.getByRole('button', { name: 'احفظ كلمة السر' }).click();
+  await page.waitForURL(/\/ar\/sales$/);
+
+  // Their customer and their price list; the server's price: 250.00 less 10%.
+  await page.getByRole('combobox', { name: 'العميل', exact: true }).selectOption({ label: SALES_CUSTOMER });
+  await page.getByRole('combobox', { name: 'قائمة الأسعار' }).selectOption({ label: SALES_PRICE_LIST });
+  await page.getByLabel('كمية E2E-SERUM-30').fill('2');
+  await expect(page.getByTestId('sale-preview-total')).toContainText('450.00');
+  await page.getByRole('button', { name: 'إنشاء الطلب' }).click();
+  await expect(page.getByText(/اتعمل الطلب IRT-/)).toBeVisible();
+  await expect(page.getByTestId('sales-orders')).toContainText('450.00');
+
+  // A quote, then the order from it.
+  await page.getByRole('combobox', { name: 'العميل', exact: true }).selectOption({ label: SALES_CUSTOMER });
+  await page.getByLabel('كمية E2E-SERUM-30').fill('1');
+  await page.getByRole('button', { name: 'حفظ كعرض سعر' }).click();
+  await expect(page.getByText(/اتحفظ عرض السعر QT-/)).toBeVisible();
+  await page.getByTestId('sales-quotes').getByRole('button', { name: 'تحويل لطلب' }).first().click();
+  await expect(page.getByTestId('sales-quotes')).toContainText('اتحوّل لطلب');
 });

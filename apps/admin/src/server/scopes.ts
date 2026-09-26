@@ -1,4 +1,5 @@
-import { eq, inArray, sql, type AnyColumn, type SQL } from 'drizzle-orm';
+import { inArray, type AnyColumn, type SQL } from 'drizzle-orm';
+import { customerRepCondition, orderRepCondition } from '@irth/db';
 import type { Context } from './trpc';
 
 /**
@@ -19,12 +20,14 @@ export function supplierScope(ctx: Pick<Context, 'access'>, column: AnyColumn): 
 }
 
 /**
- * A delivery rep's half of the same rule (PR-2a): limits an order query to
- * the orders assigned to the caller, or undefined for anyone else. 0077's
- * policies hold the same line inside ctx.withOrg. A rep without a member id
- * matches nothing — fail closed, like the database.
+ * A rep's half of the same rule (PR-2a/2b): a delivery rep's assigned orders,
+ * a sales rep's own and their customers' — undefined for anyone else. The
+ * conditions live in @irth/db so apps/api applies exactly the same ones.
  */
-export function repScope(ctx: Pick<Context, 'access'>, column: AnyColumn): SQL | undefined {
-  if (ctx.access.principalKind !== 'delivery_rep') return undefined;
-  return ctx.access.memberId ? eq(column, ctx.access.memberId) : sql`false`;
+export function orderRepScope(ctx: Pick<Context, 'access'>): SQL | undefined {
+  return orderRepCondition(ctx.access);
+}
+
+export function customerRepScope(ctx: Pick<Context, 'access'>): SQL | undefined {
+  return customerRepCondition(ctx.access);
 }

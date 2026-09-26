@@ -114,7 +114,7 @@ describe('a rep sees only their own orders', () => {
   });
 
   it('the database alone holds it: a query with no rep WHERE sees one rep\'s orders, and nothing without a member id', async () => {
-    const settings = { brand: [], supplier: [], principalKind: 'delivery_rep' as const };
+    const settings = { brand: [], supplier: [], pricelist: [], principalKind: 'delivery_rep' as const };
     const seen = await withOrgContext(testDb, org, (tx) => tx.select({ n: orders.orderNumber }).from(orders), { ...settings, memberId: repA.memberId });
     expect(seen.map((r) => r.n).sort()).toEqual(['R-1', 'R-4']);
     const blind = await withOrgContext(testDb, org, (tx) => tx.select({ n: orders.orderNumber }).from(orders), { ...settings, memberId: null });
@@ -124,7 +124,7 @@ describe('a rep sees only their own orders', () => {
       { ...settings, memberId: repA.memberId })).rejects.toBeTruthy();
     // Staff are not narrowed.
     const all = await withOrgContext(testDb, org, (tx) => tx.select({ n: orders.orderNumber }).from(orders),
-      { brand: [], supplier: [], principalKind: 'staff', memberId: admin.memberId });
+      { brand: [], supplier: [], pricelist: [], principalKind: 'staff', memberId: admin.memberId });
     expect(all.length).toBe(4);
   });
 });

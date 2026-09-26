@@ -72,6 +72,8 @@ export const PERMISSIONS = {
     write: ['owner', 'admin'] as Role[],
     delete: ['owner'] as Role[],
     export: ['owner', 'admin', 'member'] as Role[],
+    // PR-2b: hand a customer to a sales rep.
+    assign: ['owner', 'admin'] as Role[],
   },
   courier: {
     view: ['owner', 'admin', 'member'] as Role[],
@@ -159,6 +161,16 @@ export const PERMISSIONS = {
   // PR-2a: rep cash custody. `handover` is the rep's own end-of-day handover;
   // `confirm` is the cashier counting it; `writeOff` books a shortage as a
   // loss and stays owner-only by default.
+  // PR-2b: a sales rep's own book — their customers, their orders and
+  // quotes, at the price lists they may use. Every procedure behind these is
+  // also narrowed to the caller (and by 0078 in the database). No system role
+  // but the owner has them: a rep gets them from a role of kind sales_rep.
+  sales: {
+    view: ['owner'] as Role[],
+    customers: ['owner'] as Role[],
+    order: ['owner'] as Role[],
+    quote: ['owner'] as Role[],
+  },
   repCash: {
     view: ['owner', 'admin'] as Role[],
     handover: ['owner'] as Role[],
@@ -252,6 +264,7 @@ export function transactionSettings(access: EffectiveAccess) {
   return {
     brand: access.scopes.brand,
     supplier: access.scopes.supplier,
+    pricelist: access.scopes.pricelist,
     memberId: access.memberId,
     principalKind: access.principalKind,
   };
@@ -260,9 +273,13 @@ export function transactionSettings(access: EffectiveAccess) {
 export interface MemberScopes {
   readonly brand: readonly string[];
   readonly supplier: readonly string[];
+  /** PR-2b: the price lists this member may sell at (0078). */
+  readonly pricelist: readonly string[];
 }
 
-export const NO_SCOPES: MemberScopes = { brand: [], supplier: [] };
+export const SCOPE_KIND_NAMES = ['brand', 'supplier', 'pricelist'] as const;
+
+export const NO_SCOPES: MemberScopes = { brand: [], supplier: [], pricelist: [] };
 
 const key = (resource: string, action: string) => `${resource}.${action}`;
 
@@ -374,7 +391,7 @@ export function covers(actor: EffectiveAccess, target: EffectiveAccess): boolean
  * empty inner would mean "unrestricted", which is wider).
  */
 export function withinScopes(outer: MemberScopes, inner: MemberScopes): boolean {
-  for (const kind of ['brand', 'supplier'] as const) {
+  for (const kind of SCOPE_KIND_NAMES) {
     if (outer[kind].length === 0) continue;
     if (inner[kind].length === 0) return false;
     if (!inner[kind].every((id) => outer[kind].includes(id))) return false;

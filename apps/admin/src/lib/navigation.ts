@@ -3,7 +3,7 @@ import {
   Box, FolderOpen, Warehouse, ClipboardList, ShoppingBag, RotateCcw,
   DollarSign, PieChart, Tag, List, Megaphone, Gift,
   Truck, MapPin, FileText, Plug2,
-  Settings, UserCog, BrainCircuit, ShieldCheck, KeyRound, PackageCheck, Wallet,
+  Settings, UserCog, BrainCircuit, ShieldCheck, KeyRound, PackageCheck, Wallet, Briefcase,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -44,6 +44,7 @@ const REQUIRES: Record<string, string> = {
   'gift-cards': 'giftCards.view',
   courier: 'courier.view',
   rep: 'deliveries.view',
+  sales: 'sales.view',
   'rep-cash': 'repCash.view',
   shipping: 'shipping.view',
   eta: 'eta.view',
@@ -93,6 +94,7 @@ export function buildNavGroups(locale: string): NavGroup[] {
         { href: `/${locale}`, label: 'الرئيسية', icon: Home, keywords: 'home dashboard' },
         { href: `/${locale}/orders`, label: 'الطلبات', icon: ShoppingCart, keywords: 'orders' },
         { href: `/${locale}/customers`, label: 'العملاء', icon: Users, keywords: 'customers' },
+        { href: `/${locale}/sales`, label: 'مبيعاتي', icon: Briefcase, keywords: 'sales rep quotes مبيعات مندوب عروض أسعار' },
         { href: `/${locale}/customer-segments`, label: 'شرائح العملاء', icon: UsersRound, keywords: 'segments' },
         { href: `/${locale}/notifications`, label: 'الإشعارات', icon: Bell, keywords: 'notifications' },
         { href: `/${locale}/intelligence`, label: locale === 'ar' ? 'ذكاء إرث' : 'IRTH Intelligence', icon: BrainCircuit, keywords: 'ai assistant intelligence chatbot' },

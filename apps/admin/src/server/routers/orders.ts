@@ -1,7 +1,7 @@
 import { router, requirePermission } from '../trpc';
 import { orders, orderItems, shipmentTracking, products, productVariants, orderStatusEnum, notifications, paginationMeta, paginationOffset } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
-import { repScope } from '../scopes';
+import { orderRepScope } from '../scopes';
 import { orderAssignmentProcedures } from './orderAssignment';
 import { eq, and, desc, count, ilike, gte, lte, inArray, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
@@ -114,8 +114,8 @@ export const ordersRouter = router({
             // respect the search and date narrowing, but not the tab the user is
             // standing on — otherwise every tab but the active one reads zero.
             const scope = [eq(orders.orgId, ctx.orgId)];
-            // A delivery rep granted orders.view sees only their own (PR-2a).
-            const rep = repScope(ctx, orders.assignedRepMemberId);
+            // A rep granted orders.view sees only their own (PR-2a/2b).
+            const rep = orderRepScope(ctx);
             if (rep) scope.push(rep);
 
             if (search) {
@@ -184,7 +184,7 @@ export const ordersRouter = router({
                     where: and(
                         eq(orders.id, input.id),
                         eq(orders.orgId, ctx.orgId),
-                        repScope(ctx, orders.assignedRepMemberId),
+                        orderRepScope(ctx),
                     )
                 })),
                 ctx.withOrg(async (tx) => tx

@@ -1,7 +1,8 @@
 import { test as setup, expect } from '@playwright/test';
 import postgres from 'postgres';
 import {
-  BLOCKED_ORDER_NUMBER, BUYER_NAME, COD_ORDER_NUMBER, DRIVER_USERNAME, LINKED_GID, ORG_SLUG, OWNER, OWNER_STATE, REP_USERNAME, UNMAPPED_LINE,
+  BLOCKED_ORDER_NUMBER, BUYER_NAME, COD_ORDER_NUMBER, DRIVER_USERNAME, LINKED_GID, ORG_SLUG, OWNER, OWNER_STATE, REP_USERNAME,
+  SALES_CUSTOMER, SALES_PRICE_LIST, SELLER_USERNAME, UNMAPPED_LINE,
 } from './fixture';
 
 /**
@@ -43,8 +44,21 @@ setup('seed an owner, an org and a blocked Shopify order', async ({ request }) =
     await sql`DELETE FROM rep_cash_collections WHERE org_id = ${org.id}`;
     await sql`DELETE FROM rep_cash_handovers WHERE org_id = ${org.id}`;
     await sql`DELETE FROM delivery_attempts WHERE org_id = ${org.id}`;
-    await sql`DELETE FROM org_members WHERE user_id IN (SELECT id FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME}))`;
-    await sql`DELETE FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME})`;
+    await sql`DELETE FROM org_members WHERE user_id IN (SELECT id FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME}, ${SELLER_USERNAME}))`;
+    await sql`DELETE FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME}, ${SELLER_USERNAME})`;
+
+    // The sales rep flow (PR-2b): a customer with no rep yet, and an active
+    // 10% price list. Kept across runs; the rep is re-assigned each time.
+    const [salesCustomer] = await sql`SELECT id FROM customers WHERE org_id = ${org.id} AND name = ${SALES_CUSTOMER}`;
+    if (salesCustomer) {
+      await sql`UPDATE customers SET sales_rep_member_id = NULL WHERE id = ${salesCustomer.id}`;
+    } else {
+      await sql`INSERT INTO customers (org_id, name, phone, address) VALUES (${org.id}, ${SALES_CUSTOMER}, '+201000000002', '10 شارع الجمهورية، المنصورة')`;
+    }
+    const [salesList] = await sql`SELECT id FROM price_lists WHERE org_id = ${org.id} AND name = ${SALES_PRICE_LIST}`;
+    if (!salesList) {
+      await sql`INSERT INTO price_lists (org_id, name, currency, discount_bp) VALUES (${org.id}, ${SALES_PRICE_LIST}, 'EGP', 1000)`;
+    }
     await sql`DELETE FROM access_roles WHERE org_id = ${org.id} AND system_key IS NULL`;
 
     // A cash-on-delivery order out for delivery, for the delivery rep flow.
@@ -71,6 +85,8 @@ setup('seed an owner, an org and a blocked Shopify order', async ({ request }) =
       await sql`UPDATE product_variants SET shopify_variant_id = NULL WHERE org_id = ${org.id} AND sku = 'E2E-SERUM-50'`;
       await sql`UPDATE orders SET import_status = 'blocked', status = 'confirmed' WHERE id = ${existing.id}`;
       await sql`DELETE FROM outbox_events WHERE org_id = ${org.id}`;
+      // Orders placed by an earlier run took stock; put it back.
+      await sql`UPDATE inventory_items SET quantity = 20 WHERE org_id = ${org.id}`;
       return;
     }
 

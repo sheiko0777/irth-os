@@ -30,7 +30,7 @@ export const analyticsRouter = router({
       const sinceIso = daysAgoIso(input.days);
 
       const [rows, netByDay] = await Promise.all([
-        ctx.db.execute(sql`
+        ctx.withOrg((tx) => tx.execute(sql`
           SELECT
             (date_trunc('day', created_at)::date)::text AS day,
             COUNT(*)::int                               AS orders
@@ -39,7 +39,7 @@ export const analyticsRouter = router({
             AND created_at >= ${sinceIso}
             AND status = 'delivered'
           GROUP BY 1
-        `),
+        `)),
         ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: new Date(sinceIso) })),
       ]);
 
@@ -159,18 +159,18 @@ export const analyticsRouter = router({
       totalOrders,
       lowStockCount,
     ] = await Promise.all([
-      ctx.db
+      ctx.withOrg((tx) => tx
         .select({ count: count() })
         .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart))),
+        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart)))),
       // Net sales from the ledger (CLAUDE.md rule 2); see `revenue` above.
       ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: todayStart })),
       ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: thisMonthStart })),
       ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: lastMonthStart, to: thisMonthStart })),
-      ctx.db
+      ctx.withOrg((tx) => tx
         .select({ count: count() })
         .from(orders)
-        .where(eq(orders.orgId, ctx.orgId)),
+        .where(eq(orders.orgId, ctx.orgId))),
       ctx.withOrg((tx) => tx
         .select({ count: count() })
         .from(inventoryItems)

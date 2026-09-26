@@ -53,31 +53,31 @@ export const dashboardRouter = router({
             dailyRevenueQuery,
             pipelineQuery,
         ] = await Promise.all([
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay))),
+                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay)))),
             // Revenue reads the ledger (CLAUDE.md rule 2), never orders: net
             // sales ex-VAT, less returns, dated when the sale was recognised.
             ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfDay })),
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), eq(orders.status, 'pending'))),
+                .where(and(eq(orders.orgId, ctx.orgId), eq(orders.status, 'pending')))),
             ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(products)
                 .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active')))),
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
                 .where(and(
                     eq(orders.orgId, ctx.orgId),
                     gte(orders.createdAt, startOfYesterday),
                     lt(orders.createdAt, startOfDay),
-                )),
+                ))),
             ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfYesterday, to: startOfDay })),
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({
                     day: sql<string>`${dayBucket}::date::text`,
                     orderCount: count(),
@@ -85,15 +85,15 @@ export const dashboardRouter = router({
                 .from(orders)
                 .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, sparkFrom)))
                 .groupBy(dayBucket)
-                .orderBy(dayBucket),
+                .orderBy(dayBucket)),
             // Same source as revenueToday so the headline and its trend line
             // measure the same thing.
             ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: sparkFrom })),
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ status: orders.status, count: count() })
                 .from(orders)
                 .where(eq(orders.orgId, ctx.orgId))
-                .groupBy(orders.status),
+                .groupBy(orders.status)),
         ]);
 
         const ordersToday = ordersTodayQuery[0]?.count ?? 0;
@@ -153,14 +153,14 @@ export const dashboardRouter = router({
         const lateBefore = new Date(Date.now() - LATE_ORDER_HOURS * 60 * 60 * 1000);
 
         const [lateOrdersQuery, outOfStockQuery, pendingReturnsQuery] = await Promise.all([
-            ctx.db
+            ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
                 .where(and(
                     eq(orders.orgId, ctx.orgId),
                     inArray(orders.status, ['pending', 'confirmed']),
                     lt(orders.createdAt, lateBefore),
-                )),
+                ))),
             ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(inventoryItems)
@@ -189,7 +189,7 @@ export const dashboardRouter = router({
     }),
 
     getRecentOrders: requirePermission('dashboard', 'view').query(async ({ ctx }) => {
-        const recentOrders = await ctx.db
+        const recentOrders = await ctx.withOrg((tx) => tx
             .select({
                 id: orders.id,
                 orderNumber: orders.orderNumber,
@@ -200,7 +200,7 @@ export const dashboardRouter = router({
             .from(orders)
             .where(eq(orders.orgId, ctx.orgId))
             .orderBy(desc(orders.createdAt))
-            .limit(6);
+            .limit(6));
 
         return { data: recentOrders, error: null, meta: null };
     }),
