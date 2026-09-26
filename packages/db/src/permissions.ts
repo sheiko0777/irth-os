@@ -14,6 +14,13 @@ export const PERMISSIONS = {
   members: {
     view: ['owner', 'admin'] as Role[],
     invite: ['owner', 'admin'] as Role[],
+    // PR-1d: create an account directly (username + temporary password) and
+    // reset a member's password — the same bar as inviting someone. What role
+    // the new account may get is further limited by canDelegate below.
+    create: ['owner', 'admin'] as Role[],
+    resetPassword: ['owner', 'admin'] as Role[],
+    // Suspend or reactivate a member — owner-only, like remove.
+    suspend: ['owner'] as Role[],
     changeRole: ['owner'] as Role[],
     // Owner-only, matching changeRole's bar — removing someone permanently is
     // at least as sensitive as changing their role.
@@ -189,6 +196,12 @@ export interface EffectiveAccess {
   readonly isOwner: boolean;
   readonly principalKind: PrincipalKindName;
   readonly suspended: boolean;
+  /**
+   * An account created with a temporary password (PR-1d) holds no permission
+   * until its owner sets their own password — only the self-service
+   * procedures work, which is how they change it.
+   */
+  readonly mustChangePassword: boolean;
   /** "resource.action" keys. Empty for a suspended member. */
   readonly perms: ReadonlySet<string>;
 }
@@ -235,25 +248,59 @@ export function effectiveAccess(input: {
   overrides?: { grant?: PermissionListInput; revoke?: PermissionListInput };
   principalKind?: PrincipalKindName;
   status?: 'active' | 'suspended';
+  mustChangePassword?: boolean;
 }): EffectiveAccess {
   const principalKind = input.principalKind ?? 'staff';
   const suspended = input.status === 'suspended';
+  const mustChangePassword = input.mustChangePassword === true;
   const isOwner = input.systemKey === 'owner' && !suspended;
 
-  if (suspended) return { isOwner: false, principalKind, suspended, perms: new Set() };
-  if (isOwner) return { isOwner, principalKind, suspended, perms: new Set(allPermissionKeys()) };
+  if (suspended) return { isOwner: false, principalKind, suspended, mustChangePassword, perms: new Set() };
+  if (isOwner) return { isOwner, principalKind, suspended, mustChangePassword, perms: new Set(allPermissionKeys()) };
 
   const base = input.systemKey ? permissionsForRole(input.systemKey) : input.rolePermissions;
   const perms = new Set(knownPairs(base));
   for (const k of knownPairs(input.overrides?.grant)) perms.add(k);
   for (const k of knownPairs(input.overrides?.revoke)) perms.delete(k);
-  return { isOwner, principalKind, suspended, perms };
+  return { isOwner, principalKind, suspended, mustChangePassword, perms };
 }
 
 export function canAccess<R extends Resource>(access: EffectiveAccess, resource: R, action: ActionFor<R>): boolean {
   // The owner's set already holds every declared pair, so membership alone
   // decides — and an undeclared action fails closed for everyone, owner
   // included, exactly as can() does.
-  if (access.suspended) return false;
+  if (access.suspended || access.mustChangePassword) return false;
   return access.perms.has(key(resource, String(action)));
+}
+
+/** The "resource.action" keys a stored list names, keeping only declared pairs. */
+export function permissionKeys(list: PermissionListInput | undefined): string[] {
+  return knownPairs(list);
+}
+
+// ---------------------------------------------------------------------------
+// Delegation (PR-1d): nobody hands out authority they do not hold.
+//
+// Generalises canAssignRole from three fixed roles to any role or override:
+// an actor may give someone a permission set only if it is a subset of their
+// own. The owner role itself is the owner's alone to give. And an actor may
+// only change a member whose current authority they already cover — an admin
+// cannot edit the owner, or someone granted more than the admin has.
+// ---------------------------------------------------------------------------
+
+/** May `actor` give someone exactly these permissions (a role's list, or grants)? */
+export function canDelegate(actor: EffectiveAccess, perms: Iterable<string>, opts: { ownerRole?: boolean } = {}): boolean {
+  if (actor.suspended || actor.mustChangePassword) return false;
+  if (actor.isOwner) return true;
+  if (opts.ownerRole) return false;
+  for (const p of perms) if (!actor.perms.has(p)) return false;
+  return true;
+}
+
+/** May `actor` manage `target` at all — change their role, overrides or status? */
+export function covers(actor: EffectiveAccess, target: EffectiveAccess): boolean {
+  if (actor.suspended || actor.mustChangePassword) return false;
+  if (actor.isOwner) return true;
+  if (target.isOwner) return false;
+  return canDelegate(actor, target.perms);
 }

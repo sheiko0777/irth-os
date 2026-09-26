@@ -42,6 +42,9 @@ beforeAll(async () => {
   const [b] = await testDb.insert(organizations).values({ name: 'Roles B', slug: `roles-b-${Date.now()}` }).returning();
   orgA = a.id;
   orgB = b.id;
+  // Every real org has an owner, and 0075 refuses member changes that would
+  // leave one without.
+  await testDb.insert(orgMembers).values({ orgId: orgA, userId: 'owner-user', role: 'owner' });
 });
 afterAll(async () => { await closeTestDb(); });
 

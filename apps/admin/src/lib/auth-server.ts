@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { twoFactor } from 'better-auth/plugins';
+import { twoFactor, username } from 'better-auth/plugins';
 import { db } from '@irth/db';
 import * as authSchema from '@irth/db/src/schema/auth';
 import { resolveAppBaseUrl } from './appUrl';
@@ -82,6 +82,13 @@ function createAuth() {
         // The org name shown in the authenticator app entry.
         issuer: 'IRTH OS',
       }),
+      /**
+       * Sign-in by username (PR-1d): accounts the owner creates directly —
+       * reps and suppliers, often without email — sign in with a username,
+       * usually their mobile number. Columns from migration 0075. The 2FA
+       * hook covers /sign-in/username as it does /sign-in/email.
+       */
+      username(),
     ],
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: resolveAppBaseUrl(),

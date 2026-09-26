@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { OWNER_STATE } from './e2e/fixture';
 
 /**
  * Browser smoke test for the admin: a real Next production build, a real
@@ -35,7 +36,7 @@ export default defineConfig({
     { name: 'setup', testMatch: /seed\.setup\.ts/ },
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], storageState: OWNER_STATE },
       dependencies: ['setup'],
       testMatch: /.*\.spec\.ts/,
     },

@@ -38,3 +38,4 @@ hazy-spinning-blum.md
 # Playwright
 apps/admin/playwright-report/
 apps/admin/test-results/
+apps/admin/e2e/.auth/

@@ -1,7 +1,7 @@
 import { test as setup, expect } from '@playwright/test';
 import postgres from 'postgres';
 import {
-  BLOCKED_ORDER_NUMBER, BUYER_NAME, LINKED_GID, ORG_SLUG, OWNER, UNMAPPED_LINE,
+  BLOCKED_ORDER_NUMBER, BUYER_NAME, LINKED_GID, ORG_SLUG, OWNER, OWNER_STATE, REP_USERNAME, UNMAPPED_LINE,
 } from './fixture';
 
 /**
@@ -36,7 +36,10 @@ setup('seed an owner, an org and a blocked Shopify order', async ({ request }) =
     await sql`
       INSERT INTO org_members (org_id, user_id, role) VALUES (${org.id}, ${user.id}, 'owner')
       ON CONFLICT (org_id, user_id) DO NOTHING`;
-    // Roles a previous run created through the roles screen.
+    // Accounts and roles a previous run created through the members and
+    // roles screens.
+    await sql`DELETE FROM org_members WHERE user_id IN (SELECT id FROM "user" WHERE username = ${REP_USERNAME})`;
+    await sql`DELETE FROM "user" WHERE username = ${REP_USERNAME}`;
     await sql`DELETE FROM access_roles WHERE org_id = ${org.id} AND system_key IS NULL`;
 
     // Re-runnable against the same database: put the scenario back to its
@@ -87,4 +90,13 @@ setup('seed an owner, an org and a blocked Shopify order', async ({ request }) =
   } finally {
     await sql.end();
   }
+});
+
+setup('sign the owner in once for the tests that start signed in', async ({ request }) => {
+  const res = await request.post('/api/auth/sign-in/email', {
+    data: { email: OWNER.email, password: OWNER.password },
+    headers: { origin: 'http://localhost:3100' },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  await request.storageState({ path: OWNER_STATE });
 });

@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, resolveActiveOrgMembership, resolveEffectiveAccess, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, canAccess, type ActionFor, type Resource } from '@irth/db';
+import { db, resolveActiveOrgMembership, resolveEffectiveAccess, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, canAccess, auditLog, type ActionFor, type Resource } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
@@ -193,6 +193,37 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     });
 });
 
+/**
+ * A refused call is evidence — someone probing, or a role missing something
+ * they need — so it goes to the audit log (PR-1d). At most one row per member,
+ * procedure and minute per server instance, so a client retrying in a loop
+ * cannot flood the table; and never at the cost of the refusal itself, which
+ * stands whether or not the row is written.
+ */
+const DENIAL_WINDOW_MS = 60_000;
+const recentDenials = new Map<string, number>();
+
+async function recordDenied(ctx: Pick<Context, 'orgId' | 'userId' | 'withOrg'>, path: string, permission: string) {
+    const key = `${ctx.orgId}:${ctx.userId}:${path}`;
+    const now = Date.now();
+    const last = recentDenials.get(key);
+    if (last !== undefined && now - last < DENIAL_WINDOW_MS) return;
+    recentDenials.set(key, now);
+    if (recentDenials.size > 10_000) recentDenials.clear();
+    try {
+        await ctx.withOrg((tx) => tx.insert(auditLog).values({
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            action: 'PERMISSION_DENIED',
+            tableName: 'permissions',
+            recordId: null,
+            changes: { path, permission },
+        }));
+    } catch {
+        // The refusal is what matters; a lost audit row must not turn it into a 500.
+    }
+}
+
 // Requires the caller to hold resource.action — the ONLY authorization gate
 // for tenant procedures. Checked against ctx.access, resolved per request from
 // the member's role (system or custom) plus per-person grants minus revokes;
@@ -204,8 +235,14 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 // permissionGate.test.ts fails the build if a router procedure is not built
 // on this, outside the short allowlist of self-service procedures.
 export function requirePermission<R extends Resource>(resource: R, action: ActionFor<R>) {
-    return protectedProcedure.meta({ permission: `${resource}.${String(action)}` }).use(({ ctx, next }) => {
+    return protectedProcedure.meta({ permission: `${resource}.${String(action)}` }).use(async ({ ctx, next, path }) => {
+        if (ctx.access.mustChangePassword) {
+            // Recognisable by the client, which sends the member to the
+            // change-password page instead of showing an error.
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'PASSWORD_CHANGE_REQUIRED' });
+        }
         if (!canAccess(ctx.access, resource, action)) {
+            await recordDenied(ctx, path, `${String(resource)}.${String(action)}`);
             throw new TRPCError({ code: 'FORBIDDEN', message: `Missing permission: ${String(resource)}.${String(action)}` });
         }
         return next({ ctx });

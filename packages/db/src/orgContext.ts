@@ -149,6 +149,7 @@ export async function resolveEffectiveAccess(
       principalKind: orgMembers.principalKind,
       status: orgMembers.status,
       overrides: orgMembers.overrides,
+      mustChangePassword: orgMembers.mustChangePassword,
       systemKey: accessRoles.systemKey,
       rolePermissions: accessRoles.permissions,
     })
@@ -168,5 +169,6 @@ export async function resolveEffectiveAccess(
     overrides: row.overrides,
     principalKind: row.principalKind,
     status: row.status,
+    mustChangePassword: row.mustChangePassword,
   });
 }

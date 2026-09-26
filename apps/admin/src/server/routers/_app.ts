@@ -28,6 +28,7 @@ import { meRouter } from './me';
 import { deadLettersRouter } from './deadLetters';
 import { auditRouter } from './audit';
 import { rolesRouter } from './roles';
+import { accountsRouter } from './accounts';
 
 export const appRouter = router({
     audit: auditRouter,
@@ -55,6 +56,7 @@ export const appRouter = router({
     campaigns: campaignsRouter,
     members: membersRouter,
     roles: rolesRouter,
+    accounts: accountsRouter,
     giftCards: giftCardsRouter,
     customerSegments: customerSegmentsRouter,
     platformAdmin: platformAdminRouter,

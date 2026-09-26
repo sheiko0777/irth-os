@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { BLOCKED_ORDER_NUMBER, BUYER_NAME, OWNER, UNMAPPED_LINE } from './fixture';
+import { BLOCKED_ORDER_NUMBER, BUYER_NAME, OWNER, REP_NEW_PASSWORD, REP_USERNAME, UNMAPPED_LINE } from './fixture';
 
 /**
  * The path an operator takes on day one, in a real browser against a real
@@ -9,22 +9,30 @@ import { BLOCKED_ORDER_NUMBER, BUYER_NAME, OWNER, UNMAPPED_LINE } from './fixtur
  * red before the owner finds out in production.
  */
 
-async function signIn(page: Page) {
+async function signIn(page: Page, identifier = OWNER.email, password = OWNER.password) {
   await page.goto('/ar/login');
-  await page.locator('input[type="email"]').fill(OWNER.email);
-  await page.locator('input[type="password"]').fill(OWNER.password);
+  await page.getByLabel('البريد الإلكتروني أو اسم المستخدم').fill(identifier);
+  await page.getByLabel('كلمة المرور').fill(password);
   await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
+}
+
+async function signInAsOwner(page: Page) {
+  await signIn(page);
   await page.waitForURL(/\/ar\/?$/);
 }
 
-test('owner signs in and the dashboard shows net sales, not "profit"', async ({ page }) => {
-  await signIn(page);
-  await expect(page.getByText('صافي مبيعات اليوم')).toBeVisible();
-  await expect(page.getByText('أرباح اليوم')).toHaveCount(0);
+test.describe('signing in through the form', () => {
+  // A fresh browser, not the owner state the other tests start from.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('owner signs in and the dashboard shows net sales, not "profit"', async ({ page }) => {
+    await signInAsOwner(page);
+    await expect(page.getByText('صافي مبيعات اليوم')).toBeVisible();
+    await expect(page.getByText('أرباح اليوم')).toHaveCount(0);
+  });
 });
 
 test('a blocked Shopify order is visible, complete, and can be resolved', async ({ page }) => {
-  await signIn(page);
 
   // The orders list surfaces blocked imports above everything else.
   await page.goto('/ar/orders');
@@ -58,7 +66,6 @@ test('a blocked Shopify order is visible, complete, and can be resolved', async 
 });
 
 test('the owner builds a role on the roles screen and it is listed with its permissions', async ({ page }) => {
-  await signIn(page);
   await page.goto('/ar/settings/roles');
 
   // The three system roles are there and cannot be edited, only viewed.
@@ -77,4 +84,28 @@ test('the owner builds a role on the roles screen and it is listed with its perm
   await expect(created).toBeVisible();
   await expect(created).toContainText('3 صلاحية');
   await expect(created).toContainText('0 عضو');
+});
+
+test('the owner creates an account by mobile number; the person signs in with it and must set their own password', async ({ page }) => {
+  await page.goto('/ar/settings/members');
+  await page.getByLabel('الاسم', { exact: true }).fill('مندوب الاختبار');
+  await page.getByLabel('اسم المستخدم أو رقم الموبايل').fill(REP_USERNAME);
+  await page.locator('#account-role').selectOption({ label: 'موظف — موظف' });
+  await page.getByRole('button', { name: 'إنشاء الحساب' }).click();
+  const temporary = (await page.getByTestId('temp-password').textContent())?.trim() ?? '';
+  expect(temporary).toMatch(/^[A-Za-z0-9]{12}$/);
+
+  // Their first sign-in, by username, lands on the change-password page — not the app.
+  await page.context().clearCookies();
+  await signIn(page, REP_USERNAME, temporary);
+  await page.waitForURL(/\/ar\/change-password$/);
+  // And the app stays closed to them until they do: a direct link bounces back.
+  await page.goto('/ar/orders');
+  await page.waitForURL(/\/ar\/change-password$/);
+  await page.getByLabel('كلمة السر المؤقتة').fill(temporary);
+  await page.getByLabel('كلمة السر الجديدة', { exact: true }).fill(REP_NEW_PASSWORD);
+  await page.getByLabel('أكّد كلمة السر الجديدة').fill(REP_NEW_PASSWORD);
+  await page.getByRole('button', { name: 'احفظ كلمة السر' }).click();
+  await page.waitForURL(/\/ar\/?$/);
+  await expect(page.getByText('صافي مبيعات اليوم')).toBeVisible();
 });

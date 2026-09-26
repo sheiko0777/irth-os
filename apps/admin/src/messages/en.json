@@ -388,6 +388,7 @@
   },
   "auth": {
     "email": "Email",
+    "identifier": "Email or username",
     "password": "Password",
     "name": "Full Name",
     "login": "Sign in",

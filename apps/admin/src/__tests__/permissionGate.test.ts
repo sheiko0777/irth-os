@@ -29,6 +29,7 @@ const { appRouter } = await import('@/server/routers/_app');
 const SELF_SERVICE = new Set([
   'me.get',          // who am I, which orgs am I in
   'me.switchOrg',    // choose among the caller's own memberships
+  'me.changePassword', // your own password — the one thing a temporary-password account may do
   'notifications.list',
   'notifications.markRead',
   'notifications.markAllRead',

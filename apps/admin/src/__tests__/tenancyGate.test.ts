@@ -263,6 +263,15 @@ describe('tenancy gate', () => {
    * INSERTs are excluded: they carry orgId in values(), not in a WHERE, and
    * the WITH CHECK half of each policy already gates the post-image.
    */
+  /**
+   * Better Auth's identity tables have no org_id — a password or a session
+   * belongs to a person, not to a tenant (PR-1d). Writes to them are scoped by
+   * the user instead: the caller themselves (me.changePassword), or a target
+   * the procedure first proved is a member of this org and of no other
+   * (accounts.resetPassword). Only these two tables are exempt.
+   */
+  const IDENTITY_TABLES = /^(?:tx|ctx\.db|db)\s*\.\s*(?:update|delete)\s*\(\s*(?:account|session)\s*\)/;
+
   it('scopes every UPDATE and DELETE by orgId, not just by id', () => {
     const offenders: string[] = [];
 
@@ -288,6 +297,7 @@ describe('tenancy gate', () => {
         // is not what this test is about and would be a deliberate mass update.
         if (!/\.where\s*\(/.test(stmt)) continue;
         if (/orgId/.test(stmt)) continue;
+        if (IDENTITY_TABLES.test(stmt)) continue;
 
         const line = source.slice(0, start).split('\n').length;
         offenders.push(`${file}:${line} (${m[1]})`);

@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/react";
-import { twoFactorClient } from "better-auth/client/plugins";
+import { twoFactorClient, usernameClient } from "better-auth/client/plugins";
 import { resolveAppBaseUrl } from "./appUrl";
 
 // Mirrors the DEFAULT_LOCALE convention in
@@ -19,6 +19,7 @@ export const authClient = createAuthClient({
       // the client think login failed.
       twoFactorPage: `/${DEFAULT_LOCALE}/two-factor`,
     }),
+    usernameClient(),
   ],
 });
 

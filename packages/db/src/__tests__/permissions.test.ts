@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { can, canAssignRole, PERMISSIONS, type Resource, type Role } from '../permissions';
+import { can, canAssignRole, canDelegate, covers, PERMISSIONS, type Resource, type Role } from '../permissions';
 
 describe('can', () => {
   it('matches the matrix for every declared resource and action', () => {
@@ -138,5 +138,51 @@ describe('effectiveAccess — custom roles and per-person overrides', () => {
       rolePermissions: { not_a_resource: ['view'], products: ['bogus', 'view'], orders: 'view' as unknown as string[] },
     });
     expect([...access.perms]).toEqual(['products.view']);
+  });
+});
+
+describe('must change password (PR-1d)', () => {
+  it('holds no permission until the temporary password is replaced, owner included', () => {
+    for (const systemKey of ['owner', 'admin', 'member'] as const) {
+      const access = effectiveAccess({ systemKey, mustChangePassword: true });
+      for (const [resource, action] of everyPair()) expect(canAccess(access, resource, action as never)).toBe(false);
+    }
+  });
+});
+
+describe('delegation (PR-1d): nobody hands out authority they do not hold', () => {
+  const owner = effectiveAccess({ systemKey: 'owner' });
+  const admin = effectiveAccess({ systemKey: 'admin' });
+  const member = effectiveAccess({ systemKey: 'member' });
+  const keys = (role: 'owner' | 'admin' | 'member') => [...effectiveAccess({ systemKey: role }).perms];
+
+  it('reproduces canAssignRole for the three system roles', () => {
+    for (const actor of ['owner', 'admin', 'member'] as const) {
+      for (const target of ['owner', 'admin', 'member'] as const) {
+        const access = effectiveAccess({ systemKey: actor });
+        expect(canDelegate(access, keys(target), { ownerRole: target === 'owner' }), `${actor} → ${target}`)
+          .toBe(actor === 'member' ? target === 'member' : canAssignRole(actor, target));
+      }
+    }
+  });
+
+  it('an admin cannot give a permission the admin lacks, even inside a custom role', () => {
+    expect(canDelegate(admin, ['finance.view', 'orders.write'])).toBe(true);
+    expect(canDelegate(admin, ['finance.view', 'members.changeRole'])).toBe(false);
+    expect(canDelegate(owner, ['members.changeRole'])).toBe(true);
+  });
+
+  it('a suspended or password-pending actor delegates nothing', () => {
+    expect(canDelegate(effectiveAccess({ systemKey: 'owner', status: 'suspended' }), [])).toBe(false);
+    expect(canDelegate(effectiveAccess({ systemKey: 'owner', mustChangePassword: true }), [])).toBe(false);
+  });
+
+  it('only covers members whose authority the actor already holds', () => {
+    expect(covers(admin, member)).toBe(true);
+    expect(covers(admin, owner)).toBe(false);
+    expect(covers(owner, owner)).toBe(true);
+    const granted = effectiveAccess({ systemKey: 'member', overrides: { grant: { members: ['changeRole'] } } });
+    expect(covers(admin, granted)).toBe(false);
+    expect(covers(member, admin)).toBe(false);
   });
 });

@@ -46,6 +46,9 @@ const ACTION_LABELS: Record<string, string> = {
   manage: 'إدارة',
   recover: 'إعادة المحاولة',
   submit: 'إرسال',
+  create: 'إنشاء حساب',
+  resetPassword: 'إعادة تعيين كلمة السر',
+  suspend: 'إيقاف وتفعيل',
 };
 
 const ACTION_OVERRIDES: Partial<Record<Resource, Record<string, string>>> = {
