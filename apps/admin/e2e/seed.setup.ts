@@ -2,7 +2,7 @@ import { test as setup, expect } from '@playwright/test';
 import postgres from 'postgres';
 import {
   BLOCKED_ORDER_NUMBER, BUYER_NAME, COD_ORDER_NUMBER, DRIVER_USERNAME, LINKED_GID, ORG_SLUG, OWNER, OWNER_STATE, REP_USERNAME,
-  SALES_CUSTOMER, SALES_PRICE_LIST, SELLER_USERNAME, UNMAPPED_LINE,
+  PORTAL_PO, PORTAL_SUPPLIER, PORTAL_USERNAME, SALES_CUSTOMER, SALES_PRICE_LIST, SELLER_USERNAME, UNMAPPED_LINE,
 } from './fixture';
 
 /**
@@ -44,8 +44,28 @@ setup('seed an owner, an org and a blocked Shopify order', async ({ request }) =
     await sql`DELETE FROM rep_cash_collections WHERE org_id = ${org.id}`;
     await sql`DELETE FROM rep_cash_handovers WHERE org_id = ${org.id}`;
     await sql`DELETE FROM delivery_attempts WHERE org_id = ${org.id}`;
-    await sql`DELETE FROM org_members WHERE user_id IN (SELECT id FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME}, ${SELLER_USERNAME}))`;
-    await sql`DELETE FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME}, ${SELLER_USERNAME})`;
+    await sql`DELETE FROM org_members WHERE user_id IN (SELECT id FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME}, ${SELLER_USERNAME}, ${PORTAL_USERNAME}))`;
+    await sql`DELETE FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME}, ${SELLER_USERNAME}, ${PORTAL_USERNAME})`;
+
+    // The supplier portal flow (PR-3): a supplier and a purchase order sent
+    // to them, reset to "waiting for the supplier" with no shipping notices.
+    let [portalSupplier] = await sql`SELECT id FROM suppliers WHERE org_id = ${org.id} AND name = ${PORTAL_SUPPLIER}`;
+    if (!portalSupplier) {
+      [portalSupplier] = await sql`INSERT INTO suppliers (org_id, name, phone) VALUES (${org.id}, ${PORTAL_SUPPLIER}, '+201000000003') RETURNING id`;
+    }
+    const [portalPo] = await sql`SELECT id FROM purchase_orders WHERE org_id = ${org.id} AND po_number = ${PORTAL_PO}`;
+    if (portalPo) {
+      await sql`DELETE FROM purchase_order_shipment_items WHERE shipment_id IN (SELECT id FROM purchase_order_shipments WHERE po_id = ${portalPo.id})`;
+      await sql`DELETE FROM purchase_order_shipments WHERE po_id = ${portalPo.id}`;
+      await sql`UPDATE purchase_orders SET supplier_status = 'pending', proposed_delivery_at = NULL, supplier_note = NULL WHERE id = ${portalPo.id}`;
+    } else {
+      const [newPo] = await sql`
+        INSERT INTO purchase_orders (org_id, po_number, supplier_id, status, notes, total_amount_minor, ordered_at)
+        VALUES (${org.id}, ${PORTAL_PO}, ${portalSupplier.id}, 'ordered', 'ملاحظة داخلية', 150000, now()) RETURNING id`;
+      await sql`
+        INSERT INTO purchase_order_items (org_id, po_id, product_name, sku, quantity, unit_cost_minor)
+        VALUES (${org.id}, ${newPo.id}, 'سيروم 30 مل', 'E2E-SERUM-30', 10, 15000)`;
+    }
 
     // The sales rep flow (PR-2b): a customer with no rep yet, and an active
     // 10% price list. Kept across runs; the rep is re-assigned each time.

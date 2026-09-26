@@ -9,6 +9,7 @@ import {
 } from '@irth/db';
 import { router, requirePermission, type Context } from '../trpc';
 import { permissionListSchema, pgCode } from '../permissionInput';
+import { inheritedScopes, insertAccount, rethrowAccountError, temporaryPassword, usernameSchema } from '../accountCreation';
 
 /**
  * Accounts the owner manages directly (PR-1d, owner decision A5): create a
@@ -29,23 +30,7 @@ import { permissionListSchema, pgCode } from '../permissionInput';
  *     commit that would leave members and no active owner.
  */
 
-// Better Auth's username plugin normalises to lower case and allows these
-// characters; 3–30 long. A mobile number fits.
-const usernameSchema = z.string().trim().toLowerCase().min(3).max(30).regex(/^[a-z0-9_.]+$/);
 const memberIdSchema = z.object({ memberId: z.string().uuid() });
-
-// No 0/O, 1/l/I: read aloud or copied from a screen without mistakes.
-const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-
-function temporaryPassword(length = 12): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(length));
-  return Array.from(bytes, (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]).join('');
-}
-
-/** Accounts without an email still need one (Better Auth requires it). `.invalid` never delivers. */
-function placeholderEmail(username: string): string {
-  return `${username}@accounts.irth.invalid`;
-}
 
 type Tx = DbTx;
 
@@ -106,14 +91,7 @@ function assertMayDelegate(ctx: Pick<Context, 'access'>, perms: Iterable<string>
   }
 }
 
-function rethrow(err: unknown): never {
-  const code = pgCode(err);
-  if (code === '23505') throw new TRPCError({ code: 'CONFLICT', message: 'اسم المستخدم أو البريد مستخدم بالفعل.' });
-  if (code === '23514' && String((err as { cause?: { message?: string } }).cause?.message ?? err).includes('active owner')) {
-    throw new TRPCError({ code: 'CONFLICT', message: 'لازم يفضل في المؤسسة مالك نشط واحد على الأقل.' });
-  }
-  throw err;
-}
+
 
 export const accountsRouter = router({
   /** Create an account directly. The temporary password is returned once and never stored in plain text. */
@@ -136,41 +114,13 @@ export const accountsRouter = router({
           return withAudit(
             tx,
             async () => {
-              await tx.insert(user).values({
-                id: userId,
-                name: input.name,
-                email: input.email ?? placeholderEmail(input.username),
-                emailVerified: false,
-                username: input.username,
-                displayUsername: input.username,
+              // A member limited to some brands, suppliers or price lists
+              // cannot create someone who sees more: the new account
+              // inherits the creator's scopes (PR-1e).
+              const row = await insertAccount(tx, ctx, {
+                userId, name: input.name, username: input.username, email: input.email ?? null, passwordHash: hash,
+                role, scopes: inheritedScopes(ctx),
               });
-              await tx.insert(account).values({
-                id: crypto.randomUUID(),
-                accountId: userId,
-                providerId: 'credential',
-                userId,
-                password: hash,
-                updatedAt: new Date(),
-              });
-              const [row] = await tx.insert(orgMembers).values({
-                orgId: ctx.orgId,
-                userId,
-                role: role.systemKey ?? 'member',
-                accessRoleId: role.id,
-                principalKind: role.principalKind,
-                mustChangePassword: true,
-              }).returning();
-              // A member limited to some brands or suppliers (PR-1e) cannot
-              // create someone who sees more: the new account inherits the
-              // creator's scopes. The owner and unscoped members add none.
-              const inherited = [
-                ...ctx.access.scopes.brand.map((id) => ({ scopeKind: 'brand' as const, scopeId: id })),
-                ...ctx.access.scopes.supplier.map((id) => ({ scopeKind: 'supplier' as const, scopeId: id })),
-                ...ctx.access.scopes.pricelist.map((id) => ({ scopeKind: 'pricelist' as const, scopeId: id })),
-              ];
-              if (inherited.length > 0) {
-                await tx.insert(memberScopes).values(inherited.map((sc) => ({ ...sc, orgId: ctx.orgId, memberId: row.id })));
-              }
               return row;
             },
             {
@@ -181,7 +131,7 @@ export const accountsRouter = router({
         });
         return { data: { memberId: member.id, username: input.username, temporaryPassword: password }, error: null, meta: null };
       } catch (err) {
-        rethrow(err);
+        rethrowAccountError(err);
       }
     }),
 
@@ -212,7 +162,7 @@ export const accountsRouter = router({
         });
         return { data: row, error: null, meta: null };
       } catch (err) {
-        rethrow(err);
+        rethrowAccountError(err);
       }
     }),
 
@@ -267,7 +217,7 @@ export const accountsRouter = router({
         });
         return { data: row, error: null, meta: null };
       } catch (err) {
-        rethrow(err);
+        rethrowAccountError(err);
       }
     }),
 

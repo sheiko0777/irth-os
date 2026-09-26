@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   BLOCKED_ORDER_NUMBER, BUYER_NAME, COD_ORDER_NUMBER, DRIVER_PASSWORD, DRIVER_USERNAME, OWNER, OWNER_STATE, REP_NEW_PASSWORD, REP_USERNAME,
-  SALES_CUSTOMER, SALES_PRICE_LIST, SELLER_PASSWORD, SELLER_USERNAME, UNMAPPED_LINE,
+  PORTAL_PASSWORD, PORTAL_PO, PORTAL_SUPPLIER, PORTAL_USERNAME, SALES_CUSTOMER, SALES_PRICE_LIST, SELLER_PASSWORD, SELLER_USERNAME, UNMAPPED_LINE,
 } from './fixture';
 
 /**
@@ -227,4 +227,49 @@ test('a sales rep sells to their own customer at their price list, and turns a q
   await expect(page.getByText(/اتحفظ عرض السعر QT-/)).toBeVisible();
   await page.getByTestId('sales-quotes').getByRole('button', { name: 'تحويل لطلب' }).first().click();
   await expect(page.getByTestId('sales-quotes')).toContainText('اتحوّل لطلب');
+});
+
+test('a supplier opens their portal, confirms a purchase order and announces a shipment', async ({ page, browser }) => {
+  // The office opens the supplier's portal account from the suppliers list.
+  await page.goto('/ar/purchasing');
+  const row = page.getByRole('row').filter({ hasText: PORTAL_SUPPLIER });
+  await row.getByRole('button', { name: 'حساب بوابة' }).click();
+  await page.getByLabel('اسم المستخدم أو رقم الموبايل').fill(PORTAL_USERNAME);
+  await page.getByRole('button', { name: 'إنشاء حساب البوابة' }).click();
+  const temporary = (await page.getByTestId('supplier-temp-password').textContent())?.trim() ?? '';
+  expect(temporary).toMatch(/^[A-Za-z0-9]{12}$/);
+
+  // Better Auth allows 3 sign-ins per 10 s; the tests above used them.
+  await page.waitForTimeout(10_500);
+  await page.context().clearCookies();
+  await signIn(page, PORTAL_USERNAME, temporary);
+  await page.waitForURL(/\/ar\/change-password$/);
+  await page.getByLabel('كلمة السر المؤقتة').fill(temporary);
+  await page.getByLabel('كلمة السر الجديدة', { exact: true }).fill(PORTAL_PASSWORD);
+  await page.getByLabel('أكّد كلمة السر الجديدة').fill(PORTAL_PASSWORD);
+  await page.getByRole('button', { name: 'احفظ كلمة السر' }).click();
+
+  // A supplier lands in the portal, not the back office — and cannot go back.
+  await page.waitForURL(/\/ar\/portal$/);
+  await expect(page.getByTestId('portal-supplier')).toHaveText(PORTAL_SUPPLIER);
+  await page.goto('/ar/orders');
+  await page.waitForURL(/\/ar\/portal$/);
+
+  await page.getByTestId('portal-orders').getByRole('link', { name: new RegExp(PORTAL_PO) }).click();
+  await page.waitForURL(/\/ar\/portal\/orders\//);
+  await expect(page.getByText('ملاحظة داخلية')).toHaveCount(0);
+  await page.getByRole('button', { name: 'تأكيد أمر الشراء' }).click();
+  await expect(page.getByTestId('portal-supplier-status')).toHaveText('مؤكد');
+  await page.getByLabel('كمية الشحن E2E-SERUM-30').fill('4');
+  await page.getByLabel('رقم البوليصة أو المرجع').fill('BOL-77');
+  await page.getByRole('button', { name: 'إرسال إشعار الشحن' }).click();
+  await expect(page.getByText('BOL-77')).toBeVisible();
+
+  // The office sees the supplier's answer on the purchase order.
+  const office = await browser.newContext({ storageState: OWNER_STATE });
+  const officePage = await office.newPage();
+  await officePage.goto('/ar/purchasing');
+  await officePage.getByRole('button', { name: 'طلبات الشراء' }).click();
+  await expect(officePage.getByRole('row').filter({ hasText: PORTAL_PO })).toContainText('المورد أكد');
+  await office.close();
 });

@@ -61,6 +61,10 @@ export const PERMISSIONS = {
     view: ['owner', 'admin', 'member'] as Role[],
     write: ['owner', 'admin'] as Role[],
     delete: ['owner'] as Role[],
+    // PR-3: record a payment to a supplier (posts Dr 2010 / Cr bank|cash).
+    pay: ['owner', 'admin'] as Role[],
+    // PR-3: open a supplier's portal account from the suppliers screen.
+    portalAccounts: ['owner', 'admin'] as Role[],
   },
   finance: {
     view: ['owner', 'admin'] as Role[],
@@ -170,6 +174,19 @@ export const PERMISSIONS = {
     customers: ['owner'] as Role[],
     order: ['owner'] as Role[],
     quote: ['owner'] as Role[],
+  },
+  // PR-3: the supplier portal — a supplier's own purchase orders, their
+  // answer to them, shipping notices and what they are owed. A supplier gets
+  // them from a role of kind supplier, and every procedure also requires the
+  // caller to BE a supplier with exactly one supplier in scope.
+  // owner and admin hold them only so they may put them on a supplier's
+  // role (canDelegate: nobody gives what they lack); the portal procedures
+  // refuse anyone who is not themselves a supplier.
+  portal: {
+    view: ['owner', 'admin'] as Role[],
+    respond: ['owner', 'admin'] as Role[],
+    ship: ['owner', 'admin'] as Role[],
+    payments: ['owner', 'admin'] as Role[],
   },
   repCash: {
     view: ['owner', 'admin'] as Role[],

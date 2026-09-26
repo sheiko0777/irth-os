@@ -21,13 +21,18 @@ export default async function DashboardLayout({
   // lookup (no session, no membership) falls through to the existing
   // handling — middleware and the procedures themselves.
   let mustChangePassword = false;
+  let isSupplier = false;
   try {
     const me = await (await serverCaller()).me.get();
     mustChangePassword = me.data.mustChangePassword;
+    isSupplier = me.data.principalKind === 'supplier';
   } catch {
     mustChangePassword = false;
   }
   if (mustChangePassword) redirect(`/${locale}/change-password`);
+  // A supplier's account belongs to the supplier portal (PR-3), never to
+  // this shell. UX only: the procedures behind it refuse them regardless.
+  if (isSupplier) redirect(`/${locale}/portal`);
 
   return (
     <>

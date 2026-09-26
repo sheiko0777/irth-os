@@ -34,3 +34,9 @@ export const SELLER_USERNAME = '01000000099';
 export const SELLER_PASSWORD = 'Seller-Password-2026';
 export const SALES_CUSTOMER = 'صيدلية النور';
 export const SALES_PRICE_LIST = 'جملة 10%';
+
+/** The supplier the owner opens a portal account for (PR-3), and their purchase order. */
+export const PORTAL_SUPPLIER = 'مورد الاختبار';
+export const PORTAL_USERNAME = '01000000066';
+export const PORTAL_PASSWORD = 'Supplier-Password-2026';
+export const PORTAL_PO = 'E2E-PO-1';

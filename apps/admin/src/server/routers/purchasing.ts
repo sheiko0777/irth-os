@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
+import { poSupplierProcedures, supplierAccountProcedures } from './purchasingSupplier';
 import { parseDecimal, assertSupportedCurrency } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
 
@@ -122,6 +123,7 @@ async function applyReceivedLine(
 
 export const purchasingRouter = router({
   suppliers: router({
+    ...supplierAccountProcedures,
     list: requirePermission('purchasing', 'view').query(async ({ ctx }) => {
       const data = await ctx.withOrg(async (tx) => tx
         .select()
@@ -261,6 +263,7 @@ export const purchasingRouter = router({
   }),
 
   po: router({
+    ...poSupplierProcedures,
     list: requirePermission('purchasing', 'view')
       .input(z.object({
         ...paginationInputSchema(20),
@@ -279,6 +282,9 @@ export const purchasingRouter = router({
               currency: purchaseOrders.currency,
               orderedAt: purchaseOrders.orderedAt,
               createdAt: purchaseOrders.createdAt,
+              supplierStatus: purchaseOrders.supplierStatus,
+              expectedDeliveryAt: purchaseOrders.expectedDeliveryAt,
+              proposedDeliveryAt: purchaseOrders.proposedDeliveryAt,
               supplierName: suppliers.name,
               itemsCount: sql<number>`count(${purchaseOrderItems.id})::int`,
             })

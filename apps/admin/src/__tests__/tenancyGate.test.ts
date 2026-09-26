@@ -169,7 +169,7 @@ describe('tenancy gate', () => {
   it('never reads a scope-restricted table (0076) outside ctx.withOrg', () => {
     // PR-2b adds the tables 0077/0078 narrow to a rep (orders, their lines,
     // customers, quotes) and to a price-list scope.
-    const SCOPED = /\b(products|productVariants|inventoryItems|suppliers|purchaseOrders|purchaseOrderItems|product_variants|inventory_items|purchase_orders|purchase_order_items|orders|orderItems|order_items|customers|priceLists|priceListItems|price_lists|price_list_items|salesQuotes|salesQuoteItems|sales_quotes|sales_quote_items)\b/;
+    const SCOPED = /\b(products|productVariants|inventoryItems|suppliers|purchaseOrders|purchaseOrderItems|product_variants|inventory_items|purchase_orders|purchase_order_items|orders|orderItems|order_items|customers|priceLists|priceListItems|price_lists|price_list_items|salesQuotes|salesQuoteItems|sales_quotes|sales_quote_items|purchaseOrderShipments|purchaseOrderShipmentItems|supplierPayments|purchase_order_shipments|purchase_order_shipment_items|supplier_payments)\b/;
     const offenders: string[] = [];
     for (const file of routerFiles()) {
       if (CROSS_ORG_BY_DESIGN.has(file)) continue;

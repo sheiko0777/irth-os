@@ -22,6 +22,8 @@ import { ar } from "date-fns/locale";
 import { toast } from "sonner";
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SupplierPortalActions } from "@/components/purchasing/SupplierPortalActions";
+import { PoSupplierStatus } from "@/components/purchasing/PoSupplierStatus";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ShoppingBag } from 'lucide-react';
 import { Factory } from 'lucide-react';
@@ -45,6 +47,10 @@ type PurchaseOrder = {
   totalAmountMinor: bigint | null;
   currency: string;
   createdAt: Date | string | null;
+  // PR-3: the supplier's answer from the portal.
+  supplierStatus: "pending" | "confirmed" | "date_proposed";
+  expectedDeliveryAt: Date | string | null;
+  proposedDeliveryAt: Date | string | null;
 };
 
 type Props = {
@@ -197,7 +203,8 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                       <TableCell className="text-[var(--t1)]">{s.name}</TableCell>
                       <TableCell className="text-[var(--t2)]" dir="ltr">{s.phone || "-"}</TableCell>
                       <TableCell className="text-[var(--t2)]" dir="ltr">{s.email || "-"}</TableCell>
-                      <TableCell>
+                      <TableCell className="flex flex-wrap gap-2">
+                        <SupplierPortalActions supplier={s} />
                         <ConfirmDialog
                           title="حذف المورد"
                           description={`هل أنت متأكد من حذف المورد «${s.name}»؟`}
@@ -280,6 +287,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                   <TableHead className="text-start">رقم الأمر</TableHead>
                   <TableHead className="text-start">المورد</TableHead>
                   <TableHead className="text-start">الحالة</TableHead>
+                  <TableHead className="text-start">المورد رد</TableHead>
                   <TableHead className="text-start">الإجمالي</TableHead>
                   <TableHead className="text-start">التاريخ</TableHead>
                   <TableHead className="text-start">الإجراءات</TableHead>
@@ -288,7 +296,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
               <TableBody>
                 {purchaseOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="p-0">
+                    <TableCell colSpan={7} className="p-0">
                       <EmptyState icon={ShoppingBag} title="لا توجد أوامر شراء" hint="أمر الشراء بيسجّل الكميات المستلمة من المورد ويزوّد المخزون." />
                     </TableCell>
                   </TableRow>
@@ -299,6 +307,9 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                       <TableCell className="text-[var(--t2)]">{po.supplierName || "غير محدد"}</TableCell>
                       <TableCell>
                         <StatusBadge status={po.status} domain="purchaseOrder" />
+                      </TableCell>
+                      <TableCell>
+                        <PoSupplierStatus po={po} />
                       </TableCell>
                       <TableCell className="text-[var(--t2)]">
                         {po.totalAmountMinor === null ? "-" : formatMoney(fromMinor(po.totalAmountMinor, currency(po.currency)))}
