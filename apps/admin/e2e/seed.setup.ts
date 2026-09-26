@@ -1,7 +1,7 @@
 import { test as setup, expect } from '@playwright/test';
 import postgres from 'postgres';
 import {
-  BLOCKED_ORDER_NUMBER, BUYER_NAME, LINKED_GID, ORG_SLUG, OWNER, OWNER_STATE, REP_USERNAME, UNMAPPED_LINE,
+  BLOCKED_ORDER_NUMBER, BUYER_NAME, COD_ORDER_NUMBER, DRIVER_USERNAME, LINKED_GID, ORG_SLUG, OWNER, OWNER_STATE, REP_USERNAME, UNMAPPED_LINE,
 } from './fixture';
 
 /**
@@ -38,9 +38,29 @@ setup('seed an owner, an org and a blocked Shopify order', async ({ request }) =
       ON CONFLICT (org_id, user_id) DO NOTHING`;
     // Accounts and roles a previous run created through the members and
     // roles screens.
-    await sql`DELETE FROM org_members WHERE user_id IN (SELECT id FROM "user" WHERE username = ${REP_USERNAME})`;
-    await sql`DELETE FROM "user" WHERE username = ${REP_USERNAME}`;
+    // A rep's delivery and cash history is kept attached to them (0077), so
+    // it goes first; the ledger entries it posted stay, as they would.
+    await sql`DELETE FROM rep_cash_collections WHERE org_id = ${org.id}`;
+    await sql`DELETE FROM rep_cash_handovers WHERE org_id = ${org.id}`;
+    await sql`DELETE FROM delivery_attempts WHERE org_id = ${org.id}`;
+    await sql`DELETE FROM org_members WHERE user_id IN (SELECT id FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME}))`;
+    await sql`DELETE FROM "user" WHERE username IN (${REP_USERNAME}, ${DRIVER_USERNAME})`;
     await sql`DELETE FROM access_roles WHERE org_id = ${org.id} AND system_key IS NULL`;
+
+    // A cash-on-delivery order out for delivery, for the delivery rep flow.
+    // A previous run delivered it and booked its sale, which can happen once
+    // per order (0049), so that order is retired under another number — never
+    // deleted, like any order with ledger history — and a fresh one is made.
+    await sql`
+      UPDATE orders SET order_number = 'E2E-DELIVERED-' || extract(epoch from now())::bigint
+      WHERE org_id = ${org.id} AND order_number = ${COD_ORDER_NUMBER}`;
+    await sql`
+      INSERT INTO orders (org_id, order_number, status, payment_method, total_amount_minor, currency, buyer, shipping_address)
+      VALUES (
+        ${org.id}, ${COD_ORDER_NUMBER}, 'shipped', 'cod', 50000, 'EGP',
+        ${sql.json({ name: 'أحمد سمير', email: null, phone: '+201000000001' })},
+        ${sql.json({ name: 'أحمد سمير', phone: '+201000000001', address1: '5 شارع النيل', address2: null, city: 'الجيزة', province: null, zip: null, country: 'Egypt' })}
+      )`;
 
     // Re-runnable against the same database: put the scenario back to its
     // starting state (the unlinked variant unlinked, the order blocked, no

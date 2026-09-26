@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { requirePermission, router } from '../trpc';
 import { eq, and, desc } from 'drizzle-orm';
+import { pgCode } from '../permissionInput';
 import { accessRoles, orgMembers, orgInvites, organizations, user, withAudit, canAssignRole, emitOutboxEvent, generateInviteOtp } from '@irth/db';
 import { TRPCError } from '@trpc/server';
 
@@ -339,6 +340,8 @@ export const membersRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'You cannot remove yourself.' });
       }
 
+      // A rep with delivery or cash history cannot be removed (0077's
+      // foreign keys keep that history attached to them); suspend instead.
       const removed = await ctx.withOrg((tx) => withAudit(
         tx,
         async () => {
@@ -355,7 +358,12 @@ export const membersRouter = router({
           tableName: 'org_members',
           changes: { memberId: input.memberId, removedUserId: target.userId, role: target.role },
         },
-      ));
+      )).catch((err: unknown) => {
+        if (pgCode(err) === '23503') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'العضو ده عليه توصيلات أو عهدة مسجّلة. أوقف حسابه بدل ما تمسحه.' });
+        }
+        throw err;
+      });
 
       return { data: removed, error: null, meta: null };
     }),

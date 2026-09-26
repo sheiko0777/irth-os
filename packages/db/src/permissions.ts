@@ -31,6 +31,8 @@ export const PERMISSIONS = {
     write: ['owner', 'admin'] as Role[],
     delete: ['owner'] as Role[],
     export: ['owner', 'admin', 'member'] as Role[],
+    // PR-2a: assign orders to a delivery rep.
+    assign: ['owner', 'admin'] as Role[],
   },
   coupons: {
     view: ['owner', 'admin', 'member'] as Role[],
@@ -145,6 +147,24 @@ export const PERMISSIONS = {
     supplierPrice: ['owner', 'admin'] as Role[],
     customerContact: ['owner', 'admin', 'member'] as Role[],
   },
+  // PR-2a: a delivery rep's own work — the orders assigned to them. Every
+  // procedure behind these also filters to the caller's member id, so holding
+  // them never shows anyone else's deliveries. No system role but the owner
+  // has them: a rep gets them from a custom role of kind delivery_rep.
+  deliveries: {
+    view: ['owner'] as Role[],
+    update: ['owner'] as Role[],
+    collect: ['owner'] as Role[],
+  },
+  // PR-2a: rep cash custody. `handover` is the rep's own end-of-day handover;
+  // `confirm` is the cashier counting it; `writeOff` books a shortage as a
+  // loss and stays owner-only by default.
+  repCash: {
+    view: ['owner', 'admin'] as Role[],
+    handover: ['owner'] as Role[],
+    confirm: ['owner', 'admin'] as Role[],
+    writeOff: ['owner'] as Role[],
+  },
 } as const;
 
 export type Resource = keyof typeof PERMISSIONS;
@@ -219,6 +239,22 @@ export interface EffectiveAccess {
    * through withOrgContext's settings, and by an explicit WHERE in the code.
    */
   readonly scopes: MemberScopes;
+  /**
+   * org_members.id (PR-2a). Null for a synthetic access (tests, system work).
+   * With principalKind it tells 0077's policies whose orders a delivery rep
+   * may see.
+   */
+  readonly memberId: string | null;
+}
+
+/** What withOrgContext needs from an access to narrow a transaction to it. */
+export function transactionSettings(access: EffectiveAccess) {
+  return {
+    brand: access.scopes.brand,
+    supplier: access.scopes.supplier,
+    memberId: access.memberId,
+    principalKind: access.principalKind,
+  };
 }
 
 export interface MemberScopes {
@@ -272,6 +308,7 @@ export function effectiveAccess(input: {
   status?: 'active' | 'suspended';
   mustChangePassword?: boolean;
   scopes?: MemberScopes;
+  memberId?: string | null;
 }): EffectiveAccess {
   const principalKind = input.principalKind ?? 'staff';
   const suspended = input.status === 'suspended';
@@ -279,15 +316,16 @@ export function effectiveAccess(input: {
   // The owner is never scoped: they see the whole org.
   const scopes = input.systemKey === 'owner' ? NO_SCOPES : input.scopes ?? NO_SCOPES;
   const isOwner = input.systemKey === 'owner' && !suspended;
+  const memberId = input.memberId ?? null;
 
-  if (suspended) return { isOwner: false, principalKind, suspended, mustChangePassword, scopes, perms: new Set() };
-  if (isOwner) return { isOwner, principalKind, suspended, mustChangePassword, scopes, perms: new Set(allPermissionKeys()) };
+  if (suspended) return { isOwner: false, principalKind, suspended, mustChangePassword, scopes, memberId, perms: new Set() };
+  if (isOwner) return { isOwner, principalKind, suspended, mustChangePassword, scopes, memberId, perms: new Set(allPermissionKeys()) };
 
   const base = input.systemKey ? permissionsForRole(input.systemKey) : input.rolePermissions;
   const perms = new Set(knownPairs(base));
   for (const k of knownPairs(input.overrides?.grant)) perms.add(k);
   for (const k of knownPairs(input.overrides?.revoke)) perms.delete(k);
-  return { isOwner, principalKind, suspended, mustChangePassword, scopes, perms };
+  return { isOwner, principalKind, suspended, mustChangePassword, scopes, memberId, perms };
 }
 
 export function canAccess<R extends Resource>(access: EffectiveAccess, resource: R, action: ActionFor<R>): boolean {

@@ -195,6 +195,10 @@ export const orders = pgTable("orders", {
   shippingMinor: bigint("shipping_minor", { mode: 'bigint' }),
   taxMinor: bigint("tax_minor", { mode: 'bigint' }),
   customerNote: text("customer_note"),
+  // 0077. The delivery rep (org_members.id) this order is assigned to. The
+  // composite same-org FK lives in the migration; a rep sees only these rows
+  // (orders_delivery_rep_scope).
+  assignedRepMemberId: uuid("assigned_rep_member_id"),
 }, (table) => ({
   importStatusCheck: check('orders_import_status_check', sql`${table.importStatus} IN ('complete', 'blocked')`),
   orgBlockedIdx: index('orders_org_id_blocked_idx').on(table.orgId).where(sql`${table.importStatus} = 'blocked'`),

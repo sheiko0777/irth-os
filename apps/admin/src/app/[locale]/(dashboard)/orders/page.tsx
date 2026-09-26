@@ -87,6 +87,7 @@ export default async function OrdersPage({
         orderNumber: o.orderNumber,
         status: o.status,
         blocked: o.importStatus === 'blocked',
+        assignedRepMemberId: o.assignedRepMemberId,
         totalAmountMinor: o.totalAmountMinor,
         createdAt: o.createdAt,
     }));

@@ -21,6 +21,19 @@ type Editing =
 
 const EMPTY: RoleDraft = { name: "", principalKind: "staff", permissions: {} };
 
+// PR-2a: a starting point for a delivery rep — their own deliveries, cash
+// collection, the end-of-day handover, and the customer's phone and address.
+// Edited like any other new role before it is saved.
+const DELIVERY_REP_TEMPLATE: RoleDraft = {
+  name: "مندوب توصيل",
+  principalKind: "delivery_rep",
+  permissions: {
+    deliveries: ["view", "update", "collect"],
+    repCash: ["handover"],
+    sensitive: ["customerContact"],
+  },
+};
+
 function countPermissions(list: Record<string, string[]>): number {
   return Object.values(list).reduce((n, actions) => n + actions.length, 0);
 }
@@ -72,9 +85,14 @@ export function RolesManager() {
   return (
     <div className="space-y-4">
       {canManage && (
+        <div className="flex flex-wrap gap-2">
         <Button onClick={() => open({ mode: "create", initial: EMPTY })}>
           <Plus aria-hidden="true" /> دور جديد
         </Button>
+        <Button variant="outline" onClick={() => open({ mode: "create", initial: DELIVERY_REP_TEMPLATE })}>
+          قالب مندوب توصيل
+        </Button>
+        </div>
       )}
 
       <div className="grid gap-3 md:grid-cols-2">

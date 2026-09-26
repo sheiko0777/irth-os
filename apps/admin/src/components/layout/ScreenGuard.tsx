@@ -21,7 +21,10 @@ export function ScreenGuard({ locale, children }: { locale: string; children: Re
   const required = screenRequirement(locale, pathname);
   const denied = perms !== null && required !== undefined && !perms.has(required);
   const isHome = pathname.replace(/\/$/, '') === `/${locale}`;
-  const fallback = groups.flatMap((g) => g.items).find((i) => i.href !== `/${locale}`)?.href;
+  // A real screen of theirs first (a rep lands on توصيلاتي, not on the
+  // notifications everyone has), then anything at all.
+  const items = groups.flatMap((g) => g.items).filter((i) => i.href !== `/${locale}`);
+  const fallback = (items.find((i) => i.requires) ?? items[0])?.href;
 
   useEffect(() => {
     if (denied && isHome && fallback) router.replace(fallback);

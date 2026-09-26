@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
-import { BLOCKED_ORDER_NUMBER, BUYER_NAME, OWNER, REP_NEW_PASSWORD, REP_USERNAME, UNMAPPED_LINE } from './fixture';
+import {
+  BLOCKED_ORDER_NUMBER, BUYER_NAME, COD_ORDER_NUMBER, DRIVER_PASSWORD, DRIVER_USERNAME, OWNER, OWNER_STATE, REP_NEW_PASSWORD, REP_USERNAME, UNMAPPED_LINE,
+} from './fixture';
 
 /**
  * The path an operator takes on day one, in a real browser against a real
@@ -117,4 +119,63 @@ test('the owner creates an account by mobile number; the person signs in with it
   await expect(nav.getByRole('link', { name: 'الأدوار والصلاحيات' })).toHaveCount(0);
   await page.goto('/ar/finance');
   await expect(page.getByText('مالكش صلاحية على الشاشة دي')).toBeVisible();
+});
+
+test('a delivery rep delivers a cash order, collects it and hands the cash over; the office counts it', async ({ page, browser }) => {
+  // The owner makes the rep: a role from the template, then the account.
+  await page.goto('/ar/settings/roles');
+  await page.getByRole('button', { name: 'قالب مندوب توصيل' }).click();
+  await page.getByRole('button', { name: 'حفظ الدور' }).click();
+  await expect(page.getByTestId('role-card').filter({ hasText: 'مندوب توصيل' })).toBeVisible();
+
+  await page.goto('/ar/settings/members');
+  await page.getByLabel('الاسم', { exact: true }).fill('سواق الاختبار');
+  await page.getByLabel('اسم المستخدم أو رقم الموبايل').fill(DRIVER_USERNAME);
+  await page.locator('#account-role').selectOption({ label: 'مندوب توصيل — مندوب توصيل' });
+  await page.getByRole('button', { name: 'إنشاء الحساب' }).click();
+  const temporary = (await page.getByTestId('temp-password').textContent())?.trim() ?? '';
+
+  // …and assigns them the cash order from the orders list.
+  await page.goto('/ar/orders');
+  await page.getByLabel(new RegExp(COD_ORDER_NUMBER)).check();
+  await page.getByLabel('إسناد لمندوب').selectOption({ label: 'سواق الاختبار' });
+  await page.getByRole('button', { name: 'إسناد', exact: true }).click();
+  await expect(page.getByRole('row').filter({ hasText: COD_ORDER_NUMBER })).toContainText('سواق الاختبار');
+
+  // The rep signs in (Better Auth allows 3 sign-ins per 10 s; the tests above used them).
+  await page.waitForTimeout(10_500);
+  await page.context().clearCookies();
+  await signIn(page, DRIVER_USERNAME, temporary);
+  await page.waitForURL(/\/ar\/change-password$/);
+  await page.getByLabel('كلمة السر المؤقتة').fill(temporary);
+  await page.getByLabel('كلمة السر الجديدة', { exact: true }).fill(DRIVER_PASSWORD);
+  await page.getByLabel('أكّد كلمة السر الجديدة').fill(DRIVER_PASSWORD);
+  await page.getByRole('button', { name: 'احفظ كلمة السر' }).click();
+
+  // Their home is their deliveries, and that is all their sidebar offers.
+  await page.waitForURL(/\/ar\/rep$/);
+  const nav = page.getByRole('navigation', { name: 'التنقل الرئيسي' });
+  await expect(nav.getByRole('link', { name: 'توصيلاتي' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'الطلبات', exact: true })).toHaveCount(0);
+
+  const card = page.getByTestId('rep-order').filter({ hasText: COD_ORDER_NUMBER });
+  await expect(card).toContainText('5 شارع النيل');
+  await card.getByRole('button', { name: 'تم التسليم' }).click();
+  await expect(card.getByLabel('المبلغ المحصّل (ج.م)')).toHaveValue('500.00');
+  await card.getByRole('button', { name: 'تأكيد التسليم والتحصيل' }).click();
+  await expect(page.getByTestId('rep-order')).toHaveCount(0);
+  await expect(page.getByTestId('rep-cash-total')).toContainText('500');
+
+  await page.getByRole('button', { name: 'تسليم العهدة' }).click();
+  await expect(page.getByText('مستني المكتب يعدّ')).toBeVisible();
+
+  // The office counts it.
+  const office = await browser.newContext({ storageState: OWNER_STATE });
+  const officePage = await office.newPage();
+  await officePage.goto('/ar/rep-cash');
+  const row = officePage.getByTestId('handover-row').first();
+  await row.getByRole('button', { name: 'تأكيد الاستلام' }).click();
+  await expect(row.getByRole('button', { name: 'تأكيد الاستلام' })).toHaveCount(0);
+  await expect(row).toContainText('500');
+  await office.close();
 });

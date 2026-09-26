@@ -47,4 +47,9 @@ describe('auth-server — betterAuth construction', () => {
     // Bad credentials -> better-auth's own 401/422-shaped rejection.
     expect(response.status).not.toBe(500);
   });
+
+  it('session reads are not rate-limited: every server-side check shares one bucket (no client IP)', async () => {
+    const { auth } = await import('@/lib/auth-server');
+    expect(auth.options.rateLimit?.customRules?.['/get-session']).toBe(false);
+  });
 });

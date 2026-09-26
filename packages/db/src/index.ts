@@ -68,6 +68,7 @@ export * from './schema/ledger';
 export * from './schema/shopify';
 export * from './schema/ai';
 export * from './schema/dimensions';
+export * from './schema/deliveries';
 export * from './schema/access';
 export * from './schema/exchangeRates';
 export * from './fx';
@@ -168,7 +169,17 @@ export async function withOrgContext<T>(
    * transaction sees; omitted or empty means unrestricted (system work,
    * webhooks, unscoped members).
    */
-  scopes?: { brand: readonly string[]; supplier: readonly string[] },
+  scopes?: {
+    brand: readonly string[];
+    supplier: readonly string[];
+    /**
+     * Who is acting (PR-2a), for 0077's delivery-rep policies: a
+     * 'delivery_rep' sees only the orders assigned to memberId and their own
+     * cash. Omitted for system work, which is not a rep.
+     */
+    memberId?: string | null;
+    principalKind?: 'staff' | 'delivery_rep' | 'sales_rep' | 'supplier';
+  },
 ): Promise<T> {
   // Fail before opening a transaction rather than handing a malformed value to
   // a policy comparison, where it would surface as a confusing cast error.
@@ -187,6 +198,11 @@ export async function withOrgContext<T>(
   };
   const brandIds = uuidList(scopes?.brand);
   const supplierIds = uuidList(scopes?.supplier);
+  const memberId = uuidList(scopes?.memberId ? [scopes.memberId] : []);
+  const principalKind = scopes?.principalKind ?? '';
+  if (!['', 'staff', 'delivery_rep', 'sales_rep', 'supplier'].includes(principalKind)) {
+    throw new TypeError(`withOrgContext principalKind is not a known kind: ${JSON.stringify(principalKind)}`);
+  }
 
   return dbInstance.transaction(async (tx) => {
     // One statement, not two. `SET LOCAL ROLE x` is just `SET LOCAL role = x`,
@@ -206,9 +222,14 @@ export async function withOrgContext<T>(
     // member's data scopes as comma-separated uuids, '' for unrestricted.
     // Always set, even when empty, so a pooled connection never carries a
     // previous transaction's value — they are transaction-local anyway.
+    //
+    // app.member_id / app.principal_kind (PR-2a) likewise: 0077 narrows a
+    // delivery rep to their own orders and cash, and fails closed when a rep
+    // transaction carries no member id.
     await tx.execute(
       sql`SELECT set_config('role', 'irth_app', true), set_config('app.org_id', ${orgId}, true),
-                 set_config('app.brand_ids', ${brandIds}, true), set_config('app.supplier_ids', ${supplierIds}, true)`,
+                 set_config('app.brand_ids', ${brandIds}, true), set_config('app.supplier_ids', ${supplierIds}, true),
+                 set_config('app.member_id', ${memberId}, true), set_config('app.principal_kind', ${principalKind}, true)`,
     );
     return fn(tx);
   });

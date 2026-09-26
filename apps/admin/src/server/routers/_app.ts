@@ -1,6 +1,8 @@
 import { router } from '../trpc';
 import { dashboardRouter } from './dashboard';
 import { ordersRouter } from './orders';
+import { deliveriesRouter } from './deliveries';
+import { repCashRouter } from './repCash';
 import { productsRouter } from './products';
 import { categoriesRouter } from './categories';
 import { inventoryRouter } from './inventory';
@@ -35,6 +37,8 @@ export const appRouter = router({
     me: meRouter,
     dashboard: dashboardRouter,
     orders: ordersRouter,
+    deliveries: deliveriesRouter,
+    repCash: repCashRouter,
     products: productsRouter,
     categories: categoriesRouter,
     inventory: inventoryRouter,

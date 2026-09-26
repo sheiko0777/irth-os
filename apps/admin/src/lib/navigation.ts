@@ -3,7 +3,7 @@ import {
   Box, FolderOpen, Warehouse, ClipboardList, ShoppingBag, RotateCcw,
   DollarSign, PieChart, Tag, List, Megaphone, Gift,
   Truck, MapPin, FileText, Plug2,
-  Settings, UserCog, BrainCircuit, ShieldCheck, KeyRound,
+  Settings, UserCog, BrainCircuit, ShieldCheck, KeyRound, PackageCheck, Wallet,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -43,6 +43,8 @@ const REQUIRES: Record<string, string> = {
   campaigns: 'campaigns.view',
   'gift-cards': 'giftCards.view',
   courier: 'courier.view',
+  rep: 'deliveries.view',
+  'rep-cash': 'repCash.view',
   shipping: 'shipping.view',
   eta: 'eta.view',
   integrations: 'integrations.view',
@@ -122,6 +124,8 @@ export function buildNavGroups(locale: string): NavGroup[] {
     {
       label: 'العمليات',
       items: [
+        { href: `/${locale}/rep`, label: 'توصيلاتي', icon: PackageCheck, keywords: 'deliveries rep driver مندوب توصيل' },
+        { href: `/${locale}/rep-cash`, label: 'عهدة المناديب', icon: Wallet, keywords: 'rep cash custody cod عهدة مناديب' },
         { href: `/${locale}/courier`, label: 'الشحن والتسوية', icon: Truck, keywords: 'courier shipping cod' },
         { href: `/${locale}/shipping`, label: 'مناطق الشحن', icon: MapPin, keywords: 'zones rates' },
         { href: `/${locale}/eta`, label: 'الفواتير الإلكترونية', icon: FileText, keywords: 'eta invoices tax' },

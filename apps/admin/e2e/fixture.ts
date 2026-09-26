@@ -17,6 +17,11 @@ export const UNMAPPED_LINE = 'سيروم 50 مل';
 export const REP_USERNAME = '01000000077';
 export const REP_NEW_PASSWORD = 'Rep-Password-2026';
 
+/** The delivery rep the owner creates from the role template (PR-2a), and their order. */
+export const DRIVER_USERNAME = '01000000088';
+export const DRIVER_PASSWORD = 'Driver-Password-2026';
+export const COD_ORDER_NUMBER = 'E2E-COD-1';
+
 /**
  * The owner's signed-in browser state, written once by seed.setup.ts. Better
  * Auth rate-limits /sign-in/email (3 per 10 s in production mode), so every

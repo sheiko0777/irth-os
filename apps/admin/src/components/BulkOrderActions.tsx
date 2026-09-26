@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { AssignRepControl } from '@/components/orders/AssignRep';
 
 const STATUS_OPTIONS = [
     { value: 'pending',        label: 'قيد الانتظار' },
@@ -76,6 +77,8 @@ export function BulkOrderActions({ selectedIds, onSuccess }: Props) {
                         {mutation.isPending ? 'جارٍ التحديث...' : 'تطبيق'}
                     </button>
                 </ConfirmDialog>
+
+                <AssignRepControl orderIds={selectedIds} onSuccess={onSuccess} />
             </div>
         </div>
     );

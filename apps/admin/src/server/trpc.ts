@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, resolveActiveOrgMembership, resolveEffectiveAccess, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, canAccess, auditLog, hiddenKeys, redact, type ActionFor, type Resource } from '@irth/db';
+import { db, resolveActiveOrgMembership, resolveEffectiveAccess, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, canAccess, transactionSettings, auditLog, hiddenKeys, redact, type ActionFor, type Resource } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
@@ -77,7 +77,7 @@ export const createContext = async () => {
                     await markIdempotencyEffect(tx, activeIdempotencyClaimId, orgId);
                 }
                 return fn(tx);
-            }, access.scopes),
+            }, transactionSettings(access)),
 
         /**
          * The deliberate cross-tenant escape hatch, for `platformAdminProcedure`

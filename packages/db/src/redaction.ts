@@ -30,7 +30,7 @@ export const REDACTION_RULES: readonly Rule[] = [
   {
     permission: 'sensitive.customerContact',
     keys: ['phone', 'email', 'address', 'shippingAddress', 'billingAddress', 'buyer', 'customerPhone', 'customerEmail', 'customerAddress'],
-    paths: ['orders.', 'customers.', 'customerSegments.', 'returns.', 'bulk.exportOrders', 'bulk.exportCustomers', 'dashboard.getRecentOrders'],
+    paths: ['orders.', 'deliveries.', 'customers.', 'customerSegments.', 'returns.', 'bulk.exportOrders', 'bulk.exportCustomers', 'dashboard.getRecentOrders'],
   },
 ];
 

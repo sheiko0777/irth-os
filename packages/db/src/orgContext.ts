@@ -180,5 +180,6 @@ export async function resolveEffectiveAccess(
     status: row.status,
     mustChangePassword: row.mustChangePassword,
     scopes,
+    memberId: row.memberId,
   });
 }

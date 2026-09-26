@@ -10,6 +10,8 @@ import { PERMISSIONS, type Resource } from '@irth/db/src/permissions';
 export const RESOURCE_LABELS: Record<Resource, string> = {
   dashboard: 'الرئيسية',
   orders: 'الطلبات',
+  deliveries: 'توصيلاتي (المندوب)',
+  repCash: 'عهدة المناديب',
   customers: 'العملاء وشرائحهم',
   products: 'المنتجات',
   categories: 'التصنيفات',
@@ -56,6 +58,9 @@ const ACTION_OVERRIDES: Partial<Record<Resource, Record<string, string>>> = {
   integrations: { manage: 'تغيير إعدادات الربط', recover: 'إعادة إرسال الأحداث الفاشلة' },
   roles: { manage: 'إنشاء وتعديل وحذف الأدوار' },
   eta: { submit: 'إرسال للمصلحة' },
+  orders: { assign: 'إسناد لمندوب' },
+  deliveries: { update: 'تسجيل التسليم أو الفشل أو المرتجع', collect: 'تحصيل الدفع عند الاستلام' },
+  repCash: { handover: 'تسليم العهدة', confirm: 'استلام العهدة', writeOff: 'تسوية العجز' },
   sensitive: { cost: 'رؤية التكلفة والهامش', supplierPrice: 'رؤية أسعار الموردين', customerContact: 'رؤية بيانات تواصل العملاء' },
 };
 

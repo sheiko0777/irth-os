@@ -1,6 +1,8 @@
 import { router, requirePermission } from '../trpc';
 import { orders, orderItems, shipmentTracking, products, productVariants, orderStatusEnum, notifications, paginationMeta, paginationOffset } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
+import { repScope } from '../scopes';
+import { orderAssignmentProcedures } from './orderAssignment';
 import { eq, and, desc, count, ilike, gte, lte, inArray, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
@@ -92,6 +94,7 @@ async function sourceLinesOf(tx: DbTx, orgId: string, sourcePayload: unknown) {
 }
 
 export const ordersRouter = router({
+    ...orderAssignmentProcedures,
     list: requirePermission('orders', 'view')
         .input(z.object({
             ...paginationInputSchema(20),
@@ -111,6 +114,9 @@ export const ordersRouter = router({
             // respect the search and date narrowing, but not the tab the user is
             // standing on — otherwise every tab but the active one reads zero.
             const scope = [eq(orders.orgId, ctx.orgId)];
+            // A delivery rep granted orders.view sees only their own (PR-2a).
+            const rep = repScope(ctx, orders.assignedRepMemberId);
+            if (rep) scope.push(rep);
 
             if (search) {
                 scope.push(ilike(orders.orderNumber, `%${search}%`));
@@ -146,7 +152,7 @@ export const ordersRouter = router({
                 ctx.withOrg(async (tx) => tx
                     .select({ count: count() })
                     .from(orders)
-                    .where(and(eq(orders.orgId, ctx.orgId), eq(orders.importStatus, 'blocked')))),
+                    .where(and(eq(orders.orgId, ctx.orgId), eq(orders.importStatus, 'blocked'), rep))),
             ]);
 
             return {
@@ -177,7 +183,8 @@ export const ordersRouter = router({
                 ctx.withOrg(async (tx) => tx.query.orders.findFirst({
                     where: and(
                         eq(orders.id, input.id),
-                        eq(orders.orgId, ctx.orgId)
+                        eq(orders.orgId, ctx.orgId),
+                        repScope(ctx, orders.assignedRepMemberId),
                     )
                 })),
                 ctx.withOrg(async (tx) => tx
