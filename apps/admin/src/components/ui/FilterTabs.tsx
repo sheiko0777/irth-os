@@ -44,7 +44,7 @@ export function FilterTabs({ param, tabs }: FilterTabsProps) {
 
   return (
     <div
-      className="flex flex-wrap items-center gap-1 border-b border-[var(--rim1)]"
+      className="glass inline-flex max-w-full flex-wrap items-center gap-1 rounded-[var(--control-radius)] p-1"
       role="tablist"
     >
       {tabs.map((tab) => {
@@ -56,24 +56,22 @@ export function FilterTabs({ param, tabs }: FilterTabsProps) {
             role="tab"
             aria-selected={isActive}
             scroll={false}
-            className="group flex items-center gap-2 px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--gold)]"
-            style={{
-              // A 2px gold underline on the active tab — the same "you are here"
-              // signature as the sidebar bar and the palette row, rotated to fit
-              // a horizontal strip.
-              boxShadow: isActive ? 'inset 0 -2px 0 var(--gold)' : undefined,
-              color: isActive ? 'var(--t1)' : 'var(--t2)',
-              fontWeight: isActive ? 600 : 400,
-            }}
+            // Segmented chips: the active one is the navy pill, the same
+            // "you are here" signature as the active sidebar link.
+            className={
+              'flex min-h-9 items-center gap-2 rounded-[calc(var(--control-radius)-4px)] px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ' +
+              (isActive
+                ? 'bg-[var(--accent)] font-semibold text-[var(--accent-fg)] shadow-[0_6px_14px_-8px_var(--accent)]'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--text-primary)]')
+            }
           >
             {tab.label}
             {tab.count !== undefined && (
               <span
-                className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors"
-                style={{
-                  background: isActive ? 'rgba(224,144,0,.15)' : 'var(--rim1)',
-                  color: isActive ? 'var(--gold)' : 'var(--t3)',
-                }}
+                className={
+                  'rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ' +
+                  (isActive ? 'bg-white/20 text-[var(--accent-fg)]' : 'bg-[var(--raised)] text-[var(--text-secondary)]')
+                }
                 dir="ltr"
               >
                 {tab.count.toLocaleString('ar-EG')}

@@ -9,6 +9,31 @@
   @include meta.load-css("@carbon/styles/scss/components/ui-shell");
   @include meta.load-css("@carbon/styles/scss/components/button");
 
+  // The shell speaks the app palette (PR-UI): Carbon's g100 values are
+  // remapped onto the semantic tokens, so light, dark and system all follow
+  // globals.css instead of a fixed dark shell.
+  --cds-background: var(--glass);
+  --cds-background-hover: var(--accent-soft);
+  --cds-layer-01: var(--raised);
+  --cds-layer-hover-01: var(--accent-soft);
+  --cds-layer-selected-01: var(--accent);
+  --cds-text-primary: var(--text-primary);
+  --cds-text-secondary: var(--text-secondary);
+  --cds-text-on-color: var(--accent-fg);
+  --cds-text-error: var(--critical);
+  --cds-icon-primary: var(--text-primary);
+  --cds-icon-secondary: var(--text-secondary);
+  --cds-icon-on-color: var(--accent-fg);
+  --cds-border-subtle: var(--separator);
+  --cds-border-subtle-00: var(--separator);
+  --cds-border-subtle-01: var(--separator);
+  --cds-border-strong-01: var(--input-border);
+  --cds-focus: var(--accent);
+  --cds-interactive: var(--accent);
+  --cds-link-primary: var(--accent);
+  --cds-link-primary-hover: var(--accent-strong);
+  --cds-overlay: rgb(11 18 32 / 0.45);
+
   color: var(--cds-text-primary);
   font-family: var(--font-sans);
   line-height: 1.75;
@@ -28,107 +53,179 @@
 
   .irth-header {
     z-index: 40;
-    block-size: 3rem;
-    border-block-end: 1px solid var(--cds-border-subtle-01);
-    background: var(--cds-background);
+    inset-block-start: 0.75rem;
+    inset-inline: 0.75rem;
+    inline-size: auto;
+    block-size: 3.5rem;
+    padding-inline: 0.25rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--card-radius);
+    background: var(--glass);
+    box-shadow: var(--card-shadow);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+
+    .cds--header__menu-toggle {
+      inline-size: 2.75rem;
+      block-size: 2.75rem;
+      margin-block: auto;
+      border-radius: var(--control-radius);
+      &:hover {
+        background: var(--accent-soft);
+      }
+      svg {
+        fill: var(--text-primary);
+      }
+    }
   }
 
   .irth-brand {
-    gap: 0.5rem;
+    gap: 0.625rem;
     flex-shrink: 0;
-    padding-inline: 1rem;
-    border-inline-end: 1px solid var(--cds-border-subtle-01);
+    padding-inline: 0.5rem 1rem;
+    border: 0;
+    color: var(--text-primary);
     font-size: 1.125rem;
     font-weight: 600;
   }
 
+  .irth-brand__mark {
+    display: grid;
+    inline-size: 2rem;
+    block-size: 2rem;
+    place-items: center;
+    border-radius: 0.625rem;
+    background: linear-gradient(135deg, var(--hero-from), var(--hero-to));
+    color: var(--hero-fg);
+    box-shadow: 0 6px 14px -6px var(--hero-from);
+  }
+
   .irth-brand__suffix {
-    color: var(--cds-text-secondary);
+    color: var(--text-secondary);
     font-size: 0.75rem;
-    font-weight: 400;
+    font-weight: 500;
   }
 
   .irth-header__page {
     overflow: hidden;
-    padding-inline: 1rem;
-    color: var(--cds-text-secondary);
-    font-size: 0.8125rem;
+    padding-inline: 0.75rem;
+    border-inline-start: 1px solid var(--separator);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .irth-header__actions {
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.375rem;
     margin-inline-start: auto;
-    padding-inline-end: 0.75rem;
+    padding-inline-end: 0.5rem;
   }
 
   .irth-search {
     display: flex;
     min-block-size: 2.5rem;
+    min-inline-size: 16rem;
     align-items: center;
-    gap: 0.75rem;
-    padding-inline: 0.75rem;
-    border: 1px solid var(--cds-border-subtle-01);
-    background: var(--cds-layer-01);
-    color: var(--cds-text-secondary);
+    gap: 0.625rem;
+    padding-inline: 0.875rem 0.5rem;
+    border: 1px solid var(--separator);
+    border-radius: 999px;
+    background: var(--glass-strong);
+    color: var(--text-secondary);
     cursor: pointer;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
+    transition: border-color 150ms ease, background 150ms ease;
 
     &:hover {
-      background: var(--cds-layer-hover-01);
+      border-color: var(--input-border);
+      background: var(--surface);
     }
     kbd {
-      margin-inline-start: 1rem;
-      padding-inline: 0.375rem;
-      border: 1px solid var(--cds-border-strong-01);
+      margin-inline-start: auto;
+      padding: 0 0.5rem;
+      border: 1px solid var(--separator);
+      border-radius: 999px;
+      background: var(--raised);
       font-family: inherit;
+      font-size: 0.6875rem;
     }
   }
 
-  .irth-navigation {
+  // Doubled class: Carbon's fixed side-nav rule would otherwise pin the top
+  // under a full-width header.
+  .irth-navigation.irth-navigation {
     position: fixed;
     z-index: 30;
     display: flex;
     flex-direction: column;
-    inset-block: 3rem 0;
-    inset-inline: 0 auto;
+    inset-block: 0.75rem;
+    inset-inline: 0.75rem auto;
     inline-size: 16rem;
     max-inline-size: 100%;
     block-size: auto;
     max-block-size: none;
-    border-inline-end: 1px solid var(--cds-border-subtle-01);
-    background: var(--cds-background);
-    color: var(--cds-text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: calc(var(--card-radius) + 4px);
+    background: var(--glass);
+    box-shadow: var(--card-shadow);
+    color: var(--text-primary);
     transform: none;
     visibility: visible;
     overflow: hidden;
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
 
     .cds--side-nav__items {
-      padding: 0;
+      display: grid;
+      gap: 0.125rem;
+      padding: 0 0.625rem;
     }
     .cds--side-nav__link {
       min-block-size: 2.75rem;
-      padding-inline: 1rem;
+      padding-inline: 0.375rem 0.75rem;
+      border-radius: var(--control-radius);
       text-align: start;
+      transition: background 150ms ease, color 150ms ease;
+
+      &:hover {
+        background: var(--accent-soft);
+      }
     }
     .cds--side-nav__icon {
-      margin-inline: 0 1rem;
+      display: grid;
+      inline-size: 2rem;
+      block-size: 2rem;
+      flex-shrink: 0;
+      place-items: center;
+      margin-inline: 0 0.75rem;
+      border-radius: 0.625rem;
+      background: var(--accent-soft);
+      color: var(--accent);
     }
+    // lucide icons are strokes; Carbon's fill rule would flood them.
     .cds--side-nav__icon svg {
       inline-size: 1rem;
       block-size: 1rem;
+      fill: none;
+      stroke: currentColor;
     }
     .cds--side-nav__link-text {
-      color: var(--cds-text-secondary);
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      font-weight: 500;
     }
     .cds--side-nav__link[aria-current="page"] {
-      background: var(--cds-layer-selected-01);
-      box-shadow: inset 3px 0 var(--cds-interactive);
+      background: var(--accent);
+      box-shadow: 0 8px 18px -10px var(--accent);
+    }
+    .cds--side-nav__link[aria-current="page"] .cds--side-nav__icon {
+      background: rgb(255 255 255 / 0.16);
+      color: var(--accent-fg);
     }
     .cds--side-nav__link[aria-current="page"] .cds--side-nav__link-text {
-      color: var(--cds-text-primary);
+      color: var(--accent-fg);
       font-weight: 600;
     }
     .cds--side-nav__link::before {
@@ -138,19 +235,23 @@
 
   .irth-navigation__intro {
     display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: 1.5rem 1rem 1rem;
-    border-block-end: 1px solid var(--cds-border-subtle-01);
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.125rem 1rem 0.75rem;
+  }
+
+  .irth-navigation__intro-text {
+    display: grid;
+    min-inline-size: 0;
   }
 
   .irth-eyebrow {
-    color: var(--cds-text-secondary);
+    color: var(--text-secondary);
     font-size: 0.6875rem;
     font-weight: 500;
   }
   .irth-navigation__title {
-    font-size: 1rem;
+    font-size: 0.9375rem;
     font-weight: 600;
   }
   .irth-navigation__scroll {
@@ -160,26 +261,39 @@
     padding-block-end: 1rem;
   }
   .irth-navigation__alerts {
-    padding-inline: 0.5rem;
+    padding-inline: 0.625rem;
   }
   .irth-navigation__group {
     margin: 0;
-    padding: 1.25rem 1rem 0.375rem;
-    color: var(--cds-text-secondary);
+    padding: 1rem 1.125rem 0.375rem;
+    color: var(--text-secondary);
     font-family: inherit;
     font-size: 0.6875rem;
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: 0.02em;
     line-height: 1.75;
   }
   .irth-navigation__footer {
     display: grid;
     gap: 0.5rem;
-    padding: 1rem;
-    border-block-start: 1px solid var(--cds-border-subtle-01);
-    background: var(--cds-layer-01);
+    margin: 0.625rem;
+    padding: 0.875rem;
+    border: 1px solid var(--separator);
+    border-radius: var(--card-radius);
+    background: var(--glass-strong);
     .cds--btn {
       inline-size: 100%;
       max-inline-size: none;
+      min-block-size: 2.5rem;
+      border-radius: var(--control-radius);
+      color: var(--critical);
+      &:hover {
+        background: var(--critical-bg);
+      }
+      svg {
+        fill: none;
+        stroke: currentColor;
+      }
     }
   }
   .irth-organization {
@@ -188,13 +302,13 @@
   }
   .irth-account {
     overflow: hidden;
-    color: var(--cds-text-secondary);
+    color: var(--text-secondary);
     font-size: 0.75rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .irth-logout-error {
-    color: var(--cds-text-error);
+    color: var(--critical);
     font-size: 0.75rem;
   }
 
@@ -204,8 +318,9 @@
     inset-block-start: 0.5rem;
     inset-inline-start: 0.5rem;
     padding: 0.75rem 1rem;
-    background: var(--cds-background);
-    color: var(--cds-link-primary);
+    border-radius: var(--control-radius);
+    background: var(--surface);
+    color: var(--accent);
     transform: translateY(-200%);
     &:focus {
       transform: none;
@@ -217,18 +332,22 @@
     z-index: 60;
     inset: 0;
     background: var(--cds-overlay);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
   }
   .irth-drawer {
     position: fixed;
     z-index: 61;
     display: flex;
     flex-direction: column;
-    inset-block: 0;
-    inset-inline-start: 0;
+    inset-block: 0.5rem;
+    inset-inline-start: 0.5rem;
     inline-size: min(20rem, calc(100vw - 2rem));
-    background: var(--cds-background);
-    color: var(--cds-text-primary);
-    box-shadow: 0 0 2rem rgb(0 0 0 / 25%);
+    border-radius: calc(var(--card-radius) + 4px);
+    background: var(--surface);
+    color: var(--text-primary);
+    box-shadow: var(--float-shadow);
+    overflow: hidden;
     .irth-navigation {
       position: relative;
       inset: auto;
@@ -236,15 +355,20 @@
       flex: 1;
       min-block-size: 0;
       border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
     }
   }
   .irth-drawer__heading {
     display: flex;
-    min-block-size: 3rem;
+    min-block-size: 3.5rem;
     align-items: center;
     justify-content: space-between;
-    padding-inline: 1rem 0.25rem;
-    border-block-end: 1px solid var(--cds-border-subtle-01);
+    padding-inline: 1rem 0.5rem;
+    border-block-end: 1px solid var(--separator);
     h2 {
       font-family: inherit;
       font-size: 0.875rem;
@@ -256,16 +380,16 @@
     inline-size: 2.75rem;
     block-size: 2.75rem;
     place-items: center;
+    border-radius: var(--control-radius);
     color: inherit;
     cursor: pointer;
     &:hover {
-      background: var(--cds-layer-hover-01);
+      background: var(--accent-soft);
     }
   }
 }
 
-// Structural styles only: legacy page colors, typography and component tokens
-// are deliberately not aliased to Carbon during this first review slice.
+// Structural layout for the floating header and sidebar.
 .irth-shell {
   min-block-size: 100dvh;
 }
@@ -273,8 +397,8 @@
   block-size: 100dvh;
   min-inline-size: 0;
   overflow: auto;
-  padding: 4.5rem 1rem 2rem;
-  scroll-padding-block-start: 4rem;
+  padding: 5.25rem 1rem 2rem;
+  scroll-padding-block-start: 5rem;
 }
 .irth-shell__page {
   max-inline-size: 90rem;
@@ -282,12 +406,15 @@
 }
 @media (min-width: 42rem) {
   .irth-shell__content {
-    padding: 5rem 2rem 2rem;
+    padding: 5.75rem 1.75rem 2.5rem;
   }
 }
 @media (min-width: 66rem) {
   .irth-shell[data-navigation-open="true"] .irth-shell__content {
-    margin-inline-start: 16rem;
+    margin-inline-start: 17.25rem;
+  }
+  .irth-shell[data-navigation-open="true"] .irth-carbon-ui .irth-header {
+    inset-inline-start: 17.75rem;
   }
 }
 @media (max-width: 41.99rem) {
@@ -297,15 +424,13 @@
     display: none;
   }
   .irth-carbon-ui .irth-search {
+    min-inline-size: 0;
+    inline-size: 2.75rem;
+    justify-content: center;
+    padding: 0;
     border: 0;
     background: transparent;
   }
-}
-[dir="rtl"]
-  .irth-carbon-ui
-  .irth-navigation
-  .cds--side-nav__link[aria-current="page"] {
-  box-shadow: inset -3px 0 var(--cds-interactive);
 }
 @media (forced-colors: active) {
   .irth-carbon-ui .irth-navigation .cds--side-nav__link[aria-current="page"] {

@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { FilterTabs, type FilterTab } from "@/components/ui/FilterTabs";
 import { Warehouse } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 /**
  * Three stock states, not two. "Out" cannot be sold today; "low" can, but needs
@@ -59,21 +60,26 @@ export default async function InventoryPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-[var(--t1)]">{t("inventory.title")}</h1>
-        <div className="flex items-center gap-2">
-          <InventoryScannerTrigger />
-          <ExportButton type="inventory" label="تصدير المخزون" />
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="المخزون والمنتجات"
+        title={t("inventory.title")}
+        description="الكميات المتاحة لكل صنف، وما يحتاج إعادة طلب."
+        icon={<Warehouse />}
+        actions={
+          <>
+            <InventoryScannerTrigger />
+            <ExportButton type="inventory" label="تصدير المخزون" />
+          </>
+        }
+      />
 
       {/* The banner is gone: the tab strip carries the same warning as a live,
           clickable count instead of a static sentence the operator cannot act on. */}
       <FilterTabs param="stock" tabs={tabs} />
 
-      <div className="rounded-md border border-[var(--rim1)] overflow-hidden bg-[var(--surface)]">
+      <div className="glass overflow-hidden rounded-[var(--card-radius)]">
         <Table>
-          <TableHeader className="bg-[var(--rim1)]">
+          <TableHeader>
             <TableRow>
               <TableHead className="text-start">{t("inventory.columns.product")}</TableHead>
               <TableHead className="text-start">{t("inventory.columns.variant")}</TableHead>
