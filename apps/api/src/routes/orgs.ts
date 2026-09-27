@@ -147,7 +147,7 @@ orgsRouter.post('/invite/accept', async (c: Context) => {
 
 
 const updateRoleSchema = z.object({
-  role: z.enum(['owner', 'admin', 'member']),
+  role: z.enum(['admin', 'member']),
 });
 
 orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('members', 'changeRole'), async (c: Context) => {
@@ -160,6 +160,22 @@ orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('m
     const userId = c.get('userId') as string;
 
     const result = await withOrg(c, (tx) => withAudit(tx, async () => {
+      const [target] = await tx
+        .select()
+        .from(orgMembers)
+        .where(and(eq(orgMembers.id, memberId as string), eq(orgMembers.orgId, orgId as string)))
+        .limit(1);
+
+      if (!target) return { id: undefined }; // satisfy withAudit expectation when not found
+
+      if (target.role === 'owner') {
+        throw new Error('Cannot change the owner role.');
+      }
+
+      if (target.userId === userId) {
+        throw new Error('You cannot change your own role.');
+      }
+
       const [updated] = await tx.update(orgMembers)
         .set({ role })
         .where(and(
@@ -179,6 +195,9 @@ orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('m
 
     return c.json({ data: jsonSafe(result), error: null, meta: null });
   } catch (error: unknown) {
+    if (error instanceof Error && (error.message === 'Cannot change the owner role.' || error.message === 'You cannot change your own role.')) {
+      return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
+    }
     return c.json({ data: null, error: handleError(error), meta: null }, 400);
   }
 });
