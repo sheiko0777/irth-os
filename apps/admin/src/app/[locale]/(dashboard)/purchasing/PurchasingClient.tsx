@@ -27,6 +27,7 @@ import { PoSupplierStatus } from "@/components/purchasing/PoSupplierStatus";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ShoppingBag } from 'lucide-react';
 import { Factory } from 'lucide-react';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 
 type Supplier = {
@@ -105,9 +106,11 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-[var(--t1)]">المشتريات</h1>
-      </div>
+      <PageHeader
+        eyebrow="المخزون والمنتجات"
+        title={"المشتريات"}
+        icon={<ShoppingBag />}
+      />
 
       <div className="flex gap-2 border-b border-[var(--rim1)] pb-2">
         <Button
@@ -176,7 +179,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
             </Dialog>
           </div>
 
-          <div className="rounded-md border border-[var(--rim1)] bg-[var(--surface)]">
+          <div className="glass rounded-[var(--card-radius)]">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -280,7 +283,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
             </Dialog>
           </div>
 
-          <div className="rounded-md border border-[var(--rim1)] bg-[var(--surface)]">
+          <div className="glass rounded-[var(--card-radius)]">
             <Table>
               <TableHeader>
                 <TableRow>

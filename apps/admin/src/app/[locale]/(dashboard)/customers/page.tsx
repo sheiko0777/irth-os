@@ -10,6 +10,8 @@ import { PaginationNav } from "@/components/ui/PaginationNav";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { StatBox } from "@/components/ui/StatBox";
 import { getTranslations } from "next-intl/server";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Users } from "lucide-react";
 
 const PAGE_SIZE = 50;
 
@@ -34,13 +36,15 @@ export default async function CustomersPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        eyebrow="عام"
+        title={t("title")}
+        icon={<Users />}
+        actions={<><div className="flex items-center gap-2">
           <ExportButton type="customers" label={t("actions.export")} />
           <CustomerActions actionType="create" />
-        </div>
-      </div>
+        </div></>}
+      />
 
       {summary.data && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
@@ -49,7 +53,7 @@ export default async function CustomersPage({
         </div>
       )}
 
-      <div className="rounded-md border bg-[var(--surface)]">
+      <div className="glass rounded-[var(--card-radius)]">
         <Table>
           <TableHeader>
             <TableRow>

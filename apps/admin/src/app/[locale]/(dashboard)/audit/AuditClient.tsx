@@ -31,6 +31,7 @@ import {
   AlertCircle,
   FileSpreadsheet,
 } from 'lucide-react';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type AuditListResponse = RouterOutputs['audit']['list'];
 type AuditItem = AuditListResponse['items'][number];
@@ -155,21 +156,18 @@ export function AuditClient({ initialData, initialStats }: Props) {
   return (
     <div className="space-y-6">
       {/* Header & Immutable Assurance Notice */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[var(--t1)]">سجلات الرقابة والنشاط</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/40 text-emerald-400 border border-emerald-800/40">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+      <PageHeader
+        eyebrow="الإعدادات والرقابة"
+        title="سجلات الرقابة والنشاط"
+        description="توثيق كامل لكافة الحركات والتعديلات التي تمت على النظام بالتوقيت، الحساب، الجهاز، والتفاصيل."
+        icon={<ShieldCheck />}
+        actions={
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--success-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--success)]">
+              <ShieldCheck className="size-3.5" aria-hidden="true" />
               سجل دائم غير قابل للتعديل (Immutable Log)
             </span>
-          </div>
-          <p className="text-sm text-[var(--t2)] mt-1">
-            توثيق كامل لكافة الحركات والتعديلات التي تمت على النظام بالتوقيت، الحساب، الجهاز، والتفاصيل.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -190,22 +188,24 @@ export function AuditClient({ initialData, initialStats }: Props) {
             تصدير CSV
           </Button>
         </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Security Info Card */}
-      <div className="p-3.5 rounded-xl border border-blue-900/30 bg-blue-950/20 text-blue-300 text-xs flex items-center justify-between gap-3 flex-wrap">
+      <div className="p-3.5 rounded-xl border border-[var(--info)]/30 bg-[var(--info-bg)] text-[var(--info)] text-xs flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5">
-          <Lock className="w-4 h-4 text-blue-400 shrink-0" />
+          <Lock className="w-4 h-4 text-[var(--info)] shrink-0" />
           <span>
             <strong>معيار الحوكمة والنزاهة:</strong> هذا السجل يعمل بنظام الإضافة فقط (Append-Only) ولا يمكن مسحه أو تعديل أي حركة فيه برمجياً أو يدوياً لضمان الشفافية ومطابقة المعايير المحاسبية.
           </span>
         </div>
-        <span className="text-[11px] text-blue-400/80 font-mono">WORM / AUDIT-SECURE</span>
+        <span className="text-[11px] text-[var(--info)] font-mono">WORM / AUDIT-SECURE</span>
       </div>
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-4 rounded-xl border border-[var(--rim1)] bg-[var(--surface)] shadow-xs">
+        <div className="glass rounded-[var(--card-radius)] p-4 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--t2)] font-medium">إجمالي الحركات الموثقة</span>
             <Database className="w-4 h-4 text-[var(--gold)]" />
@@ -213,26 +213,26 @@ export function AuditClient({ initialData, initialStats }: Props) {
           <p className="text-2xl font-bold text-[var(--t1)] mt-2">{stats.totalEvents.toLocaleString()}</p>
         </div>
 
-        <div className="p-4 rounded-xl border border-[var(--rim1)] bg-[var(--surface)] shadow-xs">
+        <div className="glass rounded-[var(--card-radius)] p-4 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--t2)] font-medium">عمليات اليوم</span>
-            <Activity className="w-4 h-4 text-emerald-400" />
+            <Activity className="w-4 h-4 text-[var(--success)]" />
           </div>
-          <p className="text-2xl font-bold text-emerald-400 mt-2">{stats.todayEvents.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-[var(--success)] mt-2">{stats.todayEvents.toLocaleString()}</p>
         </div>
 
-        <div className="p-4 rounded-xl border border-[var(--rim1)] bg-[var(--surface)] shadow-xs">
+        <div className="glass rounded-[var(--card-radius)] p-4 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--t2)] font-medium">المشغلون النشطون</span>
-            <Users className="w-4 h-4 text-blue-400" />
+            <Users className="w-4 h-4 text-[var(--info)]" />
           </div>
           <p className="text-2xl font-bold text-[var(--t1)] mt-2">{stats.activeOperatorsCount}</p>
         </div>
 
-        <div className="p-4 rounded-xl border border-[var(--rim1)] bg-[var(--surface)] shadow-xs">
+        <div className="glass rounded-[var(--card-radius)] p-4 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--t2)] font-medium">آخر حركة مسجلة</span>
-            <Clock className="w-4 h-4 text-purple-400" />
+            <Clock className="w-4 h-4 text-[var(--accent)]" />
           </div>
           <p className="text-xs font-bold text-[var(--t1)] mt-2 truncate">
             {stats.latestEvent ? formatDate(stats.latestEvent.createdAt, { withTime: true }) : '—'}
@@ -241,7 +241,7 @@ export function AuditClient({ initialData, initialStats }: Props) {
       </div>
 
       {/* Filter Toolbar */}
-      <div className="p-4 rounded-xl border border-[var(--rim1)] bg-[var(--surface)] space-y-3">
+      <div className="glass rounded-[var(--card-radius)] p-4 space-y-3">
         <div className="flex flex-col sm:flex-row items-center gap-3">
           {/* Free Text Search */}
           <div className="relative flex-1 w-full">
@@ -304,7 +304,7 @@ export function AuditClient({ initialData, initialStats }: Props) {
       </div>
 
       {/* Main Table */}
-      <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] overflow-hidden shadow-sm">
+      <div className="glass rounded-[var(--card-radius)] overflow-hidden shadow-sm">
         <Table>
           <TableHeader className="bg-[var(--surface2)]/60">
             <TableRow className="border-b border-[var(--rim1)] hover:bg-transparent">
@@ -328,13 +328,13 @@ export function AuditClient({ initialData, initialStats }: Props) {
               items.map((item) => {
                 const deviceIcon =
                   item.client.deviceType === 'mobile' ? (
-                    <Smartphone className="w-3.5 h-3.5 text-zinc-400" />
+                    <Smartphone className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
                   ) : item.client.deviceType === 'tablet' ? (
-                    <Tablet className="w-3.5 h-3.5 text-zinc-400" />
+                    <Tablet className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
                   ) : item.client.deviceType === 'desktop' ? (
-                    <Laptop className="w-3.5 h-3.5 text-zinc-400" />
+                    <Laptop className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
                   ) : (
-                    <Globe className="w-3.5 h-3.5 text-zinc-400" />
+                    <Globe className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
                   );
 
                 return (
@@ -368,8 +368,8 @@ export function AuditClient({ initialData, initialStats }: Props) {
                                 item.actor.role === 'owner'
                                   ? 'bg-[var(--gold)]/20 text-[var(--gold)]'
                                   : item.actor.role === 'admin'
-                                  ? 'bg-blue-500/20 text-blue-400'
-                                  : 'bg-zinc-800 text-zinc-400'
+                                  ? 'bg-[var(--info-bg)] text-[var(--info)]'
+                                  : 'bg-[var(--raised)] text-[var(--text-secondary)]'
                               }`}
                             >
                               {item.actor.role === 'owner' ? 'مالك' : item.actor.role === 'admin' ? 'مشرف' : 'عضو'}
@@ -410,7 +410,7 @@ export function AuditClient({ initialData, initialStats }: Props) {
                               className="text-[var(--t3)] hover:text-[var(--gold)] p-0.5"
                               title="نسخ المعرف"
                             >
-                              {copiedId === item.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === item.id ? <Check className="w-3 h-3 text-[var(--success)]" /> : <Copy className="w-3 h-3" />}
                             </button>
                           </div>
                         )}
@@ -526,16 +526,16 @@ export function AuditClient({ initialData, initialStats }: Props) {
                   </Button>
                 </div>
 
-                <div className="p-3 bg-black/80 rounded-xl border border-zinc-800 font-mono text-emerald-400 text-xs overflow-x-auto max-h-64 dir-ltr text-start">
+                <div className="p-3 bg-black/80 rounded-xl border border-[var(--separator)] font-mono text-[var(--success)] text-xs overflow-x-auto max-h-64 dir-ltr text-start">
                   <pre>{JSON.stringify(activeInspectorItem.changes, null, 2)}</pre>
                 </div>
               </div>
 
               {/* Immutable Security Certificate */}
-              <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-800/30 text-emerald-300 text-[11px] flex items-center gap-2">
-                <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="p-3 rounded-lg bg-[var(--success-bg)] border border-[var(--success)]/30 text-[var(--success)] text-[11px] flex items-center gap-2">
+                <Lock className="w-4 h-4 text-[var(--success)] shrink-0" />
                 <span>
-                  السجل موثق بالرقم التعريفي <strong className="font-mono text-emerald-200">{activeInspectorItem.id}</strong> ومثبت في قاعدة البيانات ولا يمكن تعديله أو حذفه.
+                  السجل موثق بالرقم التعريفي <strong className="font-mono text-[var(--success)]">{activeInspectorItem.id}</strong> ومثبت في قاعدة البيانات ولا يمكن تعديله أو حذفه.
                 </span>
               </div>
             </div>

@@ -106,7 +106,7 @@ export function TwoFactorSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md" role="alert">{error}</div>
+          <div className="p-3 text-sm text-[var(--critical)] bg-[var(--critical-bg)] rounded-md" role="alert">{error}</div>
         )}
 
         {enabled === false && !totpURI && (
@@ -130,7 +130,7 @@ export function TwoFactorSection() {
         {/* Step: paste the secret into the authenticator app, then confirm with a code */}
         {totpURI && (
           <div className="space-y-4">
-            <div className="p-3 text-sm bg-blue-50 text-blue-700 rounded-md">
+            <div className="p-3 text-sm bg-[var(--info-bg)] text-[var(--info)] rounded-md">
               {t("setupInstructions")}
             </div>
             <div className="space-y-2">
@@ -164,7 +164,7 @@ export function TwoFactorSection() {
 
         {enabled === true && (
           <div className="space-y-4">
-            <div className="p-3 text-sm text-green-700 bg-green-50 rounded-md">
+            <div className="p-3 text-sm text-[var(--success)] bg-[var(--success-bg)] rounded-md">
               {t("enabledNotice")}
             </div>
             <div className="space-y-2">

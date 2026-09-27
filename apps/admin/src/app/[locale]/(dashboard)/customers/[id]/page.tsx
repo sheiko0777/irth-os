@@ -51,7 +51,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <Link href="/ar/customers" className="text-[var(--t2)] hover:text-[var(--t1)] text-sm">
           {t("detail.backToCustomers")}
         </Link>
-        <h1 className="text-3xl font-bold tracking-tight">{customer.name}</h1>
+        <h1 className="text-[1.5rem] font-semibold leading-tight tracking-tight">{customer.name}</h1>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -60,7 +60,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <StatBox label={t("summary.totalSpent")} value={formatMoney(fromMinor(customer.totalSpentMinor ?? 0n))} />
       </div>
 
-      <div className="rounded-lg border bg-[var(--surface)] p-6 space-y-3">
+      <div className="glass rounded-[var(--card-radius)] p-6 space-y-3">
         <h2 className="font-semibold text-lg text-[var(--t1)]">{t("detail.contact.title")}</h2>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
@@ -84,7 +84,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         </div>
       </div>
 
-      <div className="rounded-lg border bg-[var(--surface)]">
+      <div className="glass rounded-[var(--card-radius)]">
         <div className="p-4 border-b border-[var(--rim1)]">
           <h2 className="font-semibold text-lg text-[var(--t1)]">{t("detail.loyaltyHistory")}</h2>
         </div>

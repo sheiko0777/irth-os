@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { TRPCError } from "@trpc/server";
 import { serverCaller } from "@/server/caller";
 import { RepCashManager } from "./RepCashManager";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Wallet } from "lucide-react";
 
 /**
  * عهدة المناديب (PR-2a): what each delivery rep holds, and the handovers
@@ -18,12 +20,12 @@ export default async function RepCashPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">عهدة المناديب</h1>
-        <p className="mt-1 text-sm text-[var(--t3)]">
-          الفلوس اللي المناديب حصّلوها، والتسليمات اللي مستنية تتعدّ. التأكيد بيسجّل المبلغ اللي اتستلم فعلًا، والعجز بيتسوّى بقيد لوحده.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="العمليات"
+        title={"عهدة المناديب"}
+        description={"الفلوس اللي المناديب حصّلوها، والتسليمات اللي مستنية تتعدّ. التأكيد بيسجّل المبلغ اللي اتستلم فعلًا، والعجز بيتسوّى بقيد لوحده."}
+        icon={<Wallet />}
+      />
       <RepCashManager />
     </div>
   );

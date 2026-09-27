@@ -17,8 +17,17 @@ export interface TabItem {
  * supplier reaches with a thumb. At most four items, each icon + label. For
  * same-page anchors the active tab follows the section in view.
  */
-export function MobileTabBar({ items, label }: { items: TabItem[]; label: string }) {
-  const [active, setActive] = useState(items[0]?.href);
+export function MobileTabBar({
+  items,
+  label,
+  activeHref,
+}: {
+  items: TabItem[];
+  label: string;
+  /** The tab to mark current when the page is not one of the anchors (a detail page). */
+  activeHref?: string;
+}) {
+  const [active, setActive] = useState(activeHref ?? items[0]?.href);
 
   useEffect(() => {
     const anchors = items.filter((i) => i.href.startsWith("#"));

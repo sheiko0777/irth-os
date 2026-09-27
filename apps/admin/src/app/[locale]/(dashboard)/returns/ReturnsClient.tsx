@@ -45,6 +45,7 @@ interface ReturnsClientProps {
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { RotateCcw } from 'lucide-react';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const tabOptions = [
   { value: 'all', label: 'الكل' },
@@ -131,22 +132,24 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
 
   return (
     <div className="flex flex-col gap-6 w-full">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-[var(--t1)]">إدارة المرتجعات</h1>
-      </div>
+      <PageHeader
+        eyebrow="المخزون والمنتجات"
+        title={"إدارة المرتجعات"}
+        icon={<RotateCcw />}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6">
+        <div className="glass rounded-[var(--card-radius)] p-6">
           <h3 className="text-[var(--t2)] text-sm mb-2">إجمالي المرتجعات</h3>
           <p className="text-2xl font-bold text-[var(--t1)]">{displaySummary.total}</p>
         </div>
-        <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6">
+        <div className="glass rounded-[var(--card-radius)] p-6">
           <h3 className="text-[var(--t2)] text-sm mb-2">قيد المراجعة</h3>
           <p className="text-2xl font-bold text-[var(--t1)]">
             {displaySummary.byStatus.requested || 0}
           </p>
         </div>
-        <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6">
+        <div className="glass rounded-[var(--card-radius)] p-6">
           <h3 className="text-[var(--t2)] text-sm mb-2">موافق عليها</h3>
           <p className="text-2xl font-bold text-[var(--t1)]">
             {displaySummary.byStatus.approved || 0}
@@ -170,7 +173,7 @@ export function ReturnsClient({ returns: initialReturns, summary: initialSummary
         ))}
       </div>
 
-      <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg overflow-hidden">
+      <div className="glass rounded-[var(--card-radius)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-start">
             <thead className="text-xs text-[var(--t2)] bg-[var(--surface)] border-b border-[var(--rim1)]">

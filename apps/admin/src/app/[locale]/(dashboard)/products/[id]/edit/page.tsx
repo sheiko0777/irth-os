@@ -2,6 +2,8 @@ import { getTranslations } from "next-intl/server";
 import { ProductForm } from "../../ProductForm";
 import { serverCaller } from "@/server/caller";
 import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Box } from "lucide-react";
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = await params;
@@ -14,7 +16,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         
         return (
             <div className="space-y-6 max-w-2xl">
-                <h1 className="text-3xl font-bold tracking-tight">{t("edit")}</h1>
+                <PageHeader eyebrow="المخزون والمنتجات" title={t("edit")} icon={<Box />} />
                 <ProductForm initialData={productResponse.data.product as never} categories={categoriesResponse.data} />
             </div>
         );

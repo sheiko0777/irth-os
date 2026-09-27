@@ -108,6 +108,12 @@ semantic tokens, so older pages follow the palette. New code uses semantic names
   tab bar (orders and custody).
 - **Supplier portal** (`/portal`, phone-first): a glass header, a "الباقي لك"
   `BalanceCard` over received and paid, PO cards, and a tab bar.
+- **Supplier PO detail** (`/portal/orders/[id]`, phone-first): a navy PO card
+  (total, status, delivery date), an answer card (confirm or propose a date), one
+  card per line with ordered/shipped/received tiles, a shipped-progress bar and the
+  quantity to ship, then the shipping notice and a notice timeline.
+- **Every other admin screen** opens with `PageHeader` (the nav group as eyebrow,
+  the nav icon) and uses glass cards. The primary action is the navy button.
 - **Sign-in:** a navy mark and a glass card over the lit canvas.
 
 ## 7. Anti-patterns
