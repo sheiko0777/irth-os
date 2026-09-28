@@ -74,37 +74,37 @@ export const auditRouter = router({
         const whereClause = and(...conditions);
 
         // 1. Fetch total count and paginated rows
-        const [totalResult, rows] = await Promise.all([
-          tx
-            .select({ count: sql<number>`count(*)::int` })
-            .from(auditLog)
-            .where(whereClause),
-          tx
-            .select({
-              id: auditLog.id,
-              orgId: auditLog.orgId,
-              userId: auditLog.userId,
-              action: auditLog.action,
-              tableName: auditLog.tableName,
-              recordId: auditLog.recordId,
-              changes: auditLog.changes,
-              createdAt: auditLog.createdAt,
-              userName: user.name,
-              userEmail: user.email,
-              userImage: user.image,
-              userRole: orgMembers.role,
-            })
-            .from(auditLog)
-            .leftJoin(user, eq(auditLog.userId, user.id))
-            .leftJoin(
-              orgMembers,
-              and(eq(orgMembers.userId, auditLog.userId), eq(orgMembers.orgId, ctx.orgId))
-            )
-            .where(whereClause)
-            .orderBy(desc(auditLog.createdAt))
-            .limit(pageSize)
-            .offset(offset),
-        ]);
+        // Sequential queries inside transaction to prevent connection multiplexing issues
+        const totalResult = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(auditLog)
+          .where(whereClause);
+
+        const rows = await tx
+          .select({
+            id: auditLog.id,
+            orgId: auditLog.orgId,
+            userId: auditLog.userId,
+            action: auditLog.action,
+            tableName: auditLog.tableName,
+            recordId: auditLog.recordId,
+            changes: auditLog.changes,
+            createdAt: auditLog.createdAt,
+            userName: user.name,
+            userEmail: user.email,
+            userImage: user.image,
+            userRole: orgMembers.role,
+          })
+          .from(auditLog)
+          .leftJoin(user, eq(auditLog.userId, user.id))
+          .leftJoin(
+            orgMembers,
+            and(eq(orgMembers.userId, auditLog.userId), eq(orgMembers.orgId, ctx.orgId))
+          )
+          .where(whereClause)
+          .orderBy(desc(auditLog.createdAt))
+          .limit(pageSize)
+          .offset(offset);
 
         const total = totalResult[0]?.count ?? 0;
 
@@ -203,41 +203,27 @@ export const auditRouter = router({
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
 
-      const [totalCountResult, todayCountResult, uniqueUsersResult, latestRowResult] = await Promise.all([
-        tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(auditLog)
-          .where(eq(auditLog.orgId, ctx.orgId)),
-        tx
-          .select({ count: sql<number>`count(*)::int` })
-          .from(auditLog)
-          .where(
-            and(
-              eq(auditLog.orgId, ctx.orgId),
-              gte(auditLog.createdAt, todayStart)
-            )
-          ),
-        tx
-          .select({ count: sql<number>`count(distinct ${auditLog.userId})::int` })
-          .from(auditLog)
-          .where(
-            and(
-              eq(auditLog.orgId, ctx.orgId),
-              sql`${auditLog.userId} is not null`
-            )
-          ),
-        tx
-          .select({ createdAt: auditLog.createdAt, action: auditLog.action })
-          .from(auditLog)
-          .where(eq(auditLog.orgId, ctx.orgId))
-          .orderBy(desc(auditLog.createdAt))
-          .limit(1),
-      ]);
+      // Execute aggregate queries in a single roundtrip to prevent multiplexing inside transactions
+      const [aggregates] = await tx
+        .select({
+          totalEvents: sql<number>`count(*)::int`,
+          todayEvents: sql<number>`count(*) filter (where ${auditLog.createdAt} >= ${todayStart})::int`,
+          activeOperatorsCount: sql<number>`count(distinct ${auditLog.userId}) filter (where ${auditLog.userId} is not null)::int`
+        })
+        .from(auditLog)
+        .where(eq(auditLog.orgId, ctx.orgId));
+
+      const latestRowResult = await tx
+        .select({ createdAt: auditLog.createdAt, action: auditLog.action })
+        .from(auditLog)
+        .where(eq(auditLog.orgId, ctx.orgId))
+        .orderBy(desc(auditLog.createdAt))
+        .limit(1);
 
       return {
-        totalEvents: totalCountResult[0]?.count ?? 0,
-        todayEvents: todayCountResult[0]?.count ?? 0,
-        activeOperatorsCount: uniqueUsersResult[0]?.count ?? 0,
+        totalEvents: aggregates?.totalEvents ?? 0,
+        todayEvents: aggregates?.todayEvents ?? 0,
+        activeOperatorsCount: aggregates?.activeOperatorsCount ?? 0,
         latestEvent: latestRowResult[0] ?? null,
       };
     });
