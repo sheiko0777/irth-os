@@ -11,3 +11,6 @@
 ## 2026-10-09 - Combine count queries with FILTER clause
 **Learning:** Found sequential and concurrent aggregate queries executing multiple database roundtrips and causing multiplexing risks on single transaction connections.
 **Action:** Use PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm` to combine multiple aggregate queries into a single query to reduce database roundtrips.
+## 2025-02-28 - Optimize AI tool sales summary queries in `apps/api/src/ai/tools.ts`
+**Learning:** Combining multiple aggregate queries using PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility prevents executing multiple queries concurrently inside transaction contexts and reduces network roundtrips.
+**Action:** When making multiple conditional aggregates on the same table, use PostgreSQL's `FILTER` clause.
