@@ -71,3 +71,8 @@
 **Vulnerability:** The API endpoint `PATCH /members/:memberId/role` allowed users with `changeRole` permission (e.g. `owner`) to change their own role or another `owner`'s role, and even allowed upgrading someone to `owner` because the schema did not restrict it.
 **Learning:** Role change endpoints should never blindly trust the requested update even if the actor has the required permissions matrix role. The target row must be fetched *before* the update to verify the target's current state (e.g., they are not the `owner` and are not the current user) to prevent self-lockout or privilege escalation.
 **Prevention:** Always restrict update schemas strictly (e.g., `z.enum(['admin', 'member'])`), fetch the target row before mutation to assert business invariants, and add explicit runtime guards for self-modification and high-privilege targets.
+
+## 2025-02-14 - Fix Type Error when securing API endpoint
+**Vulnerability:** In `apps/api/src/routes/orgs.ts`, fixing the IDOR member role issue correctly enforced role constraints but used the parameter `memberId` directly with `eq(orgMembers.id, memberId)` which resulted in a `No overload matches this call` TypeScript error because `memberId`'s type was loosely typed.
+**Learning:** `c.req.param`'s return type can be loose in certain Hono routes depending on how generics are passed. Always cast it via `as string` (i.e. `memberId as string`) when used as a parameter inside `eq()` matching a strictly typed column like `PgUUID` in Drizzle ORM.
+**Prevention:** Always run `pnpm exec turbo typecheck test` locally before submitting changes to the codebase to prevent CI pipeline failures and catch type mismatches statically.

@@ -162,7 +162,7 @@ orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('m
     const [target] = await db
       .select()
       .from(orgMembers)
-      .where(and(eq(orgMembers.id, memberId), eq(orgMembers.orgId, orgId)))
+      .where(and(eq(orgMembers.id, memberId as string), eq(orgMembers.orgId, orgId)))
       .limit(1);
 
     if (!target) {
