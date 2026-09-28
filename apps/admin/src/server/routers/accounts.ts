@@ -3,11 +3,12 @@ import { z } from 'zod';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { hashPassword } from 'better-auth/crypto';
 import {
-  accessRoles, account, brands, canDelegate, covers, effectiveAccess, memberScopes, orgMembers, permissionKeys, permissionsForRole,
+  accessRoles, account, brands, memberScopes, orgMembers, permissionKeys, permissionsForRole,
   priceLists, suppliers, withinScopes, type MemberScopes,
-  session, user, withAudit, type DbTx, type EffectiveAccess, type PermissionList,
+  session, user, withAudit, type DbTx, type PermissionList,
 } from '@irth/db';
-import { router, requirePermission, type Context } from '../trpc';
+import { router, requirePermission } from '../trpc';
+import { assertMayDelegate, assertMayManage, loadMember } from '../memberAuthority';
 import { permissionListSchema, pgCode } from '../permissionInput';
 import { inheritedScopes, insertAccount, rethrowAccountError, temporaryPassword, usernameSchema } from '../accountCreation';
 
@@ -40,58 +41,6 @@ async function loadRole(tx: Tx, orgId: string, roleId: string) {
   const list: PermissionList = role.systemKey ? permissionsForRole(role.systemKey) : role.permissions;
   return { ...role, list };
 }
-
-/** A member's row and current effective access, in this org only. */
-async function loadMember(tx: Tx, orgId: string, memberId: string) {
-  const [row] = await tx
-    .select({ member: orgMembers, systemKey: accessRoles.systemKey, rolePermissions: accessRoles.permissions, roleName: accessRoles.name })
-    .from(orgMembers)
-    .leftJoin(accessRoles, and(eq(accessRoles.id, orgMembers.accessRoleId), eq(accessRoles.orgId, orgMembers.orgId)))
-    .where(and(eq(orgMembers.id, memberId), eq(orgMembers.orgId, orgId)));
-  if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'العضو غير موجود.' });
-  const scopeRows = await tx
-    .select({ kind: memberScopes.scopeKind, id: memberScopes.scopeId })
-    .from(memberScopes)
-    .where(and(eq(memberScopes.orgId, orgId), eq(memberScopes.memberId, memberId)));
-  const scopes: MemberScopes = {
-    brand: scopeRows.filter((r) => r.kind === 'brand').map((r) => r.id).sort(),
-    supplier: scopeRows.filter((r) => r.kind === 'supplier').map((r) => r.id).sort(),
-    pricelist: scopeRows.filter((r) => r.kind === 'pricelist').map((r) => r.id).sort(),
-  };
-  const base = {
-    systemKey: row.systemKey ?? null,
-    rolePermissions: row.rolePermissions ?? undefined,
-    overrides: row.member.overrides,
-    principalKind: row.member.principalKind,
-    scopes,
-  };
-  return {
-    ...row,
-    // What they can do right now (nothing while suspended)…
-    access: effectiveAccess({ ...base, status: row.member.status }),
-    // …and the authority they hold regardless of status: a suspended owner is
-    // still the owner, and an admin must not be able to manage them.
-    authority: effectiveAccess(base),
-  };
-}
-
-/** The checks every change to another member passes first. */
-function assertMayManage(ctx: Pick<Context, 'userId' | 'access'>, target: { member: { userId: string }; authority: EffectiveAccess }) {
-  if (target.member.userId === ctx.userId) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك تعديل حسابك من هنا.' });
-  }
-  if (!covers(ctx.access, target.authority)) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'صلاحيات هذا العضو أعلى من صلاحياتك.' });
-  }
-}
-
-function assertMayDelegate(ctx: Pick<Context, 'access'>, perms: Iterable<string>, ownerRole = false) {
-  if (!canDelegate(ctx.access, perms, { ownerRole })) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'لا يمكنك منح صلاحيات لا تملكها.' });
-  }
-}
-
-
 
 export const accountsRouter = router({
   /** Create an account directly. The temporary password is returned once and never stored in plain text. */

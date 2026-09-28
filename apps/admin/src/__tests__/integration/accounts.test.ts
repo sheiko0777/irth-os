@@ -156,6 +156,36 @@ describe('assignRole and personal exceptions', () => {
   });
 });
 
+describe('the older member paths honour delegation too', () => {
+  // A plain member the owner has personally granted one permission. Before the
+  // fix, members.changeRole checked only that permission — so this member could
+  // make anyone an admin, handing out a matrix they never held.
+  const grantee = (grant: Record<string, string[]>) => callerAs(orgA, 'grantee-a', 'member',
+    effectiveAccess({ systemKey: 'member', overrides: { grant } }));
+
+  it('members.changeRole: holding changeRole alone does not let you hand out admin', async () => {
+    const [m] = await testDb.insert(orgMembers).values({ orgId: orgA, userId: 'staff-4', role: 'member' }).returning();
+    expect(await code(grantee({ members: ['changeRole'] }).members.changeRole({ memberId: m.id, role: 'admin' }))).toBe('FORBIDDEN');
+    expect((await memberOf(m.id)).role).toBe('member');
+    // The owner still can.
+    await owner().members.changeRole({ memberId: m.id, role: 'admin' });
+    expect((await memberOf(m.id)).role).toBe('admin');
+  });
+
+  it('members.remove: holding remove does not let you remove someone with more authority', async () => {
+    const [a] = await testDb.insert(orgMembers).values({ orgId: orgA, userId: 'staff-5', role: 'admin' }).returning();
+    expect(await code(grantee({ members: ['remove'] }).members.remove({ memberId: a.id }))).toBe('FORBIDDEN');
+    expect(await memberOf(a.id)).toBeDefined();
+  });
+
+  it('roles.create / roles.update: nobody builds a role holding permissions they lack', async () => {
+    const builder = grantee({ roles: ['manage'] });
+    expect(await code(builder.roles.create({ name: 'مالية', principalKind: 'staff', permissions: { finance: ['write'] } }))).toBe('FORBIDDEN');
+    const { data: role } = await owner().roles.create({ name: 'عرض فقط', principalKind: 'staff', permissions: { orders: ['view'] } });
+    expect(await code(builder.roles.update({ id: role.id, permissions: { finance: ['write'] } }))).toBe('FORBIDDEN');
+  });
+});
+
 describe('suspension, password reset, last owner', () => {
   it('a suspended member is refused at sign-in to the org; reactivation restores them', async () => {
     const { data } = await owner().accounts.create({ name: 'مؤقت', username: 'temp_staff', accessRoleId: repRole });

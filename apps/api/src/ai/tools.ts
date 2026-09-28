@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, asc, count, desc, eq, gte, ilike, lte } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, lte, sql } from 'drizzle-orm';
 import {
   canAccess,
   inventoryItems,
@@ -235,20 +235,26 @@ export const AI_TOOLS: AiTool[] = [
       start.setDate(start.getDate() - args.days);
 
       // Revenue from the ledger (CLAUDE.md rule 2): net sales ex-VAT, less
-      // returns. Order counts stay on `orders` — they count intent, not value.
-      const [allRows, deliveredRows, pendingRows, cancelledRows, sales] = await Promise.all([
-        ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start))),
-        ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'delivered'))),
-        ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'pending'))),
-        ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'cancelled'))),
+      // returns. Order counts stay on `orders` — they count intent, not value —
+      // and come from one FILTER query instead of four round-trips (#401).
+      const [[result], sales] = await Promise.all([
+        ctx.db
+          .select({
+            totalOrders: count(),
+            deliveredCount: sql<number>`count(*) filter (where ${orders.status} = 'delivered')`,
+            pendingCount: sql<number>`count(*) filter (where ${orders.status} = 'pending')`,
+            cancelledCount: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`,
+          })
+          .from(orders)
+          .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start))),
         salesTotals(ctx.db, ctx.orgId, { from: start }),
       ]);
 
       const netSales = asMinor(sales.netSalesMinor);
-      const totalOrders = allRows[0]?.count ?? 0;
-      const deliveredCount = deliveredRows[0]?.count ?? 0;
-      const pendingCount = pendingRows[0]?.count ?? 0;
-      const cancelledCount = cancelledRows[0]?.count ?? 0;
+      const totalOrders = Number(result?.totalOrders ?? 0);
+      const deliveredCount = Number(result?.deliveredCount ?? 0);
+      const pendingCount = Number(result?.pendingCount ?? 0);
+      const cancelledCount = Number(result?.cancelledCount ?? 0);
 
       return {
         summary: `${totalOrders} order(s), ${deliveredCount} delivered, ${pendingCount} pending, net sales (ledger, ex-VAT, after returns) ${netSales} minor units.`,

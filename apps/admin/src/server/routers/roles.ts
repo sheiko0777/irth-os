@@ -1,8 +1,9 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
-import { accessRoles, orgMembers, permissionsForRole, withAudit, PRINCIPAL_KINDS } from '@irth/db';
+import { accessRoles, orgMembers, permissionKeys, permissionsForRole, withAudit, PRINCIPAL_KINDS } from '@irth/db';
 import { router, requirePermission } from '../trpc';
+import { assertMayDelegate } from '../memberAuthority';
 import { permissionListSchema, pgCode } from '../permissionInput';
 
 /**
@@ -60,6 +61,9 @@ export const rolesRouter = router({
   create: requirePermission('roles', 'manage')
     .input(z.object({ name: nameSchema, principalKind: principalKindSchema, permissions: permissionListSchema }))
     .mutation(async ({ ctx, input }) => {
+      // A role is a bundle waiting to be handed out: nobody builds one holding
+      // a permission they do not hold themselves.
+      assertMayDelegate(ctx, permissionKeys(input.permissions));
       try {
         const row = await ctx.withOrg((tx) => withAudit(
           tx,
@@ -90,6 +94,7 @@ export const rolesRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...changes } = input;
+      if (changes.permissions) assertMayDelegate(ctx, permissionKeys(changes.permissions));
       try {
         const row = await ctx.withOrg(async (tx) => {
           const [before] = await tx.select().from(accessRoles)

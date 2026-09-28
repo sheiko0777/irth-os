@@ -91,9 +91,7 @@ describe('audit router — immutable activity logging', () => {
   it('stats: computes aggregated KPI metrics', async () => {
     const caller = auditRouter.createCaller(ctx('owner'));
 
-    mockDb.select.mockReturnValueOnce(chainOf([{ count: 120 }])); // total
-    mockDb.select.mockReturnValueOnce(chainOf([{ count: 15 }])); // today
-    mockDb.select.mockReturnValueOnce(chainOf([{ count: 4 }])); // users
+    mockDb.select.mockReturnValueOnce(chainOf([{ totalEvents: 120, todayEvents: 15, activeOperatorsCount: 4 }])); // aggregates
     mockDb.select.mockReturnValueOnce(chainOf([{ createdAt: new Date(), action: 'UPDATE_PRODUCT' }])); // latest
 
     const stats = await caller.stats();

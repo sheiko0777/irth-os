@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { requirePermission, router } from '../trpc';
 import { eq, and, desc } from 'drizzle-orm';
 import { pgCode } from '../permissionInput';
-import { accessRoles, orgMembers, orgInvites, organizations, user, withAudit, canAssignRole, emitOutboxEvent, generateInviteOtp } from '@irth/db';
+import { accessRoles, orgMembers, orgInvites, organizations, user, withAudit, canAssignRole, emitOutboxEvent, generateInviteOtp, permissionKeys, permissionsForRole } from '@irth/db';
+import { assertMayDelegate, assertMayManage, loadMember } from '../memberAuthority';
 import { TRPCError } from '@trpc/server';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -291,6 +292,16 @@ export const membersRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: 'You cannot change your own role.' });
       }
 
+      // Delegation, as accounts.assignRole enforces it: holding
+      // members.changeRole alone (a per-person grant) must not let someone
+      // hand out the admin role's permissions, or touch a member whose
+      // authority exceeds their own.
+      await ctx.withOrg(async (tx) => {
+        const current = await loadMember(tx, ctx.orgId, input.memberId);
+        assertMayManage(ctx, current);
+        assertMayDelegate(ctx, permissionKeys(permissionsForRole(input.role)));
+      });
+
       const updated = await ctx.withOrg((tx) => withAudit(
         tx,
         async () => {
@@ -339,6 +350,11 @@ export const membersRouter = router({
       if (target.userId === ctx.userId) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'You cannot remove yourself.' });
       }
+
+      // Only someone whose authority covers the member's may remove them.
+      await ctx.withOrg(async (tx) => {
+        assertMayManage(ctx, await loadMember(tx, ctx.orgId, input.memberId));
+      });
 
       // A rep with delivery or cash history cannot be removed (0077's
       // foreign keys keep that history attached to them); suspend instead.
