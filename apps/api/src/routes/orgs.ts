@@ -147,7 +147,7 @@ orgsRouter.post('/invite/accept', async (c: Context) => {
 
 
 const updateRoleSchema = z.object({
-  role: z.enum(['owner', 'admin', 'member']),
+  role: z.enum(['admin', 'member']),
 });
 
 orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('members', 'changeRole'), async (c: Context) => {
@@ -158,6 +158,24 @@ orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('m
     const body = await c.req.json();
     const { role } = updateRoleSchema.parse(body);
     const userId = c.get('userId') as string;
+
+    const [target] = await db
+      .select()
+      .from(orgMembers)
+      .where(and(eq(orgMembers.id, memberId), eq(orgMembers.orgId, orgId)))
+      .limit(1);
+
+    if (!target) {
+      return c.json({ data: null, error: 'Not Found', meta: null }, 404);
+    }
+
+    if (target.role === 'owner') {
+      return c.json({ data: null, error: 'Cannot change the owner role.', meta: null }, 403);
+    }
+
+    if (target.userId === userId) {
+      return c.json({ data: null, error: 'You cannot change your own role.', meta: null }, 403);
+    }
 
     const result = await withOrg(c, (tx) => withAudit(tx, async () => {
       const [updated] = await tx.update(orgMembers)
