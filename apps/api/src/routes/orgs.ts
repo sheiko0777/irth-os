@@ -159,6 +159,22 @@ orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('m
     const { role } = updateRoleSchema.parse(body);
     const userId = c.get('userId') as string;
 
+    const [target] = await db
+      .select()
+      .from(orgMembers)
+      .where(and(eq(orgMembers.id, memberId as string), eq(orgMembers.orgId, orgId as string)))
+      .limit(1);
+
+    if (!target) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
+
+    if (target.role === 'owner') {
+      return c.json({ data: null, error: 'Cannot change the owner role.', meta: null }, 403);
+    }
+
+    if (target.userId === userId) {
+      return c.json({ data: null, error: 'You cannot change your own role.', meta: null }, 403);
+    }
+
     const result = await withOrg(c, (tx) => withAudit(tx, async () => {
       const [updated] = await tx.update(orgMembers)
         .set({ role })
@@ -172,7 +188,7 @@ orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('m
       userId,
       action: 'UPDATE_MEMBER_ROLE',
       tableName: 'org_members',
-      changes: { role }
+      changes: { from: target.role, to: role }
     }));
 
     if (!result) return c.json({ data: null, error: 'Not Found', meta: null }, 404);
