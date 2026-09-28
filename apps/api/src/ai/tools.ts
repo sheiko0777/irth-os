@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, asc, count, desc, eq, gte, ilike, lte, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, lte, sum, sql } from 'drizzle-orm';
 import {
   can,
   inventoryItems,
@@ -226,18 +226,22 @@ export const AI_TOOLS: AiTool[] = [
       const start = new Date();
       start.setDate(start.getDate() - args.days);
 
-      const [allRows, deliveredRows, pendingRows, cancelledRows] = await Promise.all([
-        ctx.db.select({ count: count(), total: sum(orders.totalAmountMinor) }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start))),
-        ctx.db.select({ count: count(), total: sum(orders.totalAmountMinor) }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'delivered'))),
-        ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'pending'))),
-        ctx.db.select({ count: count() }).from(orders).where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start), eq(orders.status, 'cancelled'))),
-      ]);
+      const [result] = await ctx.db
+        .select({
+          totalOrders: count(),
+          deliveredCount: sql<number>`count(*) filter (where ${orders.status} = 'delivered')`,
+          deliveredTotal: sql<string | null>`sum(${orders.totalAmountMinor}) filter (where ${orders.status} = 'delivered')`,
+          pendingCount: sql<number>`count(*) filter (where ${orders.status} = 'pending')`,
+          cancelledCount: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`,
+        })
+        .from(orders)
+        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start)));
 
-      const deliveredTotal = asMinor(deliveredRows[0]?.total as string | null);
-      const totalOrders = allRows[0]?.count ?? 0;
-      const deliveredCount = deliveredRows[0]?.count ?? 0;
-      const pendingCount = pendingRows[0]?.count ?? 0;
-      const cancelledCount = cancelledRows[0]?.count ?? 0;
+      const totalOrders = Number(result?.totalOrders ?? 0);
+      const deliveredCount = Number(result?.deliveredCount ?? 0);
+      const pendingCount = Number(result?.pendingCount ?? 0);
+      const cancelledCount = Number(result?.cancelledCount ?? 0);
+      const deliveredTotal = asMinor(result?.deliveredTotal);
 
       return {
         summary: `${totalOrders} order(s), ${deliveredCount} delivered, ${pendingCount} pending, delivered revenue ${deliveredTotal} minor units.`,
