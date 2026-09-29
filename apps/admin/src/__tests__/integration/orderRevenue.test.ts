@@ -31,7 +31,7 @@ import {
   productVariants,
   postOrderDeliveredEntry,
   withOrgContext,
-  ACCOUNT_CODES,
+  ACCOUNT_CODES, effectiveAccess,
 } from '@irth/db';
 import { EGP, EGYPT_VAT_BP, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
@@ -112,7 +112,7 @@ describe('order delivered → revenue posting', () => {
 
     const caller = bulkRouter.createCaller({
       db: testDb,
-      orgId, userId: 'integration-user', role: 'owner',
+      orgId, userId: 'integration-user', role: 'owner', access: effectiveAccess({ systemKey: 'owner' }),
       session: { user: { id: 'integration-user', email: 'integration@example.com' } },
       withOrg: <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => withOrgContext(testDb, orgId, fn),
     } as unknown as Context);

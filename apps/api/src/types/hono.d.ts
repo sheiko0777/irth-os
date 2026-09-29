@@ -1,4 +1,4 @@
-import type { Role } from '@irth/db';
+import type { EffectiveAccess, Role } from '@irth/db';
 
 // Trusted request identity established by authContext. Typing these makes
 // c.get/c.set on the Hono context safe.
@@ -7,6 +7,9 @@ declare module 'hono' {
     userId: string;
     orgId: string;
     role: Role;
+    // What this member may do (0074): role permissions + grants − revokes.
+    // requirePermission checks this, never `role`.
+    access: EffectiveAccess;
     // Set by authContext alongside userId — needed by /invite/accept's
     // email-match check (packages/db/src/invites.ts's acceptOrgInvite).
     userEmail: string | undefined;

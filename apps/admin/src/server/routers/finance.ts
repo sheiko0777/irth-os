@@ -1,7 +1,7 @@
 import { router, requirePermission } from '../trpc';
-import { orders, orderItems, products, productVariants, journalLines, journalEntries, accounts, ACCOUNT_CODES, type DbTx } from '@irth/db';
+import { orders, orderItems, products, productVariants, journalLines, journalEntries, accounts, ACCOUNT_CODES, salesTotals, type DbTx } from '@irth/db';
 import { eq, and, desc, count, sum, gte, lte } from 'drizzle-orm';
-import { EGYPT_VAT_BP, divideRoundHalfEven, formatMoney, fromMinor, netOfTax, taxIncludedIn } from '@irth/domain';
+import { divideRoundHalfEven, formatMoney, fromMinor } from '@irth/domain';
 import { z } from 'zod';
 
 /**
@@ -16,12 +16,12 @@ import { z } from 'zod';
  */
 const ASK_AI_INTENTS: Array<{
   matches: (q: string) => boolean;
-  handle: (db: Pick<DbTx, 'select'>, orgId: string) => Promise<string>;
+  handle: (tx: Pick<DbTx, 'select'>, orgId: string) => Promise<string>;
 }> = [
   {
     matches: (q) => q.includes('اكثر') || q.includes('top') || q.includes('best'),
-    handle: async (db, orgId) => {
-      const topProducts = await db
+    handle: async (tx, orgId) => {
+      const topProducts = await tx
         .select({ name: products.name, orderCount: count(orderItems.id) })
         .from(orderItems)
         .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
@@ -40,27 +40,20 @@ const ASK_AI_INTENTS: Array<{
   },
   {
     matches: (q) => q.includes('revenue') || q.includes('ايراد'),
-    handle: async (db, orgId) => {
+    handle: async (tx, orgId) => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      const revRes = await db
-        .select({ total: sum(orders.totalAmountMinor) })
-        .from(orders)
-        .where(and(
-          eq(orders.orgId, orgId),
-          eq(orders.status, 'delivered'),
-          gte(orders.createdAt, thirtyDaysAgo)
-        ));
-
-      const rev = fromMinor(BigInt((revRes[0]?.total as string | null) ?? '0'));
-      return `إجمالي الإيرادات في آخر 30 يوماً: ${formatMoney(rev)}`;
+      // From the ledger, not orders (CLAUDE.md rule 2): refunds are
+      // subtracted and only recognised sales count.
+      const { netSalesMinor } = await salesTotals(tx, orgId, { from: thirtyDaysAgo });
+      return `صافي المبيعات في آخر 30 يوماً (بدون الضريبة، بعد المرتجعات): ${formatMoney(fromMinor(netSalesMinor))}`;
     },
   },
   {
     matches: (q) => q.includes('pending') || q.includes('معلق'),
-    handle: async (db, orgId) => {
-      const pendRes = await db
+    handle: async (tx, orgId) => {
+      const pendRes = await tx
         .select({ count: count() })
         .from(orders)
         .where(and(eq(orders.orgId, orgId), eq(orders.status, 'pending')));
@@ -71,11 +64,11 @@ const ASK_AI_INTENTS: Array<{
 ];
 
 /** Falls back to today's order count when no intent above matches. */
-async function askAiDefault(db: Pick<DbTx, 'select'>, orgId: string): Promise<string> {
+async function askAiDefault(tx: Pick<DbTx, 'select'>, orgId: string): Promise<string> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const todayRes = await db
+  const todayRes = await tx
     .select({ count: count() })
     .from(orders)
     .where(and(eq(orders.orgId, orgId), gte(orders.createdAt, startOfDay)));
@@ -130,15 +123,15 @@ export const financeRouter = router({
                         lte(journalEntries.entryDate, end),
                     ))
                     .groupBy(accounts.code, accounts.normalBalance),
-                ctx.db
+                ctx.withOrg((tx) => tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(
                         eq(orders.orgId, ctx.orgId),
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end)
-                    )),
-                ctx.db
+                    ))),
+                ctx.withOrg((tx) => tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(
@@ -146,8 +139,8 @@ export const financeRouter = router({
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end),
                         eq(orders.status, 'cancelled')
-                    )),
-                ctx.db
+                    ))),
+                ctx.withOrg((tx) => tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(
@@ -155,7 +148,7 @@ export const financeRouter = router({
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end),
                         eq(orders.status, 'pending')
-                    )),
+                    ))),
             ]);
 
             const byCode = new Map(ledgerRows.map((r) => [r.code, accountBalanceMinor(r)]));
@@ -215,7 +208,7 @@ export const financeRouter = router({
             const end = new Date(input.endDate);
             end.setHours(23, 59, 59, 999);
 
-            const rows = await ctx.db
+            const rows = await ctx.withOrg((tx) => tx
                 .select({
                     orderId: orders.id,
                     orderNumber: orders.orderNumber,
@@ -231,7 +224,7 @@ export const financeRouter = router({
                     eq(orders.status, 'delivered'),
                     eq(orders.paymentMethod, 'cod')
                 ))
-                .orderBy(desc(orders.createdAt));
+                .orderBy(desc(orders.createdAt)));
 
             return {
                 data: rows,
@@ -250,23 +243,28 @@ export const financeRouter = router({
             const end = new Date(input.endDate);
             end.setHours(23, 59, 59, 999);
 
-            const result = await ctx.db
-                .select({
-                    total: sum(orders.totalAmountMinor),
-                    count: count(),
-                })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, start),
-                    lte(orders.createdAt, end),
-                    eq(orders.status, 'delivered')
-                ));
+            // VAT as the ledger booked it (VAT Payable 2030, net of returns),
+            // not re-derived from order totals: the VAT a return reversed has
+            // to come off, and a delivered order whose sale was never posted
+            // owes no VAT in the books. `end` is inclusive to the millisecond.
+            const exclusiveEnd = new Date(end.getTime() + 1);
+            const [totals, countRows] = await Promise.all([
+                ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: start, to: exclusiveEnd })),
+                ctx.withOrg((tx) => tx
+                    .select({ count: count() })
+                    .from(orders)
+                    .where(and(
+                        eq(orders.orgId, ctx.orgId),
+                        gte(orders.createdAt, start),
+                        lte(orders.createdAt, end),
+                        eq(orders.status, 'delivered')
+                    ))),
+            ]);
 
-            const grossRevenue = fromMinor(BigInt((result[0]?.total as string | null) ?? '0'));
-            const orderCount = result[0]?.count ?? 0;
-            const vatAmount = taxIncludedIn(grossRevenue, EGYPT_VAT_BP);
-            const netRevenue = netOfTax(grossRevenue, EGYPT_VAT_BP);
+            const grossRevenue = fromMinor(totals.grossSalesMinor);
+            const orderCount = countRows[0]?.count ?? 0;
+            const vatAmount = fromMinor(totals.vatMinor);
+            const netRevenue = fromMinor(totals.netSalesMinor);
 
             return {
                 data: {
@@ -290,8 +288,8 @@ export const financeRouter = router({
             const q = input.question.toLowerCase();
             const intent = ASK_AI_INTENTS.find((candidate) => candidate.matches(q));
             const resultData = intent
-                ? await intent.handle(ctx.db, ctx.orgId)
-                : await askAiDefault(ctx.db, ctx.orgId);
+                ? await ctx.withOrg((tx) => intent.handle(tx, ctx.orgId))
+                : await ctx.withOrg((tx) => askAiDefault(tx, ctx.orgId));
 
             return {
                 data: {

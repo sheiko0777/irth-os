@@ -17,10 +17,17 @@ export async function transitionOrderStatus(
         ? sql`, payment_method = COALESCE(orders.payment_method, ${input.setPaymentMethod})`
         : sql``;
 
+    // A blocked import (0073) has no items and moved no stock, so shipping,
+    // delivering or confirming it would post revenue and file an ETA invoice
+    // for goods the system never recorded. Only cancelling it is allowed. The
+    // guard lives in the WHERE clause so every caller (admin router, apps/api
+    // PATCH, Bosta and Paymob webhooks) gets it without an `if` of its own;
+    // a refused transition returns null exactly like a missing order.
     const [row] = await tx.execute<{ previous_status: string }>(sql`
         WITH before AS (
             SELECT status FROM orders
             WHERE id = ${input.orderId} AND org_id = ${input.orgId} ${statusCondition}
+              AND (import_status = 'complete' OR ${input.newStatus} = 'cancelled')
             FOR UPDATE
         )
         UPDATE orders SET status = ${input.newStatus}, updated_at = now() ${paymentMethodUpdate}

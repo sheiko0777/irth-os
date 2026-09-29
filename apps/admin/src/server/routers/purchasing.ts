@@ -1,8 +1,10 @@
 import { router, requirePermission } from '../trpc';
+import { supplierScope } from '../scopes';
 import { z } from 'zod';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements, productVariants, products, withAudit, nextDocumentNumber, formatDocumentNumber, recordCostedReceipt, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
+import { poSupplierProcedures, supplierAccountProcedures } from './purchasingSupplier';
 import { parseDecimal, assertSupportedCurrency } from '@irth/domain';
 import { TRPCError } from '@trpc/server';
 
@@ -121,11 +123,12 @@ async function applyReceivedLine(
 
 export const purchasingRouter = router({
   suppliers: router({
+    ...supplierAccountProcedures,
     list: requirePermission('purchasing', 'view').query(async ({ ctx }) => {
       const data = await ctx.withOrg(async (tx) => tx
         .select()
         .from(suppliers)
-        .where(eq(suppliers.orgId, ctx.orgId))
+        .where(and(eq(suppliers.orgId, ctx.orgId), supplierScope(ctx, suppliers.id)))
         .orderBy(desc(suppliers.createdAt)));
       return { data, error: null, meta: null };
     }),
@@ -260,6 +263,7 @@ export const purchasingRouter = router({
   }),
 
   po: router({
+    ...poSupplierProcedures,
     list: requirePermission('purchasing', 'view')
       .input(z.object({
         ...paginationInputSchema(20),
@@ -278,13 +282,16 @@ export const purchasingRouter = router({
               currency: purchaseOrders.currency,
               orderedAt: purchaseOrders.orderedAt,
               createdAt: purchaseOrders.createdAt,
+              supplierStatus: purchaseOrders.supplierStatus,
+              expectedDeliveryAt: purchaseOrders.expectedDeliveryAt,
+              proposedDeliveryAt: purchaseOrders.proposedDeliveryAt,
               supplierName: suppliers.name,
               itemsCount: sql<number>`count(${purchaseOrderItems.id})::int`,
             })
             .from(purchaseOrders)
             .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
             .leftJoin(purchaseOrderItems, eq(purchaseOrderItems.poId, purchaseOrders.id))
-            .where(eq(purchaseOrders.orgId, ctx.orgId))
+            .where(and(eq(purchaseOrders.orgId, ctx.orgId), supplierScope(ctx, purchaseOrders.supplierId)))
             .groupBy(purchaseOrders.id, suppliers.name)
             .orderBy(desc(purchaseOrders.createdAt))
             .limit(input.pageSize)
@@ -292,7 +299,7 @@ export const purchasingRouter = router({
           ctx.withOrg(async (tx) => tx
             .select({ count: count() })
             .from(purchaseOrders)
-            .where(eq(purchaseOrders.orgId, ctx.orgId)))
+            .where(and(eq(purchaseOrders.orgId, ctx.orgId), supplierScope(ctx, purchaseOrders.supplierId))))
         ]);
 
         const total = totalResult[0]?.count ?? 0;
@@ -311,7 +318,7 @@ export const purchasingRouter = router({
             })
             .from(purchaseOrders)
             .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-            .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId)))
+            .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.orgId, ctx.orgId), supplierScope(ctx, purchaseOrders.supplierId)))
             .limit(1));
 
         const po = poRows[0];

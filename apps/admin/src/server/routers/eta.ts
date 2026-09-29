@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, protectedProcedure, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
 import { etaInvoices, orders, buildEtaOrderInput, claimEtaIssuance } from '@irth/db';
 import { eq, and, desc, isNull, or, lte } from 'drizzle-orm';
 import { issueInvoice, getInvoiceStatus, cancelInvoice, buildEtaConfig } from '@irth/domain';
@@ -11,7 +11,7 @@ import { issueInvoice, getInvoiceStatus, cancelInvoice, buildEtaConfig } from '@
 const etaConfig = () => buildEtaConfig((k) => process.env[k]);
 
 export const etaRouter = router({
-    list: protectedProcedure
+    list: requirePermission('eta', 'view')
         .input(z.object({ status: z.string().optional() }))
         .query(async ({ ctx, input }) => {
             const conditions = [eq(etaInvoices.orgId, ctx.orgId)];
@@ -25,7 +25,7 @@ export const etaRouter = router({
             return { data: rows, error: null, meta: null };
         }),
 
-    submit: adminProcedure
+    submit: requirePermission('eta', 'submit')
         .input(z.object({ orderId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             const etaInput = await buildEtaOrderInput(ctx.db, ctx.orgId, input.orderId);
@@ -101,7 +101,7 @@ export const etaRouter = router({
             return { data: row, error: null, meta: null };
         }),
 
-    checkStatus: adminProcedure
+    checkStatus: requirePermission('eta', 'submit')
         .input(z.object({ orderId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             const [invoice] = await ctx.db
@@ -128,7 +128,7 @@ export const etaRouter = router({
             return { data: { ...invoice, status: statusResult.status }, error: null, meta: null };
         }),
 
-    cancel: adminProcedure
+    cancel: requirePermission('eta', 'submit')
         .input(z.object({ orderId: z.string().uuid(), reason: z.string().min(1) }))
         .mutation(async ({ ctx, input }) => {
             const [invoice] = await ctx.db
@@ -151,9 +151,9 @@ export const etaRouter = router({
             return { data: { cancelled: result.ok }, error: result.ok ? null : (result.error ?? 'Cancel failed'), meta: null };
         }),
 
-    submitPending: adminProcedure
+    submitPending: requirePermission('eta', 'submit')
         .mutation(async ({ ctx }) => {
-            const pendingOrders = await ctx.db
+            const pendingOrders = await ctx.withOrg((tx) => tx
                 .select({ id: orders.id })
                 .from(orders)
                 .leftJoin(etaInvoices, eq(etaInvoices.orderId, orders.id))
@@ -170,7 +170,7 @@ export const etaRouter = router({
                         ),
                     ),
                 ))
-                .limit(20);
+                .limit(20));
 
             let submitted = 0;
             for (const { id: orderId } of pendingOrders) {

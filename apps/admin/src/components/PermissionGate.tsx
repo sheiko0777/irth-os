@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { can, useRole, PERMISSIONS, type ActionFor } from '../lib/permissions';
+import { useCan, PERMISSIONS, type ActionFor } from '../lib/permissions';
 
 type Resource = keyof typeof PERMISSIONS;
 
@@ -16,9 +16,11 @@ export function PermissionGate<R extends Resource>({
   action,
   children,
 }: PermissionGateProps<R>) {
-  const role = useRole();
+  // Effective permissions from me.get — the same set the server checks, so a
+  // per-person grant shows the control and a revoke hides it.
+  const can = useCan();
 
-  if (!role || !can(role, resource, action)) {
+  if (!can(resource, action)) {
     return null;
   }
 

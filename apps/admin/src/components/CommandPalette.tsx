@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Search } from 'lucide-react';
-import { buildNavGroups } from '@/lib/navigation';
+import { useVisibleNavGroups } from '@/lib/permissions';
 import { signOut } from '@/lib/auth-client';
 
 /**
@@ -51,8 +51,9 @@ export function CommandPalette({ locale }: { locale: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
+  const visibleGroups = useVisibleNavGroups(locale);
   const commands = useMemo<Command[]>(() => {
-    const nav = buildNavGroups(locale).flatMap((g) =>
+    const nav = visibleGroups.flatMap((g) =>
       g.items.map((item) => ({
         id: item.href,
         label: item.label,
@@ -78,7 +79,7 @@ export function CommandPalette({ locale }: { locale: string }) {
         },
       },
     ];
-  }, [locale, router]);
+  }, [locale, router, visibleGroups]);
 
   const results = useMemo(() => {
     const q = normalize(query);

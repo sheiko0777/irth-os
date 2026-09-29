@@ -1,3 +1,4 @@
+import { effectiveAccess } from '@irth/db';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
 import type { Context } from '@/server/trpc';
@@ -13,6 +14,7 @@ function ctx(): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role: 'owner',
+    access: effectiveAccess({ systemKey: 'owner' }),
   } as unknown as Context;
 }
 
@@ -45,6 +47,9 @@ describe('me router', () => {
       userId: 'user-1',
       orgId: 'org-1',
       role: 'owner',
+      principalKind: 'staff',
+      permissions: [...effectiveAccess({ systemKey: 'owner' }).perms].sort(),
+      mustChangePassword: false,
       orgs: [
         { orgId: 'org-1', orgName: 'IRTH Group', role: 'owner' },
         { orgId: 'org-2', orgName: 'Second Co', role: 'member' },

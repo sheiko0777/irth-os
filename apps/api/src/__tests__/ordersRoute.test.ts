@@ -1,6 +1,6 @@
 /**
  * Covers the converted `PATCH /:id/status` route: it used to gate on
- * `requireRole('owner', 'admin')` and now gates on
+ * a fixed owner/admin role list and now gates on
  * `requirePermission('orders', 'write')` (packages/db/src/permissions.ts).
  * Tests authorization, no-op transitions, and the route's atomic-transition
  * wiring into the outbox/ETA/ledger guards. Shared postOrderDeliveredEntry
@@ -36,7 +36,10 @@ function buildApp(ctx: { orgId?: string; userId?: string; role?: Role }) {
   app.use('*', async (c, next) => {
     if (ctx.orgId !== undefined) c.set('orgId', ctx.orgId);
     if (ctx.userId !== undefined) c.set('userId', ctx.userId);
-    if (ctx.role !== undefined) c.set('role', ctx.role);
+    if (ctx.role !== undefined) {
+      c.set('role', ctx.role);
+      c.set('access', dbExports.effectiveAccess({ systemKey: ctx.role }));
+    }
     await next();
   });
   app.route('/api/orders', ordersRoute);

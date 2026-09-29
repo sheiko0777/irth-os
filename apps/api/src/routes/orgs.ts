@@ -6,6 +6,7 @@ import { db, withOrg } from '../db';
 import {
   organizations, orgMembers, orgInvites, withAudit, jsonSafe, setActiveOrg, NotAMemberError,
   emitOutboxEvent, generateInviteOtp, acceptOrgInvite, canAssignRole, type Role,
+  canDelegate, covers, permissionKeys, permissionsForRole, resolveEffectiveAccess, type EffectiveAccess,
 } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { requireOrgId } from '../middlewares/requireOrgId';
@@ -173,6 +174,19 @@ orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('m
     }
 
     if (target.userId === userId) {
+      return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
+    }
+
+    // Delegation, as the admin's accounts.assignRole enforces it: a per-person
+    // grant of members.changeRole must not let its holder hand out the admin
+    // role's permissions, or touch a member whose authority exceeds theirs.
+    const actor = c.get('access') as EffectiveAccess | undefined;
+    const targetAccess = await withOrg(c, (tx) => resolveEffectiveAccess(tx, orgId, target.userId));
+    if (
+      !actor || !targetAccess ||
+      !covers(actor, targetAccess) ||
+      !canDelegate(actor, permissionKeys(permissionsForRole(role)))
+    ) {
       return c.json({ data: null, error: 'Forbidden', meta: null }, 403);
     }
 

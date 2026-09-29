@@ -1,4 +1,4 @@
-import { formatDate, formatMoney, fromMinor, multiply, sum } from "@irth/domain";
+import { currency, formatDate, formatMoney, fromMinor, multiply, sum } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { TRPCError } from "@trpc/server";
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatusUpdater } from "./StatusUpdater";
+import { BlockedImportPanel } from "./BlockedImportPanel";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string, locale: string }> }) {
     const { id, locale } = await params;
@@ -49,7 +50,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         );
     }
 
-    const { order, items, history } = response.data;
+    const { order, items, history, sourceLines } = response.data;
+    const orderCurrency = currency(order.currency);
+    const money = (minor: bigint | null | undefined) =>
+        minor == null ? t("detail.totals.unknown") : formatMoney(fromMinor(minor, orderCurrency));
+    const isBlocked = order.importStatus === "blocked";
+    const address = (a: typeof order.shippingAddress) =>
+        a ? [a.name, a.address1, a.address2, a.city, a.province, a.country].filter(Boolean).join("، ") : t("detail.buyer.notCaptured");
 
     // Was Number(i.price) * i.quantity accumulated into a float. Each line is
     // multiplied in minor units and summed exactly, so the footer total always
@@ -80,7 +87,104 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     {/* Current state belongs in the header. Previously the only
                         way to see it was to open the status dropdown. */}
                     <StatusBadge status={order.status} domain="order" />
+                    {isBlocked && (
+                        <span className="rounded-full border border-[var(--warning)] px-2 py-0.5 text-xs font-medium text-[var(--warning)]">
+                            {t("detail.blocked.badge")}
+                        </span>
+                    )}
                 </div>
+            </div>
+
+            {isBlocked && (
+                <BlockedImportPanel
+                    orderId={order.id}
+                    reason={order.blockedReason}
+                    lines={sourceLines.filter((l) => l.mappedVariant === null)}
+                />
+            )}
+
+            <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>{t("detail.buyer.title")}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                            <dt className="text-[var(--t3)]">{t("detail.buyer.name")}</dt>
+                            <dd>{order.buyer?.name ?? t("detail.buyer.notCaptured")}</dd>
+                            <dt className="text-[var(--t3)]">{t("detail.buyer.phone")}</dt>
+                            <dd dir="ltr" className="text-end md:text-start">{order.buyer?.phone ?? t("detail.buyer.notCaptured")}</dd>
+                            <dt className="text-[var(--t3)]">{t("detail.buyer.email")}</dt>
+                            <dd dir="ltr" className="text-end md:text-start">{order.buyer?.email ?? t("detail.buyer.notCaptured")}</dd>
+                            <dt className="text-[var(--t3)]">{t("detail.buyer.shipping")}</dt>
+                            <dd>{address(order.shippingAddress)}</dd>
+                            <dt className="text-[var(--t3)]">{t("detail.buyer.billing")}</dt>
+                            <dd>{address(order.billingAddress)}</dd>
+                            {order.customerNote && (
+                                <>
+                                    <dt className="text-[var(--t3)]">{t("detail.buyer.note")}</dt>
+                                    <dd className="whitespace-pre-wrap">{order.customerNote}</dd>
+                                </>
+                            )}
+                        </dl>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>{t("detail.totals.title")}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <dl className="grid grid-cols-[1fr_auto] gap-y-2 text-sm">
+                            <dt className="text-[var(--t3)]">{t("detail.totals.subtotal")}</dt>
+                            <dd className="tabular-nums" dir="ltr">{money(order.subtotalMinor)}</dd>
+                            <dt className="text-[var(--t3)]">{t("detail.totals.discount")}</dt>
+                            <dd className="tabular-nums" dir="ltr">{money(order.discountMinor)}</dd>
+                            <dt className="text-[var(--t3)]">{t("detail.totals.shipping")}</dt>
+                            <dd className="tabular-nums" dir="ltr">{money(order.shippingMinor)}</dd>
+                            <dt className="text-[var(--t3)]">{t("detail.totals.tax")}</dt>
+                            <dd className="tabular-nums" dir="ltr">{money(order.taxMinor)}</dd>
+                            <dt className="border-t border-[var(--rim1)] pt-2 font-bold">{t("detail.totals.total")}</dt>
+                            <dd className="border-t border-[var(--rim1)] pt-2 text-lg font-bold tabular-nums" dir="ltr">{money(order.totalAmountMinor)}</dd>
+                        </dl>
+                    </CardContent>
+                </Card>
+
+                {sourceLines.length > 0 && (
+                    <Card className="md:col-span-2">
+                        <CardHeader>
+                            <CardTitle>{t("detail.sourceLines.title")}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>{t("detail.sourceLines.item")}</TableHead>
+                                        <TableHead>{t("detail.sourceLines.sku")}</TableHead>
+                                        <TableHead>{t("detail.sourceLines.quantity")}</TableHead>
+                                        <TableHead className="text-end">{t("detail.sourceLines.unitPrice")}</TableHead>
+                                        <TableHead>{t("detail.sourceLines.status")}</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {sourceLines.map((line, i) => (
+                                        <TableRow key={`${line.shopifyVariantId ?? "custom"}-${i}`}>
+                                            <TableCell>{line.label}</TableCell>
+                                            <TableCell className="font-mono text-xs" dir="ltr">{line.sku ?? "—"}</TableCell>
+                                            <TableCell className="tabular-nums" dir="ltr">{line.quantity.toLocaleString("ar-EG")}</TableCell>
+                                            <TableCell className="text-end tabular-nums" dir="ltr">{money(line.unitPriceMinor)}</TableCell>
+                                            <TableCell>
+                                                {line.mappedVariant
+                                                    ? <span className="text-xs">{t("detail.blocked.mapped")}: <span className="font-mono" dir="ltr">{line.mappedVariant.sku}</span></span>
+                                                    : <span className="text-xs text-[var(--warning)]">{t("detail.blocked.badge")}</span>}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">

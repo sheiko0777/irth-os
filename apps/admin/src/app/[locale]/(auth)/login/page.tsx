@@ -11,8 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+// One field for both: staff sign in with their email, and accounts the owner
+// creates directly (reps, suppliers — PR-1d) with their username, usually a
+// mobile number. An "@" decides which.
 const loginSchema = z.object({
-  email: z.string().email("البريد الإلكتروني غير صحيح"),
+  identifier: z.string().trim().min(3, "اكتب البريد الإلكتروني أو اسم المستخدم").max(254),
   password: z.string().min(1, "كلمة المرور مطلوبة"),
 });
 
@@ -35,10 +38,9 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormValues) => {
     setError(null);
     try {
-      const res = await signIn.email({
-        email: data.email,
-        password: data.password,
-      });
+      const res = data.identifier.includes("@")
+        ? await signIn.email({ email: data.identifier, password: data.password })
+        : await signIn.username({ username: data.identifier, password: data.password });
 
       if (res.error) {
         setError(t("loginError"));
@@ -70,21 +72,26 @@ export default function LoginPage() {
             )}
             
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t("email")}</label>
+              <label htmlFor="login-identifier" className="text-sm font-medium">{t("identifier")}</label>
               <Input
-                type="email"
-                {...register("email")}
+                id="login-identifier"
+                type="text"
+                autoComplete="username"
+                inputMode="email"
+                dir="ltr"
+                {...register("identifier")}
                 disabled={isSubmitting}
-                className={`text-start ${errors.email ? "border-crimson focus-visible:ring-crimson" : ""}`}
+                className={`text-start ${errors.identifier ? "border-crimson focus-visible:ring-crimson" : ""}`}
               />
-              {errors.email && (
-                <p className="text-xs text-crimson">{errors.email.message}</p>
+              {errors.identifier && (
+                <p className="text-xs text-crimson">{errors.identifier.message}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t("password")}</label>
+              <label htmlFor="login-password" className="text-sm font-medium">{t("password")}</label>
               <Input
+                id="login-password"
                 type="password"
                 {...register("password")}
                 disabled={isSubmitting}

@@ -31,9 +31,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+// applyShopifyOrderLines moved here from routes/webhooks/shopify.ts so the
+// orders/create webhook and the blocked-order re-import job (outbox event
+// `shopify.order.reimport`) share one implementation of the lock order.
 const HANDLER = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../routes/webhooks/shopify.ts',
+  '../services/shopifyOrderImport.ts',
 );
 
 describe('Shopify orders/create takes inventory locks in a stable order', () => {

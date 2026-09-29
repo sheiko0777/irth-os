@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { getTableName } from 'drizzle-orm';
-import { outboxEvents } from '@irth/db';
+import { outboxEvents, effectiveAccess } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { productsRouter } from '@/server/routers/products';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
@@ -86,6 +86,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 

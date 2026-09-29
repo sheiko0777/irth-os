@@ -69,9 +69,9 @@ export default async function AnalyticsPage({
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatBox label="طلبات اليوم" value={fmt(kpiData.ordersToday)} />
-        <StatBox label="إيرادات اليوم" value={fmtCurrency(kpiData.revenueToday)} valueClassName="text-[var(--gold)]" />
+        <StatBox label="صافي مبيعات اليوم" value={fmtCurrency(kpiData.revenueToday)} valueClassName="text-[var(--gold)]" />
         <StatBox
-          label="إيرادات الشهر"
+          label="صافي مبيعات الشهر"
           value={fmtCurrency(kpiData.revenueThisMonth)}
           valueClassName="text-[var(--gold)]"
           trailing={<GrowthBadge pct={kpiData.revenueGrowth} />}
@@ -86,7 +86,7 @@ export default async function AnalyticsPage({
       {/* Revenue Chart */}
       <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-lg text-[var(--t1)]">الإيرادات — آخر 14 يوم</h2>
+          <h2 className="font-semibold text-lg text-[var(--t1)]">صافي المبيعات — آخر 14 يوم (من القيود، بدون الضريبة)</h2>
           <span className="text-sm text-[var(--t2)]">الطلبات المسلمة فقط</span>
         </div>
         {revenueChartData.length === 0 ? (
@@ -212,7 +212,7 @@ export default async function AnalyticsPage({
             <span className="font-bold text-[var(--t1)]">{fmt(kpiData.totalOrders)}</span>
           </div>
           <div>
-            <span className="text-[var(--t2)]">إيرادات الشهر الحالي: </span>
+            <span className="text-[var(--t2)]">صافي مبيعات الشهر الحالي: </span>
             <span className="font-bold text-[var(--gold)]">{fmtCurrency(kpiData.revenueThisMonth)}</span>
             {kpiData.revenueGrowth !== null && (
               <span className="ms-2">

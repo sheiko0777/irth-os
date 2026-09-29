@@ -14,7 +14,7 @@ import { organizations } from '../schema';
  */
 export const orgDocumentCounters = pgTable('org_document_counters', {
   orgId: uuid('org_id').notNull().references(() => organizations.id),
-  /** 'order' | 'return' | 'purchase_order'. See DocumentKind. */
+  /** 'order' | 'return' | 'purchase_order' | 'quote'. See DocumentKind. */
   kind: text('kind').notNull(),
   /** The number most recently handed out. Starts at 0, so the first is 1. */
   lastValue: bigint('last_value', { mode: 'bigint' }).notNull().default(0n),

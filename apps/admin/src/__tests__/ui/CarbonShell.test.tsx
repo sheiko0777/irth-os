@@ -14,6 +14,12 @@ const state = vi.hoisted(() => ({
   refresh: vi.fn(),
   signOut: vi.fn(),
 }));
+// The shell filters navigation by the member's permissions (PR-1e); these
+// tests are about the shell itself, so every destination stays visible.
+vi.mock("@/lib/permissions", async () => {
+  const nav = await import("@/lib/navigation");
+  return { useVisibleNavGroups: (locale: string) => nav.buildNavGroups(locale) };
+});
 vi.mock("next/navigation", () => ({
   usePathname: () => state.pathname,
   useRouter: () => ({ push: state.push, refresh: state.refresh }),

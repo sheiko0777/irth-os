@@ -37,6 +37,9 @@ export const STANDARD_ACCOUNTS = [
   { code: '1040', name: 'المخزون', type: 'asset', normalBalance: 'debit' },
   // Holds money captured online (e.g. Paymob) before an actual bank settlement.
   { code: '1050', name: 'ذمم مدينة - دفع إلكتروني', type: 'asset', normalBalance: 'debit' },
+  // Cash a delivery rep has collected and not yet handed over (0077): it
+  // leaves AR-COD when collected and reaches 1010 when the cashier counts it.
+  { code: '1060', name: 'عهدة المناديب', type: 'asset', normalBalance: 'debit' },
   { code: '2010', name: 'ذمم دائنة - موردون', type: 'liability', normalBalance: 'credit' },
   { code: '2020', name: 'التزامات بطاقات الهدايا', type: 'liability', normalBalance: 'credit' },
   { code: '2030', name: 'ضريبة القيمة المضافة مستحقة', type: 'liability', normalBalance: 'credit' },
@@ -51,6 +54,9 @@ export const STANDARD_ACCOUNTS = [
   // credits it (gain). An expense account occasionally credited to record a
   // gain is standard practice, not a modelling error.
   { code: '5020', name: 'فروق جرد المخزون', type: 'expense', normalBalance: 'debit' },
+  // A rep handover short of what they collected, written off by a separate,
+  // approved entry — never by editing the handover's own posting.
+  { code: '5030', name: 'عجز عهدة المناديب', type: 'expense', normalBalance: 'debit' },
 ] as const;
 
 export const ACCOUNT_CODES = {
@@ -59,6 +65,7 @@ export const ACCOUNT_CODES = {
   ACCOUNTS_RECEIVABLE_COD: '1030',
   INVENTORY: '1040',
   ACCOUNTS_RECEIVABLE_ONLINE: '1050',
+  REP_CUSTODY: '1060',
   ACCOUNTS_PAYABLE: '2010',
   GIFT_CARD_LIABILITY: '2020',
   VAT_PAYABLE: '2030',
@@ -68,6 +75,7 @@ export const ACCOUNT_CODES = {
   SALES_RETURNS: '4020',
   COGS: '5010',
   INVENTORY_VARIANCE: '5020',
+  REP_CUSTODY_SHORTAGE: '5030',
 } as const;
 
 /**

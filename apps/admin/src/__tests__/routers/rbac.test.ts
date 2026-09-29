@@ -1,6 +1,7 @@
+import { effectiveAccess } from '@irth/db';
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure, adminProcedure, ownerProcedure, type Context } from '@/server/trpc';
+import { router, requirePermission, type Context } from '@/server/trpc';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
 function ctxWithRole(role: 'owner' | 'admin' | 'member'): Context {
@@ -15,6 +16,7 @@ function ctxWithRole(role: 'owner' | 'admin' | 'member'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 
@@ -35,33 +37,69 @@ async function expectNotForbidden(p: Promise<unknown>) {
   }
 }
 
-// Middleware mechanism — the tiers themselves.
-const tiers = router({
-  memberOp: protectedProcedure.mutation(() => 'ok'),
-  adminOp: adminProcedure.mutation(() => 'ok'),
-  ownerOp: ownerProcedure.mutation(() => 'ok'),
+// Middleware mechanism: requirePermission reads ctx.access (role + per-person
+// grants − revokes), never ctx.role.
+const gated = router({
+  view: requirePermission('products', 'view').mutation(() => 'ok'),
+  write: requirePermission('products', 'write').mutation(() => 'ok'),
+  remove: requirePermission('products', 'delete').mutation(() => 'ok'),
 });
 
-describe('rbac — procedure tier middleware', () => {
-  it('member: allowed on protected, forbidden on admin and owner ops', async () => {
-    const caller = tiers.createCaller(ctxWithRole('member'));
-    await expect(caller.memberOp()).resolves.toBe('ok');
-    await expectForbidden(caller.adminOp());
-    await expectForbidden(caller.ownerOp());
+function ctxWithAccess(access: ReturnType<typeof effectiveAccess>, role: 'owner' | 'admin' | 'member' = 'member'): Context {
+  return { ...ctxWithRole(role), access } as unknown as Context;
+}
+
+describe('rbac — requirePermission on effective access', () => {
+  it('member: view only', async () => {
+    const caller = gated.createCaller(ctxWithRole('member'));
+    await expect(caller.view()).resolves.toBe('ok');
+    await expectForbidden(caller.write());
+    await expectForbidden(caller.remove());
   });
 
-  it('admin: allowed on protected and admin, forbidden on owner ops', async () => {
-    const caller = tiers.createCaller(ctxWithRole('admin'));
-    await expect(caller.memberOp()).resolves.toBe('ok');
-    await expect(caller.adminOp()).resolves.toBe('ok');
-    await expectForbidden(caller.ownerOp());
+  it('admin: view and write, not delete', async () => {
+    const caller = gated.createCaller(ctxWithRole('admin'));
+    await expect(caller.view()).resolves.toBe('ok');
+    await expect(caller.write()).resolves.toBe('ok');
+    await expectForbidden(caller.remove());
   });
 
-  it('owner: allowed on everything', async () => {
-    const caller = tiers.createCaller(ctxWithRole('owner'));
-    await expect(caller.memberOp()).resolves.toBe('ok');
-    await expect(caller.adminOp()).resolves.toBe('ok');
-    await expect(caller.ownerOp()).resolves.toBe('ok');
+  it('owner: everything', async () => {
+    const caller = gated.createCaller(ctxWithRole('owner'));
+    await expect(caller.view()).resolves.toBe('ok');
+    await expect(caller.write()).resolves.toBe('ok');
+    await expect(caller.remove()).resolves.toBe('ok');
+  });
+
+  it('a per-person grant lets a member write; a revoke takes view from an admin', async () => {
+    const granted = gated.createCaller(ctxWithAccess(effectiveAccess({
+      systemKey: 'member', overrides: { grant: { products: ['write'] } },
+    })));
+    await expect(granted.write()).resolves.toBe('ok');
+
+    const revoked = gated.createCaller(ctxWithAccess(effectiveAccess({
+      systemKey: 'admin', overrides: { revoke: { products: ['view'] } },
+    }), 'admin'));
+    await expectForbidden(revoked.view());
+    await expect(revoked.write()).resolves.toBe('ok');
+  });
+
+  it('decides on access, not role: an "owner" role string with member access is a member', async () => {
+    const caller = gated.createCaller(ctxWithAccess(effectiveAccess({ systemKey: 'member' }), 'owner'));
+    await expectForbidden(caller.remove());
+  });
+
+  it('a custom role holds exactly its own list', async () => {
+    const caller = gated.createCaller(ctxWithAccess(effectiveAccess({
+      systemKey: null, rolePermissions: { products: ['delete'] },
+    })));
+    await expect(caller.remove()).resolves.toBe('ok');
+    await expectForbidden(caller.view());
+  });
+
+  it('a suspended member is refused everything, whatever the role', async () => {
+    const caller = gated.createCaller(ctxWithAccess(effectiveAccess({ systemKey: 'owner', status: 'suspended' }), 'owner'));
+    await expectForbidden(caller.view());
   });
 });
 
