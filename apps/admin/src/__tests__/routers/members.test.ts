@@ -5,6 +5,15 @@ import type { Context } from '@/server/trpc';
 import { membersRouter } from '@/server/routers/members';
 import { mockDb, withOrgMock, idempotentMock } from '../helpers/mockDb';
 
+// The delegation checks (covers / canDelegate) read real member rows and are
+// exercised against Postgres in integration/accounts.test.ts. Here the DB is a
+// mock, so they are stubbed and this suite keeps testing the router's own guards.
+vi.mock('@/server/memberAuthority', () => ({
+  loadMember: vi.fn(async () => ({})),
+  assertMayManage: vi.fn(),
+  assertMayDelegate: vi.fn(),
+}));
+
 const UUID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
 
 function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
