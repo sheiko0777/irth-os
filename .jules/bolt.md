@@ -14,3 +14,6 @@
 ## 2025-02-28 - Optimize AI tool sales summary queries in `apps/api/src/ai/tools.ts`
 **Learning:** Combining multiple aggregate queries using PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility prevents executing multiple queries concurrently inside transaction contexts and reduces network roundtrips.
 **Action:** When making multiple conditional aggregates on the same table, use PostgreSQL's `FILTER` clause.
+## 2023-11-20 - Combine Queries using PostgreSQL FILTER
+**Learning:** Three separate database queries executing in Promise.all were making three separate database round trips to fetch counts with different where conditions for the same table.
+**Action:** When making multiple conditional aggregates on the same table, use PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine them into a single query to reduce latency and database roundtrips.
