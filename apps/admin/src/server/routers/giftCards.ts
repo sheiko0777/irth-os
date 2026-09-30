@@ -82,9 +82,11 @@ export const giftCardsRouter = router({
         recipientEmail: z.string().email().optional(),
         message: z.string().optional(),
         expiresAt: z.date().optional(),
+        idempotencyKey: z.string().min(1).max(MAX_IDEMPOTENCY_KEY_LENGTH),
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) =>
+      ctx.idempotent('giftCards.create', input.idempotencyKey, input, async () => {
       const code = generateCode();
       const giftCardCurrency = currency(input.currency);
       const initialAmountMinor = parseDecimal(String(input.initialAmount), giftCardCurrency).minor;
@@ -149,7 +151,7 @@ export const giftCardsRouter = router({
       });
 
       return { data: card, error: null };
-    }),
+    })),
 
   topup: requirePermission('giftCards', 'write')
     .input(z.object({
