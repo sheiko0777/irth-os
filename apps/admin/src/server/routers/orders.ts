@@ -131,29 +131,31 @@ export const ordersRouter = router({
             const conditions = status ? [...scope, eq(orders.status, status)] : [...scope];
             if (blockedOnly) conditions.push(eq(orders.importStatus, 'blocked'));
 
-            // Execute list, count and status breakdown concurrently
-            const [data, totalQuery, statusCountsQuery, blockedQuery] = await Promise.all([
-                ctx.withOrg(async (tx) => tx
+            // Execute list, count and status breakdown sequentially in one transaction to preserve isolation
+            const [data, totalQuery, statusCountsQuery, blockedQuery] = await ctx.withOrg(async (tx) => {
+                const dataRes = await tx
                     .select()
                     .from(orders)
                     .where(and(...conditions))
                     .orderBy(desc(orders.createdAt))
                     .limit(pageSize)
-                    .offset(offset)),
-                ctx.withOrg(async (tx) => tx
+                    .offset(offset);
+                const totalRes = await tx
                     .select({ count: count() })
                     .from(orders)
-                    .where(and(...conditions))),
-                ctx.withOrg(async (tx) => tx
+                    .where(and(...conditions));
+                const statusRes = await tx
                     .select({ status: orders.status, count: count() })
                     .from(orders)
                     .where(and(...scope))
-                    .groupBy(orders.status)),
-                ctx.withOrg(async (tx) => tx
+                    .groupBy(orders.status);
+                const blockedRes = await tx
                     .select({ count: count() })
                     .from(orders)
-                    .where(and(eq(orders.orgId, ctx.orgId), eq(orders.importStatus, 'blocked'), rep))),
-            ]);
+                    .where(and(eq(orders.orgId, ctx.orgId), eq(orders.importStatus, 'blocked'), rep));
+
+                return [dataRes, totalRes, statusRes, blockedRes] as const;
+            });
 
             return {
                 data,
@@ -176,18 +178,21 @@ export const ordersRouter = router({
             // order, items and history are all keyed by input.id (the order id
             // in the where clause is `eq(orders.id, input.id)`), so none of the
             // three reads depends on the others' results — run them in one
-            // org-scoped transaction concurrently instead of three sequential
-            // round-trips, matching the `list` procedure above. On the rare
-            // not-found path the two extra queries just return empty.
-            const [order, items, history] = await Promise.all([
-                ctx.withOrg(async (tx) => tx.query.orders.findFirst({
+            // org-scoped transaction sequentially instead of three sequential
+            // connection-exhausting transactions. On the rare
+            // not-found path the two extra queries are skipped entirely.
+            const [order, items, history] = await ctx.withOrg(async (tx) => {
+                const orderRes = await tx.query.orders.findFirst({
                     where: and(
                         eq(orders.id, input.id),
                         eq(orders.orgId, ctx.orgId),
                         orderRepScope(ctx),
                     )
-                })),
-                ctx.withOrg(async (tx) => tx
+                });
+
+                if (!orderRes) return [undefined, [], []];
+
+                const itemsRes = await tx
                     .select({
                         id: orderItems.id,
                         quantity: orderItems.quantity,
@@ -199,16 +204,19 @@ export const ordersRouter = router({
                     .where(and(
                         eq(orderItems.orderId, input.id),
                         eq(orderItems.orgId, ctx.orgId)
-                    ))),
-                ctx.withOrg(async (tx) => tx
+                    ));
+
+                const historyRes = await tx
                     .select()
                     .from(shipmentTracking)
                     .where(and(
                         eq(shipmentTracking.orderId, input.id),
                         eq(shipmentTracking.orgId, ctx.orgId)
                     ))
-                    .orderBy(desc(shipmentTracking.createdAt))),
-            ]);
+                    .orderBy(desc(shipmentTracking.createdAt));
+
+                return [orderRes, itemsRes, historyRes] as const;
+            });
 
             if (!order) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
