@@ -103,6 +103,7 @@ semantic tokens, so older pages follow the palette. New code uses semantic names
 - **Lists** (orders, inventory, products): `PageHeader`, then filter chips, then a
   glass table card.
 - **Finance and analytics:** `PageHeader`, KPI cards with icons, glass chart cards.
+- **Sales rep** (`/sales`, phone-first): PageHeader, new-sale form, order and quote lists as glass cards, and a tab bar (new, orders, quotes).
 - **Delivery rep** (`/rep`, phone-first): custody `BalanceCard` with the handover
   form inside, large order cards with full-width deliver and call actions, and a
   tab bar (orders and custody).
