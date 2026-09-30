@@ -1,16 +1,31 @@
 import { cn } from "@/lib/utils";
 
+/**
+ * glass: the default, a translucent card over the lit canvas.
+ * solid: an opaque surface, for dense tables and forms.
+ * hero: the one navy headline surface per screen (a balance, the day's sales).
+ */
+const CARD_VARIANTS = {
+  glass: "glass text-[var(--text-primary)]",
+  solid:
+    "border border-[var(--separator)] bg-[var(--surface)] text-[var(--text-primary)] shadow-[var(--card-shadow)]",
+  hero: "surface-hero",
+} as const;
+
 const Card = ({
   className,
   ref,
+  variant = "glass",
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & {
   ref?: React.Ref<HTMLDivElement>;
+  variant?: keyof typeof CARD_VARIANTS;
 }) => (
   <div
     ref={ref}
     className={cn(
-      "rounded-xl border border-[var(--separator)] bg-[var(--surface)] text-[var(--text-primary)] shadow",
+      "rounded-[var(--card-radius)]",
+      CARD_VARIANTS[variant],
       className,
     )}
     {...props}

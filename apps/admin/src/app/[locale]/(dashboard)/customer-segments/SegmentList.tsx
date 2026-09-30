@@ -22,7 +22,7 @@ export function SegmentList({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {segments.length === 0 && (
-        <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-xl"><EmptyState title={t('empty.title')} hint={t('empty.hint')} /></div>
+        <div className="glass rounded-[var(--card-radius)]"><EmptyState title={t('empty.title')} hint={t('empty.hint')} /></div>
       )}
       {segments.map((seg) => (
         <div

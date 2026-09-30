@@ -82,7 +82,7 @@ export function ShippingClient({ zones }: Props) {
           {selectedZoneId ? (
             <RatesTable zoneId={selectedZoneId} />
           ) : (
-            <div className="rounded-md border border-[var(--rim1)] bg-[var(--surface)] text-center text-[var(--t2)] py-8">
+            <div className="glass rounded-[var(--card-radius)] text-center text-[var(--t2)] py-8">
               اختر منطقة لعرض أسعارها
             </div>
           )}

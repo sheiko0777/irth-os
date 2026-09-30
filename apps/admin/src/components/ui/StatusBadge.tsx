@@ -13,9 +13,10 @@ export function StatusBadge({ status, domain, className }: StatusBadgeProps) {
 
   return (
     <span
-      className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold', className)}
+      className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold leading-none', className)}
       style={{ color: config.color, background: config.bg }}
     >
+      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
       {config.label}
     </span>
   );

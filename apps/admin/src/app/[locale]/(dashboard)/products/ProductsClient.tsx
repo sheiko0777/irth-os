@@ -30,7 +30,7 @@ import { SkeletonRow } from "@/components/ui/skeleton";
 
 import { toast } from "sonner";
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Box, QrCode } from 'lucide-react';
+import { Box, Package, Plus, QrCode } from 'lucide-react';
 import { ProductQrDialog } from '@/components/products/ProductQrDialog';
 
 
@@ -180,16 +180,24 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
     };
 
     return (
-        <div className="space-y-6" style={{ backgroundColor: 'var(--surface)' }}>
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--t1)' }}>{t("title")}</h1>
+        <div className="space-y-6">
+            <div className="glass flex flex-wrap items-center justify-between gap-4 rounded-[var(--card-radius)] p-5">
+                <div className="flex items-center gap-4">
+                    <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]" aria-hidden="true">
+                        <Package size={22} />
+                    </span>
+                    <div>
+                        <p className="text-[11px] font-semibold tracking-wide text-[var(--accent)]">المخزون والمنتجات</p>
+                        <h1 className="text-[1.5rem] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">{t("title")}</h1>
+                    </div>
+                </div>
                 <PermissionGate resource="products" action="write">
                     <Dialog open={isModalOpen} onOpenChange={(open) => {
                         setIsModalOpen(open);
                         if (!open) resetForm();
                     }}>
                         <DialogTrigger asChild>
-                            <Button style={{ backgroundColor: 'var(--t1)', color: 'var(--surface)' }}>{t("actions.new")}</Button>
+                            <Button><Plus aria-hidden="true" />{t("actions.new")}</Button>
                         </DialogTrigger>
                         <DialogContent>
                             <DialogHeader>
@@ -255,7 +263,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                     onChange={(e: { target: { value: string } }) => setSearchQuery(e.target.value)}
                     className="max-w-xs"
                 />
-                <div className="flex gap-2 bg-[var(--surface)] p-1 rounded-md border">
+                <div className="glass flex gap-1 rounded-[var(--control-radius)] p-1">
                     <Button 
                         variant={statusFilter === "all" ? "default" : "ghost"} 
                         size="sm" 
@@ -279,7 +287,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                 </div>
             </div>
 
-            <div className="rounded-md border border-[var(--rim1)] bg-[var(--card-bg)]">
+            <div className="glass overflow-hidden rounded-[var(--card-radius)]">
                 <Table>
                     <TableHeader>
                         <TableRow>

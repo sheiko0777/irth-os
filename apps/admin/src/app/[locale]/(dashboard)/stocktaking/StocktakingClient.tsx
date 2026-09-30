@@ -26,6 +26,7 @@ import {
   Boxes,
 } from 'lucide-react';
 import { formatDate as formatDateShared } from '@irth/domain';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export type StocktakingSession = {
   id: string;
@@ -184,17 +185,33 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
 
   return (
     <div className="space-y-6">
+      {/* Header & Create button */}
+      <PageHeader
+        eyebrow="المخزون والمنتجات"
+        title={"جرد المخزون"}
+        description={"مطابقة الأرصدة الفعلية للمخزن باستخدام مسح الباركود بالكاميرا وتسوية الفروقات."}
+        icon={<ClipboardList />}
+        actions={<><Button
+          onClick={() => createMutation.mutate({})}
+          disabled={createMutation.isPending}
+          className="font-semibold"
+        >
+          <Sparkles className="w-4 h-4" />
+          {createMutation.isPending ? 'جاري التهيئة...' : '+ بدء جرد جديد'}
+        </Button></>}
+      />
+
       {/* KPI Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-4 shadow-sm">
+        <div className="glass rounded-[var(--card-radius)] p-4 shadow-sm">
           <p className="text-sm text-[var(--t2)]">إجمالي جلسات الجرد</p>
           <p className="text-3xl font-bold text-[var(--t1)] mt-1">{summary.totalSessions}</p>
         </div>
-        <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-4 shadow-sm">
+        <div className="glass rounded-[var(--card-radius)] p-4 shadow-sm">
           <p className="text-sm text-[var(--t2)]">جلسات نشطة</p>
           <p className="text-3xl font-bold mt-1 text-[var(--gold)]">{summary.activeSessions}</p>
         </div>
-        <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] p-4 shadow-sm">
+        <div className="glass rounded-[var(--card-radius)] p-4 shadow-sm">
           <p className="text-sm text-[var(--t2)]">آخر جرد مكتمل</p>
           <p className="text-lg font-semibold mt-1 text-[var(--emerald)]">
             {formatDate(summary.lastCompletedAt)}
@@ -202,27 +219,8 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
         </div>
       </div>
 
-      {/* Header & Create button */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--t1)]">جرد المخزون</h1>
-          <p className="text-xs text-[var(--t2)] mt-0.5">
-            مطابقة الأرصدة الفعلية للمخزن باستخدام مسح الباركود بالكاميرا وتسوية الفروقات.
-          </p>
-        </div>
-        <Button
-          onClick={() => createMutation.mutate({})}
-          disabled={createMutation.isPending}
-          style={{ background: 'var(--gold)', color: 'var(--void)' }}
-          className="font-bold flex items-center gap-1.5"
-        >
-          <Sparkles className="w-4 h-4" />
-          {createMutation.isPending ? 'جاري التهيئة...' : '+ بدء جرد جديد'}
-        </Button>
-      </div>
-
       {/* Sessions Table */}
-      <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] overflow-hidden shadow-sm">
+      <div className="glass rounded-[var(--card-radius)] overflow-hidden shadow-sm">
         <Table>
           <TableHeader className="bg-[var(--surface2)]">
             <TableRow>
@@ -376,9 +374,9 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
                   </div>
 
                   {/* Hardware ready badge */}
-                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded-full border border-emerald-800/40">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <Zap className="w-3 h-3 text-emerald-400" />
+                  <div className="flex items-center gap-1.5 text-[11px] text-[var(--success)] bg-[var(--success-bg)] px-2 py-1 rounded-full border border-[var(--success)]/30">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] animate-pulse" />
+                    <Zap className="w-3 h-3 text-[var(--success)]" />
                     <span>قارئ الليزر جاهز</span>
                   </div>
 
@@ -441,7 +439,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
                   onClick={() => setFilterType('uncounted')}
                   className={`px-2.5 py-1 rounded transition ${
                     filterType === 'uncounted'
-                      ? 'bg-zinc-700 text-white font-bold shadow-sm'
+                      ? 'bg-[var(--raised)] text-white font-bold shadow-sm'
                       : 'text-[var(--t2)]'
                   }`}
                 >
@@ -589,15 +587,15 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
       {isScannerOpen && detailSession && (
         <div className="fixed inset-0 z-[60] bg-black flex flex-col">
           {/* Top banner with close button and multiplier */}
-          <div className="p-3 bg-zinc-900/90 backdrop-blur-md flex items-center justify-between text-white z-20 border-b border-zinc-800 flex-wrap gap-2">
+          <div className="p-3 bg-zinc-900/90 backdrop-blur-md flex items-center justify-between text-white z-20 border-b border-[var(--separator)] flex-wrap gap-2">
             <div className="flex items-center gap-2 text-sm font-bold">
               <Camera className="w-5 h-5 text-[var(--gold)]" />
               <span>ماسح الجرد السريع - {detailSession.notes || 'جلسة نشطة'}</span>
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-zinc-800/90 px-2 py-0.5 rounded-lg border border-zinc-700 text-xs">
-                <span className="text-zinc-400 text-[11px]">الكمية:</span>
+              <div className="flex items-center gap-1 bg-zinc-800/90 px-2 py-0.5 rounded-lg border border-[var(--separator)] text-xs">
+                <span className="text-[var(--text-secondary)] text-[11px]">الكمية:</span>
                 {[1, 6, 12, 24].map((qty) => (
                   <button
                     key={qty}
@@ -606,7 +604,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
                     className={`px-1.5 py-0.5 rounded text-xs font-bold transition ${
                       multiplier === qty
                         ? 'bg-[var(--gold)] text-black shadow-xs'
-                        : 'text-zinc-400 hover:text-white'
+                        : 'text-[var(--text-secondary)] hover:text-white'
                     }`}
                   >
                     x{qty}
@@ -618,7 +616,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
                 variant="outline"
                 size="sm"
                 onClick={() => setIsScannerOpen(false)}
-                className="text-xs bg-zinc-800 text-white hover:bg-zinc-700 border-none"
+                className="text-xs bg-[var(--raised)] text-white hover:bg-[var(--raised)] border-none"
               >
                 <X className="w-4 h-4 ml-1" />
                 إغلاق الكاميرا
@@ -637,14 +635,14 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
           </div>
 
           {/* Bottom Live Feedback Bar */}
-          <div className="p-4 bg-zinc-900/95 border-t border-zinc-800 text-center z-20 space-y-1">
+          <div className="p-4 bg-zinc-900/95 border-t border-[var(--separator)] text-center z-20 space-y-1">
             {lastScannedBanner ? (
               <div className="animate-in fade-in duration-200">
-                <p className="text-xs text-zinc-400">آخر صنف تم مسحه:</p>
+                <p className="text-xs text-[var(--text-secondary)]">آخر صنف تم مسحه:</p>
                 <p className="font-bold text-base text-[var(--gold)]">
                   {lastScannedBanner.name} ({lastScannedBanner.sku})
                 </p>
-                <div className="flex items-center justify-center gap-4 text-xs text-zinc-300 mt-1">
+                <div className="flex items-center justify-center gap-4 text-xs text-[var(--text-primary)] mt-1">
                   <span>المحسوب الفعلي: <strong>{lastScannedBanner.actual}</strong></span>
                   <span>المتوقع: <strong>{lastScannedBanner.expected}</strong></span>
                   <span
@@ -659,7 +657,7 @@ export function StocktakingClient({ sessions: initialSessions, summary }: Props)
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-[var(--text-secondary)]">
                 مرر المنتجات تباعاً أمام الكاميرا، وسيتم احتساب كل صنف وإصدار صوت تأكيد فورياً.
               </p>
             )}

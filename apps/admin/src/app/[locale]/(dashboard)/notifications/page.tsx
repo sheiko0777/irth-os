@@ -1,8 +1,9 @@
 import { serverCaller } from '@/server/caller';
 import { statusLabel } from '@/lib/statusMaps';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { BellOff } from 'lucide-react';
+import { BellOff, Bell } from 'lucide-react';
 import { formatDate } from '@irth/domain';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default async function NotificationsPage() {
     const caller = await serverCaller();
@@ -11,17 +12,19 @@ export default async function NotificationsPage() {
     const items = response.error ? [] : response.data.items;
 
     return (
-        <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-[var(--t1)]">الإشعارات</h1>
-                {response.data && (
+        <div className="space-y-6">
+            <PageHeader
+              eyebrow="عام"
+              title={"الإشعارات"}
+              icon={<Bell />}
+              actions={<>{response.data && (
                     <span className="text-sm text-[var(--t2)]">
                         {response.data.unread} غير مقروء
                     </span>
-                )}
-            </div>
+                )}</>}
+            />
 
-            <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
+            <div className="glass rounded-[var(--card-radius)] overflow-hidden">
                 <table className="w-full text-start">
                     <thead className="bg-raised border-b border-[var(--rim1)]">
                         <tr>

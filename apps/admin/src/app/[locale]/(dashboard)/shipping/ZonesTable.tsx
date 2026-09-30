@@ -25,7 +25,7 @@ export function ZonesTable({ zones, selectedZoneId, onSelectZone }: Props) {
   };
 
   return (
-    <div className="rounded-md border border-[var(--rim1)] bg-[var(--surface)]">
+    <div className="glass rounded-[var(--card-radius)]">
       <Table>
         <TableHeader>
           <TableRow>

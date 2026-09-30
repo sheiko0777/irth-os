@@ -2,7 +2,8 @@ import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Factory } from 'lucide-react';
+import { Factory, Truck } from 'lucide-react';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default async function SuppliersPage() {
   const caller = await serverCaller();
@@ -16,11 +17,13 @@ export default async function SuppliersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">الموردين</h1>
-      </div>
+      <PageHeader
+        eyebrow="المخزون والمنتجات"
+        title={"الموردين"}
+        icon={<Truck />}
+      />
 
-      <div className="rounded-md border bg-[var(--surface)]">
+      <div className="glass rounded-[var(--card-radius)]">
         <Table>
           <TableHeader>
             <TableRow>

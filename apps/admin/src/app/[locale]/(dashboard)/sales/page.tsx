@@ -3,6 +3,8 @@ import { TRPCError } from "@trpc/server";
 import { serverCaller } from "@/server/caller";
 import { NewSaleForm } from "./NewSaleForm";
 import { SalesLists } from "./SalesLists";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Briefcase } from "lucide-react";
 
 /**
  * مبيعاتي (PR-2b): the sales rep's screen — a new order or quote for one of
@@ -20,10 +22,12 @@ export default async function SalesPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">مبيعاتي</h1>
-        <p className="mt-1 text-sm text-[var(--t3)]">طلب أو عرض سعر لعملائك، بأسعار القوائم المسموحة لك. الأسعار بيحسبها النظام.</p>
-      </div>
+      <PageHeader
+        eyebrow="عام"
+        title={"مبيعاتي"}
+        description={"طلب أو عرض سعر لعملائك، بأسعار القوائم المسموحة لك. الأسعار بيحسبها النظام."}
+        icon={<Briefcase />}
+      />
       <NewSaleForm />
       <SalesLists />
     </div>

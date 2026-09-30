@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { CreateCouponDialog, ToggleCouponButton, DeleteCouponButton } from './CouponActions';
 import { CouponValidator } from './CouponValidator';
 import { format } from 'date-fns';
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tag } from "lucide-react";
 
 // Next 15 hands `searchParams` to pages as a Promise. Typing it as a plain
 // object compiles under `tsc` — the generated route types live outside the
@@ -29,16 +31,18 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
     };
 
     return (
-        <div className="p-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-[var(--t1)]">{t('title')}</h1>
-                <CreateCouponDialog>
-                    <Button className="bg-[var(--emerald)] hover:bg-emerald/80 text-void">{t('actions.new')}</Button>
-                </CreateCouponDialog>
-            </div>
+        <div className="space-y-6">
+            <PageHeader
+              eyebrow="المالية والتقارير"
+              title={t('title')}
+              icon={<Tag />}
+              actions={<><CreateCouponDialog>
+                    <Button>{t('actions.new')}</Button>
+                </CreateCouponDialog></>}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="bg-[var(--surface)] border-[var(--rim1)]">
+                <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-[var(--t2)]">{t('summary.active')}</CardTitle>
                     </CardHeader>
@@ -46,7 +50,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
                         <div className="text-2xl font-bold text-[var(--t1)]">{totalActive}</div>
                     </CardContent>
                 </Card>
-                <Card className="bg-[var(--surface)] border-[var(--rim1)]">
+                <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-[var(--t2)]">{t('summary.totalUses')}</CardTitle>
                     </CardHeader>
@@ -58,7 +62,7 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
 
             <CouponValidator />
 
-            <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
+            <div className="glass rounded-[var(--card-radius)] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-start">
                         <thead className="bg-raised border-b border-[var(--rim1)]">

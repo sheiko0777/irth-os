@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { matchIntent } from '@/lib/chatIntents';
 import { routeLabel } from '@/lib/routeLabels';
+import { MessageCircle, X } from 'lucide-react';
 
 type Message = {
   id: number;
@@ -112,25 +113,26 @@ export function ChatBot({ locale }: ChatBotProps) {
         onClick={() => setOpen(o => !o)}
         style={{
           position: 'fixed',
-          bottom: 'calc(24px + env(safe-area-inset-bottom))',
+          // Rises above the phone tab bar where one is shown (globals.css).
+          bottom: 'calc(var(--chat-launcher-bottom) + env(safe-area-inset-bottom))',
           insetInlineEnd: '24px',
           width: '52px',
           height: '52px',
           borderRadius: '50%',
-          background: 'var(--gold)',
-          color: 'var(--void)',
+          background: 'var(--accent)',
+          color: 'var(--accent-fg)',
           border: 'none',
           cursor: 'pointer',
           fontSize: '22px',
           zIndex: 1000,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          boxShadow: 'var(--float-shadow)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
         aria-label="المساعد الذكي"
       >
-        {open ? '✕' : '💬'}
+        {open ? <X size={22} aria-hidden="true" /> : <MessageCircle size={22} aria-hidden="true" />}
       </button>
 
       {/* Chat panel */}
@@ -138,7 +140,7 @@ export function ChatBot({ locale }: ChatBotProps) {
         <div
           style={{
             position: 'fixed',
-            bottom: '88px',
+            bottom: 'calc(var(--chat-launcher-bottom) + 64px + env(safe-area-inset-bottom))',
             insetInlineEnd: '24px',
             width: '340px',
             maxHeight: '520px',
@@ -153,7 +155,7 @@ export function ChatBot({ locale }: ChatBotProps) {
           }}
         >
           {/* Header */}
-          <div style={{ padding: '12px 16px', background: 'var(--gold)', color: 'var(--void)' }}>
+          <div style={{ padding: '12px 16px', background: 'var(--accent)', color: 'var(--accent-fg)' }}>
             <p style={{ margin: 0, fontWeight: 700, fontSize: '15px', fontFamily: 'Cairo, sans-serif' }}>
               مساعد IRTH
             </p>

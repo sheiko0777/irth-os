@@ -7,6 +7,8 @@ import { ShopifyConnectionCard } from './ShopifyConnectionCard';
 import { Button } from '@/components/ui/button';
 import { revalidatePath } from 'next/cache';
 import { formatDate } from '@irth/domain';
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Plug2 } from "lucide-react";
 
 async function retryOutboxEvent(id: string) {
     'use server';
@@ -34,12 +36,16 @@ export default async function IntegrationsPage({
     const events = (response.data || []) as OutboxEvent[];
 
     return (
-        <div className="flex flex-col gap-6 p-6">
-            <h1 className="text-3xl font-bold text-[var(--gold)]">{t('title')}</h1>
+        <div className="flex flex-col gap-6">
+            <PageHeader
+              eyebrow="العمليات"
+              title={t('title')}
+              icon={<Plug2 />}
+            />
 
             <ShopifyConnectionCard callbackStatus={shopify} />
 
-            <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
+            <Card>
                 <CardHeader>
                     <CardTitle className="text-xl text-[var(--gold)]">{t('outbox')}</CardTitle>
                 </CardHeader>

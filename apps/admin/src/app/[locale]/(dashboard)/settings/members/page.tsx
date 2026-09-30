@@ -8,7 +8,8 @@ import { PendingInvitesList } from "./PendingInvitesList";
 import { PermissionGate } from "@/components/PermissionGate";
 import { serverCaller } from "@/server/caller";
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Users } from 'lucide-react';
+import { Users, UserCog } from 'lucide-react';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default async function MembersPage() {
   const t = await getTranslations("settings");
@@ -19,7 +20,11 @@ export default async function MembersPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">{t("members")}</h1>
+      <PageHeader
+        eyebrow="الإعدادات والرقابة"
+        title={t("members")}
+        icon={<UserCog />}
+      />
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="md:col-span-2">

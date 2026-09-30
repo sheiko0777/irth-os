@@ -67,29 +67,40 @@
   --font-display: var(--font-family);
   --font-weight-bold: 600;
   --radius-token: var(--radius);
+
+  /* Glass system (PR-UI). Runtime values live in the theme-aware :root rules. */
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-border: var(--glass-border);
+  --radius-card: var(--card-radius);
+  --radius-control: var(--control-radius);
+  --shadow-card: var(--card-shadow);
+  --shadow-float: var(--float-shadow);
 }
 
 :root {
   color-scheme: light;
   /* Default for FormDialog; each dialog overrides it inline via its `width` prop. */
   --form-dialog-width: 480px;
-  --canvas: #f6f5f2;
+  --canvas: #eef2f8;
   --surface: #ffffff;
-  --raised: #efeee9;
-  --text-primary: #252420;
-  --text-secondary: #65615a;
-  --accent: #76502c;
+  --raised: #f2f5fa;
+  --text-primary: #0f1b33;
+  --text-secondary: #536179;
+  --accent: #1f3b7a;
   --accent-fg: #ffffff;
-  --input-border: #8c867d;
-  --separator: #dddad3;
+  --input-border: #8391a8;
+  --separator: #dde4ef;
   --success: #166534;
-  --success-bg: #f0fdf4;
-  --warning: #854d0e;
-  --warning-bg: #fefce8;
-  --critical: #991b1b;
-  --critical-bg: #fef2f2;
-  --info: #1e40af;
-  --info-bg: #eff6ff;
+  --success-bg: #ecfdf3;
+  --warning: #92400e;
+  --warning-bg: #fff7e6;
+  --critical: #b42318;
+  --critical-bg: #fef3f2;
+  --info: #1d4ed8;
+  --info-bg: #eef4ff;
 
   --font-family:
     var(--font-ibm-plex-sans-arabic), var(--font-ibm-plex-sans), sans-serif;
@@ -107,7 +118,7 @@
   --t1: var(--text-primary);
   --t2: var(--text-secondary);
   --t3: var(--text-secondary);
-  --t4: var(--separator);
+  --t4: var(--text-secondary);
   --gold: var(--accent);
   --gold2: var(--accent);
   --gold3: var(--accent);
@@ -117,51 +128,89 @@
   --crimson: var(--critical);
   --azure: var(--info);
   --amber: var(--warning);
-  --radius: 8px;
+  --radius: 12px;
+  --card-radius: 18px;
+  --control-radius: 12px;
+
+  /* Glass system (PR-UI): translucent surfaces over a softly lit canvas. */
+  --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
+  --accent-strong: #152a5c;
+  --glass: rgb(255 255 255 / 0.72);
+  --glass-strong: rgb(255 255 255 / 0.9);
+  --glass-border: rgb(255 255 255 / 0.95);
+  --card-shadow: 0 1px 2px rgb(15 27 51 / 0.04), 0 10px 30px -14px rgb(15 27 51 / 0.14);
+  --float-shadow: 0 18px 48px -18px rgb(15 27 51 / 0.32);
+  --canvas-glow-a: #d7e3fb;
+  --canvas-glow-b: #e6e3fa;
+  --hero-from: #264a96;
+  --hero-to: #0f1b33;
+  --hero-fg: #ffffff;
+  --hero-muted: rgb(255 255 255 / 0.74);
+  --chat-launcher-bottom: 24px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --canvas: #191917;
-    --surface: #23221f;
-    --raised: #2d2b27;
-    --text-primary: #f3f1ec;
-    --text-secondary: #b8b2a8;
-    --accent: #d2ac80;
-    --accent-fg: #23221f;
-    --input-border: #898277;
-    --separator: #454139;
-    --success: #86efac;
-    --success-bg: #14291d;
-    --warning: #fde047;
-    --warning-bg: #302a13;
+    --canvas: #0b1220;
+    --surface: #131c2e;
+    --raised: #1b2640;
+    --text-primary: #eef2fa;
+    --text-secondary: #a3b1c9;
+    --accent: #8fb0f5;
+    --accent-fg: #0b1220;
+    --input-border: #5f6f8c;
+    --separator: #26324a;
+    --success: #6ee7a0;
+    --success-bg: #0f2a1e;
+    --warning: #fbbf5a;
+    --warning-bg: #2c2111;
     --critical: #fca5a5;
-    --critical-bg: #351c1c;
+    --critical-bg: #331a1f;
     --info: #93c5fd;
-    --info-bg: #1b273a;
+    --info-bg: #14233d;
+    --accent-strong: #b7cdfa;
+    --glass: rgb(19 28 46 / 0.72);
+    --glass-strong: rgb(19 28 46 / 0.92);
+    --glass-border: rgb(255 255 255 / 0.07);
+    --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -16px rgb(0 0 0 / 0.55);
+    --float-shadow: 0 18px 48px -18px rgb(0 0 0 / 0.7);
+    --canvas-glow-a: #132650;
+    --canvas-glow-b: #1d1a42;
+    --hero-from: #22448f;
+    --hero-to: #0d1630;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #191917;
-  --surface: #23221f;
-  --raised: #2d2b27;
-  --text-primary: #f3f1ec;
-  --text-secondary: #b8b2a8;
-  --accent: #d2ac80;
-  --accent-fg: #23221f;
-  --input-border: #898277;
-  --separator: #454139;
-  --success: #86efac;
-  --success-bg: #14291d;
-  --warning: #fde047;
-  --warning-bg: #302a13;
+  --canvas: #0b1220;
+  --surface: #131c2e;
+  --raised: #1b2640;
+  --text-primary: #eef2fa;
+  --text-secondary: #a3b1c9;
+  --accent: #8fb0f5;
+  --accent-fg: #0b1220;
+  --input-border: #5f6f8c;
+  --separator: #26324a;
+  --success: #6ee7a0;
+  --success-bg: #0f2a1e;
+  --warning: #fbbf5a;
+  --warning-bg: #2c2111;
   --critical: #fca5a5;
-  --critical-bg: #351c1c;
+  --critical-bg: #331a1f;
   --info: #93c5fd;
-  --info-bg: #1b273a;
+  --info-bg: #14233d;
+  --accent-strong: #b7cdfa;
+  --glass: rgb(19 28 46 / 0.72);
+  --glass-strong: rgb(19 28 46 / 0.92);
+  --glass-border: rgb(255 255 255 / 0.07);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -16px rgb(0 0 0 / 0.55);
+  --float-shadow: 0 18px 48px -18px rgb(0 0 0 / 0.7);
+  --canvas-glow-a: #132650;
+  --canvas-glow-b: #1d1a42;
+  --hero-from: #22448f;
+  --hero-to: #0d1630;
 }
 
 html {
@@ -169,22 +218,30 @@ html {
 }
 
 body {
-  background: var(--canvas);
+  background:
+    radial-gradient(60rem 36rem at 100% -10%, var(--canvas-glow-a), transparent 60%),
+    radial-gradient(48rem 32rem at -10% 110%, var(--canvas-glow-b), transparent 60%),
+    var(--canvas);
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: var(--font-family);
   line-height: 1.75;
   -webkit-font-smoothing: antialiased;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: var(--text-primary);
-  font-family: var(--font-family);
-  font-weight: 600;
+/* In the base layer so a utility on a heading (the muted title on a navy
+   hero card) wins over this default instead of being silently outranked. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-weight: 600;
+  }
 }
 
 table {
@@ -203,6 +260,41 @@ table {
 ::-webkit-scrollbar-thumb {
   background: var(--separator);
   border-radius: 2px;
+}
+
+/* A translucent card over the lit canvas. Solid where backdrop blur is missing. */
+.glass {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-shadow);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+  }
+}
+
+/* The one navy hero surface per screen: headline balance, primary figure. */
+.surface-hero {
+  background:
+    radial-gradient(28rem 14rem at 0% 0%, rgb(255 255 255 / 0.14), transparent 60%),
+    linear-gradient(135deg, var(--hero-from), var(--hero-to));
+  color: var(--hero-fg);
+  box-shadow: var(--float-shadow);
+}
+
+/* Room for the phone-only bottom tab bar and the device's home indicator. */
+@media (max-width: 47.99rem) {
+  .pb-tabbar {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+
+  :root:has([data-tabbar]) {
+    --chat-launcher-bottom: 6.25rem;
+  }
 }
 
 /* The heritage thread: a single accent line that fades beneath key headings. */

@@ -1,278 +1,135 @@
 # IRTH OS — Design System
 
-Admin console for Egyptian and Gulf commerce operations. Arabic-first, RTL by
-default, English supported through the same components.
-
-## Carbon shell review — staged migration
-
-Branch: `feature/carbon-ui-shell`. This is an unverified review implementation,
-not a completed application-wide redesign. Do not merge before the gates below.
-
-The dashboard layout now wraps existing server-rendered pages in `CarbonShell`.
-The shell uses real `@carbon/react` header, navigation and button components,
-with a scoped Gray 100 theme in `apps/admin/src/styles/carbon.scss`. The existing
-Radix Dialog primitive provides mobile focus trapping, Escape dismissal and
-focus restoration. Carbon's global reset is not imported. Page colors, business
-logic, authentication, financial calculations and server permissions are unchanged.
-
-The shell uses IBM Plex Sans Arabic and blue Carbon interaction accents. The
-legacy obsidian/gold rules below still apply to page content. Do not globally
-map the gold token to blue: existing foreground combinations would lose contrast.
-Existing navigation labels remain Arabic where the shared navigation model does
-not yet supply English translations. Document direction remains locale-driven.
-
-### Intentional UX changes
-
-- Desktop navigation starts expanded and can be hidden with the header toggle.
-- Below 66rem, navigation is a modal drawer instead of an always-visible rail.
-- Navigation moves to the logical inline-start edge in both RTL and LTR.
-- Only the most specific matching route receives the active-page indicator.
-- The header shows the current page label instead of the former breadcrumb strip.
-- Logout reports a recoverable error and prevents duplicate submissions.
-
-Existing organization switching, operational alerts, platform-admin visibility,
-notifications, command-palette events, chatbot and page routes are retained.
-Legacy Header and Sidebar files remain available for characterization tests and
-rollback; they are not mounted by the new dashboard layout.
-
-### Install and verify before review
-
-The editing environment cannot execute pnpm, generate a lockfile, run tests or
-render a browser. `pnpm-lock.yaml` is intentionally unchanged, so frozen-lockfile
-CI is expected to fail until a reviewer generates and commits it on this branch.
-The following commands assume a clean checkout, Node 20+ and pnpm 10.30.3:
-
-```bash
-git fetch origin
-git switch feature/carbon-ui-shell
-CI=true pnpm install --no-frozen-lockfile
-pnpm exec prettier --write apps/admin/src/components/layout/CarbonShell.tsx apps/admin/src/styles/carbon.scss apps/admin/src/__tests__/ui/CarbonShell.test.tsx apps/admin/vitest.ui.config.ts apps/admin/package.json 'apps/admin/src/app/[locale]/(dashboard)/layout.tsx'
-pnpm --filter @irth/admin test:ui
-pnpm turbo lint typecheck test
-pnpm --filter @irth/admin build
-pnpm --filter @irth/admin dev
-```
-
-Review the generated lockfile before committing it. Run integration tests only
-against the configured DISPOSABLE test database, never an application database;
-the existing integration suite truncates tables. Preserve all existing CI gates.
-
-The new UI suite includes legacy characterization plus Carbon navigation,
-locale routing, active-page selection, mobile dismissal/focus containment,
-platform-admin visibility, command palette and logout tests. These tests were
-written before the shell replacement but have NOT been executed here.
-
-Manually review Arabic and English at 375px, 768px and 1440px, including keyboard
-Tab/Shift+Tab/Escape, reduced motion, focus visibility, long account names,
-organization switching, notifications and existing table/form pages. Confirm
-there are no hydration errors or unintended CSS changes outside the shell.
-
-No preview deployment, pull request, merge or production deployment is implied.
-After validation, stage only reviewed files and the generated lockfile, commit
-on this branch, and request review before merging. Dashboard/KPI/table migration
-is a separate follow-up slice.
-
----
-
-## Legacy page design (unchanged)
-
-Source of truth: `apps/admin/src/app/[locale]/globals.css`. Every value below is
-registered as a Tailwind v4 `@theme` token, so `bg-surface`, `text-t2`,
-`border-rim1` are real utility classes — not arbitrary values.
-
----
-
-## 1. Character
-
-**Obsidian and gold.** A near-black operations console lit by a single warm
-accent. The interface is dense with numbers — orders, stock counts, variance,
-money — so the surface stays quiet and lets figures carry the contrast.
-
-Three rules the system is built on:
-
-1. **One accent.** Gold marks the primary action and nothing else. A screen with
-   two gold buttons has a bug.
-2. **Status colour is semantic, never decorative.** Emerald, crimson, azure and
-   amber appear only when they encode a state.
-3. **Elevation is a colour step, not a shadow.** Surfaces get lighter as they
-   come forward. Shadows are reserved for genuinely floating layers.
-
----
-
-## 2. Colour
-
-### Surfaces — dark to light, back to front
-
-| Token | Hex | Use |
-|---|---|---|
-| `void` | `#020406` | Page void, scrollbar track, text on gold |
-| `ink` | `#060a10` | Application background (`<body>`) |
-| `surface` | `#0e1622` | Panels, table containers, table headers |
-| `card` | `#131e2e` | Cards, inputs, dialogs |
-| `raised` | `#182436` | Row hover, popovers, menus, selected state |
-
-### Rims — borders and dividers
-
-| Token | Hex | Use |
-|---|---|---|
-| `rim1` | `#1a2840` | Default border, table dividers |
-| `rim2` | `#223050` | Input border — one step stronger so fields read as editable |
-| `rim3` | `#2c3e66` | Scrollbar thumb, emphasis border |
-
-### Text — all four measured against `ink` and `card`
-
-| Token | Hex | On `ink` | On `card` | Use |
-|---|---|---|---|---|
-| `t1` | `#f0f6ff` | 17.4:1 | 14.7:1 | Headings, figures, primary values |
-| `t2` | `#93b0d0` | 8.8:1 | 7.4:1 | Body text, labels, table cells |
-| `t3` | `#6d90b0` | 5.9:1 | 5.0:1 | Secondary text, placeholders, captions |
-| `t4` | `#263a52` | 1.7:1 | 1.4:1 | **Decorative only** — icons, rules. Never text. |
-
-`t4` fails text contrast by a wide margin and is deliberately kept that way; it
-exists for shapes, not words.
-
-### Accent and status
-
-| Token | Hex | Meaning |
-|---|---|---|
-| `gold` | `#e09000` | Primary action. Pair with `void` text (7.98:1) |
-| `gold2` | `#f5a800` | Hover |
-| `gold3` | `#ffc340` | Active, focus glow |
-| `emerald` | `#00c478` | Success, paid, in stock, approved |
-| `crimson` | `#e83838` | Error, failed, cancelled, rejected |
-| `azure` | `#2e8fff` | Informational, in transit, links |
-| `amber` | `#f5a500` | Warning, pending, low stock, awaiting review |
-
-**Every accent fill carries `void` text.** White on `gold` or `emerald` lands
-near 2.3:1; `t1` on `crimson` is 3.8:1. `void` clears 4.5:1 on all four —
-gold 7.98:1, emerald 9.6:1, amber 8.8:1, crimson 4.78:1.
-
-Status chips use a tinted background rather than a solid fill:
-`bg-{status}/10 text-{status}` on cards, `/15` on darker panels.
-
----
-
-## 3. Typography
-
-Two Arabic-capable families, loaded through `next/font/google` with
-metric-matched fallbacks.
-
-| Role | Family | Token |
-|---|---|---|
-| Body, UI, tables | IBM Plex Sans Arabic | `font-sans` |
-| Headings, display | Cairo | `font-display` |
-
-`font-display` is applied by the global `h1`–`h6` rule. Do not put it on a page
-wrapper — that forces the display face onto every table cell and label.
-
-| Step | Size | Weight | Line height |
-|---|---|---|---|
-| Page title | 30px | 700 | 1.2 |
-| Section title | 24px | 700 | 1.3 |
-| Card title | 18px | 600 | 1.4 |
-| Body | 14px | 400 | 1.75 |
-| Label, caption | 12px | 500 | 1.5 |
-| Micro (table meta) | 10px | 600, uppercase, wide tracking | 1.4 |
-
-Body line height is 1.75 — Arabic needs the room.
-
----
-
-## 4. Shape, spacing, motion
-
-- **Radius:** `8px` default (`--radius`). Cards and panels `12px`. Chips and
-  badges fully rounded. Inputs and buttons `6px`.
-- **Spacing:** 4px scale. Card padding `20-24px`, table cells `12px 16px`,
-  form field gap `16px`, section gap `24px`.
-- **Motion:** `150-200ms` on colour and opacity only. No transforms on hover —
-  they shift layout in dense tables.
-- **Focus:** `1px` ring in `gold`, always visible. Never removed.
-
----
-
-## 5. Direction
-
-The document direction comes from `<html dir>`, set from the locale in
-`layout.tsx`. Nothing else sets direction — no CSS `direction` rule, no
-per-element `dir` attribute.
-
-Two exceptions where `dir="ltr"` is correct on a single element: order numbers,
-SKUs, and monetary figures rendered with Latin digits.
-
-Everything else must mirror: use logical properties and Tailwind's `ms-`/`me-`
-/`ps-`/`pe-` rather than `ml-`/`mr-`.
-
----
-
-## 6. Components
-
-**Button** — Primary is `gold` on `void`. Secondary is `surface` with a `rim1`
-border and `t2` text. Ghost is transparent, hovering to `raised`. Destructive is
-`crimson` on `t1`. One primary per view.
-
-**Input / Select / Textarea** — `card` background, `rim2` border, `t1` text,
-`t3` placeholder. Error state swaps border and ring to `crimson` and puts the
-message directly beneath in `crimson` at 12px.
-
-**Card** — `card` background, `rim1` border, `12px` radius, `20px` padding.
-
-**Table** — `surface` container, header on `surface` with a `rim1` bottom
-border, rows divided by `rim1`, hover to `raised/50`. Numeric columns are
-`ltr` and right-aligned within the RTL layout.
-
-**Status badge** — driven by `lib/statusMaps.ts`, which maps 15 domains
-(order, payment, shipment, return, purchase order, stocktaking, …) to a label
-and a status colour. Components pass `domain` and `status`; they never pick a
-colour themselves.
-
-**Dialog** — `card` panel over a `void/70` scrim, `12px` radius, max width
-`425px` for forms.
-
-**Empty state** — `t4` icon at 32px, `t2` heading, `t3` description, optional
-primary action.
-
----
-
-## 7. Layout
-
-Sidebar navigation on the inline-start edge, `surface` background, `rim1`
-divider. Section labels at 10px uppercase in `t3`. Active item takes a `gold`
-inline-start bar with `t1` text.
-
-Content area on `ink`, `24px` padding, max width `1440px`.
-
-Breakpoints follow Tailwind defaults. The sidebar collapses to a drawer under
-`768px`; tables scroll horizontally inside their own container so the page body
-never scrolls sideways.
-
----
-
-## 8. Anti-patterns
-
-Things that have actually gone wrong in this codebase, kept here so they do not
-come back:
-
-- **Default Tailwind palette classes.** `bg-gray-50`, `text-red-600`,
-  `bg-amber-100` are light-mode values. On this surface they range from washed
-  out to invisible. Use tokens.
-- **Hardcoded hex in components.** It drifts from the palette immediately and
-  cannot be re-themed.
-- **White text on gold or emerald.** ~2.3:1. Use `void`.
-- **A display font on a page wrapper.** Cairo belongs on headings.
-- **`dir` on individual elements.** Only the two numeric exceptions above.
-- **Hover transforms.** Colour transitions only.
-- **A second primary button.** Demote it to secondary.
-
----
-
-## 9. Screens
-
-The console covers: dashboard, orders (list, detail, kanban, print), products
-and variants, categories, inventory, stocktaking, purchasing, customers,
-customer segments, returns, coupons, gift cards, price lists, campaigns,
-shipping zones and rates, courier dispatch, ETA e-invoicing, integrations,
-notifications, analytics, settings, members, and platform admin.
-
-The recurring shape is: page title with a primary action on the opposite edge,
-a row of stat cards, a filter or tab strip, then a dense table with row actions
-and pagination.
+Admin console, delivery-rep screens and supplier portal for Egyptian commerce
+operations. Arabic-first, RTL by default, English through the same components.
+
+Direction (owner decision, PR-UI): **calm navy + glass**. A softly lit light
+canvas, translucent white cards, one navy hero figure per screen, large money
+figures. Dark mode is a first-class pair, not an inversion.
+
+Every value below lives in `apps/admin/src/app/[locale]/globals.css`. Components
+use tokens, never raw hex. `src/__tests__/ui/themeTokens.test.ts` pins the
+semantic palette and fails on any `var(--x)` that globals.css does not define.
+
+## 1. Colour
+
+### Semantic tokens
+
+| Token | Light | Dark | Use |
+| --- | --- | --- | --- |
+| `--canvas` | `#EEF2F8` | `#0B1220` | Page background (under the glow) |
+| `--surface` | `#FFFFFF` | `#131C2E` | Opaque surfaces: inputs, popovers, dense tables |
+| `--raised` | `#F2F5FA` | `#1B2640` | Table heads, tracks, quiet chips |
+| `--text-primary` | `#0F1B33` | `#EEF2FA` | Body and figures |
+| `--text-secondary` | `#536179` | `#A3B1C9` | Labels, captions |
+| `--accent` | `#1F3B7A` | `#8FB0F5` | Primary action, active nav, chart line |
+| `--accent-fg` | `#FFFFFF` | `#0B1220` | Text on accent |
+| `--input-border` | `#8391A8` | `#5F6F8C` | Form control borders (3:1) |
+| `--separator` | `#DDE4EF` | `#26324A` | Dividers, card rims |
+| `--success` / `-bg` | `#166534` / `#ECFDF3` | `#6EE7A0` / `#0F2A1E` | |
+| `--warning` / `-bg` | `#92400E` / `#FFF7E6` | `#FBBF5A` / `#2C2111` | |
+| `--critical` / `-bg` | `#B42318` / `#FEF3F2` | `#FCA5A5` / `#331A1F` | |
+| `--info` / `-bg` | `#1D4ED8` / `#EEF4FF` | `#93C5FD` / `#14233D` | |
+
+Measured contrast (WCAG): primary text 15.3:1 light and 16.7:1 dark; secondary
+text at least 5.6:1 on every surface; accent on white 10.7:1; every status
+colour on its own background at least 6:1; input borders at least 3.2:1.
+
+### Glass system
+
+- `--glass`, `--glass-strong`, `--glass-border`: the translucent card. Use the
+  `.glass` class. It blurs where `backdrop-filter` exists and is near-opaque
+  where it does not, so text never sits on an unreadable surface.
+- `--card-shadow`, `--float-shadow`: two elevations only. Cards rest; menus,
+  hovered cards and the tab bar float.
+- `--hero-from` / `--hero-to` / `--hero-fg` / `--hero-muted`: the navy hero.
+  Use the `.surface-hero` class.
+- `--accent-soft`, `--accent-strong`: icon tiles, hovers, and the pressed or
+  hovered primary.
+- `--canvas-glow-a` / `-b`: the two radial glows painted on `body`.
+
+Legacy aliases (`--t1..4`, `--rim*`, `--gold*`, `--card-bg`...) still resolve to
+semantic tokens, so older pages follow the palette. New code uses semantic names.
+
+## 2. Typography
+
+- IBM Plex Sans Arabic + IBM Plex Sans, weights 400/500/600.
+- Page title 1.5–1.75rem/600. Section title 0.875–1rem/600. Labels 0.75–0.875rem/500.
+- Figures use `tabular-nums`. Money is always `<Money>`: `ج.م`, Latin digits, LTR
+  isolated. Pass `emphasis` for headline figures: pounds full weight, piastres and
+  currency muted. That is presentation only; the value is formatMoney's string.
+- Headings take their colour from the base layer, so a utility on a heading wins.
+
+## 3. Shape, spacing, motion
+
+- `--card-radius` 18px (cards), `--control-radius` 12px (buttons, inputs, chips).
+  Hero balance cards use radius + 6px.
+- 4/8px rhythm. Card padding 20px (16px on phones). Grid gaps 16px, sections 24px.
+- Controls are at least 44px tall; phone actions 44–56px.
+- Motion runs 150–300ms and animates colour, shadow and opacity only. Press is
+  `scale(0.98)` on buttons. The page entrance is `.rise`, staggered about 90ms.
+  All motion stops under `prefers-reduced-motion`.
+
+## 4. Direction
+
+- Logical properties only (`ms-`, `pe-`, `start`, `inset-inline`).
+- Sidebar at inline-start: right in Arabic, left in English.
+- Order numbers, SKUs, money and percentages are LTR-isolated (`dir="ltr"` / `<bdi>`).
+- Time axes run oldest → newest left to right, the convention for charts in
+  Arabic finance UIs too.
+
+## 5. Components (`apps/admin/src/components`)
+
+| Component | Notes |
+| --- | --- |
+| Shell (`layout/CarbonShell`, `styles/carbon.scss`) | Floating glass header and sidebar. Carbon `--cds-*` tokens are remapped onto the palette. The active link is a navy pill; icons sit in soft tiles. Below 66rem the sidebar is a drawer. |
+| `ui/card` | `variant="glass"` (default), `"solid"` for dense forms and tables, `"hero"`. |
+| `ui/PageHeader` | Title card for list screens: eyebrow, title, one-line purpose, icon tile, actions. |
+| `ui/KpiCard` | Icon tile + title + drill arrow, big figure, trend pill, sparkline. `variant="hero"` once per screen. |
+| `ui/StatBox` | The smaller label-over-figure tile. |
+| `ui/FilterTabs` | URL-backed segmented chips; the active chip is a navy pill. |
+| `ui/StatusBadge` | Soft pill with a dot: status is never colour alone. |
+| `ui/table` | Quiet tinted head, accent-soft row hover. |
+| `ui/EmptyState` | Accent icon tile, one-line hint, and a primary action where one exists. |
+| `charts/AreaChart` | Server-rendered SVG: smooth line, soft fill, 3 grid lines, latest point marked, native tooltips, and an sr-only list of values. |
+| `charts/BarChart`, `charts/Sparkline` | Same accent; bars highlight the latest period. |
+| `mobile/BalanceCard` | The phone screen's headline figure on the navy hero surface. |
+| `mobile/MobileTabBar` | Phone-only (below md) floating bottom bar, 2–4 items, icon + label, follows the section in view. Pages that use it add `.pb-tabbar`; the chat launcher rises above it. |
+
+## 6. Screens
+
+- **Home:** greeting, KPI row (net sales from the ledger is the hero), 7-day orders
+  trend, order-state track, recent orders.
+- **Lists** (orders, inventory, products): `PageHeader`, then filter chips, then a
+  glass table card.
+- **Finance and analytics:** `PageHeader`, KPI cards with icons, glass chart cards.
+- **Delivery rep** (`/rep`, phone-first): custody `BalanceCard` with the handover
+  form inside, large order cards with full-width deliver and call actions, and a
+  tab bar (orders and custody).
+- **Supplier portal** (`/portal`, phone-first): a glass header, a "الباقي لك"
+  `BalanceCard` over received and paid, PO cards, and a tab bar.
+- **Supplier PO detail** (`/portal/orders/[id]`, phone-first): a navy PO card
+  (total, status, delivery date), an answer card (confirm or propose a date), one
+  card per line with ordered/shipped/received tiles, a shipped-progress bar and the
+  quantity to ship, then the shipping notice and a notice timeline.
+- **Every other admin screen** opens with `PageHeader` (the nav group as eyebrow,
+  the nav icon) and uses glass cards. The primary action is the navy button.
+- **Sign-in:** a navy mark and a glass card over the lit canvas.
+
+## 7. Anti-patterns
+
+- Two heroes on one screen, or a hero for a figure that is not the point of it.
+- Raw hex or `rgba()` in components; Tailwind palette classes (`bg-red-500`).
+- Emoji as icons. Use lucide, one stroke style.
+- Status by colour alone. Pair it with a dot, icon or label.
+- Translucent surfaces behind body text without the `.glass` fallback.
+- Animating width, height or position. Transforms that make dense rows twitch.
+- Money through `Number()` or float arithmetic for display. Render `bigint` minor
+  units through `<Money>`.
+
+## 8. Verification
+
+- `pnpm --filter @irth/admin test`: `themeTokens` (palette and undefined variables),
+  `CarbonShell` (navigation, drawer focus trap, RTL), money and states.
+- Playwright smoke (`pnpm --filter @irth/admin test:e2e`) selects by role, label,
+  Arabic text and `data-testid`, never by class, so restyles keep it green.

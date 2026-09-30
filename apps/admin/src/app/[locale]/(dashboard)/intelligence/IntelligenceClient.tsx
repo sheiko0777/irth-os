@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { BrainCircuit, PackageSearch, Send, ShoppingCart, Sparkles, Warehouse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type Locale = 'ar' | 'en';
 
@@ -85,14 +86,14 @@ function stateLabel(state: 'out' | 'low' | 'ok', labels: IntelligenceCopy['label
 function ResultCard({ card, locale, labels }: { card: Card; locale: Locale; labels: IntelligenceCopy['labels'] }) {
   if (card.type === 'sales_summary') {
     return (
-      <div className="rounded-md border border-[var(--rim1)] bg-[var(--card-bg)] p-4">
+      <div className="glass rounded-[var(--card-radius)] p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--t1)]">
           <Sparkles size={15} className="text-[var(--gold)]" />
           {card.title}
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {card.metrics.map((metric) => (
-            <div key={metric.label} className="rounded-md border border-[var(--rim1)] bg-[var(--surface)] p-3">
+            <div key={metric.label} className="glass rounded-[var(--card-radius)] p-3">
               <p className="text-xs text-[var(--t3)]">{metric.label}</p>
               <p
                 className={cn(
@@ -114,7 +115,7 @@ function ResultCard({ card, locale, labels }: { card: Card; locale: Locale; labe
   const Icon = icon;
 
   return (
-    <div className="rounded-md border border-[var(--rim1)] bg-[var(--card-bg)]">
+    <div className="glass rounded-[var(--card-radius)]">
       <div className="flex items-center gap-2 border-b border-[var(--rim1)] px-4 py-3 text-sm font-semibold text-[var(--t1)]">
         <Icon size={15} className="text-[var(--gold)]" />
         {card.title}
@@ -216,19 +217,15 @@ export function IntelligenceClient({ locale, copy }: { locale: Locale; copy: Int
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-[var(--gold-br)] bg-[var(--gold-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--gold)]">
-            <BrainCircuit size={14} />
-            IRTH Intelligence
-          </div>
-          <h1 className="text-2xl font-bold text-[var(--t1)]">{copy.title}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--t3)]">{copy.subtitle}</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="IRTH Intelligence"
+        title={copy.title}
+        description={copy.subtitle}
+        icon={<BrainCircuit />}
+      />
 
       <div className="grid min-h-[620px] gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <section className="flex min-h-0 flex-col rounded-md border border-[var(--rim1)] bg-[var(--surface)]">
+        <section className="glass rounded-[var(--card-radius)] flex min-h-0 flex-col">
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
             {messages.length === 0 ? (
               <div className="flex h-full min-h-[360px] flex-col items-center justify-center text-center">
@@ -258,7 +255,7 @@ export function IntelligenceClient({ locale, copy }: { locale: Locale; copy: Int
               ))
             )}
             {loading && (
-              <div className="inline-flex items-center gap-2 rounded-md border border-[var(--rim1)] bg-[var(--card-bg)] px-4 py-3 text-sm text-[var(--t2)]">
+              <div className="glass rounded-[var(--card-radius)] inline-flex items-center gap-2 px-4 py-3 text-sm text-[var(--t2)]">
                 <Sparkles size={14} className="text-[var(--gold)]" />
                 {copy.thinking}
               </div>

@@ -100,7 +100,7 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <div className="flex gap-2 bg-[var(--surface)] p-1 rounded-md border border-[var(--rim1)]">
+                <div className="glass rounded-[var(--card-radius)] flex gap-2 p-1">
                     {TAB_OPTIONS.map((tab) => (
                         <button
                             key={tab.value}
@@ -124,7 +124,7 @@ export default function EtaClient({ invoices: initialInvoices }: EtaClientProps)
                 </Button>
             </div>
 
-            <div className="rounded-md border border-[var(--rim1)] overflow-hidden bg-[var(--surface)]">
+            <div className="glass rounded-[var(--card-radius)] overflow-hidden">
                 <Table>
                     <TableHeader className="bg-[var(--rim1)]">
                         <TableRow>

@@ -59,7 +59,7 @@ export function NewSaleForm() {
   const base = { customerId, priceListId: priceListId || null, lines, idempotencyKey: key };
 
   return (
-    <section className="space-y-4 rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-4" aria-labelledby="new-sale-title">
+    <section className="glass rounded-[var(--card-radius)] space-y-4 p-4" aria-labelledby="new-sale-title">
       <h2 id="new-sale-title" className="font-semibold">طلب جديد</h2>
 
       <div className="grid gap-3 sm:grid-cols-2">

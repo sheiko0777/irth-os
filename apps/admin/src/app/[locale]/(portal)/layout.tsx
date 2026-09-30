@@ -25,9 +25,9 @@ export default async function PortalLayout({ children, params }: { children: Rea
   if (target) redirect(target);
 
   return (
-    <div className="min-h-dvh bg-[var(--canvas,var(--surface))]">
+    <div className="min-h-dvh">
       <PortalHeader locale={locale} supplierName={supplierName} />
-      <main id="portal-main" className="mx-auto max-w-4xl space-y-6 p-4">{children}</main>
+      <main id="portal-main" className="pb-tabbar mx-auto max-w-4xl space-y-6 px-4 pb-10 pt-2">{children}</main>
     </div>
   );
 }

@@ -58,7 +58,7 @@ export function ShopifyConnectionCard({ callbackStatus }: { callbackStatus?: str
   };
 
   return (
-    <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
           <CardTitle className="text-xl text-[var(--gold)]">تكامل Shopify والموقع</CardTitle>
@@ -99,7 +99,7 @@ export function ShopifyConnectionCard({ callbackStatus }: { callbackStatus?: str
           <p className="text-sm text-[var(--t3)]">جارِ التحميل…</p>
         ) : connection ? (
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm bg-[var(--surface)] p-4 rounded-lg border border-[var(--rim1)]">
+            <div className="glass rounded-[var(--card-radius)] grid grid-cols-1 md:grid-cols-2 gap-4 text-sm p-4">
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-[var(--t2)]">المتجر المرتبط:</span>
