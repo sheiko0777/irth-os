@@ -1,3 +1,4 @@
+import { effectiveAccess } from '@irth/db';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Context } from '@/server/trpc';
 import { auditRouter } from '@/server/routers/audit';
@@ -12,6 +13,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'admin'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 
@@ -31,7 +33,7 @@ beforeEach(() => {
 describe('audit router — immutable activity logging', () => {
   it('rejects unprivileged member roles from reading audit logs', async () => {
     const caller = auditRouter.createCaller(ctx('member'));
-    await expect(caller.list({ page: 1, pageSize: 25 })).rejects.toThrow('Admin role required');
+    await expect(caller.list({ page: 1, pageSize: 25 })).rejects.toThrow('Missing permission: audit.view');
   });
 
   it('list: returns paginated audit records with humanized labels and device parsing', async () => {

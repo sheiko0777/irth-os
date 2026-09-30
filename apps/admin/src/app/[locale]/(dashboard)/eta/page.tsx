@@ -1,5 +1,7 @@
 import { serverCaller } from '@/server/caller';
 import EtaClient, { type EtaInvoice } from './EtaClient';
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FileText } from "lucide-react";
 
 export const metadata = { title: 'فواتير ETA | IRTH' };
 
@@ -24,11 +26,13 @@ export default async function EtaPage({ params }: PageProps) {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-[var(--t1)]">الفواتير الإلكترونية (هيئة الزكاة)</h1>
-            </div>
+            <PageHeader
+              eyebrow="العمليات"
+              title={"الفواتير الإلكترونية (هيئة الزكاة)"}
+              icon={<FileText />}
+            />
 
-            <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-md p-4 text-sm text-[var(--t2)]">
+            <div className="glass rounded-[var(--card-radius)] p-4 text-sm text-[var(--t2)]">
                 <p>يتم تقديم الفواتير الإلكترونية تلقائياً لهيئة الزكاة والضريبة والجمارك (ETA) وفقاً للمتطلبات القانونية المصرية.</p>
             </div>
 

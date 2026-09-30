@@ -4,7 +4,8 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatBox } from '@/components/ui/StatBox';
-import { TrendingUp, Box, Warehouse, Globe, FileText } from 'lucide-react';
+import { TrendingUp, Box, Warehouse, Globe, FileText, BarChart3 } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { AnalyticsTabs } from './AnalyticsTabs';
 
 function fmt(n: number) {
@@ -69,11 +70,11 @@ export default async function AnalyticsPage({
       {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatBox label="طلبات اليوم" value={fmt(kpiData.ordersToday)} />
-        <StatBox label="إيرادات اليوم" value={fmtCurrency(kpiData.revenueToday)} valueClassName="text-[var(--gold)]" />
+        <StatBox label="صافي مبيعات اليوم" value={fmtCurrency(kpiData.revenueToday)} valueClassName="text-[var(--accent)]" />
         <StatBox
-          label="إيرادات الشهر"
+          label="صافي مبيعات الشهر"
           value={fmtCurrency(kpiData.revenueThisMonth)}
-          valueClassName="text-[var(--gold)]"
+          valueClassName="text-[var(--accent)]"
           trailing={<GrowthBadge pct={kpiData.revenueGrowth} />}
         />
         <StatBox
@@ -84,9 +85,9 @@ export default async function AnalyticsPage({
       </div>
 
       {/* Revenue Chart */}
-      <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
+      <div className="glass rounded-[var(--card-radius)] p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-lg text-[var(--t1)]">الإيرادات — آخر 14 يوم</h2>
+          <h2 className="font-semibold text-lg text-[var(--t1)]">صافي المبيعات — آخر 14 يوم (من القيود، بدون الضريبة)</h2>
           <span className="text-sm text-[var(--t2)]">الطلبات المسلمة فقط</span>
         </div>
         {revenueChartData.length === 0 ? (
@@ -99,7 +100,7 @@ export default async function AnalyticsPage({
           <BarChart
             data={revenueChartData}
             height={200}
-            color="var(--gold)"
+            color="var(--accent)"
             formatValue={fmtCurrency}
           />
         )}
@@ -125,7 +126,7 @@ export default async function AnalyticsPage({
       {/* Top Products + Inventory side-by-side on larger screens */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Top Products */}
-        <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
+        <div className="glass rounded-[var(--card-radius)] p-6">
           <h2 className="font-semibold text-lg text-[var(--t1)] mb-4">أفضل المنتجات</h2>
           {topProducts.length === 0 ? (
             <EmptyState
@@ -160,7 +161,7 @@ export default async function AnalyticsPage({
         </div>
 
         {/* Inventory Turnover */}
-        <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
+        <div className="glass rounded-[var(--card-radius)] p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-lg text-[var(--t1)]">حركة المخزون</h2>
             <span className="text-xs text-[var(--t2)]">آخر 30 يوم</span>
@@ -205,14 +206,14 @@ export default async function AnalyticsPage({
       </div>
 
       {/* Orders summary row */}
-      <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-4">
+      <div className="glass rounded-[var(--card-radius)] p-4">
         <div className="flex items-center gap-6 text-sm">
           <div>
             <span className="text-[var(--t2)]">إجمالي الطلبات: </span>
             <span className="font-bold text-[var(--t1)]">{fmt(kpiData.totalOrders)}</span>
           </div>
           <div>
-            <span className="text-[var(--t2)]">إيرادات الشهر الحالي: </span>
+            <span className="text-[var(--t2)]">صافي مبيعات الشهر الحالي: </span>
             <span className="font-bold text-[var(--gold)]">{fmtCurrency(kpiData.revenueThisMonth)}</span>
             {kpiData.revenueGrowth !== null && (
               <span className="ms-2">
@@ -228,7 +229,7 @@ export default async function AnalyticsPage({
   const sourcesContent = (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* Traffic Sources */}
-      <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
+      <div className="glass rounded-[var(--card-radius)] p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-lg text-[var(--t1)] flex items-center gap-2">
             <Globe className="w-5 h-5 text-[var(--gold)]" />
@@ -265,7 +266,7 @@ export default async function AnalyticsPage({
       </div>
 
       {/* Top Viewed Pages */}
-      <div className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-6">
+      <div className="glass rounded-[var(--card-radius)] p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-lg text-[var(--t1)] flex items-center gap-2">
             <FileText className="w-5 h-5 text-[var(--gold)]" />
@@ -303,7 +304,12 @@ export default async function AnalyticsPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">التقارير والتحليلات وسلوك العملاء</h1>
+      <PageHeader
+        eyebrow="المالية والتقارير"
+        title="التقارير والتحليلات وسلوك العملاء"
+        description="المبيعات من القيود، وأفضل المنتجات، ومصادر الزيارات."
+        icon={<BarChart3 />}
+      />
 
       <AnalyticsTabs
         initialTab={tab === 'carts' ? 'carts' : 'sales'}

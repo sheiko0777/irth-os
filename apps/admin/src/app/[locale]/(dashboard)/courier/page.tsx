@@ -1,5 +1,7 @@
 import { serverCaller } from "@/server/caller";
 import CourierClient, { type CourierShipment, type CourierRemittance } from "./CourierClient";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Truck } from "lucide-react";
 
 export const metadata = { title: 'تسوية COD | IRTH' };
 
@@ -28,9 +30,11 @@ export default async function CourierPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-[var(--t1)]">التسوية والشحن (COD)</h1>
-            </div>
+            <PageHeader
+              eyebrow="العمليات"
+              title={"التسوية والشحن (COD)"}
+              icon={<Truck />}
+            />
 
             <CourierClient
                 summary={summary}

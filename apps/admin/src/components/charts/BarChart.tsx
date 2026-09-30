@@ -5,10 +5,10 @@ interface BarChartProps {
   formatValue?: (v: number) => string;
 }
 
-export function BarChart({ data, height = 180, color = 'var(--gold)', formatValue }: BarChartProps) {
+export function BarChart({ data, height = 180, color = 'var(--accent)', formatValue }: BarChartProps) {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center text-[var(--t3)] text-sm" style={{ height }}>
+      <div className="flex items-center justify-center text-[var(--text-secondary)] text-sm" style={{ height }}>
         لا توجد بيانات
       </div>
     );
@@ -16,7 +16,7 @@ export function BarChart({ data, height = 180, color = 'var(--gold)', formatValu
 
   const max = Math.max(...data.map((d) => d.value), 1);
   const barWidth = 100 / data.length;
-  const padPct = barWidth * 0.15;
+  const padPct = barWidth * 0.2;
 
   return (
     <div style={{ height }} className="w-full" aria-label="bar chart">
@@ -27,6 +27,9 @@ export function BarChart({ data, height = 180, color = 'var(--gold)', formatValu
         style={{ height: height - 24 }}
         role="img"
       >
+        {[25, 50, 75].map((y) => (
+          <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="var(--separator)" strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+        ))}
         {data.map((d, i) => {
           const barH = (d.value / max) * 92;
           const x = i * barWidth + padPct;
@@ -39,13 +42,15 @@ export function BarChart({ data, height = 180, color = 'var(--gold)', formatValu
               width={w}
               height={barH}
               fill={color}
-              rx="1"
-              opacity="0.85"
-            />
+              rx="1.2"
+              opacity={i === data.length - 1 ? 1 : 0.55}
+            >
+              {formatValue && <title>{`${d.label}: ${formatValue(d.value)}`}</title>}
+            </rect>
           );
         })}
       </svg>
-      <div className="flex justify-between text-[10px] text-[var(--t3)] mt-1 overflow-hidden">
+      <div className="flex justify-between text-[10px] text-[var(--text-secondary)] mt-1 overflow-hidden">
         {data.map((d, i) => (
           <span key={i} className="truncate text-center" style={{ width: `${barWidth}%` }}>
             {d.label}

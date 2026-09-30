@@ -1,6 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { serverCaller } from "@/server/caller";
 import { SettingsForm } from "./SettingsForm";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Settings } from "lucide-react";
 // No explicit React import!
 
 export default async function SettingsPage() {
@@ -13,7 +15,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+      <PageHeader
+        eyebrow="الإعدادات والرقابة"
+        title={t("title")}
+        icon={<Settings />}
+      />
       <SettingsForm initialSettings={initialSettings} />
     </div>
   );

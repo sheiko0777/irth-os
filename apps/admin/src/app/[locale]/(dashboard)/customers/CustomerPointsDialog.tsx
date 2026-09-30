@@ -75,7 +75,7 @@ export default function CustomerPointsDialog({ customerId, customerName, current
       <Button variant="outline" size="sm" onClick={() => setIsOpen(true)}>{t('actions.points')}</Button>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsOpen(false)}>
-          <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+          <div className="glass rounded-[var(--card-radius)] p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-1">{t('pointsDialog.title')}</h2>
             <p className="text-sm text-[var(--t2)] mb-4">
               {t('pointsDialog.currentBalancePrefix', { name: customerName ?? t('fields.customer') })} <span className="text-[var(--gold)] font-bold">{t('pointsDialog.pointsValue', { points: currentPoints ?? 0 })}</span>

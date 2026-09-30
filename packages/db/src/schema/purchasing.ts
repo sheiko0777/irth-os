@@ -1,4 +1,5 @@
-import { pgTable, uuid, timestamp, text, bigint, char, integer, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, text, bigint, char, integer, uniqueIndex, index, check } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { organizations } from '../schema';
 
 export const suppliers = pgTable('suppliers', {
@@ -26,6 +27,13 @@ export const purchaseOrders = pgTable('purchase_orders', {
   currency: char('currency', { length: 3 }).notNull().default('EGP'),
   orderedAt: timestamp('ordered_at'),
   receivedAt: timestamp('received_at'),
+  // 0079: the supplier's side, set from the supplier portal. A proposed date
+  // waits for the buyer; expected_delivery_at is the agreed one.
+  supplierStatus: text('supplier_status').$type<'pending' | 'confirmed' | 'date_proposed'>().notNull().default('pending'),
+  expectedDeliveryAt: timestamp('expected_delivery_at'),
+  proposedDeliveryAt: timestamp('proposed_delivery_at'),
+  supplierNote: text('supplier_note'),
+  supplierRespondedAt: timestamp('supplier_responded_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => [
@@ -49,3 +57,49 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   unitCostMinor: bigint('unit_cost_minor', { mode: 'bigint' }),
   receivedQuantity: integer('received_quantity').default(0),
 });
+
+// ---------------------------------------------------------------------------
+// 0079 (PR-3): shipping notices from the supplier portal, and payments to
+// suppliers. Both append-only; the composite same-org FKs and the supplier
+// policies live in the migration.
+// ---------------------------------------------------------------------------
+
+export const purchaseOrderShipments = pgTable('purchase_order_shipments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
+  poId: uuid('po_id').notNull(),
+  shippedAt: timestamp('shipped_at').notNull(),
+  expectedArrivalAt: timestamp('expected_arrival_at'),
+  reference: text('reference'),
+  note: text('note'),
+  createdByMemberId: uuid('created_by_member_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [index('purchase_order_shipments_org_po_idx').on(t.orgId, t.poId)]);
+
+export const purchaseOrderShipmentItems = pgTable('purchase_order_shipment_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
+  shipmentId: uuid('shipment_id').notNull(),
+  poItemId: uuid('po_item_id').notNull(),
+  quantity: integer('quantity').notNull(),
+}, (t) => [
+  index('purchase_order_shipment_items_org_shipment_idx').on(t.orgId, t.shipmentId),
+  check('purchase_order_shipment_items_quantity_check', sql`${t.quantity} > 0`),
+]);
+
+export const supplierPayments = pgTable('supplier_payments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id),
+  supplierId: uuid('supplier_id').notNull(),
+  poId: uuid('po_id'),
+  amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+  currency: char('currency', { length: 3 }).notNull(),
+  method: text('method').$type<'cash' | 'bank'>().notNull(),
+  reference: text('reference'),
+  paidAt: timestamp('paid_at').defaultNow().notNull(),
+  journalEntryId: uuid('journal_entry_id').notNull(),
+  createdBy: text('created_by'),
+}, (t) => [
+  index('supplier_payments_org_supplier_idx').on(t.orgId, t.supplierId),
+  check('supplier_payments_amount_check', sql`${t.amountMinor} > 0`),
+]);

@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import { db } from '../db';
-import { resolveActiveOrgMembership } from '@irth/db';
+import { resolveActiveOrgMembership, resolveEffectiveAccess } from '@irth/db';
 import { auth } from '../auth';
 // Kept in its own module so the predicate can be tested without importing
 // `../auth`, which initializes a database adapter at import time.
@@ -38,9 +38,14 @@ export const authContext = (): MiddlewareHandler => async (c, next) => {
   // their own copy of the same "first membership wins" query independently).
   const membership = await resolveActiveOrgMembership(db, userId);
 
-  if (membership) {
+  // A suspended member is treated exactly like one with no membership: no
+  // orgId, so every org-scoped route refuses them at requireOrgId.
+  const access = membership ? await resolveEffectiveAccess(db, membership.orgId, userId) : null;
+
+  if (membership && access && !access.suspended) {
     c.set('orgId', membership.orgId);
     c.set('role', membership.role);
+    c.set('access', access);
   }
 
   await next();

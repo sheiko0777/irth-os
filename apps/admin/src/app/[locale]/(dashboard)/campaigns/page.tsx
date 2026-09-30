@@ -21,7 +21,7 @@ export default async function CampaignsPage() {
     const summary = (summaryRes.data ?? { total: 0, sent: 0, inProgress: 0, totalDelivered: 0 }) as CampaignSummary;
 
     return (
-      <div className="p-6">
+      <div>
         <CampaignsClient initialData={initialData} summary={summary} />
       </div>
     );

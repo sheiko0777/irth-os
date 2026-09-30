@@ -139,15 +139,15 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
         <div className="space-y-6">
             {/* Summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-md p-6 flex flex-col justify-center items-center">
+                <div className="glass rounded-[var(--card-radius)] p-6 flex flex-col justify-center items-center">
                     <p className="text-sm text-[var(--t2)] mb-2">إجمالي الشحنات</p>
                     <p className="text-3xl font-bold text-[var(--t1)]">{summary.totalShipments}</p>
                 </div>
-                <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-md p-6 flex flex-col justify-center items-center">
+                <div className="glass rounded-[var(--card-radius)] p-6 flex flex-col justify-center items-center">
                     <p className="text-sm text-[var(--t2)] mb-2">تسويات معلقة (Pending COD)</p>
                     <p className="text-3xl font-bold text-[var(--gold)]">{summary.pendingCod} ج.م</p>
                 </div>
-                <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-md p-6 flex flex-col justify-center items-center">
+                <div className="glass rounded-[var(--card-radius)] p-6 flex flex-col justify-center items-center">
                     <p className="text-sm text-[var(--t2)] mb-2">إجمالي المسدد (Remitted COD)</p>
                     <p className="text-3xl font-bold text-[var(--emerald)]">{summary.remittedCod} ج.م</p>
                 </div>
@@ -194,7 +194,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                         </Button>
                     </div>
 
-                    <div className="rounded-md border border-[var(--rim1)] overflow-hidden bg-[var(--surface)]">
+                    <div className="glass rounded-[var(--card-radius)] overflow-hidden">
                         <Table>
                             <TableHeader className="bg-[var(--rim1)]">
                                 <TableRow>
@@ -338,7 +338,7 @@ export default function CourierClient({ summary, initialShipments, initialRemitt
                         </Dialog>
                     </div>
 
-                    <div className="rounded-md border border-[var(--rim1)] overflow-hidden bg-[var(--surface)]">
+                    <div className="glass rounded-[var(--card-radius)] overflow-hidden">
                         <Table>
                             <TableHeader className="bg-[var(--rim1)]">
                                 <TableRow>

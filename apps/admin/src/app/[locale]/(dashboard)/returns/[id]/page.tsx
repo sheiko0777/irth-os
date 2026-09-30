@@ -33,11 +33,11 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
           <Link href={`/${locale}/returns`} className="text-[var(--t2)] hover:text-[var(--t1)]">
             &larr; عودة (Back)
           </Link>
-          <h1 className="text-2xl font-bold text-[var(--t1)]">تفاصيل المرتجع (Return Details)</h1>
+          <h1 className="text-[1.5rem] font-semibold leading-tight tracking-tight">تفاصيل المرتجع (Return Details)</h1>
         </div>
       </div>
 
-      <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 flex flex-col gap-4">
+      <div className="glass rounded-[var(--card-radius)] p-6 flex flex-col gap-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <h3 className="text-[var(--t2)] text-sm">رقم المرتجع (Return Number)</h3>
@@ -80,7 +80,7 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
       <div className="flex flex-col md:flex-row gap-6">
         <div className="flex-grow flex flex-col gap-4">
           <h2 className="text-xl font-bold text-[var(--t1)]">العناصر (Items)</h2>
-          <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg overflow-hidden">
+          <div className="glass rounded-[var(--card-radius)] overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-start">
                 <thead className="text-xs text-[var(--t2)] bg-[var(--surface)] border-b border-[var(--rim1)]">
@@ -127,7 +127,7 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
 
         <div className="w-full md:w-80 flex-shrink-0">
           <h2 className="text-xl font-bold text-[var(--t1)] mb-4">الإجراءات (Actions)</h2>
-          <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-4">
+          <div className="glass rounded-[var(--card-radius)] p-4">
             <UpdateStatusForm
               returnId={returnObj.id}
               currentStatus={returnObj.status}

@@ -1,4 +1,5 @@
-import { router, protectedProcedure, adminProcedure } from '../trpc';
+import { router, requirePermission } from '../trpc';
+import { brandScope } from '../scopes';
 import { orders, customers, inventoryItems, productVariants, products, orderStatusEnum, withAudit,
          emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
          postOrderDeliveredEntry } from '@irth/db';
@@ -6,7 +7,7 @@ import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 export const bulkRouter = router({
-    bulkUpdateOrderStatus: adminProcedure
+    bulkUpdateOrderStatus: requirePermission('orders', 'write')
         .input(z.object({
             ids: z.array(z.string().uuid()).min(1).max(100),
             status: z.enum(orderStatusEnum.enumValues),
@@ -62,6 +63,10 @@ export const bulkRouter = router({
                                 WHERE id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
                                   AND org_id = ${ctx.orgId}
                                   AND status != ${status}
+                                  -- Same guard as transitionOrderStatus: a blocked
+                                  -- import (0073) has no items, so it may only be
+                                  -- cancelled. Skipped rows are not in RETURNING.
+                                  AND (import_status = 'complete' OR ${status} = 'cancelled')
                                 FOR UPDATE
                             )
                             UPDATE orders
@@ -131,7 +136,7 @@ export const bulkRouter = router({
             return { data: { updated: changed }, error: null, meta: null };
         }),
 
-    exportOrders: protectedProcedure
+    exportOrders: requirePermission('orders', 'export')
         .input(z.object({
             startDate: z.string(),
             endDate: z.string(),
@@ -146,7 +151,7 @@ export const bulkRouter = router({
             ];
             if (status) conditions.push(eq(orders.status, status));
 
-            const rows = await ctx.db
+            const rows = await ctx.withOrg((tx) => tx
                 .select({
                     orderNumber: orders.orderNumber,
                     customerName: customers.name,
@@ -158,14 +163,14 @@ export const bulkRouter = router({
                 .from(orders)
                 .leftJoin(customers, eq(orders.customerId, customers.id))
                 .where(and(...conditions))
-                .limit(5000);
+                .limit(5000));
 
             return { data: rows, error: null, meta: null };
         }),
 
-    exportInventory: protectedProcedure
+    exportInventory: requirePermission('inventory', 'export')
         .query(async ({ ctx }) => {
-            const rows = await ctx.db
+            const rows = await ctx.withOrg((tx) => tx
                 .select({
                     productName: products.name,
                     variantName: productVariants.name,
@@ -177,15 +182,15 @@ export const bulkRouter = router({
                 .from(inventoryItems)
                 .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
                 .innerJoin(products, eq(productVariants.productId, products.id))
-                .where(eq(inventoryItems.orgId, ctx.orgId))
-                .limit(5000);
+                .where(and(eq(inventoryItems.orgId, ctx.orgId), brandScope(ctx, products.brandId)))
+                .limit(5000));
 
             return { data: rows, error: null, meta: null };
         }),
 
-    exportCustomers: protectedProcedure
+    exportCustomers: requirePermission('customers', 'export')
         .query(async ({ ctx }) => {
-            const rows = await ctx.db
+            const rows = await ctx.withOrg((tx) => tx
                 .select({
                     name: customers.name,
                     email: customers.email,
@@ -197,7 +202,7 @@ export const bulkRouter = router({
                 })
                 .from(customers)
                 .where(eq(customers.orgId, ctx.orgId))
-                .limit(5000);
+                .limit(5000));
 
             return { data: rows, error: null, meta: null };
         }),

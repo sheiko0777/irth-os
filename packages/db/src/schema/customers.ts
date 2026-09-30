@@ -17,6 +17,9 @@ export const customers = pgTable('customers', {
   totalOrders: integer('total_orders').notNull().default(0),
   totalSpentMinor: bigint('total_spent_minor', { mode: 'bigint' }).notNull().default(0n),
   notes: text('notes'),
+  // 0078. The sales rep (org_members.id) who looks after this customer. A
+  // sales rep sees only their own (customers_sales_rep_scope).
+  salesRepMemberId: uuid('sales_rep_member_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

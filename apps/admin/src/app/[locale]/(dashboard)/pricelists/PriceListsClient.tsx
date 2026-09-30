@@ -12,6 +12,7 @@ import { formatDate } from '@irth/domain';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { List } from 'lucide-react';
+import { PageHeader } from "@/components/ui/PageHeader";
 
 
 export type PriceList = {
@@ -108,17 +109,18 @@ export default function PriceListsClient({ initialData }: { initialData: PriceLi
 
 
     return (
-        <div className="p-6" style={{ backgroundColor: 'var(--surface)' }}>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold" style={{ color: 'var(--t1)' }}>قوائم الأسعار</h1>
-                <button
+        <div className="space-y-6">
+            <PageHeader
+              eyebrow="المالية والتقارير"
+              title={"قوائم الأسعار"}
+              icon={<List />}
+              actions={<><button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="px-4 py-2 rounded-md text-void"
-                    style={{ backgroundColor: 'var(--emerald)' }}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--control-radius)] bg-[var(--accent)] px-4 text-sm font-medium text-[var(--accent-fg)] shadow-[0_8px_18px_-10px_var(--accent)] transition-colors hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
                 >
                     + قائمة أسعار جديدة
-                </button>
-            </div>
+                </button></>}
+            />
 
             <div className="overflow-x-auto rounded-lg" style={{ border: '1px solid var(--rim1)' }}>
                 <table className="w-full text-start" style={{ color: 'var(--t2)' }}>

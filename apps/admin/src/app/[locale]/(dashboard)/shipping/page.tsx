@@ -1,5 +1,7 @@
 import { serverCaller } from '@/server/caller';
 import { ShippingClient, type ShippingZone } from './ShippingClient';
+import { PageHeader } from "@/components/ui/PageHeader";
+import { MapPin } from "lucide-react";
 
 export const metadata = { title: 'مناطق الشحن | IRTH' };
 
@@ -18,10 +20,12 @@ export default async function ShippingPage() {
   const zones = zonesRes.data as unknown as ShippingZone[];
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--t1)]">مناطق الشحن والأسعار</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="العمليات"
+        title={"مناطق الشحن والأسعار"}
+        icon={<MapPin />}
+      />
       <ShippingClient zones={zones} />
     </div>
   );

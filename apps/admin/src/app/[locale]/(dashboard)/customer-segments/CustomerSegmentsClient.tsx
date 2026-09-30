@@ -6,6 +6,8 @@ import { SegmentList } from './SegmentList';
 import { SegmentMembersPanel } from './SegmentMembersPanel';
 import { CreateSegmentModal } from './CreateSegmentModal';
 import { useTranslations } from 'next-intl';
+import { PageHeader } from "@/components/ui/PageHeader";
+import { UsersRound } from "lucide-react";
 
 export type CustomerSegment = {
   id: string;
@@ -107,19 +109,19 @@ export default function CustomerSegmentsClient({ initialSegments }: Props) {
   };
 
   return (
-    <div className="p-6" style={{ color: 'var(--t1)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', marginBottom: '4px' }}>{t('title')}</h1>
-          <p style={{ fontSize: '13px', color: 'var(--t2)' }}>{t('subtitle')}</p>
-        </div>
-        <button
-          className="bg-[var(--gold)] text-void border-none rounded-lg px-[18px] py-2 text-[13px] font-semibold cursor-pointer"
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="عام"
+        title={t('title')}
+        description={t('subtitle')}
+        icon={<UsersRound />}
+        actions={<><button
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--control-radius)] bg-[var(--accent)] px-4 text-sm font-medium text-[var(--accent-fg)] shadow-[0_8px_18px_-10px_var(--accent)] transition-colors hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
           onClick={() => setShowCreate(true)}
         >
           {t('actions.new')}
-        </button>
-      </div>
+        </button></>}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: activeSegment ? '1fr 1.6fr' : '1fr', gap: '20px' }}>
         <SegmentList

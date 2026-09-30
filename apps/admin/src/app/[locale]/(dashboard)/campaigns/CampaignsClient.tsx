@@ -11,6 +11,8 @@ import { FormDialog } from '@/components/ui/FormDialog';
 import { useTranslations } from 'next-intl';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { statusLabel } from '@/lib/statusMaps';
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Megaphone } from "lucide-react";
 
 export type Campaign = {
   id: string;
@@ -120,21 +122,20 @@ export default function CampaignsClient({
   ];
 
   return (
-    <div className="p-6" style={{ color: 'var(--t1)' }}>
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">{t('title')}</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--t2)' }}>{t('subtitle')}</p>
-        </div>
-        <button
+      <PageHeader
+        eyebrow="المالية والتقارير"
+        title={t('title')}
+        description={t('subtitle')}
+        icon={<Megaphone />}
+        actions={<><button
           onClick={() => setIsCreateOpen(true)}
-          className="px-4 py-2 rounded-lg font-semibold text-sm"
-          style={{ background: 'var(--gold)', color: 'var(--void)' }}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--control-radius)] bg-[var(--accent)] px-4 text-sm font-medium text-[var(--accent-fg)] shadow-[0_8px_18px_-10px_var(--accent)] transition-colors hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
         >
           {t('actions.new')}
-        </button>
-      </div>
+        </button></>}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

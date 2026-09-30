@@ -33,7 +33,7 @@ export function RatesTable({ zoneId }: Props) {
   const rates = (ratesQuery.data as unknown as ShippingRate[]) ?? [];
 
   return (
-    <div className="rounded-md border border-[var(--rim1)] bg-[var(--surface)]">
+    <div className="glass rounded-[var(--card-radius)]">
       <Table>
         <TableHeader>
           <TableRow>

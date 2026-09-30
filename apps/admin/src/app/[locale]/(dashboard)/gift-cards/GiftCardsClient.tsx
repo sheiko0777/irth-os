@@ -30,6 +30,8 @@ export type GiftCardSummary = {
 
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { StatBox } from '@/components/ui/StatBox';
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Gift } from "lucide-react";
 
 // Was a local parseFloat formatter. The shared one renders the localized currency symbol rather than the
 // raw currency code and groups the digits the same way every other screen does.
@@ -102,19 +104,18 @@ export default function GiftCardsClient({
   return (
     <div>
       {/* Header */}
-      <div className='flex items-center justify-between mb-6'>
-        <div>
-          <h1 className='text-2xl font-bold text-[var(--t1)]'>{t('title')}</h1>
-          <p className='text-sm text-[var(--t2)] mt-1'>{t('subtitle')}</p>
-        </div>
-        <button
+      <PageHeader
+        eyebrow="المالية والتقارير"
+        title={t('title')}
+        description={t('subtitle')}
+        icon={<Gift />}
+        actions={<><button
           onClick={() => setShowCreate(true)}
-          className='rounded-lg px-4 py-2 text-sm font-medium text-void'
-          style={{ background: 'var(--gold)' }}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--control-radius)] bg-[var(--accent)] px-4 text-sm font-medium text-[var(--accent-fg)] shadow-[0_8px_18px_-10px_var(--accent)] transition-colors hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
         >
           {t('actions.issue')}
-        </button>
-      </div>
+        </button></>}
+      />
 
       {/* Stats */}
       <div className='grid grid-cols-2 gap-4 md:grid-cols-4 mb-6'>
@@ -125,7 +126,7 @@ export default function GiftCardsClient({
       </div>
 
       {/* Table */}
-      <div className='rounded-xl border border-[var(--rim1)] bg-[var(--surface)] overflow-hidden'>
+      <div className='glass rounded-[var(--card-radius)] overflow-hidden'>
         <div className='overflow-x-auto'>
           <table className='w-full text-sm'>
             <thead>

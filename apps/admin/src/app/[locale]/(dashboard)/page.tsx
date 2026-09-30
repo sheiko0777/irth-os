@@ -1,4 +1,4 @@
-import { formatDate, formatMoney, fromMinor } from "@irth/domain";
+import { formatDate } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -8,9 +8,11 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { PipelineBar } from "@/components/ui/PipelineBar";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
-  ShoppingCart, DollarSign, Clock, Package,
-  ArrowLeft, TrendingUp,
+  ShoppingCart, Wallet, Clock, Package,
+  ArrowLeft, TrendingUp, Receipt,
 } from "lucide-react";
+import { AreaChart } from "@/components/charts/AreaChart";
+import { Money } from "@/components/ui/Money";
 import Link from "next/link";
 
 export const revalidate = 60;
@@ -65,15 +67,27 @@ export default async function DashboardPage({
   } = stats.data;
   const recentOrders = recent.data ?? [];
 
+  // The week behind the sparklines, as day names: oldest first, ending today
+  // (the router's window is today minus six days, in UTC).
+  const weekLabels = series.orders.map((_, i) => {
+    const day = new Date();
+    day.setUTCDate(day.getUTCDate() - (series.orders.length - 1 - i));
+    return formatDate(day, { dateTimeOptions: { weekday: "short" } });
+  });
+  const firstName = String(sessionData.user?.name ?? "").split(" ")[0];
+
   return (
-    <div className="space-y-8">
-      {/* Page title */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Greeting */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--t1)]">
+          <p className="text-sm text-[var(--text-secondary)]">
+            {firstName ? `أهلاً، ${firstName}` : "أهلاً بيك"}
+          </p>
+          <h1 className="mt-1 text-[1.75rem] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">
             {t("title")}
           </h1>
-          <p className="text-sm text-[var(--t3)] mt-1">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             مرحباً بك في نظام إرث — اليوم{" "}
             {formatDate(new Date(), {
               dateTimeOptions: { weekday: "long", year: "numeric", month: "long", day: "numeric" },
@@ -82,32 +96,29 @@ export default async function DashboardPage({
         </div>
         <Link
           href={`/${locale}/orders`}
-          className="flex items-center gap-1.5 text-xs text-[var(--gold)] hover:text-[var(--gold2)] transition-colors font-medium"
+          className="inline-flex min-h-11 items-center gap-2 rounded-[var(--control-radius)] bg-[var(--accent)] px-4 text-sm font-medium text-[var(--accent-fg)] shadow-[0_8px_18px_-10px_var(--accent)] transition-colors hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
         >
-          <TrendingUp size={13} />
+          <TrendingUp size={16} aria-hidden="true" />
           عرض كل الطلبات
         </Link>
       </div>
 
       {/*
-        Revenue is the one hero card. Gold fills exactly two things in this
-        console — this card and the active nav bar — so the other three stay
-        neutral rather than each taking a decorative hue.
-        Sparklines and deltas only appear on the flow metrics; pending orders
-        and active products are stocks, and a day-over-day delta on a stock
-        would be meaningless.
+        Net sales is the one navy hero. Sparklines and deltas only appear on the
+        flow metrics; pending orders and active products are stocks, and a
+        day-over-day delta on a stock would be meaningless.
       */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 rise">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 rise">
         <KpiCard
           id="revenue"
           variant="hero"
           title={t("revenueToday")}
-          value={formatMoney(revenueToday, { digits: 'latin' })}
+          value={<Money minor={revenueToday.minor} currency={revenueToday.currency} emphasis data-testid="revenue-today" />}
           sub="الإيراد من الطلبات المسلَّمة"
           trend={deltas.revenueToday}
           series={series.revenue}
           href={`/${locale}/finance`}
-          icon={<DollarSign size={16} />}
+          icon={<Wallet />}
         />
         <KpiCard
           id="orders"
@@ -117,7 +128,7 @@ export default async function DashboardPage({
           trend={deltas.ordersToday}
           series={series.orders}
           href={`/${locale}/orders`}
-          icon={<ShoppingCart size={16} />}
+          icon={<ShoppingCart />}
         />
         <KpiCard
           id="pending"
@@ -125,7 +136,7 @@ export default async function DashboardPage({
           value={pendingOrders.toLocaleString("ar-EG-u-nu-latn")}
           sub="في انتظار المراجعة"
           href={`/${locale}/orders`}
-          icon={<Clock size={16} />}
+          icon={<Clock />}
         />
         <KpiCard
           id="products"
@@ -133,36 +144,55 @@ export default async function DashboardPage({
           value={activeProducts.toLocaleString("ar-EG-u-nu-latn")}
           sub="منتجات متاحة للبيع"
           href={`/${locale}/products`}
-          icon={<Package size={16} />}
+          icon={<Package />}
         />
       </div>
 
-      {/* One entrance sequence, ~90ms apart: KPI row, then the state track,
-          then the table. Enough to establish reading order, not enough to make
-          an operator wait. Collapses to instant under reduced motion. */}
-      <div className="rise" style={{ animationDelay: '90ms' }}>
+      {/* One entrance sequence, ~90ms apart: KPI row, then the trend and the
+          state track, then the table. Collapses to instant under reduced motion. */}
+      <div className="grid gap-4 lg:grid-cols-3 rise" style={{ animationDelay: "90ms" }}>
+        <section aria-labelledby="orders-trend" className="glass rounded-[var(--card-radius)] p-5 lg:col-span-2">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h2 id="orders-trend" className="text-sm font-semibold text-[var(--text-primary)]">
+                الطلبات — آخر 7 أيام
+              </h2>
+              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">عدد الطلبات الجديدة كل يوم</p>
+            </div>
+            <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--accent)] tabular-nums" dir="ltr">
+              {series.orders.reduce((a, b) => a + b, 0).toLocaleString("ar-EG-u-nu-latn")}
+            </span>
+          </div>
+          <AreaChart
+            id="orders-week"
+            title="عدد الطلبات في آخر 7 أيام"
+            height={180}
+            data={series.orders.map((value, i) => ({ label: weekLabels[i], value }))}
+          />
+        </section>
         <PipelineBar data={pipeline} />
       </div>
 
       {/* Recent Orders */}
-      <div
-        className="rise rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)] overflow-hidden"
-        style={{ animationDelay: '180ms' }}
+      <section
+        aria-labelledby="recent-orders"
+        className="rise glass overflow-hidden rounded-[var(--card-radius)]"
+        style={{ animationDelay: "180ms" }}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--rim1)]">
-          <h2 className="text-sm font-semibold text-[var(--t1)]">آخر الطلبات</h2>
+        <div className="flex items-center justify-between px-5 py-4">
+          <h2 id="recent-orders" className="text-sm font-semibold text-[var(--text-primary)]">آخر الطلبات</h2>
           <Link
             href={`/${locale}/orders`}
-            className="flex items-center gap-1 text-xs text-[var(--t3)] hover:text-[var(--gold)] transition-colors"
+            className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]"
           >
             عرض الكل
-            <ArrowLeft size={12} />
+            <ArrowLeft size={12} aria-hidden="true" />
           </Link>
         </div>
 
         {recent.error ? (
           // A failed recent-orders query is not "no orders yet".
-          <p role="alert" data-testid="recent-orders-error" className="px-6 py-8 text-sm text-[var(--crimson)]">
+          <p role="alert" data-testid="recent-orders-error" className="px-6 py-8 text-sm text-[var(--critical)]">
             {tCommon("section")}
           </p>
         ) : recentOrders.length === 0 ? (
@@ -173,56 +203,51 @@ export default async function DashboardPage({
             action={{ label: 'فتح صفحة الطلبات', href: `/${locale}/orders` }}
           />
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--rim1)]">
-                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
-                  رقم الطلب
-                </th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
-                  الحالة
-                </th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
-                  الإجمالي
-                </th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-[var(--t3)] uppercase tracking-wide">
-                  التاريخ
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--rim1)]">
-              {recentOrders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="hover:bg-[var(--raised)] transition-colors group"
-                >
-                  <td className="px-5 py-3.5 font-mono text-xs text-[var(--gold)] font-medium">
-                    <Link
-                      href={`/${locale}/orders/${order.id}`}
-                      className="hover:underline underline-offset-2"
-                    >
-                      {order.orderNumber}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <StatusBadge status={order.status} domain="order" />
-                  </td>
-                  <td className="px-5 py-3.5 text-[var(--t1)] font-medium tabular-nums" dir="ltr">
-                    {formatMoney(fromMinor(order.totalAmountMinor), { digits: 'latin' })}
-                  </td>
-                  <td className="px-5 py-3.5 text-[var(--t3)] text-xs">
-                    {order.createdAt
-                      ? formatDate(order.createdAt, {
-                          dateTimeOptions: { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" },
-                        })
-                      : "—"}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-[var(--raised)]/60">
+                <tr>
+                  {["رقم الطلب", "الحالة", "الإجمالي", "التاريخ"].map((h) => (
+                    <th key={h} scope="col" className="px-5 py-3 text-start text-xs font-semibold text-[var(--text-secondary)]">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-[var(--separator)]">
+                {recentOrders.map((order) => (
+                  <tr key={order.id} className="transition-colors hover:bg-[var(--accent-soft)]">
+                    <td className="px-5 py-3.5">
+                      <Link
+                        href={`/${locale}/orders/${order.id}`}
+                        className="inline-flex items-center gap-3 font-medium text-[var(--text-primary)] hover:text-[var(--accent)]"
+                      >
+                        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]" aria-hidden="true">
+                          <Receipt size={16} />
+                        </span>
+                        <span className="font-mono text-xs" dir="ltr">{order.orderNumber}</span>
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <StatusBadge status={order.status} domain="order" />
+                    </td>
+                    <td className="px-5 py-3.5 font-semibold text-[var(--text-primary)]">
+                      <Money minor={order.totalAmountMinor} />
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-[var(--text-secondary)]">
+                      {order.createdAt
+                        ? formatDate(order.createdAt, {
+                            dateTimeOptions: { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" },
+                          })
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

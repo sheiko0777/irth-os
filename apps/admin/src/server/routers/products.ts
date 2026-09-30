@@ -1,4 +1,5 @@
 import { router, requirePermission } from '../trpc';
+import { brandScope } from '../scopes';
 import { products, productVariants, categories, brands, paginationOffset, paginationMeta } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, count, ilike } from 'drizzle-orm';
@@ -19,6 +20,9 @@ export const productsRouter = router({
             const offset = paginationOffset(page, pageSize);
 
             const conditions = [eq(products.orgId, ctx.orgId)];
+            // Brand scope (PR-1e); 0076's policy holds it inside withOrg too.
+            const inBrand = brandScope(ctx, products.brandId);
+            if (inBrand) conditions.push(inBrand);
             if (q) {
                 conditions.push(ilike(products.name, `%${q}%`));
             }
@@ -67,7 +71,8 @@ export const productsRouter = router({
             const product = await ctx.withOrg(async (tx) => tx.query.products.findFirst({
                 where: and(
                     eq(products.id, input.id),
-                    eq(products.orgId, ctx.orgId)
+                    eq(products.orgId, ctx.orgId),
+                    brandScope(ctx, products.brandId),
                 )
             }));
 

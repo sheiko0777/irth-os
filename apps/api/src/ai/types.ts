@@ -1,4 +1,4 @@
-import type { Role } from '@irth/db';
+import type { EffectiveAccess, Role } from '@irth/db';
 
 export type AiLocale = 'ar' | 'en';
 
@@ -63,5 +63,7 @@ export type AiRequestContext = {
   orgId: string;
   userId: string;
   role: Role;
+  /** Decides which tools may run — role permissions + per-person overrides. */
+  access: EffectiveAccess;
   locale: AiLocale;
 };

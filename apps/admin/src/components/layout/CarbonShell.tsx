@@ -14,9 +14,9 @@ import {
   SideNavItems,
   SideNavLink,
 } from "@carbon/react";
-import { LogOut, Search, Shield, X } from "lucide-react";
+import { Layers, LogOut, Search, Shield, X } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth-client";
-import { buildNavGroups } from "@/lib/navigation";
+import { useVisibleNavGroups } from "@/lib/permissions";
 import { routeLabels } from "@/lib/routeLabels";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { AlertPanel } from "./AlertPanel";
@@ -43,7 +43,7 @@ export function CarbonShell({
   const ar = locale === "ar";
   const navLabel = ar ? "التنقل الرئيسي" : "Main navigation";
   const expanded = desktop ? desktopOpen : mobileOpen;
-  const groups = buildNavGroups(locale);
+  const groups = useVisibleNavGroups(locale);
   const platformAdmin =
     Boolean(process.env.NEXT_PUBLIC_PLATFORM_ADMIN_EMAIL) &&
     session?.user?.email === process.env.NEXT_PUBLIC_PLATFORM_ADMIN_EMAIL;
@@ -254,6 +254,9 @@ export function CarbonShell({
             prefix=""
             className="irth-brand"
           >
+            <span className="irth-brand__mark" aria-hidden="true">
+              <Layers size={16} strokeWidth={2.25} />
+            </span>
             {ar ? "إرث" : "IRTH"}
             <span className="irth-brand__suffix">OS</span>
           </HeaderName>

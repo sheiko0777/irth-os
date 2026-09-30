@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { aiConversationLogs, jsonSafe, type Role } from '@irth/db';
+import { aiConversationLogs, jsonSafe, type EffectiveAccess, type Role } from '@irth/db';
 import { withOrg } from '../db';
 import { rateLimit } from '../middlewares/rateLimit';
 import { envVar } from '../utils/env';
@@ -28,12 +28,13 @@ export const aiChatRouter = new Hono();
 const trustedProxyCount = () => parseInt(envVar('TRUSTED_PROXY_COUNT') || '0', 10);
 aiChatRouter.use('/chat', rateLimit(20, 60_000, trustedProxyCount, (c) => getAuth(c)?.orgId));
 
-function getAuth(c: Context): { orgId: string; userId: string; role: Role } | null {
+function getAuth(c: Context): { orgId: string; userId: string; role: Role; access: EffectiveAccess } | null {
   const orgId = c.get('orgId') as string | undefined;
   const userId = c.get('userId') as string | undefined;
   const role = c.get('role') as Role | undefined;
-  if (!orgId || !userId || !role) return null;
-  return { orgId, userId, role };
+  const access = c.get('access') as EffectiveAccess | undefined;
+  if (!orgId || !userId || !role || !access) return null;
+  return { orgId, userId, role, access };
 }
 
 function systemPrompt(locale: AiLocale): string {
@@ -102,7 +103,7 @@ aiChatRouter.post('/chat', async (c) => {
   }
 
   const provider = createGroqProvider();
-  const tools = allowedAiToolDefinitions(auth.role);
+  const tools = allowedAiToolDefinitions(auth.access);
   const messages: AiMessage[] = [
     { role: 'system', content: systemPrompt(parsed.locale) },
     ...(parsed.history ?? []).map((message) => ({ role: message.role, content: message.content }) as AiMessage),
@@ -137,6 +138,7 @@ aiChatRouter.post('/chat', async (c) => {
             orgId: auth.orgId,
             userId: auth.userId,
             role: auth.role,
+            access: auth.access,
             locale: parsed.locale,
           }));
           cards.push(...result.cards);

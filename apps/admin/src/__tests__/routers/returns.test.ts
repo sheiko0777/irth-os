@@ -1,3 +1,6 @@
+// Deep import: this file mocks '@irth/db', and a static import of the root
+// would evaluate the mock factory before its dependencies initialise.
+import { effectiveAccess } from '@irth/db/src/permissions';
 import { EGP, zero } from '@irth/domain';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TRPCError } from '@trpc/server';
@@ -28,6 +31,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
     orgId: 'org-1',
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
   } as unknown as Context;
 }
 

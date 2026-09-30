@@ -1,21 +1,29 @@
 import { z } from 'zod';
-import { and, asc, count, desc, eq, gte, ilike, lte, sum, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, ilike, lte, sql } from 'drizzle-orm';
 import {
-  can,
+  canAccess,
   inventoryItems,
   orders,
   products,
   productVariants,
+  salesTotals,
   type ActionFor,
   type DbTx,
+  type EffectiveAccess,
   type Resource,
-  type Role,
 } from '@irth/db';
 import { OrderStatusSchema } from '@irth/types';
+import { formatMoney, fromMinor } from '@irth/domain';
 import type { AiRequestContext, AiToolDefinition, AiToolResult } from './types';
 
-type ToolPermission = { resource: Resource; action: ActionFor<Resource> };
+type ToolPermission = { [R in Resource]: { resource: R; action: ActionFor<R> } }[Resource];
 type ToolExecuteContext = AiRequestContext & { db: DbTx };
+
+// One place that widens the correlated (resource, action) pair for canAccess,
+// which cannot see through the union above.
+function allows(access: EffectiveAccess, permission: ToolPermission): boolean {
+  return canAccess(access, permission.resource as 'orders', permission.action as 'view');
+}
 
 type AiTool = {
   definition: AiToolDefinition;
@@ -226,25 +234,30 @@ export const AI_TOOLS: AiTool[] = [
       const start = new Date();
       start.setDate(start.getDate() - args.days);
 
-      const [result] = await ctx.db
-        .select({
-          totalOrders: count(),
-          deliveredCount: sql<number>`count(*) filter (where ${orders.status} = 'delivered')`,
-          deliveredTotal: sql<string | null>`sum(${orders.totalAmountMinor}) filter (where ${orders.status} = 'delivered')`,
-          pendingCount: sql<number>`count(*) filter (where ${orders.status} = 'pending')`,
-          cancelledCount: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`,
-        })
-        .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start)));
+      // Revenue from the ledger (CLAUDE.md rule 2): net sales ex-VAT, less
+      // returns. Order counts stay on `orders` — they count intent, not value —
+      // and come from one FILTER query instead of four round-trips (#401).
+      const [[result], sales] = await Promise.all([
+        ctx.db
+          .select({
+            totalOrders: count(),
+            deliveredCount: sql<number>`count(*) filter (where ${orders.status} = 'delivered')`,
+            pendingCount: sql<number>`count(*) filter (where ${orders.status} = 'pending')`,
+            cancelledCount: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`,
+          })
+          .from(orders)
+          .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, start))),
+        salesTotals(ctx.db, ctx.orgId, { from: start }),
+      ]);
 
+      const netSales = asMinor(sales.netSalesMinor);
       const totalOrders = Number(result?.totalOrders ?? 0);
       const deliveredCount = Number(result?.deliveredCount ?? 0);
       const pendingCount = Number(result?.pendingCount ?? 0);
       const cancelledCount = Number(result?.cancelledCount ?? 0);
-      const deliveredTotal = asMinor(result?.deliveredTotal);
 
       return {
-        summary: `${totalOrders} order(s), ${deliveredCount} delivered, ${pendingCount} pending, delivered revenue ${deliveredTotal} minor units.`,
+        summary: `${totalOrders} order(s), ${deliveredCount} delivered, ${pendingCount} pending, net sales (ledger, ex-VAT, after returns) ${netSales} minor units.`,
         cards: [{
           type: 'sales_summary',
           title: ctx.locale === 'ar' ? `ملخص آخر ${args.days} يوم` : `Last ${args.days} days`,
@@ -253,18 +266,18 @@ export const AI_TOOLS: AiTool[] = [
             { label: ctx.locale === 'ar' ? 'طلبات مسلّمة' : 'Delivered orders', value: String(deliveredCount), tone: 'good' },
             { label: ctx.locale === 'ar' ? 'طلبات معلقة' : 'Pending orders', value: String(pendingCount), tone: 'warning' },
             { label: ctx.locale === 'ar' ? 'طلبات ملغية' : 'Cancelled orders', value: String(cancelledCount) },
-            { label: ctx.locale === 'ar' ? 'إيراد مسلّم' : 'Delivered revenue', value: `${deliveredTotal} EGP minor` },
+            { label: ctx.locale === 'ar' ? 'صافي المبيعات (بدون الضريبة)' : 'Net sales (ex-VAT)', value: formatMoney(fromMinor(sales.netSalesMinor)) },
           ],
         }],
-        data: { days: args.days, totalOrders, deliveredCount, pendingCount, cancelledCount, deliveredRevenueMinor: deliveredTotal },
+        data: { days: args.days, totalOrders, deliveredCount, pendingCount, cancelledCount, netSalesMinor: netSales },
       };
     },
   },
 ];
 
-export function allowedAiToolDefinitions(role: Role): AiToolDefinition[] {
+export function allowedAiToolDefinitions(access: EffectiveAccess): AiToolDefinition[] {
   return AI_TOOLS
-    .filter((tool) => can(role, tool.permission.resource, tool.permission.action))
+    .filter((tool) => allows(access, tool.permission))
     .map((tool) => tool.definition);
 }
 
@@ -274,7 +287,7 @@ export async function executeAiTool(name: string, args: unknown, ctx: ToolExecut
     throw new Error(`Unknown AI tool: ${name}`);
   }
 
-  if (!can(ctx.role, tool.permission.resource, tool.permission.action)) {
+  if (!allows(ctx.access, tool.permission)) {
     throw new Error(`Forbidden AI tool: ${name}`);
   }
 

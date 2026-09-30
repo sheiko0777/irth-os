@@ -4,11 +4,14 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 import CustomerActions from "./CustomerActions";
+import { SalesRepCell } from "@/components/customers/SalesRepCell";
 import { ExportButton } from "@/components/ExportButton";
 import { PaginationNav } from "@/components/ui/PaginationNav";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { StatBox } from "@/components/ui/StatBox";
 import { getTranslations } from "next-intl/server";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Users } from "lucide-react";
 
 const PAGE_SIZE = 50;
 
@@ -33,13 +36,15 @@ export default async function CustomersPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        eyebrow="عام"
+        title={t("title")}
+        icon={<Users />}
+        actions={<><div className="flex items-center gap-2">
           <ExportButton type="customers" label={t("actions.export")} />
           <CustomerActions actionType="create" />
-        </div>
-      </div>
+        </div></>}
+      />
 
       {summary.data && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
@@ -48,7 +53,7 @@ export default async function CustomersPage({
         </div>
       )}
 
-      <div className="rounded-md border bg-[var(--surface)]">
+      <div className="glass rounded-[var(--card-radius)]">
         <Table>
           <TableHeader>
             <TableRow>
@@ -58,13 +63,14 @@ export default async function CustomersPage({
               <TableHead>{t("table.loyaltyPoints")}</TableHead>
               <TableHead>{t("table.orders")}</TableHead>
               <TableHead>{t("table.total")}</TableHead>
+              <TableHead>مندوب المبيعات</TableHead>
               <TableHead className="text-end">{t("table.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {customerList.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="p-0"><EmptyState title={t("empty.title")} hint={t("empty.hint")} /></TableCell>
+                <TableCell colSpan={8} className="p-0"><EmptyState title={t("empty.title")} hint={t("empty.hint")} /></TableCell>
               </TableRow>
             ) : (
               customerList.map((customer) => (
@@ -81,6 +87,9 @@ export default async function CustomersPage({
                   {/* Was `${customer.totalSpent} ج.م` — the raw column value,
                       so it printed ungrouped ("1234.56 ج.م"). */}
                   <TableCell>{customer.totalSpentMinor ? formatMoney(fromMinor(customer.totalSpentMinor)) : '-'}</TableCell>
+                  <TableCell>
+                    <SalesRepCell customerId={customer.id} customerName={customer.name} memberId={customer.salesRepMemberId ?? null} />
+                  </TableCell>
                   <TableCell className="text-end">
                     <div className="flex justify-end gap-2">
                       <CustomerActions actionType="addPoints" customerId={customer.id} customerName={customer.name} currentPoints={customer.loyaltyPoints ?? 0} />

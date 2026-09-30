@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { twoFactor } from 'better-auth/plugins';
+import { twoFactor, username } from 'better-auth/plugins';
 import { db } from './db';
 import { envVar, nodeEnv } from './utils/env';
 import * as authSchema from '@irth/db/src/schema/auth';
@@ -93,6 +93,9 @@ function buildAuth() {
       twoFactor({
         issuer: 'IRTH OS',
       }),
+      // Same plugin set as apps/admin's auth-server.ts: both read and write
+      // the same user table (username columns, 0075).
+      username(),
     ],
     secret,
     baseURL: envVar('API_BASE_URL') ?? 'http://localhost:8787',

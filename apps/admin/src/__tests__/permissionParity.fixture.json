@@ -1,0 +1,787 @@
+{
+  "analytics.abandonedProducts": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.cartMonitor": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.customerActivityStream": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.customerFunnel": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.inventoryTurnover": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.kpiSummary": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.revenue": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.storefrontOverview": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.storefrontSources": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.storefrontTopPages": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "analytics.topProducts": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "audit.getById": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "audit.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "audit.stats": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "bulk.bulkUpdateOrderStatus": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "bulk.exportCustomers": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "bulk.exportInventory": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "bulk.exportOrders": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "campaigns.cancel": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "campaigns.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "campaigns.delete": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "campaigns.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "campaigns.send": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "campaigns.summary": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "categories.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "categories.delete": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "categories.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "coupons.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "coupons.delete": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "coupons.get": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "coupons.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "coupons.redeem": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "coupons.toggleActive": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "coupons.update": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "coupons.validate": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "courier.remittances.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "courier.remittances.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "courier.remittances.reconcile": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "courier.shipments.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "courier.shipments.markRemitted": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "courier.summary": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "customerSegments.addMembers": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "customerSegments.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "customerSegments.delete": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "customerSegments.getCustomersNotInSegment": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "customerSegments.getMembers": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "customerSegments.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "customerSegments.removeMember": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "customerSegments.update": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "customers.addPoints": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "customers.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "customers.get": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "customers.linkOrder": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "customers.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "customers.redeemPoints": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "customers.summary": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "customers.update": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "dashboard.getAlerts": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "dashboard.getRecentOrders": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "dashboard.getStats": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "deadLetters.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "deadLetters.replay": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "eta.cancel": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "eta.checkStatus": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "eta.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "eta.submit": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "eta.submitPending": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "finance.askAi": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "finance.codReconciliation": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "finance.pnl": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "finance.vatReport": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "giftCards.cancel": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "giftCards.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "giftCards.getTransactions": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "giftCards.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "giftCards.redeem": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "giftCards.summary": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "giftCards.topup": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "integrations.outboxList": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "integrations.outboxRetry": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "integrations.shopifyConnect": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "integrations.shopifyLocations": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "integrations.shopifyPixelSnippet": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "integrations.shopifySetLocation": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "integrations.shopifyStatus": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "inventory.adjust": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "inventory.alerts": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "inventory.batchAdjust": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "inventory.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "inventory.lookupByBarcode": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "inventory.movements": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "inventory.updateBinLocation": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "me.get": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "me.switchOrg": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "members.bulkInvite": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "members.changeRole": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "members.invite": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "members.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "members.listInvites": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "members.remove": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "members.resendInvite": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "members.revokeInvite": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "notifications.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "notifications.markAllRead": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "notifications.markRead": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "notifications.unreadCount": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "orders.getById": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "orders.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "orders.mappableVariants": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "orders.resolveBlocked": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "orders.updateStatus": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "platformAdmin.createOrg": {
+    "owner": "deny",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "platformAdmin.getOrgConfig": {
+    "owner": "deny",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "platformAdmin.listInvites": {
+    "owner": "deny",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "platformAdmin.listOrgs": {
+    "owner": "deny",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "platformAdmin.resetConfig": {
+    "owner": "deny",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "platformAdmin.revokeInvite": {
+    "owner": "deny",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "platformAdmin.setOrgConfig": {
+    "owner": "deny",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "pricelists.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "pricelists.delete": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "pricelists.getItems": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "pricelists.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "products.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "products.deactivate": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "products.getById": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "products.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "products.update": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "purchasing.po.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "purchasing.po.get": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "purchasing.po.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "purchasing.po.receive": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "purchasing.po.updateStatus": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "purchasing.suppliers.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "purchasing.suppliers.delete": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "purchasing.suppliers.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "purchasing.suppliers.update": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "returns.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "returns.get": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "returns.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "returns.restock": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "returns.summary": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "returns.updateStatus": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "settings.getAll": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "settings.set": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "settings.setMany": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "shipping.rates.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "shipping.rates.delete": {
+    "owner": "allow",
+    "admin": "deny",
+    "member": "deny"
+  },
+  "shipping.rates.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "shipping.zones.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "shipping.zones.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "shipping.zones.setActive": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "stocktaking.recordScan": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "stocktaking.sessions.complete": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "stocktaking.sessions.create": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "deny"
+  },
+  "stocktaking.sessions.getItems": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "stocktaking.sessions.list": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  },
+  "stocktaking.summary": {
+    "owner": "allow",
+    "admin": "allow",
+    "member": "allow"
+  }
+}

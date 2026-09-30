@@ -87,7 +87,7 @@ export function CategoriesClient({ categories }: CategoriesClientProps) {
                 </PermissionGate>
             </div>
 
-            <div className="rounded-md border bg-[var(--surface)] border-[var(--rim1)]">
+            <div className="glass rounded-[var(--card-radius)]">
                 <Table>
                     <TableHeader>
                         <TableRow>

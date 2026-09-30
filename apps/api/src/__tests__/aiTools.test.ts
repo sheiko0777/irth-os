@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DbTx, Role } from '@irth/db';
+import { effectiveAccess, type DbTx, type Role } from '@irth/db';
 import { allowedAiToolDefinitions, executeAiTool } from '../ai/tools';
 
 const ORG_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
@@ -19,18 +19,26 @@ function ctx(role: Role, db: unknown = {}): Parameters<typeof executeAiTool>[2] 
     orgId: ORG_ID,
     userId: 'user-1',
     role,
+    access: effectiveAccess({ systemKey: role }),
     locale: 'en',
   };
 }
 
 describe('IRTH Intelligence tools', () => {
   it('does not expose finance-only sales summaries to members', () => {
-    const names = allowedAiToolDefinitions('member').map((tool) => tool.name);
+    const names = allowedAiToolDefinitions(effectiveAccess({ systemKey: 'member' })).map((tool) => tool.name);
 
     expect(names).toContain('orders_list');
     expect(names).toContain('products_search');
     expect(names).toContain('inventory_snapshot');
     expect(names).not.toContain('sales_summary');
+  });
+
+  it('follows per-person overrides, not the role name', () => {
+    const revoked = effectiveAccess({ systemKey: 'admin', overrides: { revoke: { orders: ['view'] } } });
+    expect(allowedAiToolDefinitions(revoked).map((tool) => tool.name)).not.toContain('orders_list');
+    const granted = effectiveAccess({ systemKey: 'member', overrides: { grant: { finance: ['view'] } } });
+    expect(allowedAiToolDefinitions(granted).map((tool) => tool.name)).toContain('sales_summary');
   });
 
   it('rejects a forbidden tool before touching the database', async () => {
