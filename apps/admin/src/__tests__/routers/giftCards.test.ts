@@ -72,13 +72,13 @@ describe('giftCards router', () => {
   });
 
   it('create: non-positive initialAmount rejects BAD_REQUEST', async () => {
-    await expectCode(caller.create({ initialAmount: -10 }), 'BAD_REQUEST');
-    await expectCode(caller.create({ initialAmount: 0 }), 'BAD_REQUEST');
+    await expectCode(caller.create({ initialAmount: -10, idempotencyKey: 'key-1' }), 'BAD_REQUEST');
+    await expectCode(caller.create({ initialAmount: 0, idempotencyKey: 'key-2' }), 'BAD_REQUEST');
   });
 
   it('create: invalid recipientEmail rejects BAD_REQUEST', async () => {
     await expectCode(
-      caller.create({ initialAmount: 100, recipientEmail: 'not-an-email' }),
+      caller.create({ initialAmount: 100, recipientEmail: 'not-an-email', idempotencyKey: 'key-3' }),
       'BAD_REQUEST'
     );
   });

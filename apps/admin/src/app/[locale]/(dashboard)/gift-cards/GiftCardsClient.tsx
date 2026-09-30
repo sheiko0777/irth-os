@@ -79,6 +79,7 @@ export default function GiftCardsClient({
 
   const cancelMutation = trpc.giftCards.cancel.useMutation({ onSuccess: refresh });
 
+  const [key, setKey] = useState(() => crypto.randomUUID());
   const handleCreate = (e: { preventDefault: () => void }) => {
     e.preventDefault();
     const amt = parseFloat(amount);
@@ -89,6 +90,7 @@ export default function GiftCardsClient({
       recipientEmail: recipientEmail || undefined,
       message: message || undefined,
       expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      idempotencyKey: key,
     });
   };
 
