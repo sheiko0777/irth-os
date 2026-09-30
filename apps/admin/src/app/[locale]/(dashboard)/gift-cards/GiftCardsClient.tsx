@@ -67,8 +67,13 @@ export default function GiftCardsClient({
     if (sr.data?.data) setSum(sr.data.data as GiftCardSummary);
   };
 
+  // One key per intended card: a retry or double-click reuses it (one card),
+  // a successful create rotates it so the next card is a new request.
+  const [key, setKey] = useState(() => crypto.randomUUID());
+
   const createMutation = trpc.giftCards.create.useMutation({
     onSuccess: () => {
+      setKey(crypto.randomUUID());
       setShowCreate(false);
       setAmount(''); setRecipientName(''); setRecipientEmail(''); setMessage(''); setExpiresAt('');
       setCreateErr('');
@@ -79,7 +84,6 @@ export default function GiftCardsClient({
 
   const cancelMutation = trpc.giftCards.cancel.useMutation({ onSuccess: refresh });
 
-  const [key, setKey] = useState(() => crypto.randomUUID());
   const handleCreate = (e: { preventDefault: () => void }) => {
     e.preventDefault();
     const amt = parseFloat(amount);
