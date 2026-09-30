@@ -1,6 +1,6 @@
 import { router, requirePermission } from '../trpc';
 import { orders, orderItems, products, productVariants, journalLines, journalEntries, accounts, ACCOUNT_CODES, salesTotals, type DbTx } from '@irth/db';
-import { eq, and, desc, count, sum, gte, lte } from 'drizzle-orm';
+import { eq, and, desc, count, sum, gte, lte, sql } from 'drizzle-orm';
 import { divideRoundHalfEven, formatMoney, fromMinor } from '@irth/domain';
 import { z } from 'zod';
 
@@ -106,7 +106,7 @@ export const financeRouter = router({
             // reporting separately, and summing all `expense`-type accounts
             // together would silently merge COGS (5010) with Inventory Variance
             // (5020) into one figure.
-            const [ledgerRows, totalOrdersQuery, cancelledQuery, pendingQuery] = await Promise.all([
+            const [ledgerRows, orderStatsQuery] = await Promise.all([
                 ctx.db
                     .select({
                         code: accounts.code,
@@ -123,31 +123,18 @@ export const financeRouter = router({
                         lte(journalEntries.entryDate, end),
                     ))
                     .groupBy(accounts.code, accounts.normalBalance),
+                // One scoped query with FILTER instead of three round-trips (#404).
                 ctx.withOrg((tx) => tx
-                    .select({ count: count() })
+                    .select({
+                        totalCount: count(),
+                        cancelledCount: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`.mapWith(Number),
+                        pendingCount: sql<number>`count(*) filter (where ${orders.status} = 'pending')`.mapWith(Number),
+                    })
                     .from(orders)
                     .where(and(
                         eq(orders.orgId, ctx.orgId),
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end)
-                    ))),
-                ctx.withOrg((tx) => tx
-                    .select({ count: count() })
-                    .from(orders)
-                    .where(and(
-                        eq(orders.orgId, ctx.orgId),
-                        gte(orders.createdAt, start),
-                        lte(orders.createdAt, end),
-                        eq(orders.status, 'cancelled')
-                    ))),
-                ctx.withOrg((tx) => tx
-                    .select({ count: count() })
-                    .from(orders)
-                    .where(and(
-                        eq(orders.orgId, ctx.orgId),
-                        gte(orders.createdAt, start),
-                        lte(orders.createdAt, end),
-                        eq(orders.status, 'pending')
                     ))),
             ]);
 
@@ -166,12 +153,12 @@ export const financeRouter = router({
             const inventoryVarianceMinor = byCode.get(ACCOUNT_CODES.INVENTORY_VARIANCE) ?? zero;
             const netIncomeMinor = grossProfitMinor - inventoryVarianceMinor;
 
-            const totalOrders = totalOrdersQuery[0]?.count ?? 0;
+            const totalOrders = orderStatsQuery[0]?.totalCount ?? 0;
             const avgOrderValueMinor = totalOrders > 0
                 ? divideRoundHalfEven(netRevenueMinor, BigInt(totalOrders))
                 : zero;
-            const cancelledOrders = cancelledQuery[0]?.count ?? 0;
-            const pendingOrders = pendingQuery[0]?.count ?? 0;
+            const cancelledOrders = orderStatsQuery[0]?.cancelledCount ?? 0;
+            const pendingOrders = orderStatsQuery[0]?.pendingCount ?? 0;
 
             return {
                 data: {
