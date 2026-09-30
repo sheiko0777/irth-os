@@ -44,6 +44,7 @@ beforeEach(() => mockDb._reset());
 describe('required financial idempotency keys', () => {
   it('rejects all four mutations when the key is missing', async () => {
     const { context } = dedupingContext();
+    await expectBadRequest(giftCardsRouter.createCaller(context).create({ initialAmount: 10 } as never));
     await expectBadRequest(giftCardsRouter.createCaller(context).topup({ id: UUID, amount: 10 } as never));
     await expectBadRequest(giftCardsRouter.createCaller(context).redeem({ id: UUID, amount: 10 } as never));
     await expectBadRequest(purchasingRouter.createCaller(context).po.receive({ id: UUID, items: [] } as never));
@@ -51,6 +52,7 @@ describe('required financial idempotency keys', () => {
   });
 
   it.each([
+    ['giftCards.create', (context: Context) => giftCardsRouter.createCaller(context).create({ initialAmount: 10, idempotencyKey: 'same-key' })],
     ['giftCards.topup', (context: Context) => giftCardsRouter.createCaller(context).topup({ id: UUID, amount: 10, idempotencyKey: 'same-key' })],
     ['giftCards.redeem', (context: Context) => giftCardsRouter.createCaller(context).redeem({ id: UUID, amount: 10, idempotencyKey: 'same-key' })],
     ['purchasing.receive', (context: Context) => purchasingRouter.createCaller(context).po.receive({ id: UUID, items: [], idempotencyKey: 'same-key' })],
