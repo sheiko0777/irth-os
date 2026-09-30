@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { TRPCError } from "@trpc/server";
 import { serverCaller } from "@/server/caller";
 import { RolesManager } from "./RolesManager";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { KeyRound } from "lucide-react";
 
 /**
  * الأدوار والصلاحيات (PR-1c). The server procedures are the real gate; this
@@ -19,12 +21,12 @@ export default async function RolesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">الأدوار والصلاحيات</h1>
-        <p className="mt-1 text-sm text-[var(--t3)]">
-          كل دور بيحدد الشاشات والعمليات المتاحة لمن يحمله. أدوار النظام ثابتة، وتقدر تنسخها وتعدّل النسخة.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="الإعدادات والرقابة"
+        title={"الأدوار والصلاحيات"}
+        description={"كل دور بيحدد الشاشات والعمليات المتاحة لمن يحمله. أدوار النظام ثابتة، وتقدر تنسخها وتعدّل النسخة."}
+        icon={<KeyRound />}
+      />
       <RolesManager />
     </div>
   );

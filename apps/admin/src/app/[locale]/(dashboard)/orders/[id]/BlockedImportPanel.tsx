@@ -42,7 +42,7 @@ export function BlockedImportPanel({ orderId, reason, lines }: { orderId: string
     const options = variants.data?.data ?? [];
 
     return (
-        <div className="rounded-xl border border-[var(--warning)] bg-[var(--card-bg)] p-5 space-y-4" role="alert">
+        <div className="glass rounded-[var(--card-radius)] border-[var(--warning)] p-5 space-y-4" role="alert">
             <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 shrink-0 text-[var(--warning)]" size={20} />
                 <div className="space-y-1">

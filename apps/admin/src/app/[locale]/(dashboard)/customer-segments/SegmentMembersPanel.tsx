@@ -37,7 +37,7 @@ export function SegmentMembersPanel({
   const t = useTranslations('customerSegments');
 
   return (
-    <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-xl p-5">
+    <div className="glass rounded-[var(--card-radius)] p-5">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: activeSegment.color }} />

@@ -6,6 +6,8 @@ import { AiQueryForm } from "./AiQueryForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { KpiCard } from "@/components/ui/KpiCard";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Boxes, Landmark, PiggyBank, Receipt, ShoppingCart, TrendingUp, Undo2, Wallet, XCircle } from "lucide-react";
 
 export const revalidate = 0; // Don't cache finance reports
 
@@ -35,32 +37,40 @@ export default async function FinancePage() {
 
     return (
         <div className="space-y-8">
-            <h1 className="text-3xl font-bold text-[var(--t1)]">{t("title")}</h1>
-            <p className="text-[var(--t2)]">الفترة: {formatDate(firstDayOfMonth)} - {formatDate(today)}</p>
+            <PageHeader
+                eyebrow="المالية والتقارير"
+                title={t("title")}
+                description={`الفترة: ${formatDate(firstDayOfMonth)} - ${formatDate(today)}`}
+                icon={<Landmark />}
+            />
 
             {/* P&L Summary */}
             <section className="space-y-4">
-                <h2 className="text-xl font-semibold text-[var(--t1)]">{t("pnl")}</h2>
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">{t("pnl")}</h2>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    {/* Revenue is the hero here too — one gold fill per screen. */}
+                    {/* Revenue is the hero here too — one navy hero per screen. */}
                     <KpiCard
                         id="fin-revenue"
+                        icon={<Wallet />}
                         variant="hero"
                         title="إجمالي الإيرادات"
                         value={formatMoney(pnl.totalRevenue)}
                     />
                     <KpiCard
                         id="fin-orders"
+                        icon={<ShoppingCart />}
                         title="إجمالي الطلبات"
                         value={pnl.totalOrders.toLocaleString('ar-EG')}
                     />
                     <KpiCard
                         id="fin-aov"
+                        icon={<Receipt />}
                         title="متوسط قيمة الطلب"
                         value={formatMoney(pnl.avgOrderValue)}
                     />
                     <KpiCard
                         id="fin-cancelled"
+                        icon={<XCircle />}
                         title="طلبات ملغاة"
                         value={pnl.cancelledOrders.toLocaleString('ar-EG')}
                     />
@@ -72,21 +82,25 @@ export default async function FinancePage() {
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <KpiCard
                         id="fin-cogs"
+                        icon={<Boxes />}
                         title="تكلفة البضاعة المباعة"
                         value={formatMoney(pnl.cogs)}
                     />
                     <KpiCard
                         id="fin-gross-profit"
+                        icon={<TrendingUp />}
                         title="مجمل الربح"
                         value={formatMoney(pnl.grossProfit)}
                     />
                     <KpiCard
                         id="fin-returns"
+                        icon={<Undo2 />}
                         title="مرتجعات ومسموحات"
                         value={formatMoney(pnl.returns)}
                     />
                     <KpiCard
                         id="fin-net-income"
+                        icon={<PiggyBank />}
                         title="صافي الدخل"
                         value={formatMoney(pnl.netIncome)}
                     />
@@ -95,9 +109,9 @@ export default async function FinancePage() {
 
             {/* VAT Report */}
             <section className="space-y-4">
-                <h2 className="text-xl font-semibold text-[var(--t1)]">{t("vat")}</h2>
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">{t("vat")}</h2>
                 <div className="grid gap-4 md:grid-cols-3">
-                    <Card className="bg-[var(--surface)] border-[var(--rim1)]">
+                    <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">الإيراد الإجمالي</CardTitle>
                         </CardHeader>
@@ -105,7 +119,7 @@ export default async function FinancePage() {
                             <div className="text-2xl font-bold text-[var(--t1)]">{formatMoney(vat.grossRevenue)}</div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-[var(--surface)] border-[var(--rim1)]">
+                    <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">قيمة ضريبة القيمة المضافة (14%)</CardTitle>
                         </CardHeader>
@@ -113,7 +127,7 @@ export default async function FinancePage() {
                             <div className="text-2xl font-bold text-[var(--crimson)]">{formatMoney(vat.vatAmount)}</div>
                         </CardContent>
                     </Card>
-                    <Card className="bg-[var(--surface)] border-[var(--rim1)]">
+                    <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">الإيراد الصافي</CardTitle>
                         </CardHeader>
@@ -126,8 +140,8 @@ export default async function FinancePage() {
 
             {/* COD Reconciliation */}
             <section className="space-y-4">
-                <h2 className="text-xl font-semibold text-[var(--t1)]">{t("cod")}</h2>
-                <Card className="bg-[var(--surface)] border-[var(--rim1)]">
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">{t("cod")}</h2>
+                <Card className="overflow-hidden">
                     <Table>
                         <TableHeader>
                             <TableRow className="border-[var(--rim1)] hover:bg-transparent">
@@ -144,7 +158,7 @@ export default async function FinancePage() {
                                 </TableRow>
                             ) : (
                                 codRows.map((row) => (
-                                    <TableRow key={row.orderId} className="border-[var(--rim1)] hover:bg-[var(--rim1)]/50">
+                                    <TableRow key={row.orderId}>
                                         <TableCell className="font-mono">{row.orderNumber}</TableCell>
                                         <TableCell>{formatMoney(fromMinor(row.amount))}</TableCell>
                                         <TableCell>{formatDate(row.createdAt)}</TableCell>
@@ -163,8 +177,8 @@ export default async function FinancePage() {
 
             {/* AI Query Form */}
             <section className="space-y-4">
-                <h2 className="text-xl font-semibold text-[var(--t1)]">{t("ai")}</h2>
-                <Card className="bg-[var(--surface)] border-[var(--rim1)]">
+                <h2 className="text-base font-semibold text-[var(--text-primary)]">{t("ai")}</h2>
+                <Card>
                     <CardContent className="pt-6">
                         <AiQueryForm />
                     </CardContent>

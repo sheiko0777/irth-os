@@ -4,7 +4,8 @@ import { serverCaller } from '@/server/caller';
 import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs';
 import { SearchField } from '@/components/ui/SearchField';
 import Link from 'next/link';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ShoppingCart } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { OrdersClient, type OrderRow } from './OrdersClient';
 
 const PAGE_SIZE = 50;
@@ -94,17 +95,20 @@ export default async function OrdersPage({
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-2xl font-bold text-[var(--t1)]">{t('title')}</h1>
-                <SearchField param="q" placeholder={t('search')} />
-            </div>
+            <PageHeader
+                eyebrow="المبيعات"
+                title={t('title')}
+                description="كل الطلبات من كل القنوات، وحالة كل طلب."
+                icon={<ShoppingCart />}
+                actions={<SearchField param="q" placeholder={t('search')} />}
+            />
 
             {/* Blocked imports are shown above everything: an order that
                 could not be imported completely needs a person, not a filter. */}
             {(response.meta?.blockedCount ?? 0) > 0 && (
                 <Link
                     href={blockedOnly ? `/${locale}/orders` : `/${locale}/orders?blocked=1`}
-                    className="flex items-center gap-2 rounded-md border border-[var(--warning)] px-3 py-2 text-sm text-[var(--warning)]"
+                    className="flex items-center gap-2 rounded-[var(--control-radius)] border border-[var(--warning)]/40 bg-[var(--warning-bg)] px-4 py-3 text-sm font-medium text-[var(--warning)]"
                 >
                     <AlertTriangle size={16} />
                     {t('blockedFilter')}: <span className="tabular-nums" dir="ltr">{response.meta?.blockedCount}</span>

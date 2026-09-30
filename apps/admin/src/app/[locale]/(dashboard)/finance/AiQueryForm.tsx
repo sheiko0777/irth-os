@@ -54,7 +54,7 @@ export function AiQueryForm() {
             )}
 
             {result && (
-                <div className="mt-4 p-4 rounded-md bg-[var(--obsidian)] border border-[var(--rim1)]">
+                <div className="glass rounded-[var(--card-radius)] mt-4 p-4">
                     <h3 className="text-[var(--t2)] mb-2 font-semibold">النتيجة:</h3>
                     <pre className="whitespace-pre-wrap text-[var(--t1)] font-mono text-sm leading-relaxed">
                         {result}

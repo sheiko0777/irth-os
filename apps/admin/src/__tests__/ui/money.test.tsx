@@ -21,4 +21,16 @@ describe("Money", () => {
       "90,071,992,547,409.93 ج.م",
     );
   });
+
+  it("emphasis restyles the parts but reads exactly the same text", () => {
+    for (const minor of [123_450n, 0n, -5n, 9_007_199_254_740_993n]) {
+      const plain = render(<Money minor={minor} data-testid="plain" />);
+      const emphasised = render(<Money minor={minor} emphasis data-testid="emphasised" />);
+      expect(screen.getByTestId("emphasised").textContent).toBe(
+        screen.getByTestId("plain").textContent,
+      );
+      plain.unmount();
+      emphasised.unmount();
+    }
+  });
 });

@@ -96,7 +96,7 @@ export function CartMonitorClient() {
           <p className="text-xs text-[var(--t2)]">متابعة لحظية للسلات النشطة، المتروكة، ومحاولات الاسترداد المباشر</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-md border border-[var(--rim1)] bg-[var(--surface)] p-1 text-xs">
+          <div className="glass rounded-[var(--card-radius)] flex p-1 text-xs">
             {[1, 7, 14, 30].map((d) => (
               <button
                 key={d}
@@ -166,7 +166,7 @@ export function CartMonitorClient() {
       </div>
 
       {/* Conversion Funnel Section */}
-      <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
+      <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base text-[var(--gold)] flex items-center gap-2">
@@ -210,7 +210,7 @@ export function CartMonitorClient() {
       </Card>
 
       {/* Main Carts Table with Filter and Search */}
-      <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
+      <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <CardTitle className="text-base text-[var(--gold)] flex items-center gap-2">
@@ -220,7 +220,7 @@ export function CartMonitorClient() {
 
             <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               {/* Status Tabs */}
-              <div className="flex rounded-md border border-[var(--rim1)] bg-[var(--surface)] p-0.5 text-xs">
+              <div className="glass rounded-[var(--card-radius)] flex p-0.5 text-xs">
                 {(['all', 'abandoned', 'active', 'converted'] as const).map((st) => (
                   <button
                     key={st}
@@ -385,7 +385,7 @@ export function CartMonitorClient() {
       {/* Bottom Grid: Most Abandoned Products & Realtime Activity Stream */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Abandoned Products */}
-        <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm text-[var(--gold)] flex items-center gap-2">
               <ShoppingBag className="w-4 h-4" />
@@ -397,7 +397,7 @@ export function CartMonitorClient() {
               <p className="text-xs text-[var(--t3)] py-4 text-center">لا توجد منتجات متروكة مسجلة في هذه الفترة</p>
             ) : (
               abandonedProductsQuery.data?.data?.map((p: any, idx: number) => (
-                <div key={idx} className="flex items-center justify-between text-xs p-2 rounded-md bg-[var(--surface)] border border-[var(--rim1)]">
+                <div key={idx} className="glass rounded-[var(--card-radius)] flex items-center justify-between text-xs p-2">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-[var(--t1)] truncate">{p.title}</p>
                     <p className="text-[11px] text-[var(--crimson)]">تُركت {fmt(p.abandonCount)} مرة في السلة</p>
@@ -413,7 +413,7 @@ export function CartMonitorClient() {
         </Card>
 
         {/* Realtime Customer Event Stream */}
-        <Card className="bg-[var(--obsidian)] border-[var(--rim1)]">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm text-[var(--gold)] flex items-center gap-2">
               <Clock className="w-4 h-4" />
@@ -463,7 +463,7 @@ export function CartMonitorClient() {
       {/* Cart Details Modal */}
       {selectedCart && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="bg-[var(--obsidian)] border border-[var(--rim1)] rounded-lg max-w-lg w-full p-5 space-y-4 shadow-xl text-xs">
+          <div className="glass rounded-[var(--card-radius)] max-w-lg w-full p-5 space-y-4 shadow-xl text-xs">
             <div className="flex items-center justify-between pb-3 border-b border-[var(--rim1)]">
               <h3 className="font-bold text-sm text-[var(--gold)]">تفاصيل سلة الشراء</h3>
               <Button size="sm" variant="ghost" onClick={() => setSelectedCart(null)} className="h-6 w-6 p-0 text-base">
@@ -500,7 +500,7 @@ export function CartMonitorClient() {
               <p className="font-semibold text-[var(--t1)]">المنتجات في السلة:</p>
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {selectedCart.lineItems?.map((item: any, i: number) => (
-                  <div key={i} className="flex justify-between p-2 rounded bg-[var(--surface)] border border-[var(--rim1)]">
+                  <div key={i} className="glass rounded-[var(--card-radius)] flex justify-between p-2">
                     <span className="text-[var(--t1)]">{item.title} × {item.quantity}</span>
                     <span className="font-semibold text-[var(--gold)]">{fmtCurrency(item.price * item.quantity)}</span>
                   </div>

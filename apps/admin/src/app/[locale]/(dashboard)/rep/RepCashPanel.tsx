@@ -7,6 +7,8 @@ import { trpc } from "@/lib/trpc";
 import { useCan } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/ui/Money";
+import { BalanceCard } from "@/components/mobile/BalanceCard";
+import { Wallet } from "lucide-react";
 
 const STATUS_LABELS = { submitted: "مستني المكتب يعدّ", confirmed: "اتستلمت" } as const;
 
@@ -36,47 +38,65 @@ export function RepCashPanel() {
   const prefill = totalMinor > 0n ? toDecimalString(fromMinor(totalMinor, currency("EGP"))) : "";
 
   return (
-    <section className="space-y-3 rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-4" aria-labelledby="rep-cash-title">
-      <div className="flex items-center justify-between">
-        <h2 id="rep-cash-title" className="font-semibold">العهدة اللي معايا</h2>
-        <Money minor={totalMinor} className="text-lg font-bold" data-testid="rep-cash-total" />
-      </div>
-      <p className="text-xs text-[var(--t3)]">{open.length} طلب اتحصّل ولسه ماتسلّمش.</p>
-
-      {totalMinor > 0n && can("repCash", "handover") && (
-        <form
-          className="flex flex-wrap items-end gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit.mutate({ declared: declared ?? prefill, idempotencyKey: key });
-          }}
-        >
-          <label className="text-sm">
-            المبلغ اللي هتسلّمه (ج.م)
-            <input
-              inputMode="decimal"
-              dir="ltr"
-              className="mt-1 block h-9 w-32 rounded-md border border-[var(--input-border)] bg-[var(--surface)] px-2"
-              value={declared ?? prefill}
-              onChange={(e) => setDeclared(e.target.value)}
-            />
-          </label>
-          <Button type="submit" size="sm" disabled={submit.isPending}>
-            {submit.isPending ? "جارٍ التسليم…" : "تسليم العهدة"}
-          </Button>
-        </form>
-      )}
+    <div className="space-y-3">
+      <BalanceCard
+        id="rep-cash-title"
+        label="العهدة اللي معايا"
+        minor={totalMinor}
+        icon={<Wallet />}
+        data-testid="rep-cash-total"
+        sub={`${open.length} طلب اتحصّل ولسه ماتسلّمش.`}
+      >
+        {totalMinor > 0n && can("repCash", "handover") && (
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit.mutate({ declared: declared ?? prefill, idempotencyKey: key });
+            }}
+          >
+            <label className="grow text-sm text-[var(--hero-muted)]">
+              المبلغ اللي هتسلّمه (ج.م)
+              <input
+                inputMode="decimal"
+                dir="ltr"
+                className="mt-1 block min-h-11 w-full rounded-[var(--control-radius)] border border-white/25 bg-white/10 px-3 text-base text-[var(--hero-fg)] placeholder:text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                value={declared ?? prefill}
+                onChange={(e) => setDeclared(e.target.value)}
+              />
+            </label>
+            <Button
+              type="submit"
+              disabled={submit.isPending}
+              className="bg-white text-[var(--hero-to)] shadow-none hover:bg-white/90"
+            >
+              {submit.isPending ? "جارٍ التسليم…" : "تسليم العهدة"}
+            </Button>
+          </form>
+        )}
+      </BalanceCard>
 
       {handovers.length > 0 && (
-        <ul className="divide-y divide-[var(--rim1)] text-sm">
-          {handovers.map((h) => (
-            <li key={h.id} className="flex items-center justify-between py-2">
-              <span>{STATUS_LABELS[h.status]}</span>
-              <Money minor={h.receivedMinor ?? h.expectedMinor} currency={h.currency} />
-            </li>
-          ))}
-        </ul>
+        <section aria-labelledby="rep-handovers" className="glass rounded-[var(--card-radius)] p-4">
+          <h3 id="rep-handovers" className="mb-2 text-sm font-semibold">التسليمات</h3>
+          <ul className="divide-y divide-[var(--separator)] text-sm">
+            {handovers.map((h) => (
+              <li key={h.id} className="flex items-center justify-between gap-3 py-2.5">
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className={
+                      "size-2 rounded-full " + (h.status === "confirmed" ? "bg-[var(--success)]" : "bg-[var(--warning)]")
+                    }
+                    aria-hidden="true"
+                  />
+                  {STATUS_LABELS[h.status]}
+                </span>
+                <Money minor={h.receivedMinor ?? h.expectedMinor} currency={h.currency} className="font-semibold" />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
-    </section>
+    </div>
   );
 }

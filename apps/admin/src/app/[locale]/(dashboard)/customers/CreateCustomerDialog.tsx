@@ -53,7 +53,7 @@ export default function CreateCustomerDialog() {
       <Button onClick={() => setIsOpen(true)}>{t('actions.create')}</Button>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsOpen(false)}>
-          <div className="bg-[var(--surface)] border border-[var(--rim1)] rounded-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="glass rounded-[var(--card-radius)] p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">{t('createDialog.title')}</h2>
             <form onSubmit={handleCreateSubmit} className="space-y-3">
               <div>

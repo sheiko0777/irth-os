@@ -27,7 +27,7 @@ export default async function GiftCardsPage() {
     };
 
     return (
-      <div className="p-6">
+      <div>
         <GiftCardsClient initialData={initialData} summary={summary} />
       </div>
     );

@@ -14,7 +14,7 @@ import {
   SideNavItems,
   SideNavLink,
 } from "@carbon/react";
-import { LogOut, Search, Shield, X } from "lucide-react";
+import { Layers, LogOut, Search, Shield, X } from "lucide-react";
 import { signOut, useSession } from "@/lib/auth-client";
 import { useVisibleNavGroups } from "@/lib/permissions";
 import { routeLabels } from "@/lib/routeLabels";
@@ -254,6 +254,9 @@ export function CarbonShell({
             prefix=""
             className="irth-brand"
           >
+            <span className="irth-brand__mark" aria-hidden="true">
+              <Layers size={16} strokeWidth={2.25} />
+            </span>
             {ar ? "إرث" : "IRTH"}
             <span className="irth-brand__suffix">OS</span>
           </HeaderName>

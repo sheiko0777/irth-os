@@ -22,7 +22,7 @@ export default async function StocktakingPage() {
   const summary = summaryRes.data as unknown as StocktakingSummary;
 
   return (
-    <div className="p-6">
+    <div>
       <StocktakingClient sessions={sessions} summary={summary} />
     </div>
   );

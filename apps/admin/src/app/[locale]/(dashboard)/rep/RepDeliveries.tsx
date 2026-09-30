@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Phone, Truck } from "lucide-react";
+import { CheckCircle2, MapPin, Package, Phone, Truck } from "lucide-react";
 import { currency, fromMinor, toDecimalString } from "@irth/domain";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -68,29 +68,51 @@ export function RepDeliveries() {
         const prefill = due > 0n ? toDecimalString(fromMinor(due, currency(o.currency))) : "";
         const isOpen = open?.orderId === o.id;
         return (
-          <li key={o.id} className="rounded-lg border border-[var(--rim1)] bg-[var(--surface)] p-4 space-y-3" data-testid="rep-order">
+          <li key={o.id} className="glass space-y-4 rounded-[var(--card-radius)] p-4" data-testid="rep-order">
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-sm" dir="ltr">{o.orderNumber}</p>
-                <p className="font-medium">{o.shippingAddress?.name ?? o.buyer?.name ?? "—"}</p>
-                <p className="text-sm text-[var(--t2)]">{address || "—"}</p>
-                {o.customerNote && <p className="text-xs text-[var(--t3)]">ملاحظة: {o.customerNote}</p>}
+              <div className="flex min-w-0 gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[var(--accent-soft)] text-[var(--accent)]" aria-hidden="true">
+                  <Package size={20} />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold">{o.shippingAddress?.name ?? o.buyer?.name ?? "—"}</p>
+                  <p className="font-mono text-xs text-[var(--text-secondary)]" dir="ltr">{o.orderNumber}</p>
+                  <p className="mt-1 inline-flex items-start gap-1 text-sm text-[var(--text-secondary)]">
+                    <MapPin size={14} className="mt-1 shrink-0" aria-hidden="true" />
+                    {address || "—"}
+                  </p>
+                  {o.customerNote && <p className="mt-1 text-xs text-[var(--text-secondary)]">ملاحظة: {o.customerNote}</p>}
+                </div>
               </div>
-              <div className="text-end">
-                <p className="text-xs text-[var(--t3)]">{due > 0n ? "تحصيل" : "مدفوع"}</p>
-                <Money minor={due > 0n ? due : o.totalAmountMinor} currency={o.currency} className="font-semibold" />
+              <div className="shrink-0 text-end">
+                <p
+                  className={
+                    "inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold " +
+                    (due > 0n ? "bg-[var(--warning-bg)] text-[var(--warning)]" : "bg-[var(--success-bg)] text-[var(--success)]")
+                  }
+                >
+                  {due > 0n ? "تحصيل" : "مدفوع"}
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  <Money minor={due > 0n ? due : o.totalAmountMinor} currency={o.currency} />
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <Button type="button" className="col-span-2" onClick={() => setOpen({ orderId: o.id, kind: "deliver" })}>
+                <CheckCircle2 aria-hidden="true" /> تم التسليم
+              </Button>
               {phone && (
-                <a href={`tel:${phone}`} className="inline-flex h-9 items-center gap-1 rounded-md border border-[var(--rim1)] px-3 text-sm">
-                  <Phone size={14} /> اتصال
+                <a
+                  href={`tel:${phone}`}
+                  className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--control-radius)] bg-[var(--success-bg)] px-4 text-sm font-medium text-[var(--success)] transition-colors hover:brightness-95 sm:col-span-1"
+                >
+                  <Phone size={16} aria-hidden="true" /> اتصال
                 </a>
               )}
-              <Button type="button" size="sm" onClick={() => setOpen({ orderId: o.id, kind: "deliver" })}>تم التسليم</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setOpen({ orderId: o.id, kind: "failed" })}>فشل</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setOpen({ orderId: o.id, kind: "returned" })}>مرتجع</Button>
+              <Button type="button" variant="outline" onClick={() => setOpen({ orderId: o.id, kind: "failed" })}>فشل</Button>
+              <Button type="button" variant="outline" onClick={() => setOpen({ orderId: o.id, kind: "returned" })}>مرتجع</Button>
             </div>
 
             {isOpen && open.kind === "deliver" && (
@@ -111,13 +133,13 @@ export function RepDeliveries() {
                     <input
                       inputMode="decimal"
                       dir="ltr"
-                      className="mt-1 block h-9 w-32 rounded-md border border-[var(--input-border)] bg-[var(--surface)] px-2"
+                      className="mt-1 block min-h-11 w-36 rounded-[var(--control-radius)] border border-[var(--input-border)] bg-[var(--surface)] px-3 text-base"
                       value={amounts[o.id] ?? prefill}
                       onChange={(e) => setAmounts((a) => ({ ...a, [o.id]: e.target.value }))}
                     />
                   </label>
                 )}
-                <Button type="submit" size="sm" disabled={deliver.isPending}>
+                <Button type="submit" disabled={deliver.isPending}>
                   {deliver.isPending ? "جارٍ التسجيل…" : due > 0n ? "تأكيد التسليم والتحصيل" : "تأكيد التسليم"}
                 </Button>
               </form>
@@ -137,12 +159,12 @@ export function RepDeliveries() {
                   <input
                     required
                     maxLength={500}
-                    className="mt-1 block h-9 w-full rounded-md border border-[var(--input-border)] bg-[var(--surface)] px-2"
+                    className="mt-1 block min-h-11 w-full rounded-[var(--control-radius)] border border-[var(--input-border)] bg-[var(--surface)] px-3 text-base"
                     value={reasons[o.id] ?? ""}
                     onChange={(e) => setReasons((r) => ({ ...r, [o.id]: e.target.value }))}
                   />
                 </label>
-                <Button type="submit" size="sm" variant="outline" disabled={undelivered.isPending}>تسجيل</Button>
+                <Button type="submit" variant="outline" disabled={undelivered.isPending}>تسجيل</Button>
               </form>
             )}
           </li>

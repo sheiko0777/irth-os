@@ -65,10 +65,10 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
             </div>
 
             {/* Table */}
-            <div className="bg-[var(--surface)] rounded-md border border-[var(--rim1)] overflow-hidden">
+            <div className="glass overflow-hidden rounded-[var(--card-radius)]">
                 <div className="overflow-x-auto">
                     <table key={key} className="w-full text-start">
-                        <thead className="bg-raised border-b border-[var(--rim1)]">
+                        <thead className="bg-[var(--raised)]/60 border-b border-[var(--separator)]">
                             <tr>
                                 <th className="px-4 py-3 w-10">
                                     <input

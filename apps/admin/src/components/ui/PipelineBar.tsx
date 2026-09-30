@@ -39,16 +39,16 @@ export function PipelineBar({ data }: PipelineBarProps) {
 
   if (total === 0) {
     return (
-      <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] px-5 py-4">
+      <div className="glass rounded-[var(--card-radius)] px-5 py-4">
         <p className="text-xs text-[var(--t3)]">لا توجد طلبات بعد</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-[var(--rim1)] bg-[var(--surface)] px-5 py-4 space-y-3">
+    <div className="glass h-full rounded-[var(--card-radius)] p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--t3)]">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
           حالة الطلبات
         </h2>
         <span className="text-xs text-[var(--t2)] tabular-nums" dir="ltr">
@@ -57,7 +57,7 @@ export function PipelineBar({ data }: PipelineBarProps) {
       </div>
 
       <div
-        className="flex h-2 w-full overflow-hidden rounded-full bg-[var(--raised)]"
+        className="flex h-3 w-full overflow-hidden rounded-full bg-[var(--raised)]"
         role="img"
         aria-label={`حالة الطلبات: ${segments.map((s) => `${s.label} ${s.count}`).join('، ')}`}
       >
@@ -66,7 +66,7 @@ export function PipelineBar({ data }: PipelineBarProps) {
             key={s.status}
             style={{ width: `${(s.count / total) * 100}%`, background: s.color }}
             // A hairline between segments keeps adjacent hues from bleeding together.
-            className="border-e border-[var(--surface)] last:border-e-0"
+            className="border-e-2 border-[var(--surface)] last:border-e-0"
           />
         ))}
       </div>

@@ -1,9 +1,11 @@
+import { smoothPath } from './smoothPath';
+
 interface SparklineProps {
   /** One value per point. Fewer than two points renders nothing — a line needs a span. */
   data: number[];
   /** Unique per instance: SVG gradient ids are document-global and silently collide. */
   id: string;
-  /** Stroke and fill hue. Near-black at low opacity on the gold hero card, gold elsewhere. */
+  /** Stroke and fill hue: translucent white on the navy hero card, the accent elsewhere. */
   color?: string;
   height?: number;
   /** Faint dotted rule at the series mean, so a flat line still reads as flat. */
@@ -13,7 +15,7 @@ interface SparklineProps {
 export function Sparkline({
   data,
   id,
-  color = 'var(--gold)',
+  color = 'var(--accent)',
   height = 28,
   baseline = true,
 }: SparklineProps) {
@@ -27,8 +29,7 @@ export function Sparkline({
 
   // 4% headroom top and bottom keeps the 1.5px stroke from clipping at the edges.
   const toY = (v: number) => 96 - ((v - min) / span) * 92;
-  const points = data.map((v, i) => `${i * stepX},${toY(v)}`);
-  const line = `M ${points.join(' L ')}`;
+  const line = smoothPath(data.map((v, i) => [i * stepX, toY(v)] as const));
   const area = `${line} L 100,100 L 0,100 Z`;
 
   const meanY = toY(data.reduce((a, b) => a + b, 0) / data.length);
@@ -44,7 +45,7 @@ export function Sparkline({
     >
       <defs>
         <linearGradient id={`spark-${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>

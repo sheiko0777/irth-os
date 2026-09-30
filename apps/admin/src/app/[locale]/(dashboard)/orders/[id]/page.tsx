@@ -39,7 +39,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         // Was a bare English <div>Order not found</div> with no way back — a
         // dead end on a URL an operator can easily reach from a stale link.
         return (
-            <div className="rounded-xl border border-[var(--rim1)] bg-[var(--card-bg)]">
+            <div className="glass rounded-[var(--card-radius)]">
                 <EmptyState
                     icon={PackageSearch}
                     title={t("detail.notFound.title")}
@@ -76,7 +76,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     {t("title")}
                 </Link>
                 <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-3xl font-bold tracking-tight text-[var(--t1)]">
+                    <h1 className="text-[1.5rem] font-semibold leading-tight tracking-tight text-[var(--text-primary)]">
                         {t("detail.title")}
                     </h1>
                     {/* The order number is data, not prose — forced LTR so the
