@@ -287,8 +287,20 @@ export async function withAudit<T extends { id?: string }>(
     return result;
 }
 
-/** Document kinds with their own per-tenant number series. */
-export type DocumentKind = 'order' | 'return' | 'purchase_order' | 'quote';
+/**
+ * Document kinds with their own number series, one per (tenant, legal entity,
+ * kind) — 0081. `quote` predates DM-04 and stays.
+ */
+export type DocumentKind =
+    | 'order'
+    | 'return'
+    | 'purchase_order'
+    | 'quote'
+    | 'shipment'
+    | 'invoice'
+    | 'credit_note'
+    | 'production_order'
+    | 'stock_adjustment';
 
 /**
  * Claims the next document number for a tenant, atomically.
@@ -300,17 +312,23 @@ export type DocumentKind = 'order' | 'return' | 'purchase_order' | 'quote';
  * failure, which is the behaviour a Postgres SEQUENCE has and the reason this
  * is not one.
  *
- * Concurrency: the ON CONFLICT DO UPDATE takes a row lock on (org_id, kind), so
- * two concurrent callers for the same tenant and kind serialise here rather
- * than both reading the same value. That is the whole point — it replaces
+ * Series are per legal entity (0081): `legalEntityId` picks the issuing entity;
+ * omitted, it is the org's default entity (organizations.stock_owner_entity_id,
+ * the same default resolveLedgerEntity uses), resolved inside the same
+ * statement. An entity of another org fails the composite FK.
+ *
+ * Concurrency: the ON CONFLICT DO UPDATE takes a row lock on
+ * (org_id, legal_entity_id, kind), so two concurrent callers for the same
+ * series serialise here rather than both reading the same value. That is the
+ * whole point — it replaces
  *
  *     SELECT count(*) FROM orders WHERE org_id = $1   -- N
  *     ...insert with N + 1
  *
  * which at READ COMMITTED let both callers see N and both build N+1.
  *
- * The lock is per (tenant, kind), so tenants never block each other and an
- * order never blocks a purchase order.
+ * The lock is per (tenant, entity, kind), so tenants never block each other,
+ * entities never block each other, and an order never blocks a purchase order.
  *
  * Single statement, so there is no window between reading and writing for
  * anything to interleave. Do not "optimise" this into a SELECT followed by an
@@ -320,11 +338,16 @@ export async function nextDocumentNumber(
     tx: Pick<DbTx, 'execute' | 'rollback'>,
     orgId: string,
     kind: DocumentKind,
+    legalEntityId?: string,
 ): Promise<number> {
     const rows = await tx.execute<{ last_value: string | number | bigint }>(sql`
-        INSERT INTO org_document_counters (org_id, kind, last_value, updated_at)
-        VALUES (${orgId}, ${kind}, 1, now())
-        ON CONFLICT (org_id, kind) DO UPDATE
+        INSERT INTO org_document_counters (org_id, legal_entity_id, kind, last_value, updated_at)
+        VALUES (
+            ${orgId},
+            COALESCE(${legalEntityId ?? null}::uuid,
+                     (SELECT stock_owner_entity_id FROM organizations WHERE id = ${orgId})),
+            ${kind}, 1, now())
+        ON CONFLICT (org_id, legal_entity_id, kind) DO UPDATE
             SET last_value = org_document_counters.last_value + 1,
                 updated_at = now()
         RETURNING last_value
@@ -337,7 +360,8 @@ export async function nextDocumentNumber(
         // withOrgContext and app.org_id is unset. Fail loudly rather than
         // returning NaN and writing a document numbered "undefined".
         throw new Error(
-            `nextDocumentNumber(${kind}) returned no row for org ${orgId}. ` +
+            `nextDocumentNumber(${kind}) returned no row for org ${orgId}, ` +
+                `entity ${legalEntityId ?? '(org default)'}. ` +
                 'This usually means the call is not inside withOrgContext, so the ' +
                 'RLS policy on org_document_counters matched nothing.',
         );
@@ -354,28 +378,41 @@ export async function nextDocumentNumber(
  * Kept beside the allocator so the format and the series that feeds it cannot
  * drift apart — and so the seed logic in 0036, which reads the TRAILING digits
  * of these strings, has one place to check against.
+ *
+ * `prefix` is the issuing entity's legal_entities.document_prefix (0069) and is
+ * passed ONLY for a non-default entity. Omitted, each kind keeps the shape the
+ * default entity has always issued (IRT-YYYY-NNNN, RMA-NNNN, PO-YYYY-NNNN,
+ * QT-YYYY-NNNN), so 0036 seed continuity holds. With a prefix the entity's
+ * series is distinguishable: `${prefix}-YYYY-NNNN` for orders,
+ * `${prefix}-${code}-…` for every other kind.
+ *
+ * The year is part of the label, not part of the series: the counter is not
+ * reset in January. Changing that means seeding a new counter row, not changing
+ * this string. Returns carry no year — matching what they have already issued.
  */
-export function formatDocumentNumber(kind: DocumentKind, value: number, year?: number): string {
+export function formatDocumentNumber(kind: DocumentKind, value: number, year?: number, prefix?: string): string {
     const seq = String(value).padStart(4, '0');
-    switch (kind) {
-        // The year is part of the label, not part of the series: the counter is
-        // not reset in January. Changing that means seeding a new counter row,
-        // not changing this string.
-        case 'order':
-            return `IRT-${year ?? new Date().getFullYear()}-${seq}`;
-        case 'return':
-            return `RMA-${seq}`;
-        // PO carries a year and orders do not — matching what each has already
-        // issued. Dropping the year here would renumber every existing PO's
-        // shape and break the 0036 seed's continuity with them.
-        case 'purchase_order':
-            return `PO-${year ?? new Date().getFullYear()}-${seq}`;
-        // PR-2b: a sales rep's quote. Its own series; a converted quote's
-        // order takes the next order number, not this one.
-        case 'quote':
-            return `QT-${year ?? new Date().getFullYear()}-${seq}`;
-    }
+    const y = String(year ?? new Date().getFullYear());
+    const { code, withYear } = DOCUMENT_FORMATS[kind];
+    // Orders have no kind code: the entity prefix IS the code ('IRT' for the
+    // default entity, which is also its seeded document_prefix).
+    const head = kind === 'order' ? [prefix || 'IRT'] : [prefix, code];
+    return [...head, withYear ? y : null, seq].filter(Boolean).join('-');
 }
+
+const DOCUMENT_FORMATS: Record<DocumentKind, { code: string | null; withYear: boolean }> = {
+    order: { code: null, withYear: true },
+    return: { code: 'RMA', withYear: false },
+    purchase_order: { code: 'PO', withYear: true },
+    // PR-2b: a sales rep's quote. Its own series; a converted quote's order
+    // takes the next order number, not this one.
+    quote: { code: 'QT', withYear: true },
+    shipment: { code: 'SHP', withYear: true },
+    invoice: { code: 'INV', withYear: true },
+    credit_note: { code: 'CN', withYear: true },
+    production_order: { code: 'MO', withYear: true },
+    stock_adjustment: { code: 'ADJ', withYear: true },
+};
 export * from './campaignDispatch';
 export * from './orderPlacement';
 export * from './salesPricing';
