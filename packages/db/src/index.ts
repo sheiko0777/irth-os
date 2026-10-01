@@ -73,6 +73,7 @@ export * from './schema/access';
 export * from './schema/exchangeRates';
 export * from './fx';
 export * from './ledger';
+export * from './ledgerEntity';
 export * from './orderLedger';
 export * from './costing';
 export * from './idempotency';

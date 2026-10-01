@@ -554,7 +554,8 @@ export const purchasingRouter = router({
                 const poCurrency = assertSupportedCurrency(po.currency);
                 await postJournalEntry(tx, {
                     orgId: ctx.orgId,
-                    journalType: 'purchases',
+                    journalType: 'purchases', entryKind: 'po_receipt',
+                    dimensions: { counterpartyKind: 'supplier', counterpartyId: po.supplierId },
                     description: `Goods received — PO ${po.poNumber}`,
                     sourceTable: 'purchase_orders',
                     sourceId: po.id,

@@ -96,7 +96,12 @@ async function seedOrder(opts: {
 /** Every line of the entry, keyed by account code. */
 async function linesByCode(entryId: string) {
   const rows = await testDb
-    .select({ code: accounts.code, debit: journalLines.debitMinor, credit: journalLines.creditMinor })
+    .select({
+      code: accounts.code, debit: journalLines.debitMinor, credit: journalLines.creditMinor,
+      functionalDebit: journalLines.functionalDebitMinor, functionalCredit: journalLines.functionalCreditMinor,
+      legalEntityId: journalLines.legalEntityId, brandId: journalLines.brandId, channelId: journalLines.channelId,
+      orderId: journalLines.orderId,
+    })
     .from(journalLines)
     .innerJoin(accounts, eq(journalLines.accountId, accounts.id))
     .where(eq(journalLines.entryId, entryId));
@@ -180,6 +185,21 @@ describe('order delivered → revenue posting', () => {
     for (const l of lines.values()) { debit += l.debit; credit += l.credit; }
     expect(debit).toBe(credit);
     expect(expectedNet + expectedVat).toBe(GROSS);
+
+    // Ledger v2 (0080): the parent direct sale lands in the org's default
+    // entity, on its default channel, tagged with the order; functional =
+    // transaction amounts for an EGP sale in an EGP entity.
+    const [org] = await testDb.select({ entityId: organizations.stockOwnerEntityId })
+      .from(organizations).where(eq(organizations.id, orgId));
+    const revenue = lines.get(ACCOUNT_CODES.SALES_REVENUE)!;
+    expect(revenue.legalEntityId).toBe(org.entityId);
+    expect(revenue.brandId).not.toBeNull();
+    expect(revenue.channelId).not.toBeNull();
+    expect(lines.get(ACCOUNT_CODES.COGS)?.channelId).toBe(revenue.channelId);
+    for (const l of lines.values()) {
+      expect(l.orderId).toBe(order.id);
+      expect([l.functionalDebit, l.functionalCredit]).toEqual([l.debit, l.credit]);
+    }
   });
 
   it('omits COGS when no line has a known cost basis', async () => {

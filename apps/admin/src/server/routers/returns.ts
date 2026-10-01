@@ -99,7 +99,7 @@ async function refundReturn(
 
     await postJournalEntry(tx, {
       orgId,
-      journalType: 'sales',
+      journalType: 'sales', entryKind: 'return_refund', defaultChannel: true, dimensions: { orderId: row.orderId },
       description: `Return refunded — ${row.returnNumber}`,
       sourceTable: 'order_returns',
       sourceId: row.id,
@@ -377,7 +377,8 @@ export const returnsRouter = router({
         if (orderItem.costMinor !== null && orderItem.costMinor > 0n) {
           const cost = multiply(fromMinor(orderItem.costMinor, returnCurrency), item.quantity);
           await postJournalEntry(tx, {
-            orgId: ctx.orgId, journalType: 'sales',
+            orgId: ctx.orgId, journalType: 'sales', entryKind: 'return_restock', defaultChannel: true,
+            dimensions: { orderId: returnObj.orderId, variantId: orderItem.variantId },
             description: `Return restocked - ${returnObj.returnNumber}`,
             sourceTable: 'return_items', sourceId: item.id, createdBy: ctx.userId,
             lines: [

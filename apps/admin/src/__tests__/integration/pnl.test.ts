@@ -79,7 +79,7 @@ describe('goods received → order delivered → pnl aggregation', () => {
         .where(eq(inventoryItems.id, invItem.id));
 
       await postJournalEntry(tx, {
-        orgId, journalType: 'purchases', description: 'Goods received',
+        orgId, journalType: 'purchases', entryKind: 'po_receipt', description: 'Goods received',
         sourceTable: 'purchase_orders', sourceId: invItem.id,
         lines: [
           { accountCode: ACCOUNT_CODES.INVENTORY, currency: "EGP", debitMinor: 6000n },
@@ -111,7 +111,7 @@ describe('goods received → order delivered → pnl aggregation', () => {
         { accountCode: ACCOUNT_CODES.INVENTORY, currency: "EGP", creditMinor: costMinor },
       ];
       await postJournalEntry(tx, {
-        orgId, journalType: 'sales', description: 'Order delivered',
+        orgId, journalType: 'sales', entryKind: 'order_delivered', defaultChannel: true, description: 'Order delivered',
         sourceTable: 'orders', sourceId: invItem.id, lines,
       });
     });
@@ -121,8 +121,8 @@ describe('goods received → order delivered → pnl aggregation', () => {
       .select({
         code: accounts.code,
         normalBalance: accounts.normalBalance,
-        debit: sum(journalLines.debitMinor),
-        credit: sum(journalLines.creditMinor),
+        debit: sum(journalLines.functionalDebitMinor),
+        credit: sum(journalLines.functionalCreditMinor),
       })
       .from(journalLines)
       .innerJoin(journalEntries, eq(journalLines.entryId, journalEntries.id))
