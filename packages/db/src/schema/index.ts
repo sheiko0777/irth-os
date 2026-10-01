@@ -24,6 +24,7 @@ export * from './documentCounters';
 export * from './idempotency';
 export * from './ledger';
 export * from './shopify';
+export * from './inbound';
 export * from './ai';
 export * from './deliveries';
 export * from './connections';
