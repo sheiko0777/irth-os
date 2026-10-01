@@ -128,6 +128,8 @@ paymobRoute.post('/', async (c: Context) => {
     await db.insert(auditLog).values({
       orgId: order.orgId,
       userId: null,
+      actorKind: 'webhook',
+      channel: 'webhook',
       action: 'PAYMOB_WEBHOOK',
       tableName: 'orders',
       recordId: order.id,
@@ -161,6 +163,8 @@ paymobRoute.post('/', async (c: Context) => {
     await db.insert(auditLog).values({
       orgId: order.orgId,
       userId: null,
+      actorKind: 'webhook',
+      channel: 'webhook',
       action: 'PAYMOB_WEBHOOK',
       tableName: 'orders',
       recordId: order.id,
@@ -177,6 +181,8 @@ paymobRoute.post('/', async (c: Context) => {
     await db.insert(auditLog).values({
       orgId: order.orgId,
       userId: null,
+      actorKind: 'webhook',
+      channel: 'webhook',
       action: 'PAYMOB_WEBHOOK',
       tableName: 'orders',
       recordId: order.id,

@@ -124,6 +124,7 @@ ordersRoute.post('/', requireOrgId(), requirePermission('orders', 'write'), asyn
         // Not the session user: customer_id refers to customers.id (0034).
         customerId: null,
         auditChanges: { items: itemsToInsert },
+        auditChannel: 'api',
       })),
     );
   } catch (err) {
@@ -213,6 +214,7 @@ ordersRoute.patch('/:id/status', requireOrgId(), requirePermission('orders', 'wr
     }, {
       orgId,
       userId,
+      channel: 'api',
       action: 'UPDATE_STATUS',
       tableName: 'orders',
       changes: { oldStatus: previousStatus, newStatus: status }

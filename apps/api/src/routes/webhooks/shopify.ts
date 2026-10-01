@@ -338,7 +338,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
         return row;
       }, {
         orgId,
-        userId: null,
+        userId: null, actorKind: 'webhook', channel: 'webhook',
         action: 'SHOPIFY_ORDER_BLOCKED',
         tableName: 'orders',
         changes: { shopifyOrderId, orderNumber: blockedNumber, unmapped },
@@ -386,7 +386,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       return row;
     }, {
       orgId,
-      userId: null,
+      userId: null, actorKind: 'webhook', channel: 'webhook',
       action: 'SHOPIFY_ORDER_CREATE',
       tableName: 'orders',
       changes: { shopifyOrderId, orderNumber, unmatchedSkus },
@@ -484,7 +484,7 @@ shopifyWebhookRoute.post('/orders-updated', verifyShopifyWebhook(), async (c: Co
       return row;
     }, {
       orgId,
-      userId: null,
+      userId: null, actorKind: 'webhook', channel: 'webhook',
       action: 'SHOPIFY_ORDER_UPDATE',
       tableName: 'orders',
       changes: { oldStatus: existing.status, newStatus },
@@ -595,7 +595,7 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
     return row;
   }, {
     orgId,
-    userId: null,
+    userId: null, actorKind: 'webhook', channel: 'webhook',
     action: 'SHOPIFY_ORDER_CANCEL',
     tableName: 'orders',
     changes: { oldStatus: existing.status, newStatus: 'cancelled' },

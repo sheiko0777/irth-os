@@ -87,6 +87,7 @@ export * from './revenueReport';
 // idempotency.ts / schema/idempotency.ts: producers import emitOutboxEvent, the
 // worker imports outboxEvents, and neither has to know where the other lives.
 export * from './outbox';
+export * from './auditDenial';
 
 export const createDb = (url: string) => {
   const client = postgres(url, { prepare: false });
@@ -259,10 +260,54 @@ export type DbTx = Parameters<Parameters<DbInstance['transaction']>[0]>[0];
  */
 type AuditWriter = Pick<DbTx, 'insert' | 'rollback'>;
 
+/** Who acted, through which door, and how it ended (audit_log v2, 0082). */
+export type AuditActorKind = 'user' | 'webhook' | 'cron' | 'system';
+export type AuditChannel = 'admin' | 'api' | 'webhook' | 'cron';
+export type AuditOutcome = 'success' | 'denied' | 'failed';
+
+export interface AuditData {
+    orgId: string;
+    userId: string | null;
+    action: string;
+    tableName: string;
+    changes: Record<string, unknown>;
+    // v2, all optional so every pre-0082 call compiles unchanged. Omitted, a
+    // row reads as a user acting through the admin app, successfully.
+    actorKind?: AuditActorKind;
+    channel?: AuditChannel;
+    outcome?: AuditOutcome;
+    before?: Record<string, unknown> | null;
+    after?: Record<string, unknown> | null;
+    reason?: string | null;
+    requestId?: string | null;
+    correlationId?: string | null;
+    onBehalfOf?: string | null;
+}
+
+/**
+ * The row withAudit writes. Pure, so the defaults are unit-testable without a
+ * database. actor_id / resource_id are left to the 0082 BEFORE INSERT trigger
+ * (copied from user_id / record_id), so raw inserts get them too.
+ */
+export function auditRow(auditData: AuditData, recordId: string | null) {
+    const { before, after, ...rest } = auditData;
+    return {
+        ...rest,
+        actorKind: auditData.actorKind ?? 'user',
+        channel: auditData.channel ?? 'admin',
+        outcome: auditData.outcome ?? 'success',
+        // Same jsonb/bigint hazard as `changes` — see below.
+        changes: jsonSafe(auditData.changes),
+        before: before == null ? null : jsonSafe(before),
+        after: after == null ? null : jsonSafe(after),
+        recordId,
+    };
+}
+
 export async function withAudit<T extends { id?: string }>(
     dbInstance: AuditWriter,
     operation: () => Promise<T>,
-    auditData: { orgId: string, userId: string | null, action: string, tableName: string, changes: Record<string, unknown> }
+    auditData: AuditData
 ) {
     const result = await operation();
     // `?? null`, not `|| 'unknown_id'`. record_id is uuid, so the old string
@@ -279,11 +324,7 @@ export async function withAudit<T extends { id?: string }>(
     // took down the write it was supposed to record. jsonSafe renders bigint as
     // a decimal string; applied here, at the boundary, so no call site has to
     // remember.
-    await dbInstance.insert(auditLog).values({
-        ...auditData,
-        changes: jsonSafe(auditData.changes),
-        recordId,
-    });
+    await dbInstance.insert(auditLog).values(auditRow(auditData, recordId));
     return result;
 }
 

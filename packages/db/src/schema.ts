@@ -250,6 +250,22 @@ export const auditLog = pgTable("audit_log", {
   // subject row, and the previous NOT NULL forced withAudit to invent one.
   recordId: uuid("record_id"),
   changes: jsonb("changes").notNull(),
+  // v2 (0082). Append-only: UPDATE/DELETE raise for every role. actor_id and
+  // resource_id are filled from user_id / record_id by a BEFORE INSERT trigger
+  // when a writer leaves them unset.
+  actorKind: text("actor_kind").notNull().default('user'), // 'user' | 'webhook' | 'cron' | 'system'
+  actorId: text("actor_id"),
+  onBehalfOf: text("on_behalf_of"),
+  channel: text("channel").notNull().default('admin'), // 'admin' | 'api' | 'webhook' | 'cron'
+  outcome: text("outcome").notNull().default('success'), // 'success' | 'denied' | 'failed'
+  before: jsonb("before"),
+  after: jsonb("after"),
+  reason: text("reason"),
+  requestId: text("request_id"),
+  correlationId: text("correlation_id"),
+  ip: text("ip"),
+  ua: text("ua"),
+  resourceId: text("resource_id"),
 });
 
 export const notifications = pgTable('notifications', {

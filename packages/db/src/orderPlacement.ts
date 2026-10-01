@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { orders, orderItems, type OrderAddressSnapshot, type OrderBuyerSnapshot } from './schema';
 import { inventoryItems, inventoryMovements } from './schema/inventory';
-import { formatDocumentNumber, nextDocumentNumber, withAudit, type DbTx } from './index';
+import { formatDocumentNumber, nextDocumentNumber, withAudit, type AuditChannel, type DbTx } from './index';
 
 /** Thrown inside the order transaction so the whole thing rolls back. */
 export class InsufficientStockError extends Error {
@@ -29,6 +29,8 @@ export interface PlaceOrderInput {
   buyer?: OrderBuyerSnapshot | null;
   shippingAddress?: OrderAddressSnapshot | null;
   auditChanges?: Record<string, unknown>;
+  /** Which door the order came through (audit_log v2); defaults to 'admin'. */
+  auditChannel?: AuditChannel;
 }
 
 /**
@@ -121,6 +123,7 @@ export async function placeOrder(tx: DbTx, input: PlaceOrderInput) {
   }, {
     orgId,
     userId: input.userId,
+    channel: input.auditChannel,
     action: 'CREATE',
     tableName: 'orders',
     changes: input.auditChanges ?? { items: input.lines },
