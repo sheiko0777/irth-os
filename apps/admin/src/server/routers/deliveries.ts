@@ -157,7 +157,8 @@ export const deliveriesRouter = router({
               }).returning({ id: repCashCollections.id });
               await postJournalEntry(tx, {
                 orgId: ctx.orgId,
-                journalType: 'cash',
+                journalType: 'cash', entryKind: 'rep_collection',
+                dimensions: { orderId: order.id, counterpartyKind: 'member', counterpartyId: me(ctx) },
                 description: `تحصيل مندوب — طلب ${order.orderNumber}`,
                 sourceTable: 'rep_cash_collections',
                 sourceId: collection.id,

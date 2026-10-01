@@ -223,7 +223,7 @@ export const courierRouter = router({
           if (remittance.amountMinor > 0n) {
             await postJournalEntry(tx, {
               orgId: ctx.orgId,
-              journalType: 'cash',
+              journalType: 'cash', entryKind: 'courier_remittance',
               description: `COD remitted — ${remittance.remittanceReference}`,
               sourceTable: 'courier_remittances',
               sourceId: remittance.id,

@@ -176,7 +176,8 @@ export const supplierAccountProcedures = {
           return withAudit(tx, async () => {
             const entry = await postJournalEntry(tx, {
               orgId: ctx.orgId,
-              journalType: 'cash',
+              journalType: 'cash', entryKind: 'supplier_payment',
+              dimensions: { counterpartyKind: 'supplier', counterpartyId: supplier.id },
               description: 'سداد لمورد',
               sourceTable: 'supplier_payments',
               sourceId: paymentId,

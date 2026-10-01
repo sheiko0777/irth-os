@@ -134,7 +134,7 @@ export const giftCardsRouter = router({
         if (initialAmountMinor > 0n) {
           await postJournalEntry(tx, {
             orgId: ctx.orgId,
-            journalType: 'general',
+            journalType: 'general', entryKind: 'gift_card_issued',
             description: `Gift card issued — ${code}`,
             sourceTable: 'gift_cards',
             sourceId: issued.id,
@@ -302,7 +302,7 @@ export const giftCardsRouter = router({
         // recognised at issuance becomes real revenue now.
         await postJournalEntry(tx, {
           orgId: ctx.orgId,
-          journalType: 'general',
+          journalType: 'general', entryKind: 'gift_card_redeemed', defaultChannel: true, dimensions: { orderId: input.orderId ?? null },
           description: `Gift card redeemed — ${card.code}`,
           sourceTable: 'gift_cards',
           sourceId: input.id,

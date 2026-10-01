@@ -111,8 +111,8 @@ export const financeRouter = router({
                     .select({
                         code: accounts.code,
                         normalBalance: accounts.normalBalance,
-                        debit: sum(journalLines.debitMinor),
-                        credit: sum(journalLines.creditMinor),
+                        debit: sum(journalLines.functionalDebitMinor),
+                        credit: sum(journalLines.functionalCreditMinor),
                     })
                     .from(journalLines)
                     .innerJoin(journalEntries, eq(journalLines.entryId, journalEntries.id))
