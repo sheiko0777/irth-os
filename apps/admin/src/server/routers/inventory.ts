@@ -33,8 +33,8 @@ export const inventoryRouter = router({
 
       // Counts always span the whole org, never the active filter — a tab that
       // showed its own filtered count would read zero on every other tab.
-      const [items, tally] = await ctx.withOrg((tx) => Promise.all([
-        tx
+      const { items, tally } = await ctx.withOrg(async (tx) => {
+        const itemsList = await tx
           .select({
             item: inventoryItems,
             variant: productVariants,
@@ -44,8 +44,9 @@ export const inventoryRouter = router({
           .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
           .innerJoin(products, eq(productVariants.productId, products.id))
           .where(stockFilter ? and(inScope, stockFilter) : inScope)
-          .orderBy(asc(inventoryItems.quantity)),
-        tx
+          .orderBy(asc(inventoryItems.quantity));
+
+        const tallyList = await tx
           .select({
             out: sql<number>`count(*) filter (where ${inventoryItems.quantity} <= 0)`.mapWith(Number),
             low: sql<number>`count(*) filter (where ${inventoryItems.quantity} > 0 and ${inventoryItems.quantity} <= ${inventoryItems.reorderPoint})`.mapWith(Number),
@@ -55,8 +56,10 @@ export const inventoryRouter = router({
           .from(inventoryItems)
           .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
           .innerJoin(products, eq(productVariants.productId, products.id))
-          .where(inScope),
-      ]));
+          .where(inScope);
+
+        return { items: itemsList, tally: tallyList };
+      });
 
       return {
         data: items,
