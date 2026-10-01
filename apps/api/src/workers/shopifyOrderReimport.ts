@@ -66,6 +66,8 @@ export async function reimportBlockedShopifyOrder(
     }, {
       orgId,
       userId: null,
+      actorKind: 'cron',
+      channel: 'cron',
       action: 'SHOPIFY_ORDER_REIMPORTED',
       tableName: 'orders',
       changes: { orderNumber: order.orderNumber, shopifyOrderId: order.shopifyOrderId, items: resolvedItems.length },

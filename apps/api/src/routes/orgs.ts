@@ -99,7 +99,7 @@ orgsRouter.post('/:id/invite', requireOrgId(), requirePermission('members', 'inv
       });
       return row;
     }, {
-      orgId, userId, action: 'INVITE_MEMBER', tableName: 'org_invites', changes: { email, role },
+      orgId, userId, channel: 'api', action: 'INVITE_MEMBER', tableName: 'org_invites', changes: { email, role },
     }));
 
     return c.json({ data: jsonSafe(invite), error: null, meta: null }, 201);
@@ -201,6 +201,7 @@ orgsRouter.patch('/members/:memberId/role', requireOrgId(), requirePermission('m
     }, {
       orgId,
       userId,
+      channel: 'api',
       action: 'UPDATE_MEMBER_ROLE',
       tableName: 'org_members',
       changes: { from: target.role, to: role }

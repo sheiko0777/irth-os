@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/cloudflare';
 import { db } from '@irth/db';
-import { outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
+import { auditLog, outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
@@ -460,6 +460,21 @@ async function deadLetterEvent(database: typeof db, event: OutboxEvent, errorMes
             lastError: errorMessage,
         });
         await database.delete(outboxEvents).where(eq(outboxEvents.id, event.id));
+        // Audited (CX-05): a dead letter is a side effect that never happened.
+        // Plain owner connection, like the dead-letter insert above.
+        await database.insert(auditLog).values({
+            orgId: event.orgId,
+            userId: null,
+            actorKind: 'cron',
+            channel: 'cron',
+            outcome: 'failed',
+            action: 'OUTBOX_DEAD_LETTERED',
+            tableName: 'outbox_events',
+            recordId: null,
+            resourceId: event.id,
+            reason: errorMessage,
+            changes: { eventType: event.eventType, attempts },
+        });
     } catch (deadLetterError) {
         console.error('Failed to dead-letter outbox event', deadLetterError);
     }

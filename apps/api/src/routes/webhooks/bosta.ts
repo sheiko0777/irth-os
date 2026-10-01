@@ -125,6 +125,8 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     await tx.insert(auditLog).values({
       orgId: order.orgId,
       userId: null,
+      actorKind: 'webhook',
+      channel: 'webhook',
       action: 'BOSTA_WEBHOOK_STATUS_UPDATE',
       tableName: 'orders',
       recordId: order.id,
