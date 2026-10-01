@@ -55,6 +55,14 @@ SHOPIFY_APP_URL = "https://irth-api.irth-os-api.workers.dev"
 # never listed here; verify it's actually set with
 # `wrangler secret list --name irth-api` before relying on the connect flow —
 # missing it throws at first use, not at deploy time)
+# CONNECTION_SECRETS_KEY_V1 (base64-encoded 32-byte key-encryption key for
+# connection_secrets, migration 0083 / CX-07 — packages/db/src/secrets.ts).
+# Rotation: add CONNECTION_SECRETS_KEY_V2, set CONNECTION_SECRETS_KEY_VERSION=2
+# (plain var, default 1), run rotateConnectionKeys(1 -> 2), then remove V1.
+# Missing → connection secrets fail closed. Losing it loses every connection:
+# the owner keeps it in a password manager. Set the same value on Vercel
+# (apps/admin) if admin ever writes secrets. SHOPIFY_TOKEN_ENCRYPTION_KEY is
+# retired after CX-12 moves Shopify onto connections.
 
 # Fires the `scheduled` handler in src/index.ts, which drains the outbox.
 #
