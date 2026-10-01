@@ -120,7 +120,7 @@ const summaryColumns = {
 };
 
 /** Metadata only — never selects wrapped_dek / ciphertext / iv columns. */
-export async function listConnectionSecretMeta(tx: Tx, connectionIds: string[]): Promise<Map<string, ConnectionSecretMeta[]>> {
+export async function listConnectionSecretMeta(tx: Tx, orgId: string, connectionIds: string[]): Promise<Map<string, ConnectionSecretMeta[]>> {
   const out = new Map<string, ConnectionSecretMeta[]>();
   if (connectionIds.length === 0) return out;
   const rows = await tx.select({
@@ -131,7 +131,8 @@ export async function listConnectionSecretMeta(tx: Tx, connectionIds: string[]):
     createdAt: connectionSecrets.createdAt,
     rotatedAt: connectionSecrets.rotatedAt,
   }).from(connectionSecrets)
-    .where(inArray(connectionSecrets.connectionId, connectionIds))
+    // Org filter as well as RLS: callers may pass ids from anywhere.
+    .where(and(eq(connectionSecrets.orgId, orgId), inArray(connectionSecrets.connectionId, connectionIds)))
     .orderBy(asc(connectionSecrets.name));
   for (const { connectionId, ...meta } of rows) {
     const list = out.get(connectionId) ?? [];
@@ -145,7 +146,7 @@ export async function listConnections(tx: Tx, ctx: ConnectionOpCtx, filter: { fa
   const rows = await tx.select(summaryColumns).from(connections)
     .where(and(eq(connections.orgId, ctx.orgId), filter.family ? eq(connections.family, filter.family) : undefined))
     .orderBy(asc(connections.family), asc(connections.priority), asc(connections.createdAt));
-  const secrets = await listConnectionSecretMeta(tx, rows.map((r) => r.id));
+  const secrets = await listConnectionSecretMeta(tx, ctx.orgId, rows.map((r) => r.id));
   return ConnectionSummary.array().parse(rows.map((r) => ({ ...r, secrets: secrets.get(r.id) ?? [] })));
 }
 
@@ -166,7 +167,7 @@ export async function disableConnection(tx: Tx, ctx: ConnectionOpCtx, connection
     .returning(summaryColumns);
   if (!row) throw new Error('Connection not found');
   await auditConnectionChange(tx, ctx, 'CONNECTION_DISABLED', 'connections', row.id, { reason: reason ?? null });
-  const secrets = await listConnectionSecretMeta(tx, [row.id]);
+  const secrets = await listConnectionSecretMeta(tx, ctx.orgId, [row.id]);
   return ConnectionSummary.parse({ ...row, secrets: secrets.get(row.id) ?? [] });
 }
 

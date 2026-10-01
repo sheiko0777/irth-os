@@ -63,4 +63,5 @@ export const connectionSecrets = pgTable('connection_secrets', {
     foreignColumns: [connections.id, connections.orgId],
   }).onDelete('cascade'),
   index('connection_secrets_key_version_idx').on(t.keyVersion),
+  index('connection_secrets_org_connection_idx').on(t.orgId, t.connectionId),
 ]);

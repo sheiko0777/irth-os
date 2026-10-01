@@ -179,7 +179,7 @@ export async function putConnectionSecret(
   const now = new Date();
   const [row] = existing
     ? await tx.update(connectionSecrets).set({ ...sealed, last4, rotatedAt: now, updatedAt: now })
-      .where(eq(connectionSecrets.id, existing.id)).returning({ id: connectionSecrets.id })
+      .where(and(eq(connectionSecrets.id, existing.id), eq(connectionSecrets.orgId, ctx.orgId))).returning({ id: connectionSecrets.id })
     : await tx.insert(connectionSecrets).values({ ...sealed, last4, orgId: ctx.orgId, connectionId: input.connectionId, name: input.name })
       .returning({ id: connectionSecrets.id });
   await auditConnectionChange(tx, ctx, existing ? 'CONNECTION_SECRET_ROTATED' : 'CONNECTION_SECRET_SET', 'connection_secrets', row.id, {
@@ -222,13 +222,24 @@ export async function rotateConnectionSecrets(
 ): Promise<number> {
   if (versions.fromVersion === versions.toVersion) return 0;
   await keyring.kek(versions.toVersion); // fail closed before touching anything
-  const rows = await tx.select().from(connectionSecrets).where(eq(connectionSecrets.keyVersion, versions.fromVersion));
+  // FOR UPDATE: a concurrent putConnectionSecret must not replace a row
+  // between this read and the re-wrap below, or the old DEK would be stamped
+  // onto new ciphertext and the secret would never decrypt again.
+  const rows = await tx.select().from(connectionSecrets)
+    .where(eq(connectionSecrets.keyVersion, versions.fromVersion))
+    .for('update');
   const perOrg = new Map<string, number>();
   for (const row of rows) {
     const next = await rewrapSecret(keyring, { orgId: row.orgId, connectionId: row.connectionId, name: row.name }, row, versions.toVersion);
     await tx.update(connectionSecrets)
       .set({ keyVersion: next.keyVersion, wrappedDek: next.wrappedDek, dekIv: next.dekIv, updatedAt: new Date() })
-      .where(and(eq(connectionSecrets.id, row.id), eq(connectionSecrets.keyVersion, versions.fromVersion)));
+      .where(and(
+        eq(connectionSecrets.id, row.id),
+        eq(connectionSecrets.orgId, row.orgId),
+        eq(connectionSecrets.keyVersion, versions.fromVersion),
+        // Belt and braces with the row lock: only re-wrap the ciphertext we read.
+        eq(connectionSecrets.ciphertext, row.ciphertext),
+      ));
     perOrg.set(row.orgId, (perOrg.get(row.orgId) ?? 0) + 1);
   }
   for (const [orgId, count] of perOrg) {

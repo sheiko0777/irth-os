@@ -81,6 +81,8 @@ CREATE TABLE "connection_secrets" (
 );--> statement-breakpoint
 -- The KEK rotation job selects by version.
 CREATE INDEX "connection_secrets_key_version_idx" ON "connection_secrets" ("key_version");--> statement-breakpoint
+-- Tenant predicate (RLS and every org-scoped read) leads with org_id.
+CREATE INDEX "connection_secrets_org_connection_idx" ON "connection_secrets" ("org_id", "connection_id");--> statement-breakpoint
 
 -- RLS: same NULLIF policy shape as 0038/0069, explicit grants.
 ALTER TABLE "connections" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
