@@ -24,6 +24,7 @@ import * as idempotencySchema from './schema/idempotency';
 import * as ledgerSchema from './schema/ledger';
 import * as shopifySchema from './schema/shopify';
 import * as inboundSchema from './schema/inbound';
+import * as orderImportSchema from './schema/orderImport';
 import * as aiSchema from './schema/ai';
 import * as dimensionsSchema from './schema/dimensions';
 import * as accessSchema from './schema/access';
@@ -34,7 +35,7 @@ import * as connectionsSchema from './schema/connections';
 // auth silently half-works.
 import * as authSchema from './schema/auth';
 
-const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema, ...stocktakingSchema, ...pricelistsSchema, ...shippingZonesSchema, ...campaignsSchema, ...giftCardsSchema, ...customerSegmentsSchema, ...orgFeatureFlagsSchema, ...documentCountersSchema, ...idempotencySchema, ...ledgerSchema, ...shopifySchema, ...inboundSchema, ...aiSchema, ...authSchema, ...dimensionsSchema, ...exchangeRatesSchema, ...accessSchema, ...connectionsSchema };
+const schema = { ...baseSchema, ...inventorySchema, ...outboxSchema, ...orgSettingsSchema, ...etaInvoicesSchema, ...couriersSchema, ...returnsSchema, ...purchasingSchema, ...customersSchema, ...couponsSchema, ...stocktakingSchema, ...pricelistsSchema, ...shippingZonesSchema, ...campaignsSchema, ...giftCardsSchema, ...customerSegmentsSchema, ...orgFeatureFlagsSchema, ...documentCountersSchema, ...idempotencySchema, ...ledgerSchema, ...shopifySchema, ...inboundSchema, ...orderImportSchema, ...aiSchema, ...authSchema, ...dimensionsSchema, ...exchangeRatesSchema, ...accessSchema, ...connectionsSchema };
 import { auditLog } from './schema';
 
 export * from './crypto';
@@ -69,6 +70,7 @@ export * from './schema/idempotency';
 export * from './schema/ledger';
 export * from './schema/shopify';
 export * from './schema/inbound';
+export * from './schema/orderImport';
 export * from './schema/ai';
 export * from './schema/dimensions';
 export * from './schema/deliveries';
