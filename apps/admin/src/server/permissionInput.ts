@@ -36,8 +36,4 @@ function canonical(list: Record<string, string[]>): PermissionList {
 
 
 /** The Postgres error code behind a Drizzle error, if any. */
-export function pgCode(err: unknown): string | undefined {
-  const cause = (err as { cause?: { code?: unknown } } | null)?.cause;
-  const code = cause?.code ?? (err as { code?: unknown } | null)?.code;
-  return typeof code === 'string' ? code : undefined;
-}
+export { pgErrorCode as pgCode } from '@irth/db';

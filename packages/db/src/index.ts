@@ -98,6 +98,7 @@ export * from './revenueReport';
 // worker imports outboxEvents, and neither has to know where the other lives.
 export * from './outbox';
 export * from './auditDenial';
+export * from './pgError';
 
 export const createDb = (url: string) => {
   const client = postgres(url, { prepare: false });

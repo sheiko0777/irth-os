@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db } from '../../db';
-import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual } from '@irth/db';
+import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual, isUniqueViolation } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -97,7 +97,7 @@ paymobRoute.post('/', async (c: Context) => {
       status: 'processed'
     });
   } catch (err) {
-    if ((err as { code?: string }).code === '23505') {
+    if (isUniqueViolation(err)) {
       // It's a duplicate delivery, return 200 without reprocessing.
       return c.json({ data: { success: true }, error: null, meta: null });
     }
