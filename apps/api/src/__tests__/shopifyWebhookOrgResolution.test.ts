@@ -152,6 +152,7 @@ vi.mock('@irth/db', () => ({
   // above always makes that lookup miss — the reference is still evaluated
   // to build the (discarded) query expression before `where()` short-circuits.
   productVariants: { orgId: 'orgId', shopifyInventoryItemId: 'shopifyInventoryItemId' },
+  upsertIdentity: vi.fn(),
 }));
 
 import { shopifyWebhookRoute } from '../routes/webhooks/shopify';

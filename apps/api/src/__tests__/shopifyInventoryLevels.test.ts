@@ -14,6 +14,7 @@ vi.mock('@irth/db', () => ({
   inventoryItems: { id: 'itemId', orgId: 'orgId', variantId: 'variantId' },
   inventoryLevelDiscrepancies: { name: 'discrepancies' },
   inventoryMovements: { name: 'movements' },
+  upsertIdentity: vi.fn(),
   withOrgContext: async (_db: unknown, _orgId: string, fn: (tx: unknown) => Promise<unknown>) => {
     const before = { ...item };
     const discrepancyCount = discrepancies.length;

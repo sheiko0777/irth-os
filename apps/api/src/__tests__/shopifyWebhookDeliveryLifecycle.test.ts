@@ -62,6 +62,7 @@ vi.mock('@irth/db', () => ({
   emitOutboxEvent: vi.fn(),
   buildOrderNotification: vi.fn(),
   OUTBOX_EVENT_BY_STATUS: {},
+  upsertIdentity: vi.fn(),
 }));
 vi.mock('../middlewares/verifyShopifyWebhook', () => ({
   verifyShopifyWebhook: () => async (_c: unknown, next: () => Promise<void>) => next(),

@@ -8,7 +8,7 @@ import {
   withOrgContext, withAudit, jsonSafe,
   nextDocumentNumber, formatDocumentNumber,
   emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
-  isUniqueViolation,
+  isUniqueViolation, upsertIdentity,
 } from '@irth/db';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
@@ -258,12 +258,50 @@ function parseWebhookBody<T>(raw: string): T | null {
   }
 }
 
-async function findOrCreateCustomer(
-  tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
+type WebhookTx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+
+/**
+ * DM-06 (additive): the customers row stays the source of truth for the
+ * lookup below; this also records the connection-scoped identities so
+ * customer_identities fills in as deliveries arrive. Insert-or-nothing — an
+ * identity already held (even by another customer) is left alone; merging is
+ * an explicit operation, never a side effect of a webhook.
+ */
+async function recordShopifyIdentities(
+  tx: WebhookTx,
   orgId: string,
+  connectionId: string | null,
+  customerId: string,
+  shopifyCustomerId: string | null,
+  email: string | null | undefined,
+): Promise<void> {
+  if (shopifyCustomerId) {
+    await upsertIdentity(tx, orgId, { customerId, kind: 'shopify', connectionId, externalId: shopifyCustomerId, verified: true });
+  }
+  if (email) await upsertIdentity(tx, orgId, { customerId, kind: 'email', connectionId, externalId: email });
+}
+
+async function findOrCreateCustomer(
+  tx: WebhookTx,
+  orgId: string,
+  connectionId: string | null,
   payload: ShopifyCustomerPayload | null | undefined,
+  // A guest checkout's token stands in for the customer id on the legacy
+  // customers row, but it is not a Shopify customer: record its email only.
+  guestCheckout = false,
 ): Promise<string | null> {
   if (!payload) return null;
+  const customerId = await findOrCreateCustomerRow(tx, orgId, payload);
+  const shopifyCustomerId = guestCheckout ? null : shopifyGid('Customer', payload.id);
+  await recordShopifyIdentities(tx, orgId, connectionId, customerId, shopifyCustomerId, payload.email);
+  return customerId;
+}
+
+async function findOrCreateCustomerRow(
+  tx: WebhookTx,
+  orgId: string,
+  payload: ShopifyCustomerPayload,
+): Promise<string> {
   const shopifyCustomerId = shopifyGid('Customer', payload.id);
 
   const [existing] = await tx.select().from(customers)
@@ -351,7 +389,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
   let result;
   try {
     result = await withOrgContext(db, orgId, async (tx) => {
-    const customerId = await findOrCreateCustomer(tx, orgId, payload.customer);
+    const customerId = await findOrCreateCustomer(tx, orgId, resolved.connectionId, payload.customer);
     const snapshot = snapshotShopifyOrder(payload);
     const totalMinor = shopifyMoneyToMinor(payload.total_price);
     const paymentMethod = payload.payment_gateway_names?.some(name => /cash on delivery|\bcod\b/i.test(name)) ? 'cod' : 'online';
@@ -677,7 +715,7 @@ shopifyWebhookRoute.post('/customers-upsert', verifyShopifyWebhook(), async (c: 
 
   try {
     const customerId = await withOrgContext(db, orgId, async (tx) => {
-      const id = await findOrCreateCustomer(tx, orgId, payload);
+      const id = await findOrCreateCustomer(tx, orgId, resolved.connectionId, payload);
       if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
       return id;
     });
@@ -793,11 +831,11 @@ shopifyWebhookRoute.post('/checkouts-upsert', verifyShopifyWebhook(), async (c: 
     await withOrgContext(db, orgId, async (tx) => {
       let customerId: string | null = null;
       if (payload.customer || payload.email || payload.phone) {
-        customerId = await findOrCreateCustomer(tx, orgId, payload.customer ?? {
+        customerId = await findOrCreateCustomer(tx, orgId, connectionId, payload.customer ?? {
           id: payload.token || String(payload.id),
           email: payload.email,
           phone: payload.phone,
-        });
+        }, !payload.customer);
       }
 
       const clientRaw = payload.token || payload.cart_token || String(payload.id);
