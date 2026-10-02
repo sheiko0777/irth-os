@@ -22,7 +22,10 @@
     "pnl": "Profit & Loss Summary",
     "cod": "Cash-on-Delivery Reconciliation",
     "vat": "VAT Report (14%)",
-    "ai": "AI Sales Query"
+    "ai": "AI Sales Query",
+    "cogsNotCalculated": "Not calculated",
+    "cogsNotCalculatedHint": "No cost was recorded for items sold in this period",
+    "estimated": "Estimated — excludes cost of goods"
   },
   "intelligence": {
     "title": "IRTH Intelligence",

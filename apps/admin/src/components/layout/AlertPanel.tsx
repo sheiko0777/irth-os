@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Clock, PackageX, RotateCcw } from 'lucide-react';
+import { formatNumber } from '@irth/domain';
 import { trpc } from '@/lib/trpc';
 
 /**
@@ -108,7 +109,7 @@ export function AlertPanel({ locale }: { locale: string }) {
                   style={{ color: row.fg, background: row.bg }}
                   dir="ltr"
                 >
-                  {n.toLocaleString('ar-EG')}
+                  {formatNumber(n)}
                 </span>
               </Link>
             </li>

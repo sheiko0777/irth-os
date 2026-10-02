@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { formatNumber } from "@irth/domain";
 import { serverCaller } from "@/server/caller";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExportButton } from "@/components/ExportButton";
@@ -119,10 +120,10 @@ export default async function InventoryPage({
                     </TableCell>
                     <TableCell className="text-[var(--t2)]">{row.variant.name}</TableCell>
                     <TableCell className="text-[var(--t1)] tabular-nums" dir="ltr">
-                      {row.item.quantity.toLocaleString("ar-EG")}
+                      {formatNumber(row.item.quantity)}
                     </TableCell>
                     <TableCell className="text-[var(--t2)] tabular-nums" dir="ltr">
-                      {row.item.reorderPoint.toLocaleString("ar-EG")}
+                      {formatNumber(row.item.reorderPoint)}
                     </TableCell>
                     <TableCell>
                       {/* Tinted, never a solid fill — the same treatment as every

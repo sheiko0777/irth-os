@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { formatNumber } from '@irth/domain';
 
 export interface FilterTab {
   /** Query value. `undefined` is the "all" tab — it drops the param entirely. */
@@ -74,7 +75,7 @@ export function FilterTabs({ param, tabs }: FilterTabsProps) {
                 }
                 dir="ltr"
               >
-                {tab.count.toLocaleString('ar-EG')}
+                {formatNumber(tab.count)}
               </span>
             )}
           </Link>

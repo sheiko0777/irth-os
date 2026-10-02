@@ -1,4 +1,5 @@
-import { currency, formatDate, formatMoney, fromMinor, multiply, sum } from "@irth/domain";
+import { Money } from "@/components/ui/Money";
+import { currency, formatDate, formatMoney, formatNumber, fromMinor, multiply, sum } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { TRPCError } from "@trpc/server";
@@ -171,7 +172,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                                         <TableRow key={`${line.shopifyVariantId ?? "custom"}-${i}`}>
                                             <TableCell>{line.label}</TableCell>
                                             <TableCell className="font-mono text-xs" dir="ltr">{line.sku ?? "—"}</TableCell>
-                                            <TableCell className="tabular-nums" dir="ltr">{line.quantity.toLocaleString("ar-EG")}</TableCell>
+                                            <TableCell className="tabular-nums" dir="ltr">{formatNumber(line.quantity)}</TableCell>
                                             <TableCell className="text-end tabular-nums" dir="ltr">{money(line.unitPriceMinor)}</TableCell>
                                             <TableCell>
                                                 {line.mappedVariant
@@ -215,10 +216,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                                     <TableRow key={item.id}>
                                         <TableCell className="font-mono text-xs" dir="ltr">{item.sku}</TableCell>
                                         <TableCell className="tabular-nums" dir="ltr">
-                                            {item.quantity.toLocaleString("ar-EG")}
+                                            {formatNumber(item.quantity)}
                                         </TableCell>
                                         <TableCell className="text-end tabular-nums" dir="ltr">
-                                            {formatMoney(fromMinor(item.priceMinor))}
+                                            {<Money value={fromMinor(item.priceMinor)} />}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -231,7 +232,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                             <div className="mt-3 flex items-center justify-between border-t border-[var(--rim1)] pt-3">
                                 <span className="text-xs text-[var(--t3)]">{t("detail.itemsTable.total")}</span>
                                 <span className="text-lg font-bold text-[var(--t1)] tabular-nums" dir="ltr">
-                                    {formatMoney(itemsTotal)}
+                                    <Money value={itemsTotal} />
                                 </span>
                             </div>
                         )}

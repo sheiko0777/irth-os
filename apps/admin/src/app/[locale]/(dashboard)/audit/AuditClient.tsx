@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Pagination } from '@/components/ui/Pagination';
-import { formatDate } from '@irth/domain';
+import { formatDate, formatNumber } from '@irth/domain';
 import { toast } from 'sonner';
 import {
   ShieldCheck,
@@ -210,7 +210,7 @@ export function AuditClient({ initialData, initialStats }: Props) {
             <span className="text-xs text-[var(--t2)] font-medium">إجمالي الحركات الموثقة</span>
             <Database className="w-4 h-4 text-[var(--gold)]" />
           </div>
-          <p className="text-2xl font-bold text-[var(--t1)] mt-2">{stats.totalEvents.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-[var(--t1)] mt-2">{formatNumber(stats.totalEvents)}</p>
         </div>
 
         <div className="glass rounded-[var(--card-radius)] p-4 shadow-xs">
@@ -218,7 +218,7 @@ export function AuditClient({ initialData, initialStats }: Props) {
             <span className="text-xs text-[var(--t2)] font-medium">عمليات اليوم</span>
             <Activity className="w-4 h-4 text-[var(--success)]" />
           </div>
-          <p className="text-2xl font-bold text-[var(--success)] mt-2">{stats.todayEvents.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-[var(--success)] mt-2">{formatNumber(stats.todayEvents)}</p>
         </div>
 
         <div className="glass rounded-[var(--card-radius)] p-4 shadow-xs">

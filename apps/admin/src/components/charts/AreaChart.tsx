@@ -1,3 +1,4 @@
+import { formatNumber } from "@irth/domain";
 import { smoothPath } from "./smoothPath";
 
 interface AreaChartProps {
@@ -25,7 +26,7 @@ export function AreaChart({
   data,
   id,
   title,
-  formatValue = (v) => v.toLocaleString("ar-EG-u-nu-latn"),
+  formatValue = formatNumber,
   height = 200,
 }: AreaChartProps) {
   if (data.length < 2) {
@@ -39,13 +40,14 @@ export function AreaChart({
     );
   }
 
-  const values = data.map((d) => d.value);
+  // The y domain starts at 0: a count below the baseline is never real.
+  const values = data.map((d) => Math.max(0, d.value));
   const max = Math.max(...values, 1);
   const H = height;
   const plotH = H - PAD_TOP - PAD_BOTTOM;
   const stepX = W / (data.length - 1);
-  const pts = data.map(
-    (d, i) => [i * stepX, PAD_TOP + plotH - (d.value / max) * plotH] as const,
+  const pts = values.map(
+    (v, i) => [i * stepX, PAD_TOP + plotH - (v / max) * plotH] as const,
   );
   const line = smoothPath(pts);
   const area = `${line} L ${W},${H} L 0,${H} Z`;
