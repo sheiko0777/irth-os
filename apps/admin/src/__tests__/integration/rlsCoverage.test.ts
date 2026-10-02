@@ -17,7 +17,8 @@
  *
  * Three occurrences was not the end of it. While this file was in review, 0047
  * landed on main and did it a FOURTH time, to six tables at once —
- * shopify_connections, shopify_oauth_states, shopify_webhook_deliveries,
+ * shopify_connections, shopify_oauth_states, shopify_webhook_deliveries (since
+ * 0084 renamed inbound_deliveries, which re-asserts its RLS under that name),
  * storefront_sessions, storefront_events, storefront_daily_metrics — two of
  * them holding credentials. This gate is what turned that from invisible into
  * a red build, and 0050 is the fix it forced. That is the argument for the

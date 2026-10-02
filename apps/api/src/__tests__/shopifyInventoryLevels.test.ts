@@ -8,7 +8,7 @@ vi.mock('../middlewares/verifyShopifyWebhook', () => ({
 }));
 vi.mock('@irth/db', () => ({
   shopifyConnections: { id: 'connectionId', orgId: 'orgId', shopDomain: 'shopDomain', status: 'status', inventoryLocationId: 'location' },
-  shopifyWebhookDeliveries: { id: 'deliveryId', connectionId: 'connectionId', webhookId: 'webhookId', status: 'status' },
+  inboundDeliveries: { id: 'deliveryId', provider: 'provider', connectionId: 'connectionId', deliveryKey: 'deliveryKey', status: 'status', attempts: 'attempts' },
   productVariants: { orgId: 'orgId', shopifyInventoryItemId: 'shopifyInventoryItemId' },
   inventoryItems: { id: 'itemId', orgId: 'orgId', variantId: 'variantId' },
   inventoryLevelDiscrepancies: { name: 'discrepancies' },
@@ -28,7 +28,7 @@ vi.mock('@irth/db', () => ({
 }));
 vi.mock('../db', () => ({ getDb: () => fakeDb, getEnv: () => ({}) }));
 
-import { inventoryItems, inventoryLevelDiscrepancies, inventoryMovements, productVariants, shopifyConnections, shopifyWebhookDeliveries } from '@irth/db';
+import { inventoryItems, inventoryLevelDiscrepancies, inventoryMovements, productVariants, shopifyConnections, inboundDeliveries } from '@irth/db';
 import { shopifyWebhookRoute } from '../routes/webhooks/shopify';
 
 const eventTime = '2026-09-06T12:00:00+03:00';
@@ -51,7 +51,7 @@ const fakeDb = {
           ? [{ id: 'conn-a', orgId: 'org-a', inventoryLocationId: location }]
           : table === productVariants ? (hasVariant ? [{ id: 'variant-a' }] : [])
           : table === inventoryItems ? [item]
-          : table === shopifyWebhookDeliveries ? [deliveries.get(currentWebhookId)] : [];
+          : table === inboundDeliveries ? [deliveries.get(currentWebhookId)] : [];
         return Object.assign(Promise.resolve(rows), {
           for: (mode: string) => { lock(mode); return Promise.resolve(rows); },
         });
@@ -60,8 +60,8 @@ const fakeDb = {
   }),
   insert: (table: unknown) => ({
     values: async (row: Record<string, unknown>) => {
-      if (table === shopifyWebhookDeliveries) {
-        const key = String(row.webhookId);
+      if (table === inboundDeliveries) {
+        const key = String(row.deliveryKey);
         if (deliveries.has(key)) throw Object.assign(new Error('duplicate'), { code: '23505' });
         deliveries.set(key, { ...row });
       } else if (table === inventoryLevelDiscrepancies) {
@@ -74,7 +74,7 @@ const fakeDb = {
     set: (patch: Record<string, unknown>) => ({
       where: async () => {
         if (table === inventoryItems) { patches.push(patch); Object.assign(item, patch); }
-        if (table === shopifyWebhookDeliveries) Object.assign(deliveries.get(currentWebhookId)!, patch);
+        if (table === inboundDeliveries) Object.assign(deliveries.get(currentWebhookId)!, patch);
       },
     }),
   }),

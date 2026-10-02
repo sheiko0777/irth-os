@@ -49,9 +49,9 @@ vi.mock('@irth/db', () => ({
   orgMembers: { orgId: 'orgId', role: 'role', userId: 'userId' },
   notifications: {},
   shopifyConnections: { id: 'id', orgId: 'orgId', shopDomain: 'shopDomain', status: 'status', lastWebhookAt: 'lastWebhookAt' },
-  shopifyWebhookDeliveries: {
-    id: 'id', orgId: 'orgId', connectionId: 'connectionId', webhookId: 'webhookId',
-    topic: 'topic', payload: 'payload', status: 'status', error: 'error', processedAt: 'processedAt',
+  inboundDeliveries: {
+    id: 'id', orgId: 'orgId', provider: 'provider', connectionId: 'connectionId', deliveryKey: 'deliveryKey',
+    topic: 'topic', payload: 'payload', status: 'status', error: 'error', processedAt: 'processedAt', attempts: 'attempts',
   },
   withOrgContext: vi.fn(),
   withAudit: vi.fn(),
@@ -68,7 +68,11 @@ vi.mock('../middlewares/verifyShopifyWebhook', () => ({
 
 import { claimDelivery, markDeliveryProcessed, markDeliveryFailed } from '../routes/webhooks/shopify';
 
-interface FakeRow { id: string; connectionId: string; webhookId: string; status: string; error: string | null; processedAt: Date | null }
+interface FakeRow {
+  id: string; provider: string; connectionId: string; deliveryKey: string; status: string; error: string | null; processedAt: Date | null;
+  rawBody: Uint8Array; bodySha256: string; headers: Record<string, string>;
+  apiVersion: string | null; eventId: string | null; triggeredAt: Date | null; attempts?: unknown;
+}
 
 describe('claimDelivery / markDeliveryProcessed / markDeliveryFailed', () => {
   let rows: FakeRow[];
@@ -88,11 +92,11 @@ describe('claimDelivery / markDeliveryProcessed / markDeliveryFailed', () => {
   function fakeDb() {
     return {
       insert: (_table: unknown) => ({
-        values: async (row: { id: string; connectionId: string; webhookId: string; status: string }) => {
-          if (rows.some((r) => r.connectionId === row.connectionId && r.webhookId === row.webhookId)) {
+        values: async (row: Omit<FakeRow, 'error' | 'processedAt'>) => {
+          if (rows.some((r) => r.provider === row.provider && r.connectionId === row.connectionId && r.deliveryKey === row.deliveryKey)) {
             throw Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
           }
-          rows.push({ id: row.id, connectionId: row.connectionId, webhookId: row.webhookId, status: row.status, error: null, processedAt: null });
+          rows.push({ ...row, error: null, processedAt: null });
         },
       }),
       update: (_table: unknown) => ({
@@ -110,7 +114,7 @@ describe('claimDelivery / markDeliveryProcessed / markDeliveryFailed', () => {
         from: (_table: unknown) => ({
           where: async () => {
             if (!inFlight) return [];
-            const row = rows.find((r) => r.connectionId === inFlight!.connectionId && r.webhookId === inFlight!.webhookId);
+            const row = rows.find((r) => r.connectionId === inFlight!.connectionId && r.deliveryKey === inFlight!.webhookId);
             return row ? [{ id: row.id, status: row.status }] : [];
           },
         }),
@@ -119,8 +123,13 @@ describe('claimDelivery / markDeliveryProcessed / markDeliveryFailed', () => {
   }
 
   const resolvedBase = { orgId: 'org-a', connectionId: 'conn-a' };
-  function ctx(webhookId: string | undefined) {
-    return { req: { header: (name: string) => (name === 'x-shopify-webhook-id' ? webhookId : undefined) } } as never;
+  const BODY = '{"id":1,"name":"#1001"}';
+  function ctx(webhookId: string | undefined, extra: Record<string, string> = {}) {
+    const headers: Record<string, string> = { ...extra, ...(webhookId ? { 'x-shopify-webhook-id': webhookId } : {}) };
+    return {
+      req: { header: (name?: string) => (name === undefined ? headers : headers[name.toLowerCase()]) },
+      get: (key: string) => (key === 'rawBody' ? BODY : undefined),
+    } as never;
   }
 
   async function claim(db: ReturnType<typeof fakeDb>, webhookId: string | undefined, connectionId: string | null = resolvedBase.connectionId) {
@@ -133,7 +142,38 @@ describe('claimDelivery / markDeliveryProcessed / markDeliveryFailed', () => {
     const result = await claim(db, 'wh-1');
     expect(result).toMatchObject({ kind: 'new' });
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ connectionId: 'conn-a', webhookId: 'wh-1', status: 'received' });
+    expect(rows[0]).toMatchObject({ provider: 'shopify', connectionId: 'conn-a', deliveryKey: 'wh-1', status: 'received' });
+  });
+
+  it('records the exact raw bytes, their sha256, x-shopify-* headers only, and the header metadata', async () => {
+    const db = fakeDb();
+    inFlight = { connectionId: 'conn-a', webhookId: 'wh-ev' };
+    await claimDelivery(db as never, { orgId: 'org-a', connectionId: 'conn-a' }, ctx('wh-ev', {
+      'x-shopify-api-version': '2026-07',
+      'x-shopify-event-id': 'evt-1',
+      'x-shopify-triggered-at': '2026-09-06T12:00:00.123Z',
+      'x-shopify-hmac-sha256': 'sig',
+      authorization: 'Bearer secret',
+      cookie: 'a=b',
+    }), 'orders/create', {});
+    const row = rows[0];
+    expect(new TextDecoder().decode(row.rawBody)).toBe(BODY);
+    const expected = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(BODY))),
+      (b) => b.toString(16).padStart(2, '0')).join('');
+    expect(row.bodySha256).toBe(expected);
+    expect(row.headers).toEqual({
+      'x-shopify-webhook-id': 'wh-ev', 'x-shopify-api-version': '2026-07', 'x-shopify-event-id': 'evt-1',
+      'x-shopify-triggered-at': '2026-09-06T12:00:00.123Z', 'x-shopify-hmac-sha256': 'sig',
+    });
+    expect(row).toMatchObject({ apiVersion: '2026-07', eventId: 'evt-1', triggeredAt: new Date('2026-09-06T12:00:00.123Z') });
+  });
+
+  it('an unparseable x-shopify-triggered-at is stored as null, not an invalid date', async () => {
+    const db = fakeDb();
+    inFlight = { connectionId: 'conn-a', webhookId: 'wh-bad-ts' };
+    await claimDelivery(db as never, { orgId: 'org-a', connectionId: 'conn-a' }, ctx('wh-bad-ts', { 'x-shopify-triggered-at': 'not a date' }), 'orders/create', {});
+    expect(rows[0].triggeredAt).toBeNull();
+    expect(rows[0]).toMatchObject({ apiVersion: null, eventId: null });
   });
 
   it('THE F01 REGRESSION: a redelivery whose prior attempt never reached processed must be retried, not skipped', async () => {
@@ -153,6 +193,14 @@ describe('claimDelivery / markDeliveryProcessed / markDeliveryFailed', () => {
     // reattempted order creation. The fix must NOT report this as processed.
     expect(retry.kind).not.toBe('processed');
     expect(retry).toMatchObject({ kind: 'retry' });
+  });
+
+  it('treats a drizzle-wrapped 23505 (code on .cause) as a redelivery, not an error', async () => {
+    const db = fakeDb();
+    await claim(db, 'wh-wrapped');
+    const wrapped = { ...db, insert: () => ({ values: async () => { throw Object.assign(new Error('Failed query'), { cause: { code: '23505' } }); } }) };
+    const retry = await claim(wrapped as never, 'wh-wrapped');
+    expect(retry).toMatchObject({ kind: 'retry', deliveryId: rows[0].id });
   });
 
   it('a redelivery after the business effect genuinely completed is safely skipped', async () => {
@@ -177,6 +225,8 @@ describe('claimDelivery / markDeliveryProcessed / markDeliveryFailed', () => {
     targetId = first.deliveryId;
     await markDeliveryFailed(db as never, first.deliveryId, new Error('token exchange failed'));
     expect(rows[0]).toMatchObject({ status: 'failed', error: 'token exchange failed' });
+    // attempts is bumped in SQL (attempts + 1), not read-modify-written here.
+    expect(typeof rows[0].attempts).toBe('object');
 
     // A later redelivery still sees this as retryable, not processed.
     const retry = await claim(db, 'wh-4');

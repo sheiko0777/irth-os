@@ -4,7 +4,7 @@ import { getDb, getEnv } from '../../db';
 import {
   orders, orderItems, customers, productVariants, inventoryItems, inventoryMovements,
   inventoryDiscrepancies, inventoryLevelDiscrepancies, orgMembers, notifications,
-  shopifyConnections, shopifyWebhookDeliveries, storefrontSessions, storefrontEvents,
+  shopifyConnections, inboundDeliveries, storefrontSessions, storefrontEvents,
   withOrgContext, withAudit, jsonSafe,
   nextDocumentNumber, formatDocumentNumber,
   emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
@@ -118,6 +118,11 @@ type DeliveryClaim =
  * same as a browser) rather than read back via `.returning()` — this insert
  * otherwise matches the prior version's shape exactly, so it stays
  * compatible with every existing test's mock of a plain `insert(...).values(...)`.
+ *
+ * OR-01: the row lives in `inbound_deliveries` and also keeps the evidence —
+ * the exact bytes the HMAC was checked over (`rawBody`, set by
+ * verifyShopifyWebhook), their sha256, the x-shopify-* headers, and the API
+ * version / event id / triggered-at Shopify sent.
  */
 async function claimDelivery(
   db: ReturnType<typeof getDb>,
@@ -127,42 +132,84 @@ async function claimDelivery(
   payload: unknown,
 ): Promise<DeliveryClaim> {
   if (!resolved.connectionId) return { kind: 'unrecorded' };
-  const webhookId = c.req.header('x-shopify-webhook-id');
-  if (!webhookId) return { kind: 'unrecorded' };
+  const deliveryKey = c.req.header('x-shopify-webhook-id');
+  if (!deliveryKey) return { kind: 'unrecorded' };
 
   const deliveryId = crypto.randomUUID();
+  const raw: unknown = c.get('rawBody');
+  // Set by verifyShopifyWebhook from the body it HMAC-checked; never guess it.
+  if (typeof raw !== 'string') throw new Error('claimDelivery: rawBody not set by verifyShopifyWebhook');
+  const rawBody = new TextEncoder().encode(raw);
+  const headers = shopifyEvidenceHeaders(c.req.header());
   try {
-    await db.insert(shopifyWebhookDeliveries).values({
-      id: deliveryId, orgId: resolved.orgId, connectionId: resolved.connectionId, webhookId, topic,
+    await db.insert(inboundDeliveries).values({
+      id: deliveryId, orgId: resolved.orgId, provider: 'shopify', connectionId: resolved.connectionId, deliveryKey, topic,
+      rawBody, headers, bodySha256: await sha256Hex(rawBody),
+      apiVersion: headers['x-shopify-api-version'] ?? null,
+      eventId: headers['x-shopify-event-id'] ?? null,
+      triggeredAt: parseTimestamp(headers['x-shopify-triggered-at']),
       payload: payload as object, status: 'received',
     });
     await db.update(shopifyConnections).set({ lastWebhookAt: new Date() }).where(eq(shopifyConnections.id, resolved.connectionId));
     return { kind: 'new', deliveryId };
   } catch (err) {
-    if ((err as { code?: string }).code !== '23505') throw err;
+    // drizzle-orm 0.45 wraps driver errors in DrizzleQueryError; the
+    // Postgres code is on `.cause`. Checking only `.code` made every real
+    // redelivery throw instead of reaching the status lookup below.
+    const code = (err as { code?: string }).code ?? (err as { cause?: { code?: string } }).cause?.code;
+    if (code !== '23505') throw err;
   }
 
   // Redelivery — decide based on durable state, not mere existence.
-  const [existing] = await db.select({ id: shopifyWebhookDeliveries.id, status: shopifyWebhookDeliveries.status })
-    .from(shopifyWebhookDeliveries)
-    .where(and(eq(shopifyWebhookDeliveries.connectionId, resolved.connectionId), eq(shopifyWebhookDeliveries.webhookId, webhookId)));
+  const [existing] = await db.select({ id: inboundDeliveries.id, status: inboundDeliveries.status })
+    .from(inboundDeliveries)
+    .where(and(
+      eq(inboundDeliveries.provider, 'shopify'),
+      eq(inboundDeliveries.connectionId, resolved.connectionId),
+      eq(inboundDeliveries.deliveryKey, deliveryKey),
+    ));
   if (existing?.status === 'processed') return { kind: 'processed' };
   return { kind: 'retry', deliveryId: existing?.id ?? '' };
 }
 
+/** Only Shopify's own headers are evidence; Authorization/cookies never reach the row. */
+function shopifyEvidenceHeaders(all: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(all ?? {})) {
+    const key = name.toLowerCase();
+    if (key.startsWith('x-shopify-')) out[key] = value;
+  }
+  return out;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function parseTimestamp(value: string | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 async function markDeliveryProcessed(executor: DbOrTx, deliveryId: string): Promise<void> {
   if (!deliveryId) return;
-  await executor.update(shopifyWebhookDeliveries)
+  await executor.update(inboundDeliveries)
     .set({ status: 'processed', processedAt: new Date() })
-    .where(eq(shopifyWebhookDeliveries.id, deliveryId));
+    .where(eq(inboundDeliveries.id, deliveryId));
 }
 
 async function markDeliveryFailed(db: ReturnType<typeof getDb>, deliveryId: string, error: unknown): Promise<void> {
   if (!deliveryId) return;
   try {
-    await db.update(shopifyWebhookDeliveries)
-      .set({ status: 'failed', error: error instanceof Error ? error.message : String(error) })
-      .where(eq(shopifyWebhookDeliveries.id, deliveryId));
+    await db.update(inboundDeliveries)
+      .set({
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+        attempts: sql`${inboundDeliveries.attempts} + 1`,
+      })
+      .where(eq(inboundDeliveries.id, deliveryId));
   } catch {
     // Best-effort — called from a catch block about to rethrow the real
     // error; a failure writing this marker must never mask that error.
