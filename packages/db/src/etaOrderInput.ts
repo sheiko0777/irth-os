@@ -56,19 +56,35 @@ export async function buildEtaOrderInput(
   // GPC-format ETA item code — the SKU is real and traceable to a specific
   // product, but it is NOT itself an ETA-conformant code. Flagged rather
   // than silently assumed correct.
-  const lineRows = await db
+  //
+  // LEFT joins (0086): a custom_nonstock line has no variant, but it was
+  // charged, so it must still be declared — an inner join would silently drop
+  // it and under-declare the invoice. It is described from its own snapshot.
+  const rawLines = await db
     .select({
       quantity: orderItems.quantity,
       priceMinor: orderItems.priceMinor,
       productName: products.name,
       sku: productVariants.sku,
+      title: orderItems.title,
+      skuSnapshot: orderItems.skuSnapshot,
     })
     .from(orderItems)
-    .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-    .innerJoin(products, eq(productVariants.productId, products.id))
+    .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
+    .leftJoin(products, eq(productVariants.productId, products.id))
     .where(eq(orderItems.orderId, orderId));
 
-  if (lineRows.length === 0) return null;
+  if (rawLines.length === 0) return null;
+
+  const lineRows = rawLines.map((r) => {
+    const productName = r.productName ?? r.title;
+    const sku = r.sku ?? r.skuSnapshot;
+    if (productName == null || sku == null) {
+      // Refuse rather than invent a description or item code for a tax filing.
+      throw new Error(`order ${orderId} has a line with no product name/title or SKU; cannot build its ETA invoice`);
+    }
+    return { quantity: r.quantity, priceMinor: r.priceMinor, productName, sku };
+  });
 
   let customerName: string | null = null;
   if (order.customerId) {

@@ -98,7 +98,8 @@ export const deliveriesRouter = router({
           sku: productVariants.sku, name: productVariants.name,
         })
           .from(orderItems)
-          .innerJoin(productVariants, and(eq(productVariants.id, orderItems.variantId), eq(productVariants.orgId, ctx.orgId)))
+          // LEFT: a custom_nonstock line (no variant, 0086) is still delivered.
+          .leftJoin(productVariants, and(eq(productVariants.id, orderItems.variantId), eq(productVariants.orgId, ctx.orgId)))
           .where(and(eq(orderItems.orderId, order.id), eq(orderItems.orgId, ctx.orgId)));
         const attempts = await tx.select().from(deliveryAttempts)
           .where(and(eq(deliveryAttempts.orgId, ctx.orgId), eq(deliveryAttempts.orderId, order.id), eq(deliveryAttempts.memberId, me(ctx))))

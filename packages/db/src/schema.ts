@@ -9,6 +9,20 @@ export const orderStatusEnum = pgEnum('order_status', ['pending', 'confirmed', '
 export const shippingProviderEnum = pgEnum('shipping_provider', ['bosta', 'mylerz']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cod', 'online']);
 
+// 0086: the five order lifecycles (orders.<key>_status). The CHECK constraints
+// in the migration hold the same lists; change both together.
+export const ORDER_LIFECYCLES = {
+  commercial: ['open', 'cancelled', 'closed'],
+  fulfillment: ['unfulfilled', 'partial', 'shipped', 'delivered', 'returned'],
+  payment: ['pending', 'cod_pending', 'authorized', 'paid', 'partially_refunded', 'refunded', 'voided', 'failed'],
+  invoice: ['not_required', 'pending', 'issued', 'failed'],
+  settlement: ['unsettled', 'partial', 'settled'],
+} as const;
+export type OrderLifecycle = keyof typeof ORDER_LIFECYCLES;
+export type OrderLifecycleValue<L extends OrderLifecycle> = (typeof ORDER_LIFECYCLES)[L][number];
+export const ORDER_LINE_KINDS = ['mapped', 'custom_nonstock'] as const;
+export type OrderLineKind = (typeof ORDER_LINE_KINDS)[number];
+
 // Base columns for all tables with org_id rule
 const baseColumns = {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -203,6 +217,45 @@ export const orders = pgTable("orders", {
   // placing it for their customer, or staff). NULL for storefront and API
   // orders. A sales rep sees the orders they placed and their customers'.
   createdByMemberId: uuid("created_by_member_id"),
+  // 0086 (orders v2, DM-05 ⊕ OR-09). FKs on connection_id (shopify_connections)
+  // and the two candidate ids (same-org onto order_import_candidates) live in
+  // the migration, not here, to avoid a schema.ts <-> schema/* import cycle.
+  // source: NULL = dashboard; 'legacy_shopify' = pre-candidate webhook import;
+  // any other value requires accepted_candidate_id (orders_promotion_guard_check).
+  connectionId: uuid("connection_id"),
+  source: text("source"),
+  sourceOrderId: text("source_order_id"),
+  sourceOrderNumber: text("source_order_number"),
+  sourceCreatedAt: timestamp("source_created_at", { withTimezone: true }),
+  sourceUpdatedAt: timestamp("source_updated_at", { withTimezone: true }),
+  sourceSyncedAt: timestamp("source_synced_at", { withTimezone: true }),
+  acceptedCandidateId: uuid("accepted_candidate_id"),
+  pendingRevisionCandidateId: uuid("pending_revision_candidate_id"),
+  presentmentCurrency: char("presentment_currency", { length: 3 }),
+  feesMinor: bigint("fees_minor", { mode: 'bigint' }),
+  refundedMinor: bigint("refunded_minor", { mode: 'bigint' }),
+  outstandingMinor: bigint("outstanding_minor", { mode: 'bigint' }),
+  taxesIncluded: boolean("taxes_included"),
+  sourceFinancialStatus: text("source_financial_status"),
+  sourceFulfillmentStatus: text("source_fulfillment_status"),
+  tags: text("tags").array(),
+  customAttributes: jsonb("custom_attributes"),
+  risk: jsonb("risk"),
+  sourceUrl: text("source_url"),
+  isTest: boolean("is_test").notNull().default(false),
+  cancelReason: text("cancel_reason"),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  // Must hold all 11 ORDER_SECTION keys when set (orders_sections_check).
+  sections: jsonb("sections").$type<Record<string, unknown>>(),
+  holdReason: text("hold_reason"),
+  heldAt: timestamp("held_at", { withTimezone: true }),
+  heldBy: text("held_by"),
+  commercialStatus: text("commercial_status").notNull().default('open').$type<OrderLifecycleValue<'commercial'>>(),
+  fulfillmentStatus: text("fulfillment_status").notNull().default('unfulfilled').$type<OrderLifecycleValue<'fulfillment'>>(),
+  paymentStatus: text("payment_status").notNull().default('pending').$type<OrderLifecycleValue<'payment'>>(),
+  invoiceStatus: text("invoice_status").notNull().default('not_required').$type<OrderLifecycleValue<'invoice'>>(),
+  settlementStatus: text("settlement_status").notNull().default('unsettled').$type<OrderLifecycleValue<'settlement'>>(),
 }, (table) => ({
   importStatusCheck: check('orders_import_status_check', sql`${table.importStatus} IN ('complete', 'blocked')`),
   orgBlockedIdx: index('orders_org_id_blocked_idx').on(table.orgId).where(sql`${table.importStatus} = 'blocked'`),
@@ -211,12 +264,24 @@ export const orders = pgTable("orders", {
   // IRT-2026-0001 and was locked out of ordering entirely.
   orgOrderNumberIdx: uniqueIndex('orders_org_order_number_idx').on(table.orgId, table.orderNumber),
   orgShopifyOrderIdIdx: uniqueIndex('orders_org_id_shopify_order_id_idx').on(table.orgId, table.shopifyOrderId),
+  connectionSourceOrderIdx: uniqueIndex('orders_connection_source_order_idx').on(table.connectionId, table.sourceOrderId).where(sql`${table.sourceOrderId} IS NOT NULL`),
+  acceptedCandidateIdx: index('orders_accepted_candidate_idx').on(table.acceptedCandidateId).where(sql`${table.acceptedCandidateId} IS NOT NULL`),
+  promotionGuardCheck: check('orders_promotion_guard_check', sql`${table.source} IS NULL OR ${table.source} = 'legacy_shopify' OR ${table.acceptedCandidateId} IS NOT NULL`),
+  sectionsCheck: check('orders_sections_check', sql`${table.sections} IS NULL OR (jsonb_typeof(${table.sections}) = 'object' AND ${table.sections} ?& ARRAY['identity', 'items', 'buyer', 'addresses', 'price', 'currency', 'payment', 'fulfillment', 'returns', 'context', 'evidence'])`),
+  commercialStatusCheck: check('orders_commercial_status_check', sql`${table.commercialStatus} IN ('open', 'cancelled', 'closed')`),
+  fulfillmentStatusCheck: check('orders_fulfillment_status_check', sql`${table.fulfillmentStatus} IN ('unfulfilled', 'partial', 'shipped', 'delivered', 'returned')`),
+  paymentStatusCheck: check('orders_payment_status_check', sql`${table.paymentStatus} IN ('pending', 'cod_pending', 'authorized', 'paid', 'partially_refunded', 'refunded', 'voided', 'failed')`),
+  invoiceStatusCheck: check('orders_invoice_status_check', sql`${table.invoiceStatus} IN ('not_required', 'pending', 'issued', 'failed')`),
+  settlementStatusCheck: check('orders_settlement_status_check', sql`${table.settlementStatus} IN ('unsettled', 'partial', 'settled')`),
 }));
 
 export const orderItems = pgTable("order_items", {
   ...baseColumns,
   orderId: uuid("order_id").references(() => orders.id).notNull(),
-  variantId: uuid("variant_id").references(() => productVariants.id).notNull(),
+  // NULL only on a 'custom_nonstock' line (0086, order_items_variant_matches_kind_check):
+  // stock and cost paths must skip those lines, never assume a variant.
+  variantId: uuid("variant_id").references(() => productVariants.id),
+  lineKind: text("line_kind").notNull().default('mapped').$type<OrderLineKind>(),
   quantity: integer("quantity").notNull(),
   // No currency column: a line is denominated in its order's currency by
   // definition, and a second copy is a second thing that can disagree.
@@ -226,7 +291,28 @@ export const orderItems = pgTable("order_items", {
   // order-delivered ledger posting reports the gap rather than treating it
   // as zero COGS.
   costMinor: bigint("cost_minor", { mode: 'bigint' }),
-});
+  // 0086 provider line snapshots.
+  sourceLineId: text("source_line_id"),
+  title: text("title"),
+  variantTitle: text("variant_title"),
+  skuSnapshot: text("sku_snapshot"),
+  sourceVariantId: text("source_variant_id"),
+  sourceProductId: text("source_product_id"),
+  currentQuantity: integer("current_quantity"),
+  unfulfilledQuantity: integer("unfulfilled_quantity"),
+  refundableQuantity: integer("refundable_quantity"),
+  discountMinor: bigint("discount_minor", { mode: 'bigint' }),
+  taxMinor: bigint("tax_minor", { mode: 'bigint' }),
+  totalMinor: bigint("total_minor", { mode: 'bigint' }),
+  requiresShipping: boolean("requires_shipping"),
+  customAttributes: jsonb("custom_attributes"),
+  taxLines: jsonb("tax_lines"),
+  discountAllocations: jsonb("discount_allocations"),
+}, (table) => ({
+  lineKindCheck: check('order_items_line_kind_check', sql`${table.lineKind} IN ('mapped', 'custom_nonstock')`),
+  variantMatchesKindCheck: check('order_items_variant_matches_kind_check', sql`(${table.lineKind} = 'custom_nonstock') = (${table.variantId} IS NULL)`),
+  orderSourceLineIdx: uniqueIndex('order_items_order_source_line_idx').on(table.orderId, table.sourceLineId).where(sql`${table.sourceLineId} IS NOT NULL`),
+}));
 
 export const shipmentTracking = pgTable("shipment_tracking", {
   ...baseColumns,

@@ -587,9 +587,12 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
     // restocking the requested amount for a floored line would inflate
     // stock beyond what was ever removed. This is new: cancelling a Shopify
     // order never gave inventory back before.
-    const items = await tx.select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
+    // A custom_nonstock line (variant_id NULL, 0086) never took stock, so it
+    // has nothing to restock: skip it rather than look up a NULL variant.
+    const items = (await tx.select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
       .from(orderItems)
-      .where(eq(orderItems.orderId, existing.id));
+      .where(eq(orderItems.orderId, existing.id)))
+      .flatMap((item) => (item.variantId === null ? [] : [{ variantId: item.variantId, quantity: item.quantity }]));
     const discrepancyRows = await tx.select({
       variantId: inventoryDiscrepancies.variantId,
       appliedQuantity: inventoryDiscrepancies.appliedQuantity,
