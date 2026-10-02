@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, foreignKey, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { check, foreignKey, index, integer, jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { orders, organizations } from '../schema';
 import { inboundDeliveries } from './inbound';
 import { shopifyConnections } from './shopify';
@@ -43,6 +43,8 @@ export const orderImportCandidates = pgTable('order_import_candidates', {
   uniqueIndex('order_import_candidates_source_version_idx').on(t.provider, t.connectionId, t.sourceOrderId, t.sourceUpdatedAt),
   index('order_import_candidates_org_status_updated_idx').on(t.orgId, t.status, t.updatedAt),
   index('order_import_candidates_inbound_delivery_idx').on(t.inboundDeliveryId),
+  // 0086: target of orders' same-org candidate FKs.
+  unique('order_import_candidates_id_org_id_key').on(t.id, t.orgId),
   check('order_import_candidates_provider_check', sql`${t.provider} ~ '^[a-z][a-z0-9_]{1,40}$'`),
   check('order_import_candidates_status_check', sql`${t.status} IN ('hydrating', 'blocked', 'promoted', 'superseded', 'discarded')`),
   check('order_import_candidates_sections_check', sql`jsonb_typeof(${t.sections}) = 'object'`),

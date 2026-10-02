@@ -200,7 +200,8 @@ export const ordersRouter = router({
                         sku: productVariants.sku,
                     })
                     .from(orderItems)
-                    .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
+                    // LEFT: a custom_nonstock line (no variant, 0086) is still on the order.
+                    .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
                     .where(and(
                         eq(orderItems.orderId, input.id),
                         eq(orderItems.orgId, ctx.orgId)
