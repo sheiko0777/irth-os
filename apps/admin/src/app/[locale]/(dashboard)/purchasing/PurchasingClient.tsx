@@ -1,5 +1,6 @@
 "use client";
-import { currency, formatMoney, fromMinor } from '@irth/domain';
+import { Money } from "@/components/ui/Money";
+import { currency, fromMinor } from '@irth/domain';
 
 import { useState } from "react";
 
@@ -315,7 +316,7 @@ export function PurchasingClient({ suppliers, purchaseOrders, locale }: Props) {
                         <PoSupplierStatus po={po} />
                       </TableCell>
                       <TableCell className="text-[var(--t2)]">
-                        {po.totalAmountMinor === null ? "-" : formatMoney(fromMinor(po.totalAmountMinor, currency(po.currency)))}
+                        {po.totalAmountMinor === null ? "-" : <Money value={fromMinor(po.totalAmountMinor, currency(po.currency))} />}
                       </TableCell>
                       <TableCell className="text-[var(--t2)]">
                         {po.createdAt ? format(new Date(po.createdAt), "PP", { locale: ar }) : "-"}

@@ -1,4 +1,4 @@
-import { formatDate } from "@irth/domain";
+import { formatDate, formatNumber } from "@irth/domain";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -123,7 +123,7 @@ export default async function DashboardPage({
         <KpiCard
           id="orders"
           title={t("ordersToday")}
-          value={ordersToday.toLocaleString("ar-EG-u-nu-latn")}
+          value={ordersToday}
           sub="إجمالي الطلبات اليوم"
           trend={deltas.ordersToday}
           series={series.orders}
@@ -133,7 +133,7 @@ export default async function DashboardPage({
         <KpiCard
           id="pending"
           title={t("pendingOrders")}
-          value={pendingOrders.toLocaleString("ar-EG-u-nu-latn")}
+          value={pendingOrders}
           sub="في انتظار المراجعة"
           href={`/${locale}/orders`}
           icon={<Clock />}
@@ -141,7 +141,7 @@ export default async function DashboardPage({
         <KpiCard
           id="products"
           title={t("activeProducts")}
-          value={activeProducts.toLocaleString("ar-EG-u-nu-latn")}
+          value={activeProducts}
           sub="منتجات متاحة للبيع"
           href={`/${locale}/products`}
           icon={<Package />}
@@ -150,7 +150,7 @@ export default async function DashboardPage({
 
       {/* One entrance sequence, ~90ms apart: KPI row, then the trend and the
           state track, then the table. Collapses to instant under reduced motion. */}
-      <div className="grid gap-4 lg:grid-cols-3 rise" style={{ animationDelay: "90ms" }}>
+      <div className="grid items-start gap-4 lg:grid-cols-3 rise" style={{ animationDelay: "90ms" }}>
         <section aria-labelledby="orders-trend" className="glass rounded-[var(--card-radius)] p-5 lg:col-span-2">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
@@ -160,7 +160,7 @@ export default async function DashboardPage({
               <p className="mt-0.5 text-xs text-[var(--text-secondary)]">عدد الطلبات الجديدة كل يوم</p>
             </div>
             <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--accent)] tabular-nums" dir="ltr">
-              {series.orders.reduce((a, b) => a + b, 0).toLocaleString("ar-EG-u-nu-latn")}
+              {formatNumber(series.orders.reduce((a, b) => a + b, 0))}
             </span>
           </div>
           <AreaChart

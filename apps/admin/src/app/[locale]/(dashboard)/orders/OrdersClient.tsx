@@ -1,5 +1,6 @@
 'use client';
-import { formatDate, formatMoney, fromMinor } from '@irth/domain';
+import { Money } from "@/components/ui/Money";
+import { formatDate, fromMinor } from '@irth/domain';
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
@@ -129,7 +130,7 @@ export function OrdersClient({ orders, locale, page, pageSize, total, filtered }
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t1)]" dir="ltr">
-                                            {formatMoney(fromMinor(order.totalAmountMinor))}
+                                            {<Money value={fromMinor(order.totalAmountMinor)} />}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]">
                                             {order.createdAt

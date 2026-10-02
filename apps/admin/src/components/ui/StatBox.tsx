@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { formatNumber } from '@irth/domain';
 
 /**
  * "Label over a big number" stat tile: the smaller sibling of KpiCard for
@@ -22,7 +23,10 @@ export function StatBox({
     <div className="glass rounded-[var(--card-radius)] p-4 space-y-1.5">
       <p className="text-xs font-medium text-[var(--text-secondary)]">{label}</p>
       <div className="flex items-center gap-2">
-        <p className={`text-2xl font-semibold tracking-tight tabular-nums ${valueClassName ?? 'text-[var(--text-primary)]'}`}>{value}</p>
+        {/* LTR isolate: an amount string must read "1,234 ج.م" in RTL too. */}
+        <p dir="ltr" className={`text-2xl font-semibold tracking-tight tabular-nums ${valueClassName ?? 'text-[var(--text-primary)]'}`}>
+          {typeof value === 'number' ? formatNumber(value) : value}
+        </p>
         {trailing}
       </div>
     </div>

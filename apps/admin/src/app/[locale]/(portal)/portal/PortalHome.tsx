@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { formatDate } from "@irth/domain";
+import { formatDate, formatNumber } from "@irth/domain";
 import { trpc } from "@/lib/trpc";
 import { Money } from "@/components/ui/Money";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,7 +50,7 @@ export function PortalHome({ locale }: { locale: string }) {
           <h2 id="orders-title" className="text-base font-semibold">أوامر الشراء</h2>
           {list.length > 0 && (
             <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)] tabular-nums">
-              {list.length.toLocaleString("ar-EG-u-nu-latn")}
+              {formatNumber(list.length)}
             </span>
           )}
         </div>

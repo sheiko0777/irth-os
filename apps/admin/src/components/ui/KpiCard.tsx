@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowUpLeft, TrendingDown, TrendingUp } from 'lucide-react';
+import { formatNumber } from '@irth/domain';
 import { Sparkline } from '@/components/charts/Sparkline';
 import { cn } from '@/lib/utils';
 
@@ -96,7 +97,7 @@ export function KpiCard({
           )}
           dir="ltr"
         >
-          {value}
+          {typeof value === 'number' ? formatNumber(value) : value}
         </span>
 
         {trend != null && (
