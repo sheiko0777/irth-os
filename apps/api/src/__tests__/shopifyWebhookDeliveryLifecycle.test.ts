@@ -39,6 +39,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 // Deliberately NOT spread from the real module (importOriginal) — see the
 // comment on the identical choice in shopifyWebhookOrgResolution.test.ts.
 vi.mock('@irth/db', () => ({
+  isUniqueViolation: (e: { code?: string; cause?: { code?: string } }) => (e?.cause?.code ?? e?.code) === '23505',
   orders: { id: 'id', orgId: 'orgId', shopifyOrderId: 'shopifyOrderId', status: 'status' },
   orderItems: { orderId: 'orderId', variantId: 'variantId', quantity: 'quantity' },
   customers: { id: 'id', orgId: 'orgId', shopifyCustomerId: 'shopifyCustomerId', email: 'email' },

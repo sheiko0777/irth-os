@@ -8,6 +8,7 @@ import {
   withOrgContext, withAudit, jsonSafe,
   nextDocumentNumber, formatDocumentNumber,
   emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
+  isUniqueViolation,
 } from '@irth/db';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
@@ -153,11 +154,9 @@ async function claimDelivery(
     await db.update(shopifyConnections).set({ lastWebhookAt: new Date() }).where(eq(shopifyConnections.id, resolved.connectionId));
     return { kind: 'new', deliveryId };
   } catch (err) {
-    // drizzle-orm 0.45 wraps driver errors in DrizzleQueryError; the
-    // Postgres code is on `.cause`. Checking only `.code` made every real
-    // redelivery throw instead of reaching the status lookup below.
-    const code = (err as { code?: string }).code ?? (err as { cause?: { code?: string } }).cause?.code;
-    if (code !== '23505') throw err;
+    // A redelivery reaches the status lookup below (see pgError.ts for why
+    // the code is not on err.code).
+    if (!isUniqueViolation(err)) throw err;
   }
 
   // Redelivery — decide based on durable state, not mere existence.
@@ -477,7 +476,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
     // nothing caught the violation it raises, so the losing request
     // surfaced as an unhandled 500 instead of the same idempotent response
     // the pre-check already returns for a genuine duplicate delivery.
-    if ((err as { code?: string }).code === '23505') {
+    if (isUniqueViolation(err)) {
       const [synced] = await db.select({ id: orders.id }).from(orders)
         .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
       if (synced) {

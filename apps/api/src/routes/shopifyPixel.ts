@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { and, eq } from 'drizzle-orm';
-import { shopifyConnections, storefrontSessions, storefrontEvents, jsonSafe } from '@irth/db';
+import { shopifyConnections, storefrontSessions, storefrontEvents, jsonSafe, isUniqueViolation } from '@irth/db';
 import { getDb } from '../db';
 import { hashOpaque } from '../services/shopifyConnection';
 
@@ -99,7 +99,7 @@ shopifyPixelRoute.post('/:ingestionKey', async (c: Context) => {
   } catch (err) {
     // Unique (connection_id, event_id) — the pixel's own retry/dedup key.
     // A redelivery is success, not an error.
-    if ((err as { code?: string }).code === '23505') {
+    if (isUniqueViolation(err)) {
       return c.json({ data: jsonSafe({ alreadyRecorded: true }), error: null, meta: null });
     }
     throw err;

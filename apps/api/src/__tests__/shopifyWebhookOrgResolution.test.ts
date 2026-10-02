@@ -144,6 +144,7 @@ vi.mock('../db', () => ({
 // depend on in the first place). Sidestepping it entirely, rather than
 // continuing to chase why, is the robust fix.
 vi.mock('@irth/db', () => ({
+  isUniqueViolation: (e: { code?: string; cause?: { code?: string } }) => (e?.cause?.code ?? e?.code) === '23505',
   shopifyConnections: { id: 'id', orgId: 'orgId', shopDomain: 'shopDomain', status: 'status' },
   inboundDeliveries: { orgId: 'orgId', provider: 'provider', connectionId: 'connectionId', deliveryKey: 'deliveryKey', topic: 'topic', payload: 'payload', status: 'status', attempts: 'attempts' },
   // Referenced by the /inventory-levels-update handler's variant lookup
