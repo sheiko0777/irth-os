@@ -15,8 +15,9 @@ import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
 
 let orgA: string;
 let orgB: string;
+// One Shopify connection per org until CX-12 drops shopify_connections_org_id_idx,
+// so "another connection" is exercised as the connection-less (NULL) key.
 let connA1: string;
-let connA2: string;
 let custA1: string;
 let custA2: string;
 let custA3: string;
@@ -55,7 +56,6 @@ beforeAll(async () => {
   orgA = a.id;
   orgB = b.id;
   connA1 = await connection(orgA, `ident-a1-${stamp}`);
-  connA2 = await connection(orgA, `ident-a2-${stamp}`);
   custA1 = await customer(orgA, 'Ana One');
   custA2 = await customer(orgA, 'Ana Two');
   custA3 = await customer(orgA, 'Ana Three');
@@ -80,9 +80,9 @@ describe('customer_identities (0087)', () => {
     expect(found).toBe(custA1);
   });
 
-  it('the same email on a second connection is a second identity, not a silent link', async () => {
+  it('the same email under another connection key is a second identity, not a silent link', async () => {
     const other = await withOrgContext(testDb, orgA, (tx) =>
-      upsertIdentity(tx, orgA, { customerId: custA2, kind: 'email', connectionId: connA2, externalId: 'ana@example.com' }));
+      upsertIdentity(tx, orgA, { customerId: custA2, kind: 'email', connectionId: null, externalId: 'ana@example.com' }));
     expect(other?.customerId).toBe(custA2);
     const rows = await testDb.select().from(customerIdentities)
       .where(eq(customerIdentities.externalId, 'ana@example.com'));
@@ -93,8 +93,9 @@ describe('customer_identities (0087)', () => {
     const row = { orgId: orgA, customerId: custA3, kind: 'phone' as const, externalId: '+201000000001' };
     await testDb.insert(customerIdentities).values(row);
     expect(await pgCode(testDb.insert(customerIdentities).values({ ...row, customerId: custA4 }))).toBe('23505');
-    await testDb.insert(customerIdentities).values({ ...row, connectionId: connA1 });
-    expect(await pgCode(testDb.insert(customerIdentities).values({ ...row, connectionId: connA1 }))).toBe('23505');
+    const scoped = { ...row, externalId: '+201000000009', connectionId: connA1 };
+    await testDb.insert(customerIdentities).values(scoped);
+    expect(await pgCode(testDb.insert(customerIdentities).values(scoped))).toBe('23505');
   });
 
   it('refuses an unknown kind and a blank external id', async () => {
@@ -156,14 +157,16 @@ describe('customer_merges (0087)', () => {
 
 describe('suggestMerge', () => {
   it('ranks by identity strength and changes nothing', async () => {
-    // custA1: email ana@ (connA1) from above, plus a phone shared with custA3.
-    // custA2: email ana@ (connA2) + verified Shopify id   -> strength 3
-    // custA3: phone +201000000001 (no connection, above)  -> strength 2
-    // custA4: connection-less email ana@                  -> strength 1
+    // custA1: email ana@ (connA1) from above, plus a phone shared with custA3
+    //         and a second email ana2@ shared with custA4.
+    // custA2: email ana@ (no connection) + verified Shopify id -> strength 3
+    // custA3: phone +201000000001 (no connection, above)       -> strength 2
+    // custA4: connection-less email ana2@                      -> strength 1
     await withOrgContext(testDb, orgA, async (tx) => {
-      await upsertIdentity(tx, orgA, { customerId: custA1, kind: 'phone', connectionId: connA2, externalId: '+201000000001' });
-      await upsertIdentity(tx, orgA, { customerId: custA2, kind: 'shopify', connectionId: connA2, externalId: 'gid://shopify/Customer/2', verified: true });
-      await upsertIdentity(tx, orgA, { customerId: custA4, kind: 'email', connectionId: null, externalId: 'ana@example.com' });
+      await upsertIdentity(tx, orgA, { customerId: custA1, kind: 'phone', connectionId: connA1, externalId: '+201000000001' });
+      await upsertIdentity(tx, orgA, { customerId: custA1, kind: 'email', connectionId: connA1, externalId: 'ana2@example.com' });
+      await upsertIdentity(tx, orgA, { customerId: custA2, kind: 'shopify', connectionId: connA1, externalId: 'gid://shopify/Customer/2', verified: true });
+      await upsertIdentity(tx, orgA, { customerId: custA4, kind: 'email', connectionId: null, externalId: 'ana2@example.com' });
     });
     const before = await testDb.select({ n: sql<number>`count(*)::int` }).from(customerIdentities);
 
