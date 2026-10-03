@@ -1,0 +1,186 @@
+{
+  "header": {
+    "source_order_id": "gid://shopify/Order/1005",
+    "source_order_number": "#1005",
+    "source_name": "web",
+    "source_updated_at": "2026-09-17T10:00:00Z",
+    "source_created_at": "2026-09-17T09:58:00Z",
+    "processed_at": "2026-09-17T09:58:00Z",
+    "financial_status": "paid",
+    "currency_code": "EGP",
+    "presentment_currency_code": "EGP",
+    "subtotal_price_set": {
+      "shop_money_minor": "54000"
+    },
+    "total_price_set": {
+      "shop_money_minor": "66560"
+    },
+    "total_tax_set": {
+      "shop_money_minor": "7560"
+    },
+    "total_discounts_set": {
+      "shop_money_minor": "6000"
+    },
+    "total_shipping_set": {
+      "shop_money_minor": "5000"
+    },
+    "total_refunded_set": {
+      "shop_money_minor": "0"
+    },
+    "total_outstanding_set": {
+      "shop_money_minor": "0"
+    }
+  },
+  "lines": [
+    {
+      "source_line_id": "gid://shopify/LineItem/1",
+      "title": "Synthetic Serum 30ml",
+      "sku_snapshot": "SYN-1",
+      "source_variant_id": "gid://shopify/ProductVariant/9001",
+      "source_product_id": "gid://shopify/Product/8001",
+      "quantity": 2,
+      "current_quantity": 2,
+      "unfulfilled_quantity": 2,
+      "refundable_quantity": 2,
+      "unit_price_minor": "25000",
+      "discount_minor": "5000",
+      "tax_minor": "6300",
+      "total_minor": "45000",
+      "requires_shipping": true,
+      "taxable": true,
+      "custom_attributes": {},
+      "tax_lines": [
+        {
+          "title": "VAT",
+          "rate_basis_points": 1400,
+          "price_minor": "6300"
+        }
+      ],
+      "discount_allocations": [
+        {
+          "source_discount_id": "gid://shopify/DiscountApplication/1",
+          "title": "SYNTH10",
+          "amount_minor": "5000"
+        }
+      ],
+      "mapping": {
+        "state": "mapped",
+        "variant_id": "local-variant-1"
+      }
+    },
+    {
+      "source_line_id": "gid://shopify/LineItem/2",
+      "title": "Synthetic Serum 30ml",
+      "sku_snapshot": "SYN-2",
+      "source_variant_id": "gid://shopify/ProductVariant/9002",
+      "source_product_id": "gid://shopify/Product/8002",
+      "quantity": 1,
+      "current_quantity": 1,
+      "unfulfilled_quantity": 1,
+      "refundable_quantity": 1,
+      "unit_price_minor": "10000",
+      "discount_minor": "1000",
+      "tax_minor": "1260",
+      "total_minor": "9000",
+      "requires_shipping": true,
+      "taxable": true,
+      "custom_attributes": {},
+      "tax_lines": [
+        {
+          "title": "VAT",
+          "rate_basis_points": 1400,
+          "price_minor": "1260"
+        }
+      ],
+      "discount_allocations": [
+        {
+          "source_discount_id": "gid://shopify/DiscountApplication/1",
+          "title": "SYNTH10",
+          "amount_minor": "1000"
+        }
+      ],
+      "mapping": {
+        "state": "mapped",
+        "variant_id": "local-variant-2"
+      }
+    }
+  ],
+  "buyer": {
+    "source_customer_id": "gid://shopify/Customer/7001",
+    "name": "Test Buyer",
+    "email": "buyer@example.test",
+    "phone": "+201000000001",
+    "is_guest": false
+  },
+  "addresses": {
+    "billing": {
+      "first_name": "Test",
+      "last_name": "Buyer",
+      "address1": "1 Example Street",
+      "city": "Cairo",
+      "country": "Egypt",
+      "country_code": "EG",
+      "phone": "+201000000001"
+    },
+    "shipping": {
+      "first_name": "Test",
+      "last_name": "Buyer",
+      "address1": "1 Example Street",
+      "city": "Cairo",
+      "country": "Egypt",
+      "country_code": "EG",
+      "phone": "+201000000001"
+    }
+  },
+  "price": {
+    "subtotal": "54000",
+    "discounts": "6000",
+    "discount_codes": [
+      {
+        "code": "SYNTH10",
+        "amount_minor": "6000"
+      }
+    ],
+    "tax_lines": [
+      {
+        "title": "VAT",
+        "rate_basis_points": 1400,
+        "price_minor": "7560"
+      }
+    ],
+    "shipping": "5000",
+    "additional_fees": "0",
+    "total": "66560",
+    "refunded": "0",
+    "outstanding": "0",
+    "taxes_included": false
+  },
+  "currency": {
+    "shop": "EGP",
+    "presentment": "EGP"
+  },
+  "transactions": [
+    {
+      "source_transaction_id": "gid://shopify/OrderTransaction/10051",
+      "kind": "sale",
+      "status": "success",
+      "gateway": "synthetic_gateway",
+      "amount_minor": "66560",
+      "processed_at": "2026-09-17T10:00:00Z"
+    }
+  ],
+  "fulfillments": [],
+  "refunds": [],
+  "context": {
+    "tags": [],
+    "custom_attributes": {},
+    "source_name": "web",
+    "is_test": false
+  },
+  "evidence": {
+    "inbound_delivery_id": "delivery-1005",
+    "api_version": "2026-07",
+    "connector_version": "shopify@1",
+    "fetched_at": "2026-09-17T10:00:05Z"
+  }
+}
