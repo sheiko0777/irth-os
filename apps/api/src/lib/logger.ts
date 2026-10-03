@@ -17,6 +17,8 @@
  * customer PII from payload objects nobody meant to log.
  */
 
+import { envVar, nodeEnv } from '../utils/env';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LEVEL_WEIGHT: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -27,9 +29,9 @@ const LEVEL_WEIGHT: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, 
  * can flip LOG_LEVEL. Raise to 'warn'/'error' in prod via LOG_LEVEL.
  */
 function minLevel(): LogLevel {
-    const raw = (process.env.LOG_LEVEL as LogLevel | undefined)?.toLowerCase();
+    const raw = (envVar('LOG_LEVEL') as LogLevel | undefined)?.toLowerCase();
     if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') return raw;
-    return (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
+    return (nodeEnv() === 'production' ? 'info' : 'debug');
 }
 
 export interface LogContext {
@@ -52,12 +54,17 @@ function safeValue(v: unknown): unknown {
     return v;
 }
 
-/** Strips keys with undefined values so every emitted line is stable JSON. */
+/** Strips keys with undefined values and redact PII fields so every emitted line is stable JSON. */
 function sanitize(ctx: LogContext): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(ctx)) {
         if (v === undefined) continue;
-        out[k] = safeValue(v);
+        const keyLower = k.toLowerCase();
+        if (keyLower.includes('email') || keyLower.includes('phone') || keyLower.includes('address')) {
+            out[k] = '[redacted]';
+        } else {
+            out[k] = safeValue(v);
+        }
     }
     return out;
 }
