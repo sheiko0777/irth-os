@@ -39,6 +39,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 // Deliberately NOT spread from the real module (importOriginal) — see the
 // comment on the identical choice in shopifyWebhookOrgResolution.test.ts.
 vi.mock('@irth/db', () => ({
+  safeEqual: (left: string, right: string) => left === right,
   isUniqueViolation: (e: { code?: string; cause?: { code?: string } }) => (e?.cause?.code ?? e?.code) === '23505',
   orders: { id: 'id', orgId: 'orgId', shopifyOrderId: 'shopifyOrderId', status: 'status' },
   orderItems: { orderId: 'orderId', variantId: 'variantId', quantity: 'quantity' },
@@ -52,7 +53,9 @@ vi.mock('@irth/db', () => ({
   shopifyConnections: { id: 'id', orgId: 'orgId', shopDomain: 'shopDomain', status: 'status', lastWebhookAt: 'lastWebhookAt' },
   inboundDeliveries: {
     id: 'id', orgId: 'orgId', provider: 'provider', connectionId: 'connectionId', deliveryKey: 'deliveryKey',
-    topic: 'topic', payload: 'payload', status: 'status', error: 'error', processedAt: 'processedAt', attempts: 'attempts',
+    topic: 'topic', rawBody: 'rawBody', headers: 'headers', bodySha256: 'bodySha256', apiVersion: 'apiVersion',
+    eventId: 'eventId', triggeredAt: 'triggeredAt', payload: 'payload', status: 'status', error: 'error',
+    processedAt: 'processedAt', attempts: 'attempts',
   },
   withOrgContext: vi.fn(),
   withAudit: vi.fn(),

@@ -14,6 +14,7 @@ import { eq, and, sql, inArray } from 'drizzle-orm';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
 import { UnsupportedCurrencyError, assertSupportedCurrency } from '@irth/domain';
 import { hashOpaque } from '../../services/shopifyConnection';
+import { shopifyInboxRoute } from './shopifyInbox';
 import {
   applyShopifyOrderLines, blockedReasonFor, findUnmappedLines, notifyAdminsOfBlockedImport,
   notifyAdminsOfStockShortfall, shopifyGid, shopifyMoneyToMinor, snapshotShopifyOrder,
@@ -38,6 +39,7 @@ import {
  */
 
 const shopifyWebhookRoute = new Hono();
+shopifyWebhookRoute.route('/inbox', shopifyInboxRoute);
 
 /**
  * Legacy single-tenant fallback. The org every webhook wrote into before
@@ -137,10 +139,15 @@ async function claimDelivery(
   if (!deliveryKey) return { kind: 'unrecorded' };
 
   const deliveryId = crypto.randomUUID();
+  const rawBytes: unknown = c.get('rawBytes');
   const raw: unknown = c.get('rawBody');
   // Set by verifyShopifyWebhook from the body it HMAC-checked; never guess it.
-  if (typeof raw !== 'string') throw new Error('claimDelivery: rawBody not set by verifyShopifyWebhook');
-  const rawBody = new TextEncoder().encode(raw);
+  const rawBody = rawBytes instanceof Uint8Array
+    ? rawBytes
+    : typeof raw === 'string'
+      ? new TextEncoder().encode(raw)
+      : null;
+  if (!rawBody) throw new Error('claimDelivery: rawBody not set by verifyShopifyWebhook');
   const headers = shopifyEvidenceHeaders(c.req.header());
   try {
     await db.insert(inboundDeliveries).values({

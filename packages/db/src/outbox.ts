@@ -22,7 +22,16 @@ import { orgSettings } from './schema/orgSettings';
  */
 const TRACKING_URL_TEMPLATE_KEY = 'shipping.tracking_url_template';
 
-export type OutboxEventType = 'order.confirmed' | 'order.shipped' | 'eta.invoice.issue' | 'org.invite.sent' | 'shopify.product.push' | 'campaign.recipient.send' | 'shopify.order.reimport';
+export type OutboxEventType = 'order.confirmed' | 'order.shipped' | 'eta.invoice.issue' | 'org.invite.sent' | 'shopify.product.push' | 'campaign.recipient.send' | 'shopify.order.reimport' | 'inbound.delivery.process';
+
+/**
+ * Temporary OR-04 receipt event. OR-10 replaces the worker stub with Shopify
+ * hydration/normalization/promotion, keyed by the preserved delivery row.
+ */
+export interface InboundDeliveryProcessPayload {
+    orgId: string;
+    deliveryId: string;
+}
 
 /**
  * Re-run the Shopify import for an order stored as `import_status='blocked'`
@@ -168,7 +177,7 @@ type OutboxWriter = Pick<DbTx, 'insert' | 'rollback'>;
  */
 export async function emitOutboxEvent(
     tx: OutboxWriter,
-    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload | ShopifyProductPushPayload | CampaignRecipientSendPayload | ShopifyOrderReimportPayload },
+    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload | ShopifyProductPushPayload | CampaignRecipientSendPayload | ShopifyOrderReimportPayload | InboundDeliveryProcessPayload },
 ): Promise<void> {
     await tx.insert(outboxEvents).values({
         orgId: event.orgId,
@@ -179,7 +188,7 @@ export async function emitOutboxEvent(
 
 export async function emitOutboxEvents(
     tx: OutboxWriter,
-    events: Array<{ orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload | ShopifyProductPushPayload | CampaignRecipientSendPayload | ShopifyOrderReimportPayload }>,
+    events: Array<{ orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload | ShopifyProductPushPayload | CampaignRecipientSendPayload | ShopifyOrderReimportPayload | InboundDeliveryProcessPayload }>,
 ): Promise<void> {
     await tx.insert(outboxEvents).values(events.map((event) => ({
         orgId: event.orgId,
