@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/cloudflare';
 import { db } from '@irth/db';
-import { auditLog, outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, campaigns, campaignRecipients, customers } from '@irth/db';
+import { auditLog, outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, type InboundDeliveryProcessPayload, campaigns, campaignRecipients, customers } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
@@ -333,6 +333,20 @@ async function handleOrgInviteSent(database: typeof db, event: OutboxEvent): Pro
     await markProcessed(database, event.id);
 }
 
+/**
+ * Temporary OR-04 stub. OR-10 will hydrate and promote the preserved delivery;
+ * until then, processing must be a safe no-op so receipt events do not
+ * dead-letter forever.
+ */
+async function handleInboundDeliveryProcess(database: typeof db, event: OutboxEvent): Promise<void> {
+    const payload = JSON.parse(event.payload) as InboundDeliveryProcessPayload;
+    console.info('inbound.delivery.process not implemented until OR-10', {
+        orgId: payload.orgId,
+        deliveryId: payload.deliveryId,
+    });
+    await markProcessed(database, event.id);
+}
+
 /** Customer-facing order.confirmed / order.shipped WhatsApp + email notices. */
 async function handleOrderNotification(database: typeof db, event: OutboxEvent): Promise<void> {
     const payload = JSON.parse(event.payload) as OrderPayload;
@@ -437,6 +451,8 @@ async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<v
             return handleOrderNotification(database, event);
         case 'shopify.order.reimport':
             return handleShopifyOrderReimport(database, event);
+        case 'inbound.delivery.process':
+            return handleInboundDeliveryProcess(database, event);
         default:
             throw new Error(`Unknown outbox event type: ${event.eventType}`);
     }

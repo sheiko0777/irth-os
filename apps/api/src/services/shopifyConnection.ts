@@ -9,6 +9,8 @@ import { SHOPIFY_API_VERSION } from './shopifyApi';
 export const SHOPIFY_SCOPES = [
   'read_products', 'write_products', 'read_inventory', 'write_inventory',
   'read_orders', 'read_customers', 'read_pixels', 'write_pixels',
+  'read_fulfillments', 'write_fulfillments',
+  'read_merchant_managed_fulfillment_orders', 'write_merchant_managed_fulfillment_orders',
 ].join(',');
 
 type ShopifyConnection = InferSelectModel<typeof shopifyConnections>;
@@ -179,9 +181,17 @@ export async function setConnectionInventoryQuantity(connection: ShopifyConnecti
  * agree on route names since both point at the same handler file.
  */
 const WEBHOOK_TOPIC_ROUTES: Record<string, string> = {
-  ORDERS_CREATE: 'orders-create',
-  ORDERS_UPDATED: 'orders-updated',
-  ORDERS_CANCELLED: 'orders-cancelled',
+  ORDERS_CREATE: 'inbox/orders-create',
+  ORDERS_UPDATED: 'inbox/orders-updated',
+  ORDERS_EDITED: 'inbox/orders-edited',
+  ORDERS_PAID: 'inbox/orders-paid',
+  ORDERS_CANCELLED: 'inbox/orders-cancelled',
+  ORDERS_FULFILLED: 'inbox/orders-fulfilled',
+  ORDERS_PARTIALLY_FULFILLED: 'inbox/orders-partially-fulfilled',
+  REFUNDS_CREATE: 'inbox/refunds-create',
+  FULFILLMENTS_CREATE: 'inbox/fulfillments-create',
+  FULFILLMENTS_UPDATE: 'inbox/fulfillments-update',
+  ORDER_TRANSACTIONS_CREATE: 'inbox/order-transactions-create',
   CUSTOMERS_CREATE: 'customers-upsert',
   CUSTOMERS_UPDATE: 'customers-upsert',
   INVENTORY_LEVELS_UPDATE: 'inventory-levels-update',

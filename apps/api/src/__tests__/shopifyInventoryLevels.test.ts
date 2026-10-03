@@ -7,9 +7,15 @@ vi.mock('../middlewares/verifyShopifyWebhook', () => ({
   },
 }));
 vi.mock('@irth/db', () => ({
+  safeEqual: (left: string, right: string) => left === right,
   isUniqueViolation: (e: { code?: string; cause?: { code?: string } }) => (e?.cause?.code ?? e?.code) === '23505',
+  emitOutboxEvent: vi.fn(),
   shopifyConnections: { id: 'connectionId', orgId: 'orgId', shopDomain: 'shopDomain', status: 'status', inventoryLocationId: 'location' },
-  inboundDeliveries: { id: 'deliveryId', provider: 'provider', connectionId: 'connectionId', deliveryKey: 'deliveryKey', status: 'status', attempts: 'attempts' },
+  inboundDeliveries: {
+    id: 'deliveryId', orgId: 'orgId', provider: 'provider', connectionId: 'connectionId', deliveryKey: 'deliveryKey',
+    topic: 'topic', rawBody: 'rawBody', headers: 'headers', bodySha256: 'bodySha256', apiVersion: 'apiVersion',
+    eventId: 'eventId', triggeredAt: 'triggeredAt', payload: 'payload', status: 'status', attempts: 'attempts',
+  },
   productVariants: { orgId: 'orgId', shopifyInventoryItemId: 'shopifyInventoryItemId' },
   inventoryItems: { id: 'itemId', orgId: 'orgId', variantId: 'variantId' },
   inventoryLevelDiscrepancies: { name: 'discrepancies' },
