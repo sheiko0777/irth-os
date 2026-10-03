@@ -15,6 +15,26 @@ export const SHOPIFY_SCOPES = [
 
 type ShopifyConnection = InferSelectModel<typeof shopifyConnections>;
 
+export interface ShopifyGraphQLError {
+  message: string;
+  path?: Array<string | number>;
+  extensions?: Record<string, unknown>;
+}
+
+export interface ShopifyGraphQLRawResult<T> {
+  data?: T;
+  errors?: ShopifyGraphQLError[];
+  extensions?: unknown;
+  status: number;
+}
+
+export type ShopifyGraphQLFetch = (input: string | URL, init?: RequestInit, timeoutMs?: number) => Promise<Response>;
+
+export interface ShopifyGraphQLRawOptions {
+  fetch?: ShopifyGraphQLFetch;
+  apiVersion?: string;
+}
+
 async function aesKey(usages: Array<'encrypt' | 'decrypt'>): Promise<CryptoKey> {
   const encoded = envVar('SHOPIFY_TOKEN_ENCRYPTION_KEY');
   if (!encoded) throw new Error('SHOPIFY_TOKEN_ENCRYPTION_KEY is not configured');
@@ -104,6 +124,38 @@ export async function shopifyGraphQL<T>(connection: Pick<ShopifyConnection, 'sho
   const body = await response.json() as { data?: T; errors?: Array<{ message: string }> };
   if (body.errors?.length || !body.data) throw new Error(body.errors?.map((error) => error.message).join('; ') || 'Shopify returned no data');
   return body.data;
+}
+
+export async function shopifyGraphQLRaw<T>(
+  connection: Pick<ShopifyConnection, 'shopDomain' | 'accessTokenCiphertext' | 'accessTokenIv'>,
+  query: string,
+  variables?: Record<string, unknown>,
+  options: ShopifyGraphQLRawOptions = {},
+): Promise<ShopifyGraphQLRawResult<T>> {
+  const accessToken = await decryptShopifyToken(connection);
+  const apiVersion = options.apiVersion ?? SHOPIFY_API_VERSION;
+  const fetcher = options.fetch ?? fetchWithTimeout;
+  const response = await fetcher(`https://${connection.shopDomain}/admin/api/${apiVersion}/graphql.json`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
+    body: JSON.stringify({ query, variables }),
+  });
+  const body = await response.json().catch((): unknown => ({}));
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: response.status };
+  const record = body as Record<string, unknown>;
+  const errors = Array.isArray(record.errors)
+    ? record.errors.filter((error): error is ShopifyGraphQLError => {
+      if (!error || typeof error !== 'object' || Array.isArray(error)) return false;
+      const candidate = error as Record<string, unknown>;
+      return typeof candidate.message === 'string';
+    })
+    : undefined;
+  return {
+    data: record.data as T | undefined,
+    errors,
+    extensions: record.extensions,
+    status: response.status,
+  };
 }
 
 export async function listShopifyLocations(connection: ShopifyConnection): Promise<Array<{ id: string; name: string }>> {
