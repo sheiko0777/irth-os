@@ -1,5 +1,6 @@
 import { MiddlewareHandler } from 'hono';
 import { createLogger, newRequestId, type Logger } from '../lib/logger';
+import { envVar } from '../utils/env';
 
 /**
  * Per-request correlation, in one middleware.
@@ -33,7 +34,7 @@ const SLOW_REQUEST_MS = 2_000;
 
 export const requestContext: MiddlewareHandler = async (c, next) => {
     const inbound = c.req.header('X-Request-Id');
-    const trustInbound = process.env.TRUSTED_REQUEST_ID_HEADER === '1';
+    const trustInbound = envVar('TRUSTED_REQUEST_ID_HEADER') === '1';
     const requestId = (inbound && trustInbound && inbound.length <= 128) ? inbound : newRequestId();
 
     const logger = createLogger({
