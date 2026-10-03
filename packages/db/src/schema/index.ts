@@ -26,6 +26,7 @@ export * from './ledger';
 export * from './shopify';
 export * from './inbound';
 export * from './orderImport';
+export * from './catalogLinks';
 export * from './orderSource';
 export * from './ai';
 export * from './deliveries';

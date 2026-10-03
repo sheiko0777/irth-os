@@ -152,6 +152,8 @@ export const productVariants = pgTable('product_variants', {
   orgSkuIdx: uniqueIndex('product_variants_org_id_sku_idx').on(table.orgId, table.sku),
   orgShopifyVariantIdIdx: uniqueIndex('product_variants_org_id_shopify_variant_id_idx').on(table.orgId, table.shopifyVariantId),
   orgShopifyInventoryItemIdIdx: uniqueIndex('product_variants_org_id_shopify_inventory_item_id_idx').on(table.orgId, table.shopifyInventoryItemId),
+  // 0088: target of variant_source_links' same-org variant FK.
+  idOrgIdKey: unique('product_variants_id_org_id_key').on(table.id, table.orgId),
 }));
 
 export interface OrderBuyerSnapshot {

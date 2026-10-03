@@ -33,12 +33,14 @@ import { deadLettersRouter } from './deadLetters';
 import { auditRouter } from './audit';
 import { rolesRouter } from './roles';
 import { accountsRouter } from './accounts';
+import { orderImportRouter } from './orderImport';
 
 export const appRouter = router({
     audit: auditRouter,
     me: meRouter,
     dashboard: dashboardRouter,
     orders: ordersRouter,
+    orderImport: orderImportRouter,
     deliveries: deliveriesRouter,
     repCash: repCashRouter,
     sales: salesRouter,
