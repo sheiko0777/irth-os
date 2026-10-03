@@ -1,0 +1,136 @@
+{
+  "header": {
+    "source_order_id": "gid://shopify/Order/1003",
+    "source_order_number": "#1003",
+    "source_name": "web",
+    "source_updated_at": "2026-09-17T10:00:00Z",
+    "source_created_at": "2026-09-17T09:58:00Z",
+    "processed_at": "2026-09-17T09:58:00Z",
+    "financial_status": "paid",
+    "currency_code": "EGP",
+    "presentment_currency_code": "EGP",
+    "subtotal_price_set": {
+      "shop_money_minor": "25000"
+    },
+    "total_price_set": {
+      "shop_money_minor": "33500"
+    },
+    "total_tax_set": {
+      "shop_money_minor": "3500"
+    },
+    "total_discounts_set": {
+      "shop_money_minor": "0"
+    },
+    "total_shipping_set": {
+      "shop_money_minor": "5000"
+    },
+    "total_refunded_set": {
+      "shop_money_minor": "0"
+    },
+    "total_outstanding_set": {
+      "shop_money_minor": "0"
+    }
+  },
+  "lines": [
+    {
+      "source_line_id": "gid://shopify/LineItem/1",
+      "title": "Synthetic Serum 30ml",
+      "sku_snapshot": "SYN-1",
+      "quantity": 1,
+      "current_quantity": 1,
+      "unfulfilled_quantity": 1,
+      "refundable_quantity": 1,
+      "unit_price_minor": "25000",
+      "discount_minor": "0",
+      "tax_minor": "3500",
+      "total_minor": "25000",
+      "requires_shipping": true,
+      "taxable": true,
+      "custom_attributes": {},
+      "tax_lines": [
+        {
+          "title": "VAT",
+          "rate_basis_points": 1400,
+          "price_minor": "3500"
+        }
+      ],
+      "discount_allocations": [],
+      "mapping": {
+        "state": "unmapped"
+      }
+    }
+  ],
+  "buyer": {
+    "source_customer_id": "gid://shopify/Customer/7001",
+    "name": "Test Buyer",
+    "email": "buyer@example.test",
+    "phone": "+201000000001",
+    "is_guest": false
+  },
+  "addresses": {
+    "billing": {
+      "first_name": "Test",
+      "last_name": "Buyer",
+      "address1": "1 Example Street",
+      "city": "Cairo",
+      "country": "Egypt",
+      "country_code": "EG",
+      "phone": "+201000000001"
+    },
+    "shipping": {
+      "first_name": "Test",
+      "last_name": "Buyer",
+      "address1": "1 Example Street",
+      "city": "Cairo",
+      "country": "Egypt",
+      "country_code": "EG",
+      "phone": "+201000000001"
+    }
+  },
+  "price": {
+    "subtotal": "25000",
+    "discounts": "0",
+    "discount_codes": [],
+    "tax_lines": [
+      {
+        "title": "VAT",
+        "rate_basis_points": 1400,
+        "price_minor": "3500"
+      }
+    ],
+    "shipping": "5000",
+    "additional_fees": "0",
+    "total": "33500",
+    "refunded": "0",
+    "outstanding": "0",
+    "taxes_included": false
+  },
+  "currency": {
+    "shop": "EGP",
+    "presentment": "EGP"
+  },
+  "transactions": [
+    {
+      "source_transaction_id": "gid://shopify/OrderTransaction/10031",
+      "kind": "sale",
+      "status": "success",
+      "gateway": "synthetic_gateway",
+      "amount_minor": "33500",
+      "processed_at": "2026-09-17T10:00:00Z"
+    }
+  ],
+  "fulfillments": [],
+  "refunds": [],
+  "context": {
+    "tags": [],
+    "custom_attributes": {},
+    "source_name": "web",
+    "is_test": false
+  },
+  "evidence": {
+    "inbound_delivery_id": "delivery-1003",
+    "api_version": "2026-07",
+    "connector_version": "shopify@1",
+    "fetched_at": "2026-09-17T10:00:05Z"
+  }
+}
