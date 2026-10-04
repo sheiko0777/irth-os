@@ -35,12 +35,12 @@ export function SalesLists() {
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      <section aria-labelledby="my-orders" className="space-y-2">
-        <h2 id="my-orders" className="font-semibold">طلباتي</h2>
-        <ul className="divide-y divide-[var(--rim1)] rounded-md border border-[var(--rim1)] bg-[var(--surface)] text-sm" data-testid="sales-orders">
-          {(orders.data?.data ?? []).length === 0 && <li className="p-3 text-[var(--t3)]">مفيش طلبات لسه.</li>}
+      <section id="my-orders" aria-labelledby="my-orders-h" className="scroll-mt-24 space-y-2">
+        <h2 id="my-orders-h" className="font-semibold">طلباتي</h2>
+        <ul className="glass divide-y divide-[var(--separator)] overflow-hidden rounded-[var(--card-radius)] text-sm" data-testid="sales-orders">
+          {(orders.data?.data ?? []).length === 0 && <li className="p-4 text-[var(--text-secondary)]">مفيش طلبات لسه.</li>}
           {(orders.data?.data ?? []).map((o) => (
-            <li key={o.id} className="flex items-center justify-between gap-2 p-3">
+            <li key={o.id} className="flex min-h-14 items-center justify-between gap-2 p-4">
               <div>
                 <p className="font-mono" dir="ltr">{o.orderNumber}</p>
                 <p className="text-xs text-[var(--t3)]">{o.customerName ?? "—"} · {o.createdAt ? formatDate(o.createdAt) : ""}</p>
@@ -54,14 +54,14 @@ export function SalesLists() {
         </ul>
       </section>
 
-      <section aria-labelledby="my-quotes" className="space-y-2">
-        <h2 id="my-quotes" className="font-semibold">عروض الأسعار</h2>
-        <ul className="divide-y divide-[var(--rim1)] rounded-md border border-[var(--rim1)] bg-[var(--surface)] text-sm" data-testid="sales-quotes">
-          {(quotes.data?.data ?? []).length === 0 && <li className="p-3 text-[var(--t3)]">مفيش عروض أسعار.</li>}
+      <section id="my-quotes" aria-labelledby="my-quotes-h" className="scroll-mt-24 space-y-2">
+        <h2 id="my-quotes-h" className="font-semibold">عروض الأسعار</h2>
+        <ul className="glass divide-y divide-[var(--separator)] overflow-hidden rounded-[var(--card-radius)] text-sm" data-testid="sales-quotes">
+          {(quotes.data?.data ?? []).length === 0 && <li className="p-4 text-[var(--text-secondary)]">مفيش عروض أسعار.</li>}
           {(quotes.data?.data ?? []).map(({ quote: q, customerName }) => {
             const expired = new Date(q.validUntil) < new Date();
             return (
-              <li key={q.id} className="space-y-2 p-3">
+              <li key={q.id} className="space-y-3 p-4">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-mono" dir="ltr">{q.quoteNumber}</p>
