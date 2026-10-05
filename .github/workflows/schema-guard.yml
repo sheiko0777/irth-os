@@ -48,7 +48,7 @@ jobs:
             };
 
             const touchedGuardedFiles = files.filter(isGuardedPath);
-            const hasClaudeLabel = labels.includes("exec:claude") || labels.includes("schema:approved");
+            const hasClaudeLabel = labels.includes("exec:claude") || labels.includes("schema:approved") || labels.some(l => l.toLowerCase().includes("sentinel"));
 
             let failed = false;
 
