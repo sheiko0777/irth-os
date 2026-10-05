@@ -3,6 +3,7 @@ import { router, requirePermission } from '../trpc';
 import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES, MAX_IDEMPOTENCY_KEY_LENGTH, paginationOffset, paginationMeta } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, sql, ne, count } from 'drizzle-orm';
+import { randomInt } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { assertSupportedCurrency, currency, fromMinor, parseDecimal } from '@irth/domain';
 
@@ -12,9 +13,8 @@ function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const segments = [4, 4, 4].map(() =>
     Array.from({ length: 4 }, () => {
-      // SECURITY: Math.random() is predictable. Use Web Crypto API for secure gift card generation.
-      const randomVal = crypto.getRandomValues(new Uint32Array(1))[0];
-      return chars[randomVal % chars.length];
+      // SECURITY: Math.random() is predictable. Use node:crypto for secure gift card generation without modulo bias.
+      return chars[randomInt(0, chars.length)];
     }).join('')
   );
   return segments.join('-');
