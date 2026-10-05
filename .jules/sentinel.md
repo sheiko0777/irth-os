@@ -71,3 +71,8 @@
 **Vulnerability:** The `/orgs/members/:memberId/role` endpoint in `apps/api/src/routes/orgs.ts` failed to verify the target member's current role before updating it, and allowed users to set the `role` to `owner` or modify their own role. This bypassed the critical protection preventing users from seizing full account control or modifying an owner's role.
 **Learning:** For endpoints dealing with role-based changes, simply enforcing the correct middleware (`requirePermission`) is not enough. You must fetch the target record first to ensure the operation does not target an unauthorized user (like an owner) or oneself (IDOR), and explicitly omit unauthorized roles from the input schema.
 **Prevention:** When implementing member role update endpoints, always enforce that a user cannot change their own role (prevent IDOR) and that the 'owner' role cannot be modified or assigned through standard role-change endpoints.
+
+## 2025-03-01 - Modulo Bias in Secure PRNG Generation
+**Vulnerability:** Even when using a cryptographically secure random number generator (CSPRNG) like `crypto.getRandomValues`, combining it with modulo arithmetic (`% chars.length` or `% 900000`) introduces modulo bias. This means that certain outcomes are slightly more probable than others because the range of the CSPRNG (e.g., $2^{32}$) is not perfectly divisible by the modulo divisor.
+**Learning:** For truly secure, uniformly distributed random values within a specific range, you cannot just use raw random bits with the modulo operator.
+**Prevention:** In Node.js environments, always use `randomInt` from `node:crypto` to securely generate integers within a range. `randomInt` handles the complex logic required to eliminate modulo bias.

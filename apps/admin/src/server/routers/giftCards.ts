@@ -5,6 +5,7 @@ import { paginationInputSchema } from '../pagination';
 import { eq, and, desc, sql, ne, count } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { assertSupportedCurrency, currency, fromMinor, parseDecimal } from '@irth/domain';
+import { randomInt } from 'node:crypto';
 
 const moneyInput = z.string().min(1).or(z.number().positive());
 
@@ -12,9 +13,9 @@ function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const segments = [4, 4, 4].map(() =>
     Array.from({ length: 4 }, () => {
-      // SECURITY: Math.random() is predictable. Use Web Crypto API for secure gift card generation.
-      const randomVal = crypto.getRandomValues(new Uint32Array(1))[0];
-      return chars[randomVal % chars.length];
+      // SECURITY: crypto.getRandomValues with modulo arithmetic introduces modulo bias.
+      // Use randomInt from node:crypto to securely generate integers within a range.
+      return chars[randomInt(0, chars.length)];
     }).join('')
   );
   return segments.join('-');

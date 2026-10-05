@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { orgInvites, orgMembers } from './schema';
 import type { DbInstance } from './index';
+import { randomInt } from 'node:crypto';
 
 /**
  * OTP generation for an org invite. 6 digits, 15-minute default window.
@@ -12,9 +13,9 @@ import type { DbInstance } from './index';
  * column already applies (also plaintext).
  */
 export function generateInviteOtp(ttlMs = 15 * 60_000): { code: string; expiresAt: Date } {
-  // SECURITY: Math.random() is predictable. Use Web Crypto API for secure OTP generation.
-  const randomVal = crypto.getRandomValues(new Uint32Array(1))[0];
-  const code = String(100000 + (randomVal % 900000));
+  // SECURITY: crypto.getRandomValues with modulo arithmetic introduces modulo bias.
+  // Use randomInt from node:crypto to securely generate integers within a range.
+  const code = String(randomInt(100000, 1000000));
   return { code, expiresAt: new Date(Date.now() + ttlMs) };
 }
 
