@@ -17,3 +17,6 @@
 ## 2023-11-20 - Combine Queries using PostgreSQL FILTER
 **Learning:** Three separate database queries executing in Promise.all were making three separate database round trips to fetch counts with different where conditions for the same table.
 **Action:** When making multiple conditional aggregates on the same table, use PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine them into a single query to reduce latency and database roundtrips.
+## 2024-03-24 - Filter Clause Indexing
+**Learning:** Combining multiple `count()` queries into one using `FILTER (WHERE ...)` can cause performance regressions if the base query lacks a restrictive `WHERE` clause, forcing the database to scan the entire table history instead of utilizing indexes for relevant rows.
+**Action:** Always include a restrictive base `WHERE` clause (e.g., using `OR` to combine the filter conditions) when combining queries using PostgreSQL `FILTER` to ensure the database can utilize indexes and avoid scanning irrelevant rows.
