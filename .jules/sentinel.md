@@ -75,3 +75,7 @@
 **Vulnerability:** Generation of security-sensitive codes (OTPs and gift card codes) relied on `crypto.getRandomValues()` combined with modulo arithmetic (`%`).
 **Learning:** Using modulo arithmetic on uniformly generated large random integers introduces modulo bias because the max possible value isn't perfectly divisible by the divisor, skewing the distribution slightly and making outputs marginally more predictable.
 **Prevention:** In Node.js environments (or environments with `nodejs_compat` enabled, like the `apps/api` Cloudflare Worker in this repository), use `randomInt` from `node:crypto` to securely generate integers within a defined range without modulo bias.
+## 2026-10-07 - Fix Modulo Bias in Secure Random Code Generation
+**Vulnerability:** The `temporaryPassword` function in `apps/admin/src/server/accountCreation.ts` used `crypto.getRandomValues()` combined with modulo arithmetic (`%`) to generate temporary passwords.
+**Learning:** Using modulo arithmetic on uniformly generated large random integers introduces modulo bias because the max possible value isn't perfectly divisible by the divisor (e.g. 256 / 57), skewing the distribution slightly. This causes earlier characters in the alphabet to appear slightly more often and makes outputs marginally more predictable, reducing the overall entropy.
+**Prevention:** In Node.js environments (or environments with `nodejs_compat` enabled), use `randomInt` from `node:crypto` to securely generate integers within a defined range without modulo bias.
