@@ -17,3 +17,6 @@
 ## 2023-11-20 - Combine Queries using PostgreSQL FILTER
 **Learning:** Three separate database queries executing in Promise.all were making three separate database round trips to fetch counts with different where conditions for the same table.
 **Action:** When making multiple conditional aggregates on the same table, use PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine them into a single query to reduce latency and database roundtrips.
+## 2023-11-20 - Combine Courier Shipments Aggregates using PostgreSQL FILTER
+**Learning:** Three separate aggregate queries running concurrently were making three separate database round trips to fetch counts with different where conditions for the same table, opening multiple connections against the database.
+**Action:** Used PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine them into a single query to reduce database round trips and connections footprint. Added an `or` restrictive `WHERE` clause to narrow scanned rows and leverage indexes.
