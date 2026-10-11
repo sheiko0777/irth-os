@@ -79,3 +79,8 @@
 **Vulnerability:** The `temporaryPassword` function in `apps/admin/src/server/accountCreation.ts` used `crypto.getRandomValues()` combined with modulo arithmetic (`%`) to generate temporary passwords.
 **Learning:** Using modulo arithmetic on uniformly generated large random integers introduces modulo bias because the max possible value isn't perfectly divisible by the divisor (e.g. 256 / 57), skewing the distribution slightly. This causes earlier characters in the alphabet to appear slightly more often and makes outputs marginally more predictable, reducing the overall entropy.
 **Prevention:** In Node.js environments (or environments with `nodejs_compat` enabled), use `randomInt` from `node:crypto` to securely generate integers within a defined range without modulo bias.
+
+## 2026-10-18 - Missing Authorization Guard on AI Chat API Endpoints
+**Vulnerability:** The POST `/chat` endpoint in `apps/api/src/ai/route.ts` processed chat requests and granted access to read operational data without utilizing the standard `requireOrgId()` and `requirePermission('dashboard', 'view')` middleware guards.
+**Learning:** Although internal checks like `getAuth(c)` existed, relying on them inline instead of the proven middleware pipeline can lead to accidental bypasses or inconsistent access control. The route should explicitly mandate the correct permissions (e.g., `dashboard.view`) mapped in the authorization matrix.
+**Prevention:** Always secure API endpoints mapping to sensitive functionality or operational data with a combination of `requireOrgId()` and `requirePermission(resource, action)`.
