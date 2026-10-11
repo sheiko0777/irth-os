@@ -20,3 +20,6 @@
 ## 2023-11-20 - Combine Courier Shipments Aggregates using PostgreSQL FILTER
 **Learning:** Three separate aggregate queries running concurrently were making three separate database round trips to fetch counts with different where conditions for the same table, opening multiple connections against the database.
 **Action:** Used PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine them into a single query to reduce database round trips and connections footprint. Added an `or` restrictive `WHERE` clause to narrow scanned rows and leverage indexes.
+## 2025-02-28 - Combine aggregate queries with FILTER in Dashboard
+**Learning:** Found three concurrent `count()` queries on the `orders` table in the dashboard's `getStats` procedure. They executed inside `Promise.all` inside the single `tx` transaction wrapper.
+**Action:** Replaced them with a single combined query using `count(*) filter (where ...)` and a bounded `where` clause connecting the multiple requirements through `or`. This removes database roundtrips and keeps things within Drizzle ORM to preserve bindings and driver compatibility.
