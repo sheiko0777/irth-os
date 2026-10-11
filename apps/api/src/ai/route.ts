@@ -5,6 +5,8 @@ import { aiConversationLogs, jsonSafe, type EffectiveAccess, type Role } from '@
 import { withOrg } from '../db';
 import { rateLimit } from '../middlewares/rateLimit';
 import { envVar } from '../utils/env';
+import { requireOrgId } from '../middlewares/requireOrgId';
+import { requirePermission } from '../middlewares/requirePermission';
 import { handleError } from '../utils/errors';
 import { createGroqProvider } from './providers/groq';
 import { allowedAiToolDefinitions, executeAiTool } from './tools';
@@ -89,7 +91,7 @@ function summarizeCards(cards: AiToolCard[], locale: AiLocale): string {
     : 'I reviewed the available data and attached the results as cards.';
 }
 
-aiChatRouter.post('/chat', async (c) => {
+aiChatRouter.post('/chat', requireOrgId(), requirePermission('dashboard', 'view'), async (c) => {
   const auth = getAuth(c);
   if (!auth) {
     return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
