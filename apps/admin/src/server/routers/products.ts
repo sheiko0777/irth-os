@@ -30,9 +30,11 @@ export const productsRouter = router({
                 conditions.push(eq(products.status, status));
             }
 
-            // Execute list and count queries concurrently to reduce latency
-            const [data, totalQuery] = await Promise.all([
-                ctx.withOrg(async (tx) => tx
+            // Execute list and count queries sequentially inside a single
+            // transaction to avoid connection pool exhaustion and reduce
+            // connection acquisition overhead.
+            const { data, total } = await ctx.withOrg(async (tx) => {
+                const rows = await tx
                     .select({
                         id: products.id,
                         name: products.name,
@@ -49,17 +51,20 @@ export const productsRouter = router({
                     .where(and(...conditions))
                     .orderBy(desc(products.createdAt))
                     .limit(pageSize)
-                    .offset(offset)),
-                ctx.withOrg(async (tx) => tx
+                    .offset(offset);
+
+                const totalQuery = await tx
                     .select({ count: count() })
                     .from(products)
-                    .where(and(...conditions)))
-            ]);
+                    .where(and(...conditions));
+
+                return { data: rows, total: totalQuery[0]?.count ?? 0 };
+            });
 
             return {
                 data,
                 error: null,
-                meta: paginationMeta(page, pageSize, totalQuery[0].count),
+                meta: paginationMeta(page, pageSize, total),
             };
         }),
 

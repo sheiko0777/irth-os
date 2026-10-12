@@ -20,3 +20,6 @@
 ## 2023-11-20 - Combine Courier Shipments Aggregates using PostgreSQL FILTER
 **Learning:** Three separate aggregate queries running concurrently were making three separate database round trips to fetch counts with different where conditions for the same table, opening multiple connections against the database.
 **Action:** Used PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine them into a single query to reduce database round trips and connections footprint. Added an `or` restrictive `WHERE` clause to narrow scanned rows and leverage indexes.
+## 2026-10-12 - Sequential transaction queries vs concurrent withOrg connections
+**Learning:** Using `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside pagination API handlers acquires multiple database connections concurrently, causing connection pool exhaustion under load and breaking data isolation.
+**Action:** When handling data and count queries requiring a transaction wrapper, run them sequentially inside a single `ctx.withOrg(async (tx) => { ... })` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
