@@ -3,6 +3,8 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 import { aiConversationLogs, jsonSafe, type EffectiveAccess, type Role } from '@irth/db';
 import { withOrg } from '../db';
+import { requireOrgId } from '../middlewares/requireOrgId';
+import { requirePermission } from '../middlewares/requirePermission';
 import { rateLimit } from '../middlewares/rateLimit';
 import { envVar } from '../utils/env';
 import { handleError } from '../utils/errors';
@@ -27,6 +29,7 @@ export const aiChatRouter = new Hono();
 
 const trustedProxyCount = () => parseInt(envVar('TRUSTED_PROXY_COUNT') || '0', 10);
 aiChatRouter.use('/chat', rateLimit(20, 60_000, trustedProxyCount, (c) => getAuth(c)?.orgId));
+aiChatRouter.use('/chat', requireOrgId(), requirePermission('dashboard', 'view'));
 
 function getAuth(c: Context): { orgId: string; userId: string; role: Role; access: EffectiveAccess } | null {
   const orgId = c.get('orgId') as string | undefined;
@@ -90,10 +93,7 @@ function summarizeCards(cards: AiToolCard[], locale: AiLocale): string {
 }
 
 aiChatRouter.post('/chat', async (c) => {
-  const auth = getAuth(c);
-  if (!auth) {
-    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
-  }
+  const auth = getAuth(c)!;
 
   let parsed: z.infer<typeof chatSchema>;
   try {
