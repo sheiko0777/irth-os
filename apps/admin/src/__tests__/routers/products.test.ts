@@ -103,7 +103,7 @@ function chainOf(value: unknown) {
   return chain;
 }
 
-/** list fires two queries in Promise.all: rows, then the total count. */
+/** list fires two queries sequentially: rows, then the total count. */
 function queueSelects(results: unknown[]) {
   let i = 0;
   mockDb.select = vi.fn(() => chainOf(results[i++] ?? []));
