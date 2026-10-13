@@ -1,3 +1,5 @@
+import { requireOrgId } from '../middlewares/requireOrgId';
+import { requirePermission } from '../middlewares/requirePermission';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -89,11 +91,8 @@ function summarizeCards(cards: AiToolCard[], locale: AiLocale): string {
     : 'I reviewed the available data and attached the results as cards.';
 }
 
-aiChatRouter.post('/chat', async (c) => {
-  const auth = getAuth(c);
-  if (!auth) {
-    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
-  }
+aiChatRouter.post('/chat', requireOrgId(), requirePermission('dashboard', 'view'), async (c) => {
+  const auth = getAuth(c)!;
 
   let parsed: z.infer<typeof chatSchema>;
   try {
