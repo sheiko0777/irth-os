@@ -171,7 +171,7 @@ export const dashboardRouter = router({
                         eq(inventoryItems.orgId, ctx.orgId),
                         lteOp(inventoryItems.quantity, 0),
                     )),
-                await tx
+                await ctx.db
                     .select({ count: count() })
                     .from(orderReturns)
                     .where(and(
