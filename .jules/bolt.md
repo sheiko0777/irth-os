@@ -23,3 +23,7 @@
 ## 2026-10-12 - Sequential transaction queries vs concurrent withOrg connections
 **Learning:** Using `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside pagination API handlers acquires multiple database connections concurrently, causing connection pool exhaustion under load and breaking data isolation.
 **Action:** When handling data and count queries requiring a transaction wrapper, run them sequentially inside a single `ctx.withOrg(async (tx) => { ... })` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+
+## 2025-03-01 - Avoid Promise.all with Multiple Transactions
+**Learning:** In Drizzle ORM when using `ctx.withOrg` wrapper, wrapping individual queries inside `ctx.withOrg` and running them concurrently with `Promise.all` causes connection pool exhaustion and breaks multiplexing as Postgres drivers cannot multiplex queries over the pool.
+**Action:** When refactoring concurrent database queries improperly wrapped in separate `ctx.withOrg` transactions (e.g. inside `Promise.all`), execute them sequentially inside a *single* `ctx.withOrg` block using the provided transaction object `tx`.
