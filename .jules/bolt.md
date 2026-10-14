@@ -23,3 +23,6 @@
 ## 2026-10-12 - Sequential transaction queries vs concurrent withOrg connections
 **Learning:** Using `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside pagination API handlers acquires multiple database connections concurrently, causing connection pool exhaustion under load and breaking data isolation.
 **Action:** When handling data and count queries requiring a transaction wrapper, run them sequentially inside a single `ctx.withOrg(async (tx) => { ... })` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+## 2024-10-14 - Fix connection pool exhaustion in Promise.all()
+**Learning:** Using `Promise.all([ ctx.withOrg(...), ctx.withOrg(...) ])` acquires multiple database connections simultaneously, which can exhaust the connection pool under load, particularly on dashboard or analytics endpoints where many aggregates are fetched at once. While concurrent execution seems faster, it sacrifices scalability and violates the N+1 transaction rule.
+**Action:** When batching multiple independent database queries in a tRPC router, wrap them in a single `ctx.withOrg(async (tx) => [ await tx..., await tx... ] as const)` to sequence them over a single leased connection. This eliminates pool exhaustion and connection acquisition latency while preserving predictable test execution order.
