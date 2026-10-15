@@ -331,3 +331,5 @@ describe('tenancy gate', () => {
     expect(findAll(scoped, 'x.ts', new RegExp(UNSCOPED_WRITE))).toHaveLength(0);
   });
 });
+
+// Force CI to pick up the fix
