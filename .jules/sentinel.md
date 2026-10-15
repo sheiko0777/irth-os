@@ -79,3 +79,8 @@
 **Vulnerability:** The `temporaryPassword` function in `apps/admin/src/server/accountCreation.ts` used `crypto.getRandomValues()` combined with modulo arithmetic (`%`) to generate temporary passwords.
 **Learning:** Using modulo arithmetic on uniformly generated large random integers introduces modulo bias because the max possible value isn't perfectly divisible by the divisor (e.g. 256 / 57), skewing the distribution slightly. This causes earlier characters in the alphabet to appear slightly more often and makes outputs marginally more predictable, reducing the overall entropy.
 **Prevention:** In Node.js environments (or environments with `nodejs_compat` enabled), use `randomInt` from `node:crypto` to securely generate integers within a defined range without modulo bias.
+
+## 2025-02-27 - [Sentinel] Add authorization to AI chat endpoint
+**Vulnerability:** The `/chat` endpoint in `apps/api/src/ai/route.ts` relied solely on an inline `getAuth(c)` check which only verified the presence of an authenticated user/tenant but did not enforce any specific role-based permissions. This could allow unauthorized access to operational data through the AI assistant.
+**Learning:** Relying on simple inline authentication checks for endpoints that interact with or return operational data leads to authorization bypass vulnerabilities. Endpoints must be explicitly gated by fine-grained permissions.
+**Prevention:** Always enforce fine-grained access control using the `requirePermission` middleware (e.g., `requirePermission('dashboard', 'view')`) on Hono API routes interacting with shared resources, composed sequentially after `requireOrgId()`.
