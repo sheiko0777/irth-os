@@ -70,7 +70,6 @@ const UNSCOPED_READ_BASELINE = [
   'customerSegments.ts:87',
   'customerSegments.ts:121',
   'customerSegments.ts:161',
-  'dashboard.ts:171',
   // Both reads filter explicitly by eq(outboxDeadLetters.orgId, ctx.orgId),
   // same shape as eta.ts's own baseline entries below.
   'deadLetters.ts:23',
@@ -332,3 +331,5 @@ describe('tenancy gate', () => {
     expect(findAll(scoped, 'x.ts', new RegExp(UNSCOPED_WRITE))).toHaveLength(0);
   });
 });
+
+// Force CI to pick up the fix
