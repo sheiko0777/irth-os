@@ -271,9 +271,9 @@ export const purchasingRouter = router({
       .query(async ({ ctx, input }) => {
         const offset = paginationOffset(input.page, input.pageSize);
 
-        // ⚡ Bolt: Execute list and count queries concurrently to reduce max latency
-        const [data, totalResult] = await Promise.all([
-          ctx.withOrg(async (tx) => tx
+        // ⚡ Bolt: Execute list and count queries sequentially inside a single transaction wrapper to reduce connection overhead
+        const result = await ctx.withOrg(async (tx) => {
+          const data = await tx
             .select({
               id: purchaseOrders.id,
               poNumber: purchaseOrders.poNumber,
@@ -295,16 +295,17 @@ export const purchasingRouter = router({
             .groupBy(purchaseOrders.id, suppliers.name)
             .orderBy(desc(purchaseOrders.createdAt))
             .limit(input.pageSize)
-            .offset(offset)),
-          ctx.withOrg(async (tx) => tx
+            .offset(offset);
+
+          const totalResult = await tx
             .select({ count: count() })
             .from(purchaseOrders)
-            .where(and(eq(purchaseOrders.orgId, ctx.orgId), supplierScope(ctx, purchaseOrders.supplierId))))
-        ]);
+            .where(and(eq(purchaseOrders.orgId, ctx.orgId), supplierScope(ctx, purchaseOrders.supplierId)));
 
-        const total = totalResult[0]?.count ?? 0;
+          return { data, total: totalResult[0]?.count ?? 0 };
+        });
 
-        return { data, error: null, meta: paginationMeta(input.page, input.pageSize, total) };
+        return { data: result.data, error: null, meta: paginationMeta(input.page, input.pageSize, result.total) };
       }),
 
     get: requirePermission('purchasing', 'view')
