@@ -23,3 +23,6 @@
 ## 2026-10-12 - Sequential transaction queries vs concurrent withOrg connections
 **Learning:** Using `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside pagination API handlers acquires multiple database connections concurrently, causing connection pool exhaustion under load and breaking data isolation.
 **Action:** When handling data and count queries requiring a transaction wrapper, run them sequentially inside a single `ctx.withOrg(async (tx) => { ... })` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+## 2026-10-18 - Fix batch Purchasing PO List Query with single transaction wrapper
+**Learning:** Combining pagination list and count queries into `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` incorrectly acquires multiple database connections concurrently and breaks transaction data isolation, leading to potential pool exhaustion.
+**Action:** When executing batch list and count queries that require transaction-level consistency or isolation, wrap them sequentially inside a single `ctx.withOrg` transaction block to avoid scaling risks.
