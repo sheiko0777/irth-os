@@ -98,7 +98,14 @@ function buildAuth() {
       username(),
     ],
     secret,
-    baseURL: envVar('API_BASE_URL') ?? 'http://localhost:8787',
+    baseURL: (() => {
+      const url = envVar('API_BASE_URL');
+      if (url) return url;
+      if (nodeEnv() === 'production') {
+        throw new Error('API_BASE_URL must be set in production');
+      }
+      return 'http://localhost:8787';
+    })(),
   });
 }
 

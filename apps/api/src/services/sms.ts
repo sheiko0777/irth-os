@@ -15,6 +15,7 @@
 import { fetchWithTimeout } from '@irth/domain';
 import { recordSend, recordProviderFailure } from '../lib/metrics';
 import { createLogger } from '../lib/logger';
+import { envVar } from '../utils/env';
 
 const log = createLogger({ component: 'providers' });
 
@@ -24,10 +25,10 @@ export interface SendSmsOptions {
 }
 
 export async function sendSms(opts: SendSmsOptions): Promise<unknown> {
-  const baseUrl = process.env.SMS_BASE_URL;
-  const accountSid = process.env.SMS_ACCOUNT_SID;
-  const authToken = process.env.SMS_AUTH_TOKEN;
-  const from = process.env.SMS_FROM;
+  const baseUrl = envVar('SMS_BASE_URL');
+  const accountSid = envVar('SMS_ACCOUNT_SID');
+  const authToken = envVar('SMS_AUTH_TOKEN');
+  const from = envVar('SMS_FROM');
 
   if (!baseUrl || !accountSid || !authToken || !from) {
     throw new Error('Missing SMS environment variables (SMS_BASE_URL, SMS_ACCOUNT_SID, SMS_AUTH_TOKEN, SMS_FROM)');
