@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatusUpdater } from "./StatusUpdater";
 import { BlockedImportPanel } from "./BlockedImportPanel";
+import { PermissionGate } from "@/components/PermissionGate";
+import { CreateReturnDialog } from "./CreateReturnDialog";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string, locale: string }> }) {
     const { id, locale } = await params;
@@ -102,6 +104,19 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                     reason={order.blockedReason}
                     lines={sourceLines.filter((l) => l.mappedVariant === null)}
                 />
+            )}
+
+
+            {order.status === "delivered" && (
+                <PermissionGate resource="returns" action="write">
+                    <div className="flex justify-end mb-4">
+                        <CreateReturnDialog
+                            orderId={order.id}
+                            items={items.map(i => ({ id: i.id, sku: i.sku, quantity: i.quantity, returnedQuantity: 0 }))}
+                            locale={locale}
+                        />
+                    </div>
+                </PermissionGate>
             )}
 
             <div className="grid gap-6 md:grid-cols-2">
