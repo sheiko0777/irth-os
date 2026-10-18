@@ -217,8 +217,8 @@ describe('entity boundaries and once-per-source', () => {
       orgId, entryKind: 'courier_remittance', journalType: 'cash', description: 'COD remitted',
       sourceTable: 'courier_remittances', sourceId,
       lines: [
-        { accountCode: ACCOUNT_CODES.BANK, currency: 'EGP', debitMinor: 100n },
-        { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, currency: 'EGP', creditMinor: 100n },
+        { accountCode: ACCOUNT_CODES.BANK, currency: 'EGP', debitMinor: 700n },
+        { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD, currency: 'EGP', creditMinor: 700n },
       ],
     });
     await withOrgContext(testDb, orgId, post);
