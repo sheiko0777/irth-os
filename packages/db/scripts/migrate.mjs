@@ -30,22 +30,31 @@ import postgres from 'postgres';
 
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'drizzle');
 
-const url = process.env.DATABASE_URL;
-if (!url) {
-  console.error('DATABASE_URL is not set.');
-  process.exit(1);
-}
+let sql;
+function getSql() {
+  if (sql) return sql;
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    const isDirectRun = fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+    if (isDirectRun) {
+      console.error('DATABASE_URL is not set.');
+      process.exit(1);
+    }
+    return null; // For test imports
+  }
 
-// max: 1 keeps every statement on one connection; DDL and the ledger write must
-// not land on different backends.
-//
-// prepare: false because DATABASE_URL may point at a pooled endpoint (Neon's
-// `-pooler` host is PgBouncer in transaction mode, which does not support
-// prepared statements). postgres-js prepares by default, so without this the
-// runner works against a direct endpoint and fails against a pooled one — a
-// difference nobody notices until a deploy uses the other URL.
-//
-const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  // max: 1 keeps every statement on one connection; DDL and the ledger write must
+  // not land on different backends.
+  //
+  // prepare: false because DATABASE_URL may point at a pooled endpoint (Neon's
+  // `-pooler` host is PgBouncer in transaction mode, which does not support
+  // prepared statements). postgres-js prepares by default, so without this the
+  // runner works against a direct endpoint and fails against a pooled one — a
+  // difference nobody notices until a deploy uses the other URL.
+  //
+  sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  return sql;
+}
 
 // Every migration in drizzle/ writes unqualified names, and several build DDL
 // dynamically with format('ALTER TABLE %I', …). The schema those resolve to is
@@ -74,12 +83,31 @@ const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
 //   search_path = public              ->  correct value
 const SCOPE_SEARCH_PATH = 'SET LOCAL search_path TO public';
 
+export const MIGRATION_LOCK_ID = 8110593465191244n;
+
+export async function runMigrationFile(tx, file, statements, logger = console) {
+  await tx.unsafe(`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_ID})`);
+  const [row] = await tx`SELECT filename FROM public._migrations WHERE filename = ${file}`;
+  if (row) {
+    logger.log(`  skipped  ${file} (already applied by a concurrent runner)`);
+    return false;
+  }
+
+  await tx.unsafe(SCOPE_SEARCH_PATH);
+  for (const statement of statements) {
+    await tx.unsafe(statement);
+  }
+  await tx`INSERT INTO public._migrations (filename) VALUES (${file})`;
+  logger.log(`  applied  ${file}`);
+  return true;
+}
+
 async function main() {
   // Written schema-qualified rather than relying on search_path: these two run
   // outside any transaction, so the SET LOCAL above cannot cover them, and the
   // ledger deciding which migrations are pending is the last thing that should
   // resolve to a schema nobody chose.
-  await sql`
+  await getSql()`
     CREATE TABLE IF NOT EXISTS public._migrations (
       filename   text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
@@ -87,7 +115,7 @@ async function main() {
   `;
 
   const applied = new Set(
-    (await sql`SELECT filename FROM public._migrations`).map((r) => r.filename),
+    (await getSql()`SELECT filename FROM public._migrations`).map((r) => r.filename),
   );
 
   const files = (await readdir(MIGRATIONS_DIR))
@@ -109,6 +137,8 @@ async function main() {
 
   console.log(`applying ${pending.length} of ${files.length} migrations`);
 
+  let appliedCount = 0;
+
   for (const file of pending) {
     const body = await readFile(path.join(MIGRATIONS_DIR, file), 'utf8');
     // drizzle-kit's separator. Files without it run as a single statement.
@@ -118,14 +148,12 @@ async function main() {
       .filter(Boolean);
 
     try {
-      await sql.begin(async (tx) => {
-        await tx.unsafe(SCOPE_SEARCH_PATH);
-        for (const statement of statements) {
-          await tx.unsafe(statement);
-        }
-        await tx`INSERT INTO public._migrations (filename) VALUES (${file})`;
+      const appliedThisTime = await getSql().begin(async (tx) => {
+        return await runMigrationFile(tx, file, statements, console);
       });
-      console.log(`  applied  ${file}`);
+      if (appliedThisTime) {
+        appliedCount++;
+      }
     } catch (err) {
       console.error(`  FAILED   ${file}`);
       console.error(`  ${err.message}`);
@@ -133,14 +161,17 @@ async function main() {
     }
   }
 
-  console.log(`done — ${pending.length} applied`);
+  console.log(`done — ${appliedCount} applied`);
 }
 
-try {
-  await main();
-} catch {
-  // The failing migration already printed its own message.
-  await sql.end({ timeout: 5 });
-  process.exit(1);
+const isDirectRun = fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isDirectRun) {
+  try {
+    await main();
+  } catch {
+    // The failing migration already printed its own message.
+    await getSql()?.end({ timeout: 5 });
+    process.exit(1);
+  }
+  await getSql()?.end({ timeout: 5 });
 }
-await sql.end({ timeout: 5 });
