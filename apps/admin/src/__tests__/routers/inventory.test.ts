@@ -135,3 +135,48 @@ describe('inventory out adjustments never go negative', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });
+
+describe('inventory.setLevelDiscrepancyStatus', () => {
+  const callerOwner = inventoryRouter.createCaller(ctx('owner'));
+  const callerMember = inventoryRouter.createCaller(ctx('member'));
+  const id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+
+  function updateReturning(rows: unknown[]) {
+    const chain: Record<string, unknown> = {};
+    for (const m of ['set', 'where', 'returning']) chain[m] = vi.fn(() => chain);
+    chain.then = (resolve: (v: unknown) => void) => Promise.resolve(rows).then(resolve);
+    mockDb.update = vi.fn(() => chain) as never;
+  }
+
+  it('rejects mutation from a member role', async () => {
+    // Member does not have write permission for inventory.
+    await expect(callerMember.setLevelDiscrepancyStatus({ id, status: 'acknowledged' }))
+      .rejects.toThrow('Missing permission: inventory.write');
+  });
+
+  it('rejects transition from resolved back to open (Zod validation)', async () => {
+    await expect(callerOwner.setLevelDiscrepancyStatus({ id, status: 'open' } as never))
+      .rejects.toBeDefined();
+  });
+
+  it('returns NOT_FOUND if the discrepancy id belongs to another org (update matched no row and select returns nothing)', async () => {
+    updateReturning([]); // Update fails
+    queueSelects([[]]); // Fallback select returns nothing (not found)
+    await expect(callerOwner.setLevelDiscrepancyStatus({ id, status: 'acknowledged' }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('returns BAD_REQUEST if the state transition is invalid (update matched no row but select found it)', async () => {
+    updateReturning([]); // Update fails due to status mismatch
+    queueSelects([[{ id }]]); // Fallback select finds the row in the org
+    await expect(callerOwner.setLevelDiscrepancyStatus({ id, status: 'acknowledged' }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('resolves the status and applies resolvedAt/resolvedBy', async () => {
+    const now = new Date();
+    updateReturning([{ id, status: 'resolved', resolvedAt: now, resolvedBy: 'user-1' }]);
+    const res = await callerOwner.setLevelDiscrepancyStatus({ id, status: 'resolved' });
+    expect(res.data.status).toBe('resolved');
+  });
+});
