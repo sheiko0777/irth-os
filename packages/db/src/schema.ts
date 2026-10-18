@@ -275,6 +275,9 @@ export const orders = pgTable("orders", {
   paymentStatusCheck: check('orders_payment_status_check', sql`${table.paymentStatus} IN ('pending', 'cod_pending', 'authorized', 'paid', 'partially_refunded', 'refunded', 'voided', 'failed')`),
   invoiceStatusCheck: check('orders_invoice_status_check', sql`${table.invoiceStatus} IN ('not_required', 'pending', 'issued', 'failed')`),
   settlementStatusCheck: check('orders_settlement_status_check', sql`${table.settlementStatus} IN ('unsettled', 'partial', 'settled')`),
+  orgCustomerIdIdx: index('orders_org_id_customer_id_idx').on(table.orgId, table.customerId),
+  orgCreatedAtDescIdx: index('orders_org_id_created_at_desc_idx').on(table.orgId, sql`${table.createdAt} DESC`),
+  orgStatusCreatedAtDescIdx: index('orders_org_id_status_created_at_desc_idx').on(table.orgId, table.status, sql`${table.createdAt} DESC`),
 }));
 
 export const orderItems = pgTable("order_items", {
@@ -314,6 +317,8 @@ export const orderItems = pgTable("order_items", {
   lineKindCheck: check('order_items_line_kind_check', sql`${table.lineKind} IN ('mapped', 'custom_nonstock')`),
   variantMatchesKindCheck: check('order_items_variant_matches_kind_check', sql`(${table.lineKind} = 'custom_nonstock') = (${table.variantId} IS NULL)`),
   orderSourceLineIdx: uniqueIndex('order_items_order_source_line_idx').on(table.orderId, table.sourceLineId).where(sql`${table.sourceLineId} IS NOT NULL`),
+  orderIdIdx: index('order_items_order_id_idx').on(table.orderId),
+  variantIdIdx: index('order_items_variant_id_idx').on(table.variantId),
 }));
 
 export const shipmentTracking = pgTable("shipment_tracking", {
@@ -323,7 +328,9 @@ export const shipmentTracking = pgTable("shipment_tracking", {
   trackingNumber: varchar("tracking_number", { length: 255 }),
   status: varchar("status", { length: 100 }), // The provider's status, mapped later to order status
   rawPayload: jsonb("raw_payload").default({}),
-});
+}, (table) => ({
+  orderIdIdx: index('shipment_tracking_order_id_idx').on(table.orderId),
+}));
 
 export const auditLog = pgTable("audit_log", {
   ...baseColumns,
