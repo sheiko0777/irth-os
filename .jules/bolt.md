@@ -26,3 +26,9 @@
 ## 2026-10-18 - Fix batch Purchasing PO List Query with single transaction wrapper
 **Learning:** Combining pagination list and count queries into `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` incorrectly acquires multiple database connections concurrently and breaks transaction data isolation, leading to potential pool exhaustion.
 **Action:** When executing batch list and count queries that require transaction-level consistency or isolation, wrap them sequentially inside a single `ctx.withOrg` transaction block to avoid scaling risks.
+## 2026-10-18 - Optimize Dashboard pendingOrdersQuery
+**Learning:** Found sequential and concurrent aggregate queries executing multiple database roundtrips and causing multiplexing risks on single transaction connections.
+**Action:** Removed redundant `pendingOrdersQuery` in `apps/admin/src/server/routers/dashboard.ts` by deriving the value from `pipelineQuery`, saving one `count()` query against the database.
+## 2026-10-18 - Combine ordersCounts queries with FILTER clause
+**Learning:** Three separate aggregate queries running concurrently were making three separate database round trips to fetch counts with different where conditions for the same table, opening multiple connections against the database.
+**Action:** Used PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine `ordersTodayQuery` and `ordersYesterdayQuery` into a single query to reduce database round trips and connections footprint. Added an `or` restrictive `WHERE` clause to narrow scanned rows and leverage indexes.

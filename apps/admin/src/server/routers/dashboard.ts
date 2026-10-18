@@ -43,39 +43,32 @@ export const dashboardRouter = router({
 
         // Batch independent queries — O(max latency) instead of O(n × latency)
         const [
-            ordersTodayQuery,
+            ordersCountsQuery,
             revenueTodayQuery,
-            pendingOrdersQuery,
             activeProductsQuery,
-            ordersYesterdayQuery,
             revenueYesterdayQuery,
             dailyOrdersQuery,
             dailyRevenueQuery,
             pipelineQuery,
         ] = await Promise.all([
+            // Combine today and yesterday orders count using FILTER to save a query
             ctx.withOrg((tx) => tx
-                .select({ count: count() })
+                .select({
+                    today: sql<number>`count(*)::int filter (where ${orders.createdAt} >= ${startOfDay})`,
+                    yesterday: sql<number>`count(*)::int filter (where ${orders.createdAt} >= ${startOfYesterday} and ${orders.createdAt} < ${startOfDay})`
+                })
                 .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay)))),
+                .where(and(
+                    eq(orders.orgId, ctx.orgId),
+                    gte(orders.createdAt, startOfYesterday)
+                ))),
             // Revenue reads the ledger (CLAUDE.md rule 2), never orders: net
             // sales ex-VAT, less returns, dated when the sale was recognised.
             ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfDay })),
             ctx.withOrg((tx) => tx
                 .select({ count: count() })
-                .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), eq(orders.status, 'pending')))),
-            ctx.withOrg((tx) => tx
-                .select({ count: count() })
                 .from(products)
                 .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active')))),
-            ctx.withOrg((tx) => tx
-                .select({ count: count() })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, startOfYesterday),
-                    lt(orders.createdAt, startOfDay),
-                ))),
             ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfYesterday, to: startOfDay })),
             ctx.withOrg((tx) => tx
                 .select({
@@ -96,8 +89,10 @@ export const dashboardRouter = router({
                 .groupBy(orders.status)),
         ]);
 
-        const ordersToday = ordersTodayQuery[0]?.count ?? 0;
-        const ordersYesterday = ordersYesterdayQuery[0]?.count ?? 0;
+        const ordersToday = ordersCountsQuery[0]?.today ?? 0;
+        const ordersYesterday = ordersCountsQuery[0]?.yesterday ?? 0;
+        // pendingOrders can be derived directly from the pipelineQuery rather than running a separate count query
+        const pendingOrders = pipelineQuery.find((r) => r.status === 'pending')?.count ?? 0;
 
         const revenueTodayMinor = revenueTodayQuery.netSalesMinor;
         const revenueYesterdayMinor = revenueYesterdayQuery.netSalesMinor;
@@ -127,7 +122,7 @@ export const dashboardRouter = router({
             data: {
                 ordersToday,
                 revenueToday: fromMinor(revenueTodayMinor),
-                pendingOrders: pendingOrdersQuery[0]?.count ?? 0,
+                pendingOrders,
                 activeProducts: activeProductsQuery[0]?.count ?? 0,
                 deltas: {
                     ordersToday: countDelta(ordersToday, ordersYesterday),
