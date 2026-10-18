@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { router, requirePermission } from '../trpc';
 import { brandScope } from '../scopes';
-import { inventoryItems, inventoryMovements, productVariants, products, withAudit } from '@irth/db';
-import { eq, and, desc, asc, lte, gt, sql, count, inArray } from 'drizzle-orm';
+import { inventoryItems, inventoryMovements, productVariants, products, inventoryLevelDiscrepancies, withAudit } from '@irth/db';
+import { eq, and, desc, asc, lte, gt, sql, count, inArray, or, lt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const inventoryRouter = router({
@@ -91,6 +91,120 @@ export const inventoryRouter = router({
         .orderBy(asc(inventoryItems.quantity)));
 
       return { data: items, error: null, meta: null };
+    }),
+
+  listLevelDiscrepancies: requirePermission('inventory', 'view')
+    .input(z.object({
+      status: z.enum(['open', 'acknowledged', 'resolved']).optional(),
+      cursor: z.string().uuid().optional(),
+      limit: z.number().int().min(1).max(100).default(50),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { data, nextCursor } = await ctx.withOrg(async (tx) => {
+        let cursorCondition = undefined;
+        if (input.cursor) {
+          const [cursorRow] = await tx
+            .select({ createdAt: inventoryLevelDiscrepancies.createdAt })
+            .from(inventoryLevelDiscrepancies)
+            .where(
+              and(
+                eq(inventoryLevelDiscrepancies.id, input.cursor),
+                eq(inventoryLevelDiscrepancies.orgId, ctx.orgId)
+              )
+            );
+          if (cursorRow) {
+            cursorCondition = or(
+              lt(inventoryLevelDiscrepancies.createdAt, cursorRow.createdAt),
+              and(
+                eq(inventoryLevelDiscrepancies.createdAt, cursorRow.createdAt),
+                lt(inventoryLevelDiscrepancies.id, input.cursor)
+              )
+            );
+          }
+        }
+
+        const rows = await tx
+          .select()
+          .from(inventoryLevelDiscrepancies)
+          .where(
+            and(
+              eq(inventoryLevelDiscrepancies.orgId, ctx.orgId),
+              input.status ? eq(inventoryLevelDiscrepancies.status, input.status) : undefined,
+              cursorCondition
+            )
+          )
+          .orderBy(
+            desc(inventoryLevelDiscrepancies.createdAt),
+            desc(inventoryLevelDiscrepancies.id)
+          )
+          .limit(input.limit + 1);
+
+        let nextCursor: string | undefined = undefined;
+        if (rows.length > input.limit) {
+          const nextItem = rows.pop();
+          nextCursor = nextItem?.id;
+        }
+
+        return { data: rows, nextCursor };
+      });
+
+      return { data, error: null, meta: { nextCursor } };
+    }),
+
+  setLevelDiscrepancyStatus: requirePermission('inventory', 'write')
+    .input(z.object({
+      id: z.string().uuid(),
+      status: z.enum(['acknowledged', 'resolved']),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const allowedPreviousStates = input.status === 'acknowledged'
+        ? ['open']
+        : ['open', 'acknowledged'];
+
+      return await ctx.withOrg(async (tx) => {
+        const [updated] = await tx
+          .update(inventoryLevelDiscrepancies)
+          .set({
+            status: input.status,
+            ...(input.status === 'resolved'
+              ? { resolvedAt: new Date(), resolvedBy: ctx.userId }
+              : {}),
+          })
+          .where(
+            and(
+              eq(inventoryLevelDiscrepancies.id, input.id),
+              eq(inventoryLevelDiscrepancies.orgId, ctx.orgId),
+              inArray(inventoryLevelDiscrepancies.status, allowedPreviousStates as any)
+            )
+          )
+          .returning();
+
+        if (!updated) {
+          const [exists] = await tx
+            .select({ id: inventoryLevelDiscrepancies.id })
+            .from(inventoryLevelDiscrepancies)
+            .where(
+              and(
+                eq(inventoryLevelDiscrepancies.id, input.id),
+                eq(inventoryLevelDiscrepancies.orgId, ctx.orgId)
+              )
+            );
+
+          if (!exists) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Discrepancy not found',
+            });
+          }
+
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Current status does not allow this change',
+          });
+        }
+
+        return { data: updated, error: null, meta: null };
+      });
     }),
 
   movements: requirePermission('inventory', 'view')
