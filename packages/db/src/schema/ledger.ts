@@ -21,6 +21,7 @@ export const ledgerEntryKindEnum = pgEnum('ledger_entry_kind', [
   'po_receipt', 'supplier_payment', 'courier_remittance',
   'rep_collection', 'rep_handover', 'rep_shortage_writeoff',
   'stocktake_variance', 'reversal', 'manual', 'intercompany', 'fx_revaluation',
+  'payment_captured',
 ]);
 export const ledgerCounterpartyKindEnum = pgEnum('ledger_counterparty_kind', ['customer', 'supplier', 'courier', 'member', 'legal_entity']);
 

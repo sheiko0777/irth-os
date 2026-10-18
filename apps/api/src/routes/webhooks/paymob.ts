@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual, isUniqueViolation, withOrgContext } from '@irth/db';
+import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual, isUniqueViolation, withOrgContext, ACCOUNT_CODES, postJournalEntry } from '@irth/db';
+import { assertSupportedCurrency } from '@irth/domain';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -138,6 +139,27 @@ paymobRoute.post('/', async (c: Context) => {
       const isGenuineCapture = isSuccess && obj.pending !== true && obj.is_refunded !== true && obj.is_voided !== true;
 
       if (isGenuineCapture) {
+        const orderCurrency = assertSupportedCurrency(order.currency);
+        // Post journal entry for the genuine capture.
+        // A capture that arrives BEFORE delivery leaves 1050 with a credit balance
+        // (a customer prepayment) until the delivered entry debits it; that is intended.
+        // Payout settlement (clearing -> bank) is out of scope and is expected to be
+        // cleared by a manual journal until a payout flow is built.
+        await postJournalEntry(tx, {
+          orgId: order.orgId,
+          journalType: 'cash',
+          entryKind: 'payment_captured',
+          description: `Paymob payment captured - Transaction ${transactionId}`,
+          lines: [
+            { accountCode: ACCOUNT_CODES.GATEWAY_CLEARING, currency: orderCurrency, debitMinor: order.totalAmountMinor },
+            { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_ONLINE, currency: orderCurrency, creditMinor: order.totalAmountMinor }
+          ],
+          dimensions: { orderId: order.id },
+          sourceTable: 'orders',
+          sourceId: order.id,
+          createdBy: null
+        });
+
         // Attempt the atomic status transition, restricted to not regress past 'pending'/'payment_failed'
         const transitionResult = await transitionOrderStatus(tx as any, {
           orgId: order.orgId,
