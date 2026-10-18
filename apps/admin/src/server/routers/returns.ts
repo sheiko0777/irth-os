@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, requirePermission } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx } from '@irth/db';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx, journalEntries } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { EGYPT_VAT_BP, add, assertSupportedCurrency, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
@@ -64,6 +64,18 @@ async function refundReturn(
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Refund amount is invalid or exceeds the order total' });
     }
   }
+  const [deliveredEntry] = await tx.select({ id: journalEntries.id }).from(journalEntries)
+    .where(and(
+      eq(journalEntries.orgId, orgId),
+      eq(journalEntries.sourceTable, 'orders'),
+      eq(journalEntries.sourceId, target.orderId),
+      eq(journalEntries.entryKind, 'order_delivered')
+    )).limit(1);
+
+  if (!deliveredEntry) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Order has no recognised sale to refund' });
+  }
+
   // Like restock, the atomic claim guards all ledger side effects. Its
   // durable marker is independent of the editable current status.
   const [row] = await tx.update(orderReturns)

@@ -126,9 +126,10 @@ describe('returns', () => {
       totalAmountMinor: 2000n, orderCurrency: 'EGP' };
     const target = rows([{ orderId: 'o-1' }]);
     const siblings = rows([current, { id: 'ret-2', refundPostedAt: new Date(), refundAmountMinor: prior }]);
+    const deliveredEntry = rows([{ id: 'je-1' }]);
     const claim = rows(posted ? [] : [current]);
     const retry = rows([current]);
-    mockDb.select.mockReturnValueOnce(target).mockReturnValueOnce(siblings);
+    mockDb.select.mockReturnValueOnce(target).mockReturnValueOnce(siblings).mockReturnValueOnce(deliveredEntry);
     mockDb.update.mockReturnValueOnce(claim).mockReturnValueOnce(retry);
     return { claim, retry, siblings };
   }

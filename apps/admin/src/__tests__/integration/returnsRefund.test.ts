@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { journalEntries, orders, orderReturns, organizations, withOrgContext, effectiveAccess } from '@irth/db';
+import { journalEntries, orders, orderReturns, organizations, withOrgContext, effectiveAccess, postOrderDeliveredEntry } from '@irth/db';
 import type { Context } from '@/server/trpc';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
 
@@ -17,10 +17,20 @@ beforeAll(async () => {
 });
 afterAll(async () => { await closeTestDb(); });
 
-async function fixture(count = 1) {
+// `delivered: false` models an order that was never recognised as a sale (no
+// order_delivered ledger entry), which a refund must be refused against.
+async function fixture(count = 1, delivered = true) {
   const [order] = await testDb.insert(orders).values({
     orgId, orderNumber: `REFUND-${++sequence}`, status: 'delivered', totalAmountMinor: 2000n, currency: 'EGP',
   }).returning();
+  if (delivered) {
+    // Post the sale through the real helper (same call the delivery flow makes)
+    // rather than hand-inserting a journal row: a hand-built entry needs a valid
+    // legal entity and accounts, and would drift from what production writes.
+    await withOrgContext(testDb, orgId, (tx) => postOrderDeliveredEntry(tx, {
+      orgId, order, previousStatus: 'shipped', newStatus: 'delivered',
+    }));
+  }
   const returns = await testDb.insert(orderReturns).values(Array.from({ length: count }, (_, index) => ({
     orgId, orderId: order.id, returnNumber: `RMA-${sequence}-${index}`, reason: 'other' as const,
   }))).returning();
@@ -78,6 +88,13 @@ describe('refund posting through the real router', () => {
       .rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(await entries(second.id)).toHaveLength(0);
     expect((await returned(second.id)).refundPostedAt).toBeNull();
+  });
+
+  it('rejects refund if order has no delivered entry and leaves refund_posted_at null', async () => {
+    const { caller, returns: [row] } = await fixture(1, false);
+    await expect(caller.updateStatus({ id: row.id, status: 'refunded', refundAmount: '20' }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Order has no recognised sale to refund' });
+    expect((await returned(row.id)).refundPostedAt).toBeNull();
   });
 
   it('serializes concurrent refunds on different returns of the same order', async () => {
