@@ -1,7 +1,7 @@
 import { router, requirePermission } from '../trpc';
 import { z } from 'zod';
 import { courierShipments, courierRemittances, paginationMeta, paginationOffset, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
-import { assertSupportedCurrency, fromMinor, parseDecimal } from '@irth/domain';
+import { assertSupportedCurrency, formatMoney, fromMinor, parseDecimal } from '@irth/domain';
 import { eq, and, ne, sum, count, sql, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { paginationInputSchema } from '../pagination';
@@ -128,6 +128,18 @@ export const courierRouter = router({
         const newRemittance = await ctx.withOrg((tx) => withAudit(
           tx,
           async () => {
+            // Best-effort guard against a race by design (no unique index).
+            const [existing] = await tx
+              .select()
+              .from(courierRemittances)
+              .where(and(
+                eq(courierRemittances.orgId, ctx.orgId),
+                eq(courierRemittances.remittanceReference, input.reference)
+              ));
+            if (existing) {
+              throw new TRPCError({ code: 'CONFLICT', message: 'A remittance with this reference already exists' });
+            }
+
             const [row] = await tx
               .insert(courierRemittances)
               .values({
@@ -178,6 +190,34 @@ export const courierRouter = router({
 
           if (!remittance) {
             throw new TRPCError({ code: 'NOT_FOUND', message: 'Remittance not found' });
+          }
+
+          const [shipmentsAggr] = await tx
+            .select({
+              totalCodMinor: sql<string | null>`SUM(${courierShipments.codAmountMinor})`
+            })
+            .from(courierShipments)
+            .where(and(
+              eq(courierShipments.orgId, ctx.orgId),
+              eq(courierShipments.remittanceId, remittance.remittanceReference)
+            ));
+
+          const expectedMinor = BigInt(shipmentsAggr?.totalCodMinor ?? '0');
+
+          if (expectedMinor === 0n && remittance.amountMinor > 0n) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'No COD shipments are linked to this remittance reference',
+            });
+          }
+
+          if (expectedMinor !== remittance.amountMinor) {
+            const expectedStr = formatMoney(fromMinor(expectedMinor, assertSupportedCurrency('EGP')), { symbol: false });
+            const amountStr = formatMoney(fromMinor(remittance.amountMinor, assertSupportedCurrency('EGP')), { symbol: false });
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Remittance amount ${amountStr} does not match the COD total of its linked shipments ${expectedStr}`,
+            });
           }
 
           // Idempotency without a key: only a remittance that is not already

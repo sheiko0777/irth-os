@@ -120,12 +120,38 @@ describe('courier router', () => {
     );
   });
 
+  it('remittances.create: rejects duplicate reference', async () => {
+    const existing = queryResult([{ id: 'remittance-1', orgId: 'org-1', remittanceReference: 'dup-ref' }]);
+    mockDb.select.mockReturnValueOnce(existing as never);
+
+    await expectCode(
+      caller.remittances.create({ courier: 'bosta', reference: 'dup-ref', amount: '100', shipmentCount: 1 }),
+      'CONFLICT'
+    );
+  });
+
   it('remittances.reconcile: missing remittance rejects NOT_FOUND', async () => {
     await expectCode(caller.remittances.reconcile({ remittanceId: UUID }), 'NOT_FOUND');
   });
 
   it('remittances.reconcile: malformed uuid rejects BAD_REQUEST', async () => {
     await expectCode(caller.remittances.reconcile({ remittanceId: 'nope' }), 'BAD_REQUEST');
+  });
+
+  it('remittances.reconcile: rejects when linked shipments COD total is zero and remittance amount > 0', async () => {
+    const remittance = queryResult([{ id: UUID, orgId: 'org-1', remittanceReference: 'ref-1', amountMinor: 10000n }]);
+    const shipmentsAggr = queryResult([{ totalCodMinor: '0' }]);
+    mockDb.select.mockReturnValueOnce(remittance as never).mockReturnValueOnce(shipmentsAggr as never);
+
+    await expectCode(caller.remittances.reconcile({ remittanceId: UUID }), 'BAD_REQUEST');
+  });
+
+  it('remittances.reconcile: rejects when linked shipments COD total does not match remittance amount', async () => {
+    const remittance = queryResult([{ id: UUID, orgId: 'org-1', remittanceReference: 'ref-1', amountMinor: 10000n }]);
+    const shipmentsAggr = queryResult([{ totalCodMinor: '9000' }]);
+    mockDb.select.mockReturnValueOnce(remittance as never).mockReturnValueOnce(shipmentsAggr as never);
+
+    await expectCode(caller.remittances.reconcile({ remittanceId: UUID }), 'BAD_REQUEST');
   });
 
   /**
@@ -143,6 +169,9 @@ describe('courier router', () => {
    * courier webhooks in apps/api, not through this router.
    */
   it('COD settlement queues no customer notification', async () => {
+    const remittance = queryResult([{ id: 'r-1', orgId: 'org-1', remittanceReference: 'ref-1', amountMinor: 100n }]);
+    const shipmentsAggr = queryResult([{ totalCodMinor: '100' }]);
+    mockDb.select.mockReturnValueOnce(remittance as never).mockReturnValueOnce(shipmentsAggr as never);
     await caller.shipments.markRemitted({ shipmentId: UUID, remittanceId: 'r-1' });
 
     // The mock declares `insert: vi.fn(() => chainable())` — no parameters — so
