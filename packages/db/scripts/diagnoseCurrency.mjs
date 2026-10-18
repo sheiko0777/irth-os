@@ -2,8 +2,6 @@
 /**
  * Diagnostic script to find non-EGP currency rows across all tables in the database.
  * Run inside a strictly READ-ONLY transaction.
- *
- * Usage: DATABASE_URL="..." node packages/db/scripts/diagnoseCurrency.mjs
  */
 
 import postgres from 'postgres';
