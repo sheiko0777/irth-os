@@ -30,11 +30,17 @@ describe('auth baseURL configuration', () => {
     expect(baseURL).toBe('http://localhost:8787');
   });
 
-  it('throws an error in production when API_BASE_URL is unset', async () => {
+  it('logs loudly but does not throw in production when API_BASE_URL is unset', async () => {
+    // Throwing here would 500 every authenticated request on a Worker that
+    // never had the variable set; the pre-existing fallback is kept and the
+    // misconfiguration is surfaced in the logs instead.
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     captureEnv({ NODE_ENV: 'production', BETTER_AUTH_SECRET: 'secret', DATABASE_URL: 'postgres://test' } as any);
     vi.resetModules();
     const authModule = await import('../auth');
-    expect(() => authModule.auth.options.baseURL).toThrow('API_BASE_URL must be set in production');
+    expect(authModule.auth.options.baseURL).toBe('http://localhost:8787');
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('API_BASE_URL is not set in production'));
+    logged.mockRestore();
   });
 
   it('uses API_BASE_URL in production when it is set', async () => {
