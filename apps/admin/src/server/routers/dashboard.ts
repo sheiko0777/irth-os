@@ -168,6 +168,7 @@ export const dashboardRouter = router({
                     lt(orders.createdAt, lateBefore),
                 )),
             await tx
+            // ctx.db.execute();
                 .select({ count: count() })
                 .from(inventoryItems)
                 .where(and(
