@@ -1,13 +1,13 @@
 import * as Sentry from '@sentry/cloudflare';
 import { db } from '@irth/db';
-import { auditLog, outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, type InboundDeliveryProcessPayload, campaigns, campaignRecipients, customers } from '@irth/db';
+import { auditLog, outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, type InboundDeliveryProcessPayload, type InventoryPushPayload, inventoryItems, campaigns, campaignRecipients, customers } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
 import { sendSms } from '../services/sms';
 import { renderCampaignEmail, renderOrgInviteEmail, renderOrderConfirmedEmail } from '@irth/emails';
 import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
-import { upsertShopifyProductForConnection } from '../services/shopifyConnection';
+import { upsertShopifyProductForConnection, setConnectionInventoryQuantity } from '../services/shopifyConnection';
 import { envVar } from '../utils/env';
 import { handleShopifyOrderReimport } from './shopifyOrderReimport';
 
@@ -40,6 +40,55 @@ async function markProcessed(database: typeof db, eventId: string): Promise<void
     await database.update(outboxEvents)
         .set({ processed: true, processedAt: new Date() })
         .where(eq(outboxEvents.id, eventId));
+}
+
+/**
+ * Pushes one variant's available stock to Shopify as an absolute quantity.
+ *
+ * Reads the quantity at run time rather than carrying it in the event, so a
+ * burst of adjustments for one variant converges on the latest value. The
+ * quantity is the sum of the variant's inventory rows — one row per variant in
+ * practice, which is exactly what the inbound inventory-levels-update handler
+ * compares against, so a push never looks like a discrepancy on the way back.
+ *
+ * Skips (marks processed) when there is nothing to push to: the variant is not
+ * linked to a Shopify inventory item, or the org has no active connection with
+ * a selected location. Only per-org connections are pushed; the legacy
+ * single-tenant client has no configured location to push to. Every other
+ * failure throws, so the outbox retry/backoff and dead-letter handling apply.
+ */
+async function handleInventoryPush(database: typeof db, event: OutboxEvent): Promise<void> {
+    const { orgId, variantId } = JSON.parse(event.payload) as InventoryPushPayload;
+    // The worker runs as the owner role (RLS does not apply), so isolation here
+    // is only as good as the producer: refuse a payload that names another org.
+    if (orgId !== event.orgId) {
+        throw new Error(`inventory.push payload org ${orgId} does not match event org ${event.orgId}`);
+    }
+
+    const [variant] = await database.select({ id: productVariants.id, shopifyInventoryItemId: productVariants.shopifyInventoryItemId })
+        .from(productVariants)
+        .where(and(eq(productVariants.id, variantId), eq(productVariants.orgId, event.orgId)));
+    if (!variant?.shopifyInventoryItemId) {
+        await markProcessed(database, event.id);
+        return;
+    }
+
+    const [connection] = await database.select().from(shopifyConnections)
+        .where(and(eq(shopifyConnections.orgId, event.orgId), eq(shopifyConnections.status, 'active')));
+    if (!connection?.inventoryLocationId) {
+        await markProcessed(database, event.id);
+        return;
+    }
+
+    const [stock] = await database.select({ total: sql<string>`COALESCE(SUM(${inventoryItems.quantity}), 0)` })
+        .from(inventoryItems)
+        .where(and(eq(inventoryItems.orgId, event.orgId), eq(inventoryItems.variantId, variant.id)));
+    // quantity is CHECK >= 0 in the schema; the clamp is belt-and-braces so a
+    // bad row can never make us tell Shopify a negative number.
+    const quantity = Math.max(0, Number(stock?.total ?? 0));
+
+    await setConnectionInventoryQuantity(connection, variant.shopifyInventoryItemId, quantity);
+    await markProcessed(database, event.id);
 }
 
 /**
@@ -453,6 +502,8 @@ async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<v
             return handleShopifyOrderReimport(database, event);
         case 'inbound.delivery.process':
             return handleInboundDeliveryProcess(database, event);
+        case 'inventory.push':
+            return handleInventoryPush(database, event);
         default:
             throw new Error(`Unknown outbox event type: ${event.eventType}`);
     }

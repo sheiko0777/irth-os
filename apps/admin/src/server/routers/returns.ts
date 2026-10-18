@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, requirePermission } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx, journalEntries } from '@irth/db';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, emitOutboxEvent, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx, journalEntries } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { EGYPT_VAT_BP, add, assertSupportedCurrency, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
@@ -414,6 +414,15 @@ export const returnsRouter = router({
           quantity: item.quantity,
           note: saleable ? `Return restock ${input.returnId}`
             : `Return restock ${input.returnId} - condition: ${item.condition ?? 'unknown'}, held out of saleable stock, no quarantine location configured`,
+        });
+
+        // Sellable stock rose, so Shopify's count is now too low. Queued in this
+        // transaction (ids only; the worker re-reads the quantity). Held-out
+        // damaged/unknown items do not change available stock and push nothing.
+        if (saleable) await emitOutboxEvent(tx, {
+          orgId: ctx.orgId,
+          eventType: 'inventory.push',
+          payload: { orgId: ctx.orgId, variantId: orderItem.variantId },
         });
 
         await withAudit(

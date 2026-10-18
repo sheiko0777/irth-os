@@ -12,7 +12,7 @@ vi.mock('@irth/db', async (importOriginal) => ({
   db: mockDb,
   postJournalEntry: vi.fn(),
 }));
-const { postJournalEntry, inventoryItems, inventoryMovements, ACCOUNT_CODES } = await import('@irth/db');
+const { postJournalEntry, inventoryItems, inventoryMovements, outboxEvents, ACCOUNT_CODES } = await import('@irth/db');
 
 function rows(value: unknown[]) {
   const chain = mockDb.select();
@@ -243,6 +243,12 @@ describe('returns', () => {
     }));
     const movement = mockDb.insert.mock.results[0].value;
     expect(movement.values).toHaveBeenCalledWith(expect.objectContaining({ type: 'in', quantity: 2 }));
+    // Sellable stock rose, so Shopify's count is stale: one push, queued in the same tx.
+    const pushIndex = (mockDb.insert.mock.calls as unknown[][]).findIndex((call) => call[0] === outboxEvents);
+    expect(pushIndex).toBeGreaterThanOrEqual(0);
+    const pushRow = (mockDb.insert.mock.results[pushIndex].value.values.mock.calls as unknown[][])[0][0] as { eventType: string; payload: string };
+    expect(pushRow.eventType).toBe('inventory.push');
+    expect(JSON.parse(pushRow.payload)).toEqual({ orgId: 'org-1', variantId: 'v-1' });
   });
 
   it.each(['damaged', 'unknown'])('holds %s stock out of saleable inventory but reverses cost', async (condition) => {
@@ -262,6 +268,8 @@ describe('returns', () => {
     expect(movement.values).toHaveBeenCalledWith(expect.objectContaining({
       type: 'adjustment', quantity: 2, note: expect.stringContaining('held out of saleable stock'),
     }));
+    // Held-out stock does not change what is available, so nothing is pushed.
+    expect(mockDb.insert).not.toHaveBeenCalledWith(outboxEvents);
   });
 
   it('restocks physically with null cost without inventing a reversal', async () => {
