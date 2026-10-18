@@ -13,12 +13,15 @@ let transitionArgs: unknown[] = [];
 
 vi.mock('../db', () => {
   const dbMock = {
-    insert: vi.fn(() => ({ values: vi.fn((vals: unknown) => { insertValuesArgs.push(vals); return Promise.resolve(); }) })),
+    // Awaitable on its own (audit rows) and chainable with .returning() (the delivery claim reads back its id).
+    insert: vi.fn(() => ({ values: vi.fn((vals: unknown) => { insertValuesArgs.push(vals); return Object.assign(Promise.resolve(), { returning: vi.fn(() => Promise.resolve([{ id: 'delivery-1' }])) }); }) })),
     select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn((...args: unknown[]) => { selectWhereArgs.push(...args); return Promise.resolve(selectQueue.shift() || []); }) })) })),
     update: vi.fn(() => ({ set: vi.fn((vals: unknown) => { updateSetArgs.push(vals); return { where: vi.fn((cond: unknown) => { updateWhereArgs.push(cond); return Promise.resolve(); }) }; }) })),
   };
   return { db: dbMock, getDb: () => dbMock };
 });
+
+let postJournalEntryArgs: unknown[] = [];
 
 vi.mock('@irth/db', async (importOriginal) => ({
   ...await importOriginal<typeof import('@irth/db')>(),
@@ -27,6 +30,10 @@ vi.mock('@irth/db', async (importOriginal) => ({
     transitionArgs.push(args);
     return Promise.resolve({ previousStatus: 'pending' });
   }),
+  postJournalEntry: vi.fn((_db: unknown, args: unknown) => {
+    postJournalEntryArgs.push(args);
+    return Promise.resolve();
+  })
 }));
 
 vi.mock('../utils/env', () => ({
@@ -103,6 +110,7 @@ describe('paymob webhook', () => {
     updateSetArgs = [];
     updateWhereArgs = [];
     transitionArgs = [];
+    postJournalEntryArgs = [];
   });
 
   afterEach(() => {
@@ -284,7 +292,7 @@ describe('paymob webhook', () => {
     const ORG_ID = 'org-b-bbbb';
     const VALID_ORDER = { id: ORDER_ID, orgId: ORG_ID, status: 'pending', totalAmountMinor: 10000n, currency: 'EGP' };
 
-    it('confirms a valid order (genuinely new, matching, successful transaction)', async () => {
+    it('confirms a valid order (genuinely new, matching, successful transaction) and posts a journal entry', async () => {
       selectQueue = [[VALID_ORDER]];
       const obj = buildObj(ORDER_ID, true);
       const hmac = computeHmac(obj, SECRET);
@@ -293,6 +301,22 @@ describe('paymob webhook', () => {
       expect(res.status).toBe(200);
 
       expect(transitionArgs[0]).toMatchObject({ orderId: ORDER_ID, orgId: ORG_ID, newStatus: 'confirmed' });
+      expect(postJournalEntryArgs).toHaveLength(1);
+      expect(postJournalEntryArgs[0]).toMatchObject({
+        orgId: ORG_ID,
+        journalType: 'cash',
+        entryKind: 'payment_captured',
+        lines: [
+          { accountCode: '1080', currency: 'EGP', debitMinor: 10000n },
+          { accountCode: '1050', currency: 'EGP', creditMinor: 10000n }
+        ],
+        dimensions: { orderId: ORDER_ID },
+        // Keyed by the Paymob delivery (one per transaction), not by the order: a
+        // second genuine capture on the same order must not collide on the ledger's
+        // one-entry-per-source unique index and roll the webhook back.
+        sourceTable: 'paymob_webhook_deliveries',
+        sourceId: 'delivery-1',
+      });
     });
 
 
@@ -321,14 +345,17 @@ describe('paymob webhook', () => {
 
       // We explicitly override the `insert` mock to throw a duplicate constraint error just for this test
       const { db: mockedDb } = await import('../db');
+      // The claim insert reads its id back with .returning(), which is where a real
+      // unique-violation surfaces.
       vi.mocked(mockedDb.insert).mockImplementationOnce(() => ({
-        values: vi.fn(() => Promise.reject({ code: '23505' })),
+        values: vi.fn(() => ({ returning: vi.fn(() => Promise.reject({ code: '23505' })) })),
       } as any));
 
       const res = await postWebhook({ obj }, { hmac });
       expect(res.status).toBe(200);
 
       expect(transitionArgs).toHaveLength(0); // transition NOT called
+      expect(postJournalEntryArgs).toHaveLength(0); // post NOT called
     });
 
     it('rejects on wrong amount without confirming', async () => {
@@ -341,6 +368,7 @@ describe('paymob webhook', () => {
 
       expect(transitionArgs).toHaveLength(0);
       expect(JSON.stringify(insertValuesArgs)).toContain('amount_currency_mismatch');
+      expect(postJournalEntryArgs).toHaveLength(0);
     });
 
     it('rejects on wrong currency without confirming', async () => {
@@ -353,6 +381,7 @@ describe('paymob webhook', () => {
 
       expect(transitionArgs).toHaveLength(0);
       expect(JSON.stringify(insertValuesArgs)).toContain('amount_currency_mismatch');
+      expect(postJournalEntryArgs).toHaveLength(0);
     });
 
     it('pending: true transaction does not confirm', async () => {
@@ -365,6 +394,7 @@ describe('paymob webhook', () => {
 
       expect(transitionArgs).toHaveLength(0);
       expect(JSON.stringify(insertValuesArgs)).toContain('not_a_genuine_capture');
+      expect(postJournalEntryArgs).toHaveLength(0);
     });
 
     it('is_refunded: true transaction does not confirm', async () => {
@@ -377,6 +407,7 @@ describe('paymob webhook', () => {
 
       expect(transitionArgs).toHaveLength(0);
       expect(JSON.stringify(insertValuesArgs)).toContain('not_a_genuine_capture');
+      expect(postJournalEntryArgs).toHaveLength(0);
     });
 
     it('records but does not confirm on success: false', async () => {
@@ -389,6 +420,7 @@ describe('paymob webhook', () => {
 
       expect(transitionArgs).toHaveLength(0);
       expect(JSON.stringify(insertValuesArgs)).toContain('not_a_genuine_capture');
+      expect(postJournalEntryArgs).toHaveLength(0);
     });
   });
 });

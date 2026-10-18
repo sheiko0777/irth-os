@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual, isUniqueViolation, withOrgContext } from '@irth/db';
+import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual, isUniqueViolation, withOrgContext, ACCOUNT_CODES, postJournalEntry } from '@irth/db';
+import { assertSupportedCurrency } from '@irth/domain';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -91,13 +92,17 @@ paymobRoute.post('/', async (c: Context) => {
     await withOrgContext(getDb(), order.orgId, async (tx) => {
       // Idempotency: Insert transaction first to claim the delivery, catch unique violation
       // to detect re-delivery of the same transaction id.
-      await tx.insert(paymobWebhookDeliveries).values({
+      // The id is read back: the capture ledger entry is keyed by this delivery
+      // (one per Paymob transaction), not by the order, so a second genuine
+      // capture on the same order (a failed payment retried) cannot hit the
+      // ledger's one-entry-per-source unique index and roll the webhook back.
+      const [delivery] = await tx.insert(paymobWebhookDeliveries).values({
         orgId: order.orgId,
         orderId: order.id,
         transactionId,
         payload: obj,
         status: 'processed'
-      });
+      }).returning({ id: paymobWebhookDeliveries.id });
 
       // Amount/currency check
       let isAmountMatch: boolean;
@@ -138,6 +143,27 @@ paymobRoute.post('/', async (c: Context) => {
       const isGenuineCapture = isSuccess && obj.pending !== true && obj.is_refunded !== true && obj.is_voided !== true;
 
       if (isGenuineCapture) {
+        const orderCurrency = assertSupportedCurrency(order.currency);
+        // Post journal entry for the genuine capture.
+        // A capture that arrives BEFORE delivery leaves 1050 with a credit balance
+        // (a customer prepayment) until the delivered entry debits it; that is intended.
+        // Payout settlement (clearing -> bank) is out of scope and is expected to be
+        // cleared by a manual journal until a payout flow is built.
+        await postJournalEntry(tx, {
+          orgId: order.orgId,
+          journalType: 'cash',
+          entryKind: 'payment_captured',
+          description: `Paymob payment captured - Transaction ${transactionId}`,
+          lines: [
+            { accountCode: ACCOUNT_CODES.GATEWAY_CLEARING, currency: orderCurrency, debitMinor: order.totalAmountMinor },
+            { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_ONLINE, currency: orderCurrency, creditMinor: order.totalAmountMinor }
+          ],
+          dimensions: { orderId: order.id },
+          sourceTable: 'paymob_webhook_deliveries',
+          sourceId: delivery.id,
+          createdBy: null
+        });
+
         // Attempt the atomic status transition, restricted to not regress past 'pending'/'payment_failed'
         const transitionResult = await transitionOrderStatus(tx as any, {
           orgId: order.orgId,
