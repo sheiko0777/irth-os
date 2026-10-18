@@ -300,9 +300,36 @@ Five read-only audits ran in parallel against `main` at `d371000` (tenancy/RLS, 
 | Manual courier + tracking number, fills COD amount with the ledger's own COD rule | [#470](https://github.com/sheiko0777/irth-os/pull/470) | `41e7f6f` | courier delivery webhooks could never match one of our orders |
 | Read-only non-EGP currency diagnostic (`packages/db/scripts/diagnoseCurrency.mjs`) | [#459](https://github.com/sheiko0777/irth-os/pull/459) | `d0f60d3` | closes the unreported F06 production check — **still needs to be run against production** |
 
-**Open, reviewed, CI-green except `schema-guard` (needs a human `schema:approved` label):** [#469](https://github.com/sheiko0777/irth-os/pull/469) (refund requires a recognised sale; courier scans cannot regress or cancel a delivered order), [#471](https://github.com/sheiko0777/irth-os/pull/471) (outbound inventory push to Shopify), [#458](https://github.com/sheiko0777/irth-os/pull/458) (hot-path indexes), [#455](https://github.com/sheiko0777/irth-os/pull/455) (dashboard on one pooled connection).
+### Second round (2026-10-18/19) — merged after owner approval of the `schema:approved` labels and the accounting designs
 
-**Not yet done — needs an owner decision:** order-status transition rules and reversal on return/cancel after delivery; online-payment clearing (AR-Online is never credited); COD remittance validated against linked shipments; gift-card redemption double-counting revenue; per-tenant courier webhook secrets (one shared secret lets one merchant forge another's deliveries); per-organisation ETA issuer; branch protection / human review for the auto-merge workflow.
+| Fix | PR | Merge commit | Why it mattered |
+|---|---|---|---|
+| Hot-path indexes (`0089`) | [#458](https://github.com/sheiko0777/irth-os/pull/458) | `2471e71` | `order_items.order_id`, the orders list sort and `shipment_tracking.order_id` had no usable index |
+| Refund requires a recognised sale; courier scans cannot regress or cancel a delivered order | [#469](https://github.com/sheiko0777/irth-os/pull/469) | `27e0bd7` | a refund on an undelivered order drove net sales/VAT negative; a late "In Transit" scan made the next "Delivered" violate `journal_entries_source_kind_once` and 500 forever |
+| Outbound inventory push to Shopify (`inventory.push` outbox event) | [#471](https://github.com/sheiko0777/irth-os/pull/471) | `1514a4b` | nothing pushed IRTH stock to Shopify, so overselling was possible. Per-org connections only; the legacy single-tenant client has no configured location |
+| Dashboard queries on one pooled connection | [#455](https://github.com/sheiko0777/irth-os/pull/455) | `9a6ac22` | 9 + 3 pool connections leased per request |
+| A delivered order cannot change status from the admin (incl. bulk) | [#477](https://github.com/sheiko0777/irth-os/pull/477) | `f9e4ace` | same double-entry crash via the admin dropdown; undo a sale through Returns, which also restocks |
+| COD remittance must equal the COD total of its linked shipments | [#478](https://github.com/sheiko0777/irth-os/pull/478) | `94c877a` | a typed remittance amount cleared AR-COD regardless of what the courier actually handed over; duplicate references refused (no unique index — it could fail on existing duplicates) |
+| Paymob capture clears AR-Online (Dr 1080 / Cr 1050; migration `0090`, entry kind `payment_captured`) | [#476](https://github.com/sheiko0777/irth-os/pull/476) | `bf902ab` | AR-Online was debited on delivery and never credited. Keyed by the Paymob delivery row, not the order, so a second genuine capture cannot roll the webhook back |
+| Gift-card redemption settles the order's receivable, caps at the order total, rejects expired cards and non-positive amounts | [#479](https://github.com/sheiko0777/irth-os/pull/479) | `2282673` | redemption booked revenue the delivered entry had already booked. Top-up and cancel still post nothing (need a cash-account decision) |
+| Shared-secret courier webhooks pinned to one org (`COURIER_WEBHOOK_ORG_ID`, falling back to `SHOPIFY_ORG_ID`) | [#481](https://github.com/sheiko0777/irth-os/pull/481) | `ae1a2a2` | any holder of the shared Bosta/Aramex secret could forge events for, or overwrite shipments of, another tenant. Inert until the variable is set; logs an error once while unset |
+| Removed the `claude-code` label auto-merge workflow | [#480](https://github.com/sheiko0777/irth-os/pull/480) | `dbef1d9` | a label could merge to `main`, which migrates production and deploys, with no human review |
 
-**Operational:** set `API_BASE_URL` on the Worker; reconnect Shopify and place one real test order; the `integration` job shares one Neon branch through a concurrency group, so many open PRs can starve a `main` deploy — keep the queue short and re-run a cancelled deploy when the queue is quiet.
+**Process notes.** Jules sessions overwrote already-reviewed branches twice (#473 reverted a reviewed fix and deleted most of `.jules/sentinel.md`; earlier on F09), and several of its PRs committed scratch files (`patch_*.js`, `.orig`, `commit_message.txt`). From then on every Jules result was rebuilt onto a branch only the reviewer pushes to. A Jules session also closes itself about seven minutes after generating a plan that nobody approves.
+
+**Not yet done:**
+- Per-connection courier webhook secrets for additional tenants (a connection-scoped URL verified against that connection's own envelope-encrypted secret, plus an owner-facing way to enter it). The org pin above stops the forgery; it does not give other merchants a working courier webhook.
+- Gift-card top-up and cancel ledger postings (which cash account received the money; what happens to the unspent liability).
+- Per-organisation ETA issuer (every tenant's e-invoices are filed under one issuer).
+- Reversal posting on cancel after delivery (deliberately blocked instead; use Returns).
+- Refund/void accounting for online payments.
+- Branch protection with a required human review, and production deploys behind a protected GitHub Environment (repository settings).
+
+**Operational — needs someone with access:**
+- `irth-house.com` (apex, `www`, `app`) resolved to Hostinger parking nameservers with no records on 2026-10-18; restore the DNS records at the registrar.
+- Vercel's free tier refuses new production deployments ("api-deployments-free-per-day", 100/day) after the volume of PR previews; merged admin changes (dashboard, delivered-order guard, COD remittance, gift-card redemption) reach production on the next successful admin deploy.
+- Set `API_BASE_URL` and `COURIER_WEBHOOK_ORG_ID` on the Worker.
+- Reconnect Shopify once (re-points the three order topics from `inbox/*` to the real handlers) and place one real test order.
+- Run `packages/db/scripts/diagnoseCurrency.mjs` against production.
+- The `integration` job shares one Neon branch through a concurrency group, so many open PRs can starve a `main` deploy — keep the queue short and re-run a cancelled deploy when the queue is quiet.
 
