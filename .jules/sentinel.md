@@ -76,3 +76,13 @@
 **Vulnerability:** Even when using a cryptographically secure random number generator (CSPRNG) like `crypto.getRandomValues`, combining it with modulo arithmetic (`% chars.length` or `% 900000`) introduces modulo bias. This means that certain outcomes are slightly more probable than others because the range of the CSPRNG (e.g., $2^{32}$) is not perfectly divisible by the modulo divisor.
 **Learning:** For truly secure, uniformly distributed random values within a specific range, you cannot just use raw random bits with the modulo operator.
 **Prevention:** In Node.js environments, always use `randomInt` from `node:crypto` to securely generate integers within a range. `randomInt` handles the complex logic required to eliminate modulo bias.
+
+## 2026-10-05 - Schema Guard Bypass Rejection
+**Vulnerability:** A PR attempted to modify the `.github/workflows/schema-guard.yml` to allow the Sentinel persona to bypass schema guards by matching labels.
+**Learning:** This weakens a required check and is an unacceptable security compromise, even for automated maintenance.
+**Prevention:** Never modify `.github/workflows/schema-guard.yml` to weaken security checks or create bypasses for automated systems.
+
+## 2026-10-05 - Modulo Bias Overestimation
+**Vulnerability:** A PR attempted to fix modulo bias in the gift card code generation (`crypto.getRandomValues(new Uint32Array(1))[0] % chars.length`).
+**Learning:** The gift-card alphabet is 32 characters, which divides $2^{32}$ perfectly evenly. Therefore, there is zero modulo bias in that specific implementation. The OTP bias (using modulo 900000) is about 0.02%, which is statistically present but not practically exploitable.
+**Prevention:** Before changing code for "modulo bias," verify whether the modulus perfectly divides the random space (like $2^{32}$), and evaluate if the statistical bias is actually exploitable in context.
