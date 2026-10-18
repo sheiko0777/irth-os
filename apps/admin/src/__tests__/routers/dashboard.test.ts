@@ -52,6 +52,23 @@ beforeEach(() => {
 describe('dashboard router', () => {
   const caller = dashboardRouter.createCaller(ctx('owner'));
 
+
+  it('calls ctx.withOrg exactly once per procedure', async () => {
+    mockDb.select = vi.fn(() => chainOf([]));
+    const ownerCtx = ctx('owner');
+    const spy = vi.fn(ownerCtx.withOrg as any) as any;
+    ownerCtx.withOrg = spy;
+
+    const callerWithSpy = dashboardRouter.createCaller(ownerCtx);
+
+    await callerWithSpy.getStats();
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    spy.mockClear();
+    await callerWithSpy.getAlerts();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
   it('getStats: yields zeroed stats when db is empty', async () => {
     mockDb.select = vi.fn(() => chainOf([]));
     const res = await caller.getStats();
