@@ -6,6 +6,8 @@ import { withOrg } from '../db';
 import { rateLimit } from '../middlewares/rateLimit';
 import { envVar } from '../utils/env';
 import { handleError } from '../utils/errors';
+import { requireOrgId } from '../middlewares/requireOrgId';
+import { requirePermission } from '../middlewares/requirePermission';
 import { createGroqProvider } from './providers/groq';
 import { allowedAiToolDefinitions, executeAiTool } from './tools';
 import type { AiLocale, AiMessage, AiToolCard } from './types';
@@ -89,11 +91,8 @@ function summarizeCards(cards: AiToolCard[], locale: AiLocale): string {
     : 'I reviewed the available data and attached the results as cards.';
 }
 
-aiChatRouter.post('/chat', async (c) => {
-  const auth = getAuth(c);
-  if (!auth) {
-    return c.json({ data: null, error: 'Unauthorized', meta: null }, 401);
-  }
+aiChatRouter.post('/chat', requireOrgId(), requirePermission('dashboard', 'view'), async (c) => {
+  const auth = getAuth(c)!;
 
   let parsed: z.infer<typeof chatSchema>;
   try {
