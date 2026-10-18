@@ -162,10 +162,30 @@ function stubOrder(order: Record<string, unknown> | undefined, previousStatus = 
     // We'll let the user logic from the test define `previousStatus`. We don't try to rigidly map `params[2]`
     // if the query shape changed (which it did, because we added `onlyIfPreviousStatusIn`).
 
-    // Just find the first param that looks like a valid target status.
-    const newStatus = targetStatusParamIndex >= 0 ? params[targetStatusParamIndex] : order?.status;
+    // We'll extract newStatus by checking `params` and skipping `orgId`/`orderId` values
+    // to find the actual `status` string value. We know `input.newStatus` is among the enums.
+    const statusEnumValues = ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'];
+    let newStatusInQuery = order?.status; // Fallback
 
-    mockDb.select.mockImplementationOnce(() => chainOf([{ id: order?.id, status: newStatus }]));
+    // Since `input.newStatus` is always the LAST param passed into `execute` by `transitionOrderStatus`
+    // (it is used in `SET status = ${input.newStatus}`), we can just grab the last param if it matches the enum.
+    if (params.length > 0) {
+        const lastParam = params[params.length - 1];
+        if (typeof lastParam === 'string' && statusEnumValues.includes(lastParam)) {
+            newStatusInQuery = lastParam;
+        } else {
+            // Find any param that is a valid status, searching backwards to prefer SET clause
+            for (let i = params.length - 1; i >= 0; i--) {
+                const p = params[i];
+                if (typeof p === 'string' && statusEnumValues.includes(p)) {
+                    newStatusInQuery = p;
+                    break;
+                }
+            }
+        }
+    }
+
+    mockDb.select.mockImplementationOnce(() => chainOf([{ id: order?.id, status: newStatusInQuery }]));
 
     if (!order) return [];
 
@@ -388,7 +408,7 @@ describe('orders router — authorization', () => {
   it('updateStatus: admin caller is allowed (requirePermission orders.write)', async () => {
     // Same status in and out so the outbox/notification machinery (already
     // covered above) stays out of scope for this authorization check.
-    stubOrder({ id: ORDER_UUID, orderNumber: 'IRT-2026-0010', status: 'pending', customerId: null }, 'pending');
+    stubOrder({ id: ORDER_UUID, orderNumber: 'IRT-2026-0010', status: 'confirmed', customerId: null });
     queueSelects([[]]);
 
     const caller = ordersRouter.createCaller(ctx('admin'));
