@@ -1,5 +1,5 @@
 import { router, requirePermission } from '../trpc';
-import { orders, orderItems, shipmentTracking, products, productVariants, orderStatusEnum, notifications, paginationMeta, paginationOffset } from '@irth/db';
+import { orders, orderItems, shipmentTracking, products, productVariants, orderStatusEnum, notifications, paginationMeta, paginationOffset, courierShipments } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { orderRepScope } from '../scopes';
 import { orderAssignmentProcedures } from './orderAssignment';
@@ -232,6 +232,66 @@ export const ordersRouter = router({
                 error: null,
                 meta: null
             };
+        }),
+
+    setShipment: requirePermission('orders', 'write')
+        .input(z.object({
+            orderId: z.string().uuid(),
+            courier: z.enum(['bosta', 'aramex']),
+            trackingNumber: z.string().trim().min(3).max(64)
+        }))
+        .mutation(async ({ ctx, input }) => {
+            return ctx.withOrg(async (tx) => {
+                const order = await tx.query.orders.findFirst({
+                    where: and(
+                        eq(orders.id, input.orderId),
+                        eq(orders.orgId, ctx.orgId)
+                    )
+                });
+
+                if (!order) {
+                    throw new TRPCError({ code: 'NOT_FOUND' });
+                }
+
+                if (order.status !== 'confirmed' && order.status !== 'shipped') {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'Shipments can only be updated for confirmed or shipped orders.',
+                    });
+                }
+
+                const isCod = order.paymentMethod !== 'online' && order.totalAmountMinor > 0n;
+                const codAmountMinor = isCod ? order.totalAmountMinor : null;
+
+                const result = await withAudit(tx, async () => {
+                    const [upserted] = await tx.insert(courierShipments)
+                        .values({
+                            orgId: ctx.orgId,
+                            orderId: input.orderId,
+                            courier: input.courier,
+                            trackingNumber: input.trackingNumber,
+                            codAmountMinor,
+                        })
+                        .onConflictDoUpdate({
+                            target: [courierShipments.orderId],
+                            set: {
+                                courier: input.courier,
+                                trackingNumber: input.trackingNumber,
+                                codAmountMinor,
+                            }
+                        })
+                        .returning();
+                    return upserted;
+                }, {
+                    action: 'courier_shipments.set',
+                    orgId: ctx.orgId,
+                    userId: ctx.userId,
+                    tableName: 'courier_shipments',
+                    changes: { courier: input.courier, trackingNumber: input.trackingNumber, codAmountMinor: codAmountMinor?.toString() },
+                });
+
+                return { data: result, error: null, meta: null };
+            });
         }),
 
     updateStatus: requirePermission('orders', 'write')
