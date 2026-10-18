@@ -345,8 +345,10 @@ describe('paymob webhook', () => {
 
       // We explicitly override the `insert` mock to throw a duplicate constraint error just for this test
       const { db: mockedDb } = await import('../db');
+      // The claim insert reads its id back with .returning(), which is where a real
+      // unique-violation surfaces.
       vi.mocked(mockedDb.insert).mockImplementationOnce(() => ({
-        values: vi.fn(() => Promise.reject({ code: '23505' })),
+        values: vi.fn(() => ({ returning: vi.fn(() => Promise.reject({ code: '23505' })) })),
       } as any));
 
       const res = await postWebhook({ obj }, { hmac });
