@@ -24,6 +24,8 @@ import { Hono } from 'hono';
 vi.mock('../db', () => ({
   db: { select: vi.fn() },
   getDb: vi.fn(),
+  // The handler reads the shared-secret org pin through envVar() -> getEnv().
+  getEnv: () => ({}),
 }));
 
 // The signature check is not what is under test — bypass it and hand the
