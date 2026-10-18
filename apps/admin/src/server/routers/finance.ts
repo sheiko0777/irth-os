@@ -127,8 +127,8 @@ export const financeRouter = router({
                 ctx.withOrg((tx) => tx
                     .select({
                         totalCount: count(),
-                        cancelledCount: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`.mapWith(Number),
-                        pendingCount: sql<number>`count(*) filter (where ${orders.status} = 'pending')`.mapWith(Number),
+                        cancelledCount: sql<number>`sum(case when ${orders.status} = 'cancelled' then 1 else 0 end)`.mapWith(Number),
+                        pendingCount: sql<number>`sum(case when ${orders.status} = 'pending' then 1 else 0 end)`.mapWith(Number),
                     })
                     .from(orders)
                     .where(and(

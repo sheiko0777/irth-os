@@ -17,21 +17,9 @@ export const dashboardRouter = router({
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
 
-        // Yesterday's window, used for the delta chips on the two flow metrics.
         const startOfYesterday = new Date(startOfDay);
         startOfYesterday.setDate(startOfYesterday.getDate() - 1);
 
-        // Seven-day window (today inclusive) backing the KPI sparklines.
-        //
-        // Bucketed in UTC on both sides: Postgres truncates the stored timestamp,
-        // so the JS keys must be UTC too or every bucket misses and the lines
-        // flatline to zero.
-        //
-        // Anchored on the current instant's UTC date, deliberately not on
-        // `startOfDay`. That value is local midnight, whose UTC date is the day
-        // before anywhere east of Greenwich (Cairo is UTC+2, so local midnight is
-        // 22:00 the previous UTC day) — anchoring there slides the whole window
-        // back a day and drops today off the end of the chart.
         const now = new Date();
         const sparkFrom = new Date(Date.UTC(
             now.getUTCFullYear(),
@@ -41,7 +29,6 @@ export const dashboardRouter = router({
 
         const dayBucket = sql`date_trunc('day', ${orders.createdAt})`;
 
-        // Batch independent queries — O(max latency) instead of O(n × latency)
         const [
             ordersCountsQuery,
             revenueTodayQuery,
@@ -51,19 +38,16 @@ export const dashboardRouter = router({
             dailyRevenueQuery,
             pipelineQuery,
         ] = await Promise.all([
-            // Combine today and yesterday orders count using FILTER to save a query
             ctx.withOrg((tx) => tx
                 .select({
-                    today: sql<number>`count(*)::int filter (where ${orders.createdAt} >= ${startOfDay})`,
-                    yesterday: sql<number>`count(*)::int filter (where ${orders.createdAt} >= ${startOfYesterday} and ${orders.createdAt} < ${startOfDay})`
+                    today: sql<number>`sum(case when ${orders.createdAt} >= ${startOfDay} then 1 else 0 end)::int`,
+                    yesterday: sql<number>`sum(case when ${orders.createdAt} >= ${startOfYesterday} and ${orders.createdAt} < ${startOfDay} then 1 else 0 end)::int`
                 })
                 .from(orders)
                 .where(and(
                     eq(orders.orgId, ctx.orgId),
                     gte(orders.createdAt, startOfYesterday)
                 ))),
-            // Revenue reads the ledger (CLAUDE.md rule 2), never orders: net
-            // sales ex-VAT, less returns, dated when the sale was recognised.
             ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfDay })),
             ctx.withOrg((tx) => tx
                 .select({ count: count() })
@@ -79,8 +63,6 @@ export const dashboardRouter = router({
                 .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, sparkFrom)))
                 .groupBy(dayBucket)
                 .orderBy(dayBucket)),
-            // Same source as revenueToday so the headline and its trend line
-            // measure the same thing.
             ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: sparkFrom })),
             ctx.withOrg((tx) => tx
                 .select({ status: orders.status, count: count() })
@@ -91,21 +73,14 @@ export const dashboardRouter = router({
 
         const ordersToday = ordersCountsQuery[0]?.today ?? 0;
         const ordersYesterday = ordersCountsQuery[0]?.yesterday ?? 0;
-        // pendingOrders can be derived directly from the pipelineQuery rather than running a separate count query
         const pendingOrders = pipelineQuery.find((r) => r.status === 'pending')?.count ?? 0;
 
         const revenueTodayMinor = revenueTodayQuery.netSalesMinor;
         const revenueYesterdayMinor = revenueYesterdayQuery.netSalesMinor;
 
-        // Percent change against the same window a day earlier. Null rather than
-        // a fabricated 0% or an Infinity when there is no prior value to divide by.
-        // Counts are plain integers, so they get their own delta — percentDelta
-        // takes bigint minor units and is for money.
         const countDelta = (current: number, previous: number): number | null =>
             previous === 0 ? null : Math.round(((current - previous) / previous) * 1000) / 10;
 
-        // The grouped queries only emit rows for days that actually traded, so
-        // fill the gaps — a sparkline needs a point per day or it misreads the shape.
         const ordersByDay = new Map(dailyOrdersQuery.map((r) => [r.day, r.orderCount]));
         const revenueByDay = dailyRevenueQuery;
         const ordersSeries: number[] = [];
@@ -148,11 +123,6 @@ export const dashboardRouter = router({
         const lateBefore = new Date(Date.now() - LATE_ORDER_HOURS * 60 * 60 * 1000);
 
         const [lateOrdersQuery, outOfStockQuery, pendingReturnsQuery] = await Promise.all([
-            //
-            //
-            //
-            //
-            //
             ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)

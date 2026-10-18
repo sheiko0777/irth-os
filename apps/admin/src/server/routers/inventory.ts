@@ -48,9 +48,9 @@ export const inventoryRouter = router({
 
         const tallyList = await tx
           .select({
-            out: sql<number>`count(*) filter (where ${inventoryItems.quantity} <= 0)`.mapWith(Number),
-            low: sql<number>`count(*) filter (where ${inventoryItems.quantity} > 0 and ${inventoryItems.quantity} <= ${inventoryItems.reorderPoint})`.mapWith(Number),
-            ok: sql<number>`count(*) filter (where ${inventoryItems.quantity} > ${inventoryItems.reorderPoint})`.mapWith(Number),
+            out: sql<number>`sum(case when ${inventoryItems.quantity} <= 0 then 1 else 0 end)`.mapWith(Number),
+            low: sql<number>`sum(case when ${inventoryItems.quantity} > 0 and ${inventoryItems.quantity} <= ${inventoryItems.reorderPoint} then 1 else 0 end)`.mapWith(Number),
+            ok: sql<number>`sum(case when ${inventoryItems.quantity} > ${inventoryItems.reorderPoint} then 1 else 0 end)`.mapWith(Number),
             all: count(),
           })
           .from(inventoryItems)

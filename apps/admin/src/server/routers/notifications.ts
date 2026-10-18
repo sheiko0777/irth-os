@@ -22,7 +22,7 @@ export const notificationsRouter = router({
                 ctx.db
                     .select({
                         total:  sql<number>`count(*)::int`,
-                        unread: sql<number>`count(*) filter (where ${notifications.read} = false)::int`,
+                        unread: sql<number>`sum(case when ${notifications.read} = false then 1 else 0 end)::int`,
                     })
                     .from(notifications)
                     .where(and(eq(notifications.orgId, ctx.orgId), eq(notifications.userId, ctx.userId))),

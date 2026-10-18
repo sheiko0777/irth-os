@@ -259,9 +259,9 @@ export const courierRouter = router({
       // significantly faster than running them concurrently in separate
       // Promise.all elements, and reduces database roundtrips.
       ctx.withOrg(async (tx) => tx.select({
-        totalCollected: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codCollected} = true)`,
-        totalRemitted: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codRemitted} = true)`,
-        totalUnremitted: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codCollected} = true and ${courierShipments.codRemitted} = false)`,
+        totalCollected: sql<string | null>`sum(case when ${courierShipments.codCollected} = true then ${courierShipments.codAmountMinor} else 0 end)`,
+        totalRemitted: sql<string | null>`sum(case when ${courierShipments.codRemitted} = true then ${courierShipments.codAmountMinor} else 0 end)`,
+        totalUnremitted: sql<string | null>`sum(case when ${courierShipments.codCollected} = true and ${courierShipments.codRemitted} = false then ${courierShipments.codAmountMinor} else 0 end)`,
       })
       .from(courierShipments)
       .where(and(

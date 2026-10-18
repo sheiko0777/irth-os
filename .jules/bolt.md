@@ -32,3 +32,6 @@
 ## 2026-10-18 - Combine ordersCounts queries with FILTER clause
 **Learning:** Three separate aggregate queries running concurrently were making three separate database round trips to fetch counts with different where conditions for the same table, opening multiple connections against the database.
 **Action:** Used PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine `ordersTodayQuery` and `ordersYesterdayQuery` into a single query to reduce database round trips and connections footprint. Added an `or` restrictive `WHERE` clause to narrow scanned rows and leverage indexes.
+## 2026-10-18 - Fix mocked Postgres query parsing on `FILTER`
+**Learning:** E2E or certain pg mock test environments might fail when trying to parse `count(*) filter (where ...)` syntax, producing `syntax error at or near "filter"`.
+**Action:** When you encounter a Postgres query parsing issue with `FILTER` (like `count(*)::int filter (where ...)`), replace it with the standard ANSI SQL equivalent using `sum(case when ... then 1 else 0 end)::int` to ensure compatibility across all test runners and environments.
