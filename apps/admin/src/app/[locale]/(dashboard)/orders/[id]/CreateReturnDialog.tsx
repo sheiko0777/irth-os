@@ -30,6 +30,10 @@ export function CreateReturnDialog({ orderId, items, locale }: CreateReturnDialo
     const t = useTranslations("orders.detail.createReturn");
     const router = useRouter();
     const [open, setOpen] = useState(false);
+    // One key per opened form, reused by every submit of it: a double-tap or a
+    // retry after a timeout must hit the same idempotent create, not make a
+    // second return. A fresh key is minted only when the form is reopened.
+    const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
     const [reason, setReason] = useState<'damaged'|'wrong_item'|'not_as_described'|'changed_mind'|'other'>('other');
     const [resolution, setResolution] = useState<'refund'|'exchange'|'store_credit'|'none'>('none');
     const [notes, setNotes] = useState('');
@@ -90,8 +94,6 @@ export function CreateReturnDialog({ orderId, items, locale }: CreateReturnDialo
             return;
         }
 
-        const idempotencyKey = crypto.randomUUID();
-
         createMutation.mutate({
             orderId,
             reason,
@@ -108,7 +110,15 @@ export function CreateReturnDialog({ orderId, items, locale }: CreateReturnDialo
 
     return (
         <>
-            <Button onClick={() => setOpen(true)} variant="outline">{t("action")}</Button>
+            <Button
+                onClick={() => {
+                    setIdempotencyKey(crypto.randomUUID());
+                    setOpen(true);
+                }}
+                variant="outline"
+            >
+                {t("action")}
+            </Button>
 
             <FormDialog open={open} onClose={() => setOpen(false)} title={t("title")} width="600px">
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-4">
