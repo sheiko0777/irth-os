@@ -48,6 +48,10 @@ export const bulkRouter = router({
                         // raw tx.execute, not a Drizzle-schema-typed query. Typed
                         // honestly here and converted below before it reaches
                         // postOrderDeliveredEntry.
+                        const notDeliveredGuard = status !== 'delivered'
+                            ? sql`AND status != 'delivered'`
+                            : sql``;
+
                         const rows = await tx.execute<{
                             id: string;
                             order_number: string;
@@ -63,6 +67,7 @@ export const bulkRouter = router({
                                 WHERE id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
                                   AND org_id = ${ctx.orgId}
                                   AND status != ${status}
+                                  ${notDeliveredGuard}
                                   -- Same guard as transitionOrderStatus: a blocked
                                   -- import (0073) has no items, so it may only be
                                   -- cancelled. Skipped rows are not in RETURNING.

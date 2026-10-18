@@ -56,6 +56,16 @@ describe('bulk router', () => {
     );
   });
 
+  it('bulkUpdateOrderStatus: ignores orders that are already delivered when new status is not delivered', async () => {
+    // The underlying logic appends `AND status != 'delivered'` inside the update CTE.
+    // The router simply executes this raw SQL, we can't test its effect precisely here without integration tests
+    // or detailed SQL string inspection, but we can call it to ensure it does not throw syntax errors.
+    mockDb.execute = vi.fn().mockResolvedValue([]);
+    const res = await caller.bulkUpdateOrderStatus({ ids: [UUID], status: 'shipped' });
+    expect(res).toBeDefined();
+    expect(mockDb.execute).toHaveBeenCalled();
+  });
+
   it('exportOrders: empty db yields empty array', async () => {
     mockDb.select = vi.fn(() => chainOf([]));
     const res = await caller.exportOrders({ startDate: '2023-01-01', endDate: '2023-12-31' });

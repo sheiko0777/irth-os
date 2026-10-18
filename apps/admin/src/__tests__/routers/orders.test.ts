@@ -147,9 +147,58 @@ function stubOrder(order: Record<string, unknown> | undefined, previousStatus = 
   // Execute now returns the locked pre-update status; the following SELECT
   // retrieves the response row in Drizzle's camelCase shape.
   mockDb.execute = vi.fn(async (query: SQL) => {
-    const { params } = new PgDialect().sqlToQuery(query);
-    mockDb.select.mockImplementationOnce(() => chainOf([{ id: order?.id, status: params[2] }]));
-    return order ? [{ previous_status: previousStatus }] : [];
+    const { params, sql: sqlString } = new PgDialect().sqlToQuery(query);
+
+    // The param index for the update status changes if we pass an array to IN
+    let targetStatusParamIndex = params.findIndex(p => typeof p === 'string' && ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'].includes(p));
+    // If we have an array passed for the IN clause, `status` might be later or earlier.
+    // Drizzle/PgDialect parameters order depends on the query construction order.
+    // In transitionOrderStatus, newStatus is the first param in the SET clause (`status = ${input.newStatus}`),
+    // but the WHERE clause has `id`, `orgId` and then the IN clause parameters,
+    // then `import_status` fallback (`newStatus = 'cancelled'`), and SET status.
+
+    // An easier fallback: we know what we passed to updateStatus. Since we mock `findFirst` and `execute`,
+    // if `onlyIfPreviousStatusIn` causes the update to fail, `execute` should return `[]`.
+    // We'll let the user logic from the test define `previousStatus`. We don't try to rigidly map `params[2]`
+    // if the query shape changed (which it did, because we added `onlyIfPreviousStatusIn`).
+
+    // We'll extract newStatus by checking `params` and skipping `orgId`/`orderId` values
+    // to find the actual `status` string value. We know `input.newStatus` is among the enums.
+    const statusEnumValues = ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'];
+    let newStatusInQuery = order?.status; // Fallback
+
+    // Since `input.newStatus` is always the LAST param passed into `execute` by `transitionOrderStatus`
+    // (it is used in `SET status = ${input.newStatus}`), we can just grab the last param if it matches the enum.
+    if (params.length > 0) {
+        const lastParam = params[params.length - 1];
+        if (typeof lastParam === 'string' && statusEnumValues.includes(lastParam)) {
+            newStatusInQuery = lastParam;
+        } else {
+            // Find any param that is a valid status, searching backwards to prefer SET clause
+            for (let i = params.length - 1; i >= 0; i--) {
+                const p = params[i];
+                if (typeof p === 'string' && statusEnumValues.includes(p)) {
+                    newStatusInQuery = p;
+                    break;
+                }
+            }
+        }
+    }
+
+    mockDb.select.mockImplementationOnce(() => chainOf([{ id: order?.id, status: newStatusInQuery }]));
+
+    if (!order) return [];
+
+    // If the query has the IN clause, verify previousStatus is among allowed
+    if (sqlString.includes('status IN')) {
+        // extract the array of statuses from params
+        const allowedStatuses = params.filter(p => typeof p === 'string' && ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered', 'cancelled'].includes(p));
+        if (allowedStatuses.length > 0 && typeof previousStatus === 'string' && !allowedStatuses.includes(previousStatus)) {
+            return []; // Simulates the update failing due to the WHERE condition
+        }
+    }
+
+    return [{ previous_status: previousStatus }];
   }) as unknown as typeof mockDb.execute;
   (mockDb as unknown as { query: Record<string, unknown> }).query = {
     orders: { findFirst: vi.fn(async () => order) },
@@ -366,6 +415,16 @@ describe('orders router — authorization', () => {
     const res = await caller.updateStatus({ id: ORDER_UUID, status: 'confirmed' });
 
     expect(res.data).toEqual({ id: ORDER_UUID, status: 'confirmed' });
+  });
+
+  it('updateStatus: rejects moving away from delivered with BAD_REQUEST', async () => {
+    stubOrder({ id: ORDER_UUID, orderNumber: 'IRT-2026-0011', status: 'delivered', customerId: null });
+
+    const caller = ordersRouter.createCaller(ctx('admin'));
+    await expectCode(
+      caller.updateStatus({ id: ORDER_UUID, status: 'shipped' }),
+      'BAD_REQUEST'
+    );
   });
 });
 
