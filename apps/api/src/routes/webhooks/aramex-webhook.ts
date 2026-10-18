@@ -5,6 +5,7 @@ import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNo
 import { eq, and } from 'drizzle-orm';
 import { envVar } from '../../utils/env';
 import { resolveCourierShipmentByTracking } from './resolveCourierShipmentByTracking';
+import { pinnedCourierOrgId } from './courierOrgPin';
 
 /**
  * Courier states that mean "the parcel is moving" — the natural trigger for
@@ -57,7 +58,8 @@ aramexWebhookRoute.post('/', async (c: Context) => {
   else if (updateCode === 'SH001') courierStatus = 'picked_up';
   else if (updateCode === 'SH002') courierStatus = 'in_transit';
 
-  const resolution = await resolveCourierShipmentByTracking(db, 'aramex', trackingNumber);
+  // The shared token authenticated this request; it only vouches for ONE org.
+  const resolution = await resolveCourierShipmentByTracking(db, 'aramex', trackingNumber, pinnedCourierOrgId());
   if (resolution.status === 'ambiguous') {
     return c.json({ data: null, error: 'ambiguous_tracking_number', meta: null }, 409);
   }
