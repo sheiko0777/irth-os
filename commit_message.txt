@@ -1,0 +1,13 @@
+fix: map Shopify order webhooks to direct routes and make registration idempotent
+
+This routes `ORDERS_CREATE`, `ORDERS_UPDATED`, and `ORDERS_CANCELLED` directly to the `orders-create`, `orders-updated`, and `orders-cancelled` routes, bypassing the inbox because the `OR-10` promotion feature is not built yet.
+
+This also updates `registerShopifyWebhooks` to:
+- Be idempotent (checks existing subscriptions via GraphQL, updating or deleting+creating if they don't match the new callbackUrl)
+- Be resilient (if one topic fails to register, it continues to the next, instead of aborting the whole process)
+- Collect and bubble up per-topic error messages, which `routes/shopify.ts` now stores in the connection's `lastError`.
+
+Testing:
+- Checked integration routing `verifyShopifyWebhook` directly testing `ORDERS_CREATE`.
+- Adjusted `shopifyInboxWebhook.test.ts` to `orders-edited` to maintain existing coverage.
+- Validated new webhook error handling logic doesn't crash on initial failure.

@@ -54,10 +54,11 @@ shopifyRoute.get('/oauth/callback', async (c) => {
     }).onConflictDoUpdate({ target: shopifyConnections.orgId, set: { shopDomain, accessTokenCiphertext: sealed.ciphertext, accessTokenIv: sealed.iv, scopes: token.scope, status: 'active', uninstalledAt: null, lastError: null, updatedAt: new Date() } }).returning();
     return row;
   });
-  try {
-    await registerShopifyWebhooks(connection, apiBaseUrl());
-  } catch (error) {
-    await database.update(shopifyConnections).set({ lastError: error instanceof Error ? error.message : String(error) }).where(eq(shopifyConnections.id, connection.id));
+    const errors = await registerShopifyWebhooks(connection, apiBaseUrl());
+  if (errors.length > 0) {
+    await database.update(shopifyConnections).set({ lastError: errors.join('\n') }).where(eq(shopifyConnections.id, connection.id));
+  } else {
+    await database.update(shopifyConnections).set({ lastError: null }).where(eq(shopifyConnections.id, connection.id));
   }
   return c.redirect(`${adminBaseUrl()}/ar/integrations?shopify=connected`);
 });

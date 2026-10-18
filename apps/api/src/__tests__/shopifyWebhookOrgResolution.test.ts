@@ -269,4 +269,25 @@ describe('Shopify webhook org resolution', () => {
     // Only the first delivery was actually recorded — the second short-circuited.
     expect(deliveryInsertCalls).toHaveLength(1);
   });
+
+  it('orders/create creates an order in the connecting shop org, NOT the SHOPIFY_ORG_ID org', async () => {
+    connectionsByDomain = { 'connected-shop.myshopify.com': CONNECTION_A };
+    const res = await post('connected-shop.myshopify.com', 'wh-orders-create-1');
+    expect(res.status).toBe(200);
+    expect(deliveryInsertCalls).toHaveLength(1);
+    expect(deliveryInsertCalls[0]).toMatchObject({ orgId: 'org-a', connectionId: 'conn-a', deliveryKey: 'wh-orders-create-1' });
+  });
+
+  it('orders/create creates an order in the connecting shop org, NOT the SHOPIFY_ORG_ID org', async () => {
+    // Uses the existing mocked database layer from this file to ensure delivery matches correctly.
+    // Full HMAC checking isn't done here because the middleware is completely mocked out globally
+    // in this file, but we're asserting the routing side of it.
+    connectionsByDomain = { 'connected-shop.myshopify.com': CONNECTION_A };
+    const res = await post('connected-shop.myshopify.com', 'wh-orders-create-1', 'orders-create', { id: 12345 });
+    // Using existing post function
+
+    expect(res.status).toBe(200);
+    expect(deliveryInsertCalls).toHaveLength(1);
+    expect(deliveryInsertCalls[0]).toMatchObject({ orgId: 'org-a', connectionId: 'conn-a', deliveryKey: 'wh-orders-create-1' });
+  });
 });

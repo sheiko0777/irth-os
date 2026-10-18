@@ -15,11 +15,8 @@ import { hashOpaque } from '../../services/shopifyConnection';
 const shopifyInboxRoute = new Hono();
 
 const TOPIC_BY_ROUTE: Record<string, string> = {
-  '/orders-create': 'orders/create',
-  '/orders-updated': 'orders/updated',
   '/orders-edited': 'orders/edited',
   '/orders-paid': 'orders/paid',
-  '/orders-cancelled': 'orders/cancelled',
   '/orders-fulfilled': 'orders/fulfilled',
   '/orders-partially-fulfilled': 'orders/partially_fulfilled',
   '/refunds-create': 'refunds/create',

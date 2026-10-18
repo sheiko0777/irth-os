@@ -232,12 +232,16 @@ export async function setConnectionInventoryQuantity(connection: ShopifyConnecti
  * that script, one-time manual setup for the legacy single-tenant shop) must
  * agree on route names since both point at the same handler file.
  */
+/**
+ * Note: ORDERS_CREATE, ORDERS_UPDATED, and ORDERS_CANCELLED bypass the inbox
+ * intentionally because OR-10 (order promotion) is not built yet.
+ */
 const WEBHOOK_TOPIC_ROUTES: Record<string, string> = {
-  ORDERS_CREATE: 'inbox/orders-create',
-  ORDERS_UPDATED: 'inbox/orders-updated',
+  ORDERS_CREATE: 'orders-create',
+  ORDERS_UPDATED: 'orders-updated',
   ORDERS_EDITED: 'inbox/orders-edited',
   ORDERS_PAID: 'inbox/orders-paid',
-  ORDERS_CANCELLED: 'inbox/orders-cancelled',
+  ORDERS_CANCELLED: 'orders-cancelled',
   ORDERS_FULFILLED: 'inbox/orders-fulfilled',
   ORDERS_PARTIALLY_FULFILLED: 'inbox/orders-partially-fulfilled',
   REFUNDS_CREATE: 'inbox/refunds-create',
@@ -252,14 +256,68 @@ const WEBHOOK_TOPIC_ROUTES: Record<string, string> = {
   APP_UNINSTALLED: 'app-uninstalled',
 };
 
-export async function registerShopifyWebhooks(connection: ShopifyConnection, apiBaseUrl: string): Promise<void> {
+export async function registerShopifyWebhooks(connection: ShopifyConnection, apiBaseUrl: string): Promise<string[]> {
   const callbackBase = `${apiBaseUrl.replace(/\/$/, '')}/api/webhooks/shopify`;
+  const errors: string[] = [];
+
   for (const [topic, route] of Object.entries(WEBHOOK_TOPIC_ROUTES)) {
-    const data = await shopifyGraphQL<{ webhookSubscriptionCreate: { userErrors: Array<{ message: string }> } }>(connection, `
-      mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) {
-        webhookSubscriptionCreate(topic: $topic, webhookSubscription: $input) { userErrors { message } }
+    try {
+      const callbackUrl = `${callbackBase}/${route}`;
+
+      const existingData = await shopifyGraphQL<{ webhookSubscriptions: { nodes: Array<{ id: string; endpoint: { __typename: string; callbackUrl?: string } }> } }>(connection, `
+        query GetWebhooks($topic: WebhookSubscriptionTopic!) {
+          webhookSubscriptions(first: 50, topics: [$topic]) {
+            nodes {
+              id
+              endpoint {
+                __typename
+                ... on WebhookHttpEndpoint {
+                  callbackUrl
+                }
+              }
+            }
+          }
+        }
+      `, { topic });
+
+      const existing = existingData.webhookSubscriptions.nodes;
+      let shouldCreate = true;
+
+      for (const sub of existing) {
+        if (sub.endpoint.__typename === 'WebhookHttpEndpoint') {
+          if (sub.endpoint.callbackUrl === callbackUrl) {
+            shouldCreate = false; // Already exactly correct
+          } else {
+            // Wrong callback URL -> delete first
+            const deleteData = await shopifyGraphQL<{ webhookSubscriptionDelete: { userErrors: Array<{ message: string }> } }>(connection, `
+              mutation DeleteWebhook($id: ID!) {
+                webhookSubscriptionDelete(id: $id) { userErrors { message } }
+              }
+            `, { id: sub.id });
+            if (deleteData.webhookSubscriptionDelete.userErrors.length) throw new Error(deleteData.webhookSubscriptionDelete.userErrors.map((error) => error.message).join('; '));
+          }
+        } else {
+          // E.g., EventBridge endpoint, delete it as we expect an HTTP endpoint
+          const deleteData = await shopifyGraphQL<{ webhookSubscriptionDelete: { userErrors: Array<{ message: string }> } }>(connection, `
+            mutation DeleteWebhook($id: ID!) {
+              webhookSubscriptionDelete(id: $id) { userErrors { message } }
+            }
+          `, { id: sub.id });
+          if (deleteData.webhookSubscriptionDelete.userErrors.length) throw new Error(deleteData.webhookSubscriptionDelete.userErrors.map((error) => error.message).join('; '));
+        }
       }
-    `, { topic, input: { callbackUrl: `${callbackBase}/${route}`, format: 'JSON' } });
-    if (data.webhookSubscriptionCreate.userErrors.length) throw new Error(data.webhookSubscriptionCreate.userErrors.map((error) => error.message).join('; '));
+
+      if (shouldCreate) {
+        const createData = await shopifyGraphQL<{ webhookSubscriptionCreate: { userErrors: Array<{ message: string }> } }>(connection, `
+          mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) {
+            webhookSubscriptionCreate(topic: $topic, webhookSubscription: $input) { userErrors { message } }
+          }
+        `, { topic, input: { callbackUrl, format: 'JSON' } });
+        if (createData.webhookSubscriptionCreate.userErrors.length) throw new Error(createData.webhookSubscriptionCreate.userErrors.map((error) => error.message).join('; '));
+      }
+    } catch (e) {
+      errors.push(`Failed to register ${topic}: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
+  return errors;
 }

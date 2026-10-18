@@ -165,7 +165,7 @@ describe('Shopify inbox webhook route', () => {
   it('does not enqueue a duplicate delivery already marked processed', async () => {
     existingDelivery = { id: 'delivery-processed', status: 'processed' };
 
-    const res = await post('orders-updated', new TextEncoder().encode('{"id":1}'), 'wh-dup');
+    const res = await post('orders-edited', new TextEncoder().encode('{"id":1}'), 'wh-dup');
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ data: { alreadyProcessed: true }, error: null, meta: null });
