@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import UpdateStatusForm from './UpdateStatusForm';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { PermissionGate } from "@/components/PermissionGate";
+import { RestockButton } from "./RestockButton";
+import { getTranslations } from "next-intl/server";
 
 export const metadata = {
   title: 'Return Details | IRTH',
@@ -12,6 +15,7 @@ export const metadata = {
 
 export default async function ReturnDetailsPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
+  const t = await getTranslations("returns");
 
   const caller = await serverCaller();
 
@@ -112,9 +116,16 @@ export default async function ReturnDetailsPage({ params }: { params: Promise<{ 
                         <td className="px-4 py-3 text-[var(--t1)] capitalize">{item.condition}</td>
                         <td className="px-4 py-3">
                           {item.restock ? (
-                            <span className="text-[var(--emerald)]">✓ نعم (Yes)</span>
+                            <span className="text-[var(--emerald)]">{t("restocked")}</span>
                           ) : (
-                            <span className="text-[var(--t2)]">✗ لا (No)</span>
+                            <div className="flex items-center gap-2">
+                                <PermissionGate resource="returns" action="write">
+                                    <RestockButton returnId={returnObj.id} itemId={item.id} />
+                                </PermissionGate>
+                                {(item.condition === 'damaged' || item.condition === 'unknown') && (
+                                    <span className="text-xs text-[var(--warning)]">{t("conditionHint")}</span>
+                                )}
+                            </div>
                           )}
                         </td>
                       </tr>
