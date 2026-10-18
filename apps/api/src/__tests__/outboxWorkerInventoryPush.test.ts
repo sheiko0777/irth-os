@@ -80,7 +80,7 @@ describe('outbox inventory.push', () => {
     expect(setConnectionInventoryQuantity).toHaveBeenCalledExactlyOnceWith(CONNECTION, INVENTORY_ITEM_GID, 0);
   });
 
-  it.each([
+  it.each<[string, Parameters<typeof mockDatabase>[0]]>([
     ['the variant is not linked to a Shopify inventory item', { variant: [{ id: 'variant-1', shopifyInventoryItemId: null }] }],
     ['the variant no longer exists', { variant: [] }],
     ['the org has no active connection', { connection: [] }],

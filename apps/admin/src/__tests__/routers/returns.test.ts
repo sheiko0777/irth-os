@@ -244,10 +244,11 @@ describe('returns', () => {
     const movement = mockDb.insert.mock.results[0].value;
     expect(movement.values).toHaveBeenCalledWith(expect.objectContaining({ type: 'in', quantity: 2 }));
     // Sellable stock rose, so Shopify's count is stale: one push, queued in the same tx.
-    const pushIndex = mockDb.insert.mock.calls.findIndex(([table]) => table === outboxEvents);
+    const pushIndex = (mockDb.insert.mock.calls as unknown[][]).findIndex((call) => call[0] === outboxEvents);
     expect(pushIndex).toBeGreaterThanOrEqual(0);
-    const push = JSON.parse(mockDb.insert.mock.results[pushIndex].value.values.mock.calls[0][0].payload);
-    expect(push).toEqual({ orgId: 'org-1', variantId: 'v-1' });
+    const pushRow = (mockDb.insert.mock.results[pushIndex].value.values.mock.calls as unknown[][])[0][0] as { eventType: string; payload: string };
+    expect(pushRow.eventType).toBe('inventory.push');
+    expect(JSON.parse(pushRow.payload)).toEqual({ orgId: 'org-1', variantId: 'v-1' });
   });
 
   it.each(['damaged', 'unknown'])('holds %s stock out of saleable inventory but reverses cost', async (condition) => {
