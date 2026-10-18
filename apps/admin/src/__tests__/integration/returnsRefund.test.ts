@@ -21,6 +21,15 @@ async function fixture(count = 1) {
   const [order] = await testDb.insert(orders).values({
     orgId, orderNumber: `REFUND-${++sequence}`, status: 'delivered', totalAmountMinor: 2000n, currency: 'EGP',
   }).returning();
+  await testDb.insert(journalEntries).values({
+    orgId,
+    legalEntityId: '00000000-0000-0000-0000-000000000000',
+    journalType: 'sales',
+    entryKind: 'order_delivered',
+    description: 'Delivered',
+    sourceTable: 'orders',
+    sourceId: order.id,
+  });
   const returns = await testDb.insert(orderReturns).values(Array.from({ length: count }, (_, index) => ({
     orgId, orderId: order.id, returnNumber: `RMA-${sequence}-${index}`, reason: 'other' as const,
   }))).returning();
@@ -78,6 +87,14 @@ describe('refund posting through the real router', () => {
       .rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(await entries(second.id)).toHaveLength(0);
     expect((await returned(second.id)).refundPostedAt).toBeNull();
+  });
+
+  it('rejects refund if order has no delivered entry and leaves refund_posted_at null', async () => {
+    const { caller, returns: [row] } = await fixture();
+    await testDb.delete(journalEntries).where(and(eq(journalEntries.orgId, orgId), eq(journalEntries.sourceId, row.orderId), eq(journalEntries.entryKind, 'order_delivered')));
+    await expect(caller.updateStatus({ id: row.id, status: 'refunded', refundAmount: '20' }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Order has no recognised sale to refund' });
+    expect((await returned(row.id)).refundPostedAt).toBeNull();
   });
 
   it('serializes concurrent refunds on different returns of the same order', async () => {
