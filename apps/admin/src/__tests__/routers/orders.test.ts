@@ -70,7 +70,7 @@ function ctx(role: 'owner' | 'admin' | 'member' = 'owner'): Context {
 
 function chainOf(value: unknown) {
   const chain: Record<string, unknown> = {};
-  for (const m of ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'groupBy', 'update', 'set', 'insert', 'values', 'returning']) {
+  for (const m of ['select', 'from', 'where', 'orderBy', 'limit', 'offset', 'groupBy', 'update', 'set', 'insert', 'values', 'returning', 'onConflictDoUpdate']) {
     chain[m] = vi.fn(() => chain);
   }
   chain.then = (resolve: (v: unknown) => void) => Promise.resolve(value).then(resolve);
@@ -366,5 +366,74 @@ describe('orders router — authorization', () => {
     const res = await caller.updateStatus({ id: ORDER_UUID, status: 'confirmed' });
 
     expect(res.data).toEqual({ id: ORDER_UUID, status: 'confirmed' });
+  });
+});
+
+describe('orders.setShipment', () => {
+  const caller = ordersRouter.createCaller(ctx('admin'));
+
+  it('rejects member caller (requirePermission orders.write)', async () => {
+    const memberCaller = ordersRouter.createCaller(ctx('member'));
+    await expectCode(
+      memberCaller.setShipment({ orderId: ORDER_UUID, courier: 'bosta', trackingNumber: 'BST123' }),
+      'FORBIDDEN'
+    );
+  });
+
+  it('returns NOT_FOUND if order does not exist', async () => {
+    stubOrder(undefined);
+    await expectCode(
+      caller.setShipment({ orderId: ORDER_UUID, courier: 'bosta', trackingNumber: 'BST123' }),
+      'NOT_FOUND'
+    );
+  });
+
+  it('returns BAD_REQUEST if status is neither confirmed nor shipped', async () => {
+    stubOrder({ id: ORDER_UUID, status: 'pending', paymentMethod: 'online', totalAmountMinor: 100n });
+    await expectCode(
+      caller.setShipment({ orderId: ORDER_UUID, courier: 'bosta', trackingNumber: 'BST123' }),
+      'BAD_REQUEST'
+    );
+  });
+
+  it('upserts courier_shipments setting codAmountMinor correctly for COD order', async () => {
+    stubOrder({ id: ORDER_UUID, status: 'confirmed', paymentMethod: 'cod', totalAmountMinor: 150000n });
+    mockDb.insert = vi.fn().mockReturnValue(chainOf([{ id: 'upsert-1' }]));
+
+    const res = await caller.setShipment({ orderId: ORDER_UUID, courier: 'aramex', trackingNumber: 'ARX-987' });
+
+    expect(res.data).toEqual({ id: 'upsert-1' });
+    const insertValues = (mockDb.insert.mock.results[0].value as any).values.mock.calls[0][0];
+    expect(insertValues).toMatchObject({
+      orderId: ORDER_UUID,
+      courier: 'aramex',
+      trackingNumber: 'ARX-987',
+      codAmountMinor: 150000n,
+    });
+
+    // Check that we update instead of inserting a second row when conflict occurs
+    const onConflictUpdateArgs = (mockDb.insert.mock.results[0].value as any).values().onConflictDoUpdate.mock.calls[0][0];
+    expect(onConflictUpdateArgs).toMatchObject({
+      set: {
+        courier: 'aramex',
+        trackingNumber: 'ARX-987',
+        codAmountMinor: 150000n,
+      }
+    });
+  });
+
+  it('upserts courier_shipments leaving codAmountMinor null for online payment', async () => {
+    stubOrder({ id: ORDER_UUID, status: 'shipped', paymentMethod: 'online', totalAmountMinor: 150000n });
+    mockDb.insert = vi.fn().mockReturnValue(chainOf([{ id: 'upsert-2' }]));
+
+    await caller.setShipment({ orderId: ORDER_UUID, courier: 'bosta', trackingNumber: 'BST-456' });
+
+    const insertValues = (mockDb.insert.mock.results[0].value as any).values.mock.calls[0][0];
+    expect(insertValues).toMatchObject({
+      orderId: ORDER_UUID,
+      courier: 'bosta',
+      trackingNumber: 'BST-456',
+      codAmountMinor: null,
+    });
   });
 });

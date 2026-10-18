@@ -9,3 +9,10 @@ export async function updateOrderStatusAction(orderId: string, status: "pending"
     revalidatePath(`/ar/orders/${orderId}`);
     revalidatePath(`/ar/orders`);
 }
+
+export async function setShipmentAction(orderId: string, courier: "bosta" | "aramex", trackingNumber: string) {
+    const caller = await serverCaller();
+    await caller.orders.setShipment({ orderId, courier, trackingNumber });
+    revalidatePath(`/ar/orders/${orderId}`);
+    revalidatePath(`/en/orders/${orderId}`);
+}
