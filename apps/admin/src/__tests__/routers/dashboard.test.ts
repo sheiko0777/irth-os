@@ -74,9 +74,11 @@ describe('dashboard router', () => {
 
   it('getStats: pads the sparkline to seven points when days have no orders', async () => {
     queueSelects([
-      [{ ordersToday: 5, pendingOrders: 2, ordersYesterday: 4 }], // combined orders aggregates
+      [{ count: 5 }],                       // ordersToday
       [{ code: '4010', amount: '90000' }],  // revenueToday — ledger net sales, minor units (900.00)
+      [{ count: 2 }],                       // pendingOrders
       [{ count: 40 }],                      // activeProducts
+      [{ count: 4 }],                       // ordersYesterday
       [{ code: '4010', amount: '60000' }],  // revenueYesterday — ledger net sales, minor units
       [                                     // daily orders — only two of seven days traded
         { day: utcDayKey(-6), orderCount: 3 },
@@ -102,9 +104,11 @@ describe('dashboard router', () => {
 
   it('getStats: computes day-over-day deltas against the prior window', async () => {
     queueSelects([
-      [{ ordersToday: 5, pendingOrders: 0, ordersYesterday: 4 }],
+      [{ count: 5 }],
       [{ code: '4010', amount: '90000' }],
       [{ count: 0 }],
+      [{ count: 0 }],
+      [{ count: 4 }],      // 4 -> 5 is +25%
       [{ code: '4010', amount: '60000' }],  // 600 -> 900 is +50%
       [],
       [],
@@ -118,9 +122,11 @@ describe('dashboard router', () => {
 
   it('getStats: reports a fall as a negative delta', async () => {
     queueSelects([
-      [{ ordersToday: 3, pendingOrders: 0, ordersYesterday: 6 }], // 6 -> 3 is -50%
+      [{ count: 3 }],
       [{ code: '4010', amount: '250' }],
       [{ count: 0 }],
+      [{ count: 0 }],
+      [{ count: 6 }],      // 6 -> 3 is -50%
       [{ code: '4010', amount: '500' }],  // 500 -> 250 is -50%
       [],
       [],
