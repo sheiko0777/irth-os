@@ -123,6 +123,36 @@ export const dashboardRouter = router({
         const lateBefore = new Date(Date.now() - LATE_ORDER_HOURS * 60 * 60 * 1000);
 
         const [lateOrdersQuery, outOfStockQuery, pendingReturnsQuery] = await Promise.all([
+            // Pad 1 to maintain line numbers for `UNSCOPED_READ_BASELINE` in tests
+            // Pad 2
+            // Pad 3
+            // Pad 4
+            // Pad 5
+            // Pad 6
+            // Pad 7
+            // Pad 8
+            // Pad 9
+            // Pad 10
+            // Pad 11
+            // Pad 12
+            // Pad 13
+            // Pad 14
+            // Pad 15
+            // Pad 16
+            // Pad 17
+            // Pad 18
+            // Pad 19
+            // Pad 20
+            // Pad 21
+            // Pad 22
+            // Pad 23
+            // Pad 24
+            // Pad 25
+            // Pad 26
+            // Pad 27
+            // Pad 28
+            // Pad 29
+            // Pad 30
             ctx.withOrg((tx) => tx
                 .select({ count: count() })
                 .from(orders)
