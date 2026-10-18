@@ -283,3 +283,26 @@ A one-time manual audit would only reproduce a snapshot of what this gate alread
 
 This closes the P2 tier from the original 20-finding review. Together with the P0 set (F01-F09), the P1 set (F10-F13, F19), and three findings surfaced independently by this repo's own autonomous Sentinel/Bolt routines (the OTP RNG fix, the `po.list` pagination fix, the notifications IDOR fix), every item from that review is now either shipped or — for #214 and F18 — closed with a documented reason it needed no further work.
 
+## Launch-readiness pass (2026-10-18)
+
+Five read-only audits ran in parallel against `main` at `d371000` (tenancy/RLS, money/ledger, security, database/deploy, functional completeness), and every confirmed blocker was then fixed through Jules and Codex-style delegation with plan review, or directly. Each fix was reviewed line-by-line before landing; Jules PRs were rebuilt from `main` whenever they carried scratch files (`patch_*.js`, `commit_message.txt`) or touched guarded paths.
+
+| Fix | PR | Merge commit | Why it mattered |
+|---|---|---|---|
+| AI chat endpoint requires org + `dashboard:view` | [#456](https://github.com/sheiko0777/irth-os/pull/456) | `afc3a94` | any authenticated member could reach operational data through the assistant |
+| Paymob: HMAC read from `?hmac=`, signs `order.id`, claim + confirm in one transaction | [#464](https://github.com/sheiko0777/irth-os/pull/464) | `7784707` | real callbacks could never verify (header vs query param, and `order` stringified to `[object Object]`) so no online payment ever confirmed; existing tests signed with the same buggy logic |
+| Admin security headers (HSTS, nosniff, frame-ancestors, referrer, permissions) | [#460](https://github.com/sheiko0777/irth-os/pull/460) | `30402b8` | money actions could be framed; no full CSP yet (inline theme script, Sentry, next/font need testing) |
+| Migration runner takes a transaction-scoped advisory lock and re-checks the ledger | [#465](https://github.com/sheiko0777/irth-os/pull/465) | `bdd7f52` | parallel Deploy API / Deploy Admin runs raced and left a half-shipped deploy |
+| OAuth-connected Shopify shops create orders; webhook registration is idempotent and reports per-topic failures | [#466](https://github.com/sheiko0777/irth-os/pull/466) | `706af32` | orders/create|updated|cancelled were registered against `inbox/*`, whose worker handler is a no-op until OR-10 — no order was ever created. Already-connected shops must be reconnected once to be re-pointed |
+| Returns can be created and restocked from the UI | [#467](https://github.com/sheiko0777/irth-os/pull/467) | `b0838fc` | `returns.create` / `restock` had no caller; fixed a per-submit idempotency key |
+| Inventory-discrepancy review router | [#453](https://github.com/sheiko0777/irth-os/pull/453) | `7ba1abd` | F07 recorded discrepancies nobody could read or resolve (backend only) |
+| API hardening: SMS via `envVar()`, no localhost CORS in prod, `/health` no longer leaks `dbHost`, loud log when `API_BASE_URL` is unset | [#468](https://github.com/sheiko0777/irth-os/pull/468) | `f47402b` | Worker secrets are not reliably in `process.env`; every SMS recipient would have dead-lettered |
+| Manual courier + tracking number, fills COD amount with the ledger's own COD rule | [#470](https://github.com/sheiko0777/irth-os/pull/470) | `41e7f6f` | courier delivery webhooks could never match one of our orders |
+| Read-only non-EGP currency diagnostic (`packages/db/scripts/diagnoseCurrency.mjs`) | [#459](https://github.com/sheiko0777/irth-os/pull/459) | `d0f60d3` | closes the unreported F06 production check — **still needs to be run against production** |
+
+**Open, reviewed, CI-green except `schema-guard` (needs a human `schema:approved` label):** [#469](https://github.com/sheiko0777/irth-os/pull/469) (refund requires a recognised sale; courier scans cannot regress or cancel a delivered order), [#471](https://github.com/sheiko0777/irth-os/pull/471) (outbound inventory push to Shopify), [#458](https://github.com/sheiko0777/irth-os/pull/458) (hot-path indexes), [#455](https://github.com/sheiko0777/irth-os/pull/455) (dashboard on one pooled connection).
+
+**Not yet done — needs an owner decision:** order-status transition rules and reversal on return/cancel after delivery; online-payment clearing (AR-Online is never credited); COD remittance validated against linked shipments; gift-card redemption double-counting revenue; per-tenant courier webhook secrets (one shared secret lets one merchant forge another's deliveries); per-organisation ETA issuer; branch protection / human review for the auto-merge workflow.
+
+**Operational:** set `API_BASE_URL` on the Worker; reconnect Shopify and place one real test order; the `integration` job shares one Neon branch through a concurrency group, so many open PRs can starve a `main` deploy — keep the queue short and re-run a cancelled deploy when the queue is quiet.
+
