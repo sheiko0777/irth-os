@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { db } from '../../db';
-import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual, isUniqueViolation } from '@irth/db';
+import { db, getDb } from '../../db';
+import { orders, auditLog, paymobWebhookDeliveries, transitionOrderStatus, safeEqual, isUniqueViolation, withOrgContext } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -17,8 +17,8 @@ paymobRoute.post('/', async (c: Context) => {
     return c.json({ data: null, error: 'hmac_secret_not_configured', meta: null }, 500);
   }
 
-  const hmacHeader = c.req.header('hmac');
-  if (!hmacHeader) {
+  const hmacValue = c.req.query('hmac') || c.req.header('hmac');
+  if (!hmacValue) {
     return c.json({ data: null, error: 'missing_hmac', meta: null }, 401);
   }
 
@@ -42,7 +42,7 @@ paymobRoute.post('/', async (c: Context) => {
   const lexoKeys = [
     'amount_cents', 'created_at', 'currency', 'error_occured', 'has_parent_transaction',
     'id', 'integration_id', 'is_3d_secure', 'is_auth', 'is_capture', 'is_refunded',
-    'is_standalone_payment', 'is_voided', 'order', 'owner', 'pending', 'source_data.pan',
+    'is_standalone_payment', 'is_voided', 'order.id', 'owner', 'pending', 'source_data.pan',
     'source_data.sub_type', 'source_data.type', 'success'
   ];
   
@@ -57,7 +57,7 @@ paymobRoute.post('/', async (c: Context) => {
   }
 
   const expected = crypto.createHmac('sha512', hmacSecret).update(concatenatedString).digest('hex');
-  if (!safeEqual(hmacHeader, expected, 'hex')) {
+  if (!safeEqual(hmacValue, expected, 'hex')) {
     return c.json({ data: null, error: 'invalid_hmac', meta: null }, 401);
   }
 
@@ -86,15 +86,101 @@ paymobRoute.post('/', async (c: Context) => {
 
   const transactionId = String(obj.id);
 
-  // Idempotency: Insert transaction first to claim the delivery, catch unique violation
-  // to detect re-delivery of the same transaction id.
+  // Run everything inside an atomic, org-scoped transaction
   try {
-    await db.insert(paymobWebhookDeliveries).values({
-      orgId: order.orgId,
-      orderId: order.id,
-      transactionId,
-      payload: obj,
-      status: 'processed'
+    await withOrgContext(getDb(), order.orgId, async (tx) => {
+      // Idempotency: Insert transaction first to claim the delivery, catch unique violation
+      // to detect re-delivery of the same transaction id.
+      await tx.insert(paymobWebhookDeliveries).values({
+        orgId: order.orgId,
+        orderId: order.id,
+        transactionId,
+        payload: obj,
+        status: 'processed'
+      });
+
+      // Amount/currency check
+      let isAmountMatch: boolean;
+      try {
+        isAmountMatch = BigInt(obj.amount_cents) === order.totalAmountMinor;
+      } catch {
+        isAmountMatch = false;
+      }
+      const isCurrencyMatch = typeof obj.currency === 'string' && obj.currency.toLowerCase() === (order.currency || '').toLowerCase();
+
+      if (!isAmountMatch || !isCurrencyMatch) {
+        // Mismatch - mark delivery as rejected, log audit
+        await tx.update(paymobWebhookDeliveries)
+          .set({ status: 'rejected' })
+          .where(and(eq(paymobWebhookDeliveries.orgId, order.orgId), eq(paymobWebhookDeliveries.transactionId, transactionId)));
+
+        await tx.insert(auditLog).values({
+          orgId: order.orgId,
+          userId: null,
+          actorKind: 'webhook',
+          channel: 'webhook',
+          action: 'PAYMOB_WEBHOOK',
+          tableName: 'orders',
+          recordId: order.id,
+          changes: {
+            oldStatus: order.status,
+            newStatus: order.status,
+            error: 'amount_currency_mismatch',
+            paymobPayload: obj,
+            expected: { amount: String(order.totalAmountMinor), currency: order.currency }
+          }
+        });
+        return; // Return from transaction, proceed to 200 response
+      }
+
+      // Genuine capture condition check
+      const isSuccess = obj.success === true;
+      const isGenuineCapture = isSuccess && obj.pending !== true && obj.is_refunded !== true && obj.is_voided !== true;
+
+      if (isGenuineCapture) {
+        // Attempt the atomic status transition, restricted to not regress past 'pending'/'payment_failed'
+        const transitionResult = await transitionOrderStatus(tx as any, {
+          orgId: order.orgId,
+          orderId: order.id,
+          newStatus: 'confirmed',
+          onlyIfPreviousStatusIn: ['pending', 'payment_failed'],
+          setPaymentMethod: 'online'
+        });
+
+        // If it successfully transitioned (or if not, we audit it anyway, though transitionResult is null if no matching row to update)
+        await tx.insert(auditLog).values({
+          orgId: order.orgId,
+          userId: null,
+          actorKind: 'webhook',
+          channel: 'webhook',
+          action: 'PAYMOB_WEBHOOK',
+          tableName: 'orders',
+          recordId: order.id,
+          changes: {
+            oldStatus: transitionResult?.previousStatus ?? order.status,
+            newStatus: transitionResult ? 'confirmed' : order.status, // untouched if null
+            paymobPayload: obj,
+            transitionSkipped: !transitionResult // log if we skipped because it was already beyond pending/payment_failed
+          }
+        });
+      } else {
+        // Not a genuine capture (e.g. pending, void, refund, or failure), record delivery but do not confirm order.
+        await tx.insert(auditLog).values({
+          orgId: order.orgId,
+          userId: null,
+          actorKind: 'webhook',
+          channel: 'webhook',
+          action: 'PAYMOB_WEBHOOK',
+          tableName: 'orders',
+          recordId: order.id,
+          changes: {
+            oldStatus: order.status,
+            newStatus: order.status,
+            error: 'not_a_genuine_capture',
+            paymobPayload: obj
+          }
+        });
+      }
     });
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -102,97 +188,6 @@ paymobRoute.post('/', async (c: Context) => {
       return c.json({ data: { success: true }, error: null, meta: null });
     }
     throw err;
-  }
-
-  // Amount/currency check
-  // Compare amount and currency. Both must match. amount_cents arrives as a
-  // JSON number (float-precision) while totalAmountMinor is an exact bigint —
-  // comparing via String() coerces both through Number's lossy range instead
-  // of comparing the exact integers, so this converts amount_cents to a
-  // BigInt explicitly. A non-integer/malformed amount_cents is itself a
-  // mismatch, not a thrown error.
-  let isAmountMatch: boolean;
-  try {
-    isAmountMatch = BigInt(obj.amount_cents) === order.totalAmountMinor;
-  } catch {
-    isAmountMatch = false;
-  }
-  const isCurrencyMatch = typeof obj.currency === 'string' && obj.currency.toLowerCase() === (order.currency || '').toLowerCase();
-
-  if (!isAmountMatch || !isCurrencyMatch) {
-    // Mismatch - mark delivery as rejected, log audit, and return 200
-    await db.update(paymobWebhookDeliveries)
-      .set({ status: 'rejected' })
-      .where(and(eq(paymobWebhookDeliveries.orgId, order.orgId), eq(paymobWebhookDeliveries.transactionId, transactionId)));
-
-    await db.insert(auditLog).values({
-      orgId: order.orgId,
-      userId: null,
-      actorKind: 'webhook',
-      channel: 'webhook',
-      action: 'PAYMOB_WEBHOOK',
-      tableName: 'orders',
-      recordId: order.id,
-      changes: {
-        oldStatus: order.status,
-        newStatus: order.status,
-        error: 'amount_currency_mismatch',
-        paymobPayload: obj,
-        expected: { amount: String(order.totalAmountMinor), currency: order.currency }
-      }
-    });
-
-    return c.json({ data: { success: true }, error: null, meta: null });
-  }
-
-  // Genuine capture condition check
-  const isSuccess = obj.success === true;
-  const isGenuineCapture = isSuccess && obj.pending !== true && obj.is_refunded !== true && obj.is_voided !== true;
-
-  if (isGenuineCapture) {
-    // Attempt the atomic status transition, restricted to not regress past 'pending'/'payment_failed'
-    const transitionResult = await transitionOrderStatus(db as any, {
-      orgId: order.orgId,
-      orderId: order.id,
-      newStatus: 'confirmed',
-      onlyIfPreviousStatusIn: ['pending', 'payment_failed'],
-      setPaymentMethod: 'online'
-    });
-
-    // If it successfully transitioned (or if not, we audit it anyway, though transitionResult is null if no matching row to update)
-    await db.insert(auditLog).values({
-      orgId: order.orgId,
-      userId: null,
-      actorKind: 'webhook',
-      channel: 'webhook',
-      action: 'PAYMOB_WEBHOOK',
-      tableName: 'orders',
-      recordId: order.id,
-      changes: {
-        oldStatus: transitionResult?.previousStatus ?? order.status,
-        newStatus: transitionResult ? 'confirmed' : order.status, // untouched if null
-        paymobPayload: obj,
-        transitionSkipped: !transitionResult // log if we skipped because it was already beyond pending/payment_failed
-      }
-    });
-  } else {
-    // Not a genuine capture (e.g. pending, void, refund, or failure), record delivery but do not confirm order.
-    // We already inserted the 'processed' webhook delivery. Add audit log for traceability.
-    await db.insert(auditLog).values({
-      orgId: order.orgId,
-      userId: null,
-      actorKind: 'webhook',
-      channel: 'webhook',
-      action: 'PAYMOB_WEBHOOK',
-      tableName: 'orders',
-      recordId: order.id,
-      changes: {
-        oldStatus: order.status,
-        newStatus: order.status,
-        error: 'not_a_genuine_capture',
-        paymobPayload: obj
-      }
-    });
   }
 
   return c.json({ data: { success: true }, error: null, meta: null });

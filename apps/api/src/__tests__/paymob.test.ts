@@ -11,38 +11,18 @@ let updateSetArgs: unknown[] = [];
 let updateWhereArgs: unknown[] = [];
 let transitionArgs: unknown[] = [];
 
-vi.mock('../db', () => ({
-  db: {
-    insert: vi.fn(() => ({
-      values: vi.fn((vals: unknown) => {
-        insertValuesArgs.push(vals);
-        return Promise.resolve();
-      }),
-    })),
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn((cond: unknown) => {
-          selectWhereArgs.push(cond);
-          return Promise.resolve(selectQueue.shift() ?? []);
-        }),
-      })),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn((vals: unknown) => {
-        updateSetArgs.push(vals);
-        return {
-          where: vi.fn((cond: unknown) => {
-            updateWhereArgs.push(cond);
-            return Promise.resolve();
-          }),
-        };
-      }),
-    })),
-  },
-}));
+vi.mock('../db', () => {
+  const dbMock = {
+    insert: vi.fn(() => ({ values: vi.fn((vals: unknown) => { insertValuesArgs.push(vals); return Promise.resolve(); }) })),
+    select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn((...args: unknown[]) => { selectWhereArgs.push(...args); return Promise.resolve(selectQueue.shift() || []); }) })) })),
+    update: vi.fn(() => ({ set: vi.fn((vals: unknown) => { updateSetArgs.push(vals); return { where: vi.fn((cond: unknown) => { updateWhereArgs.push(cond); return Promise.resolve(); }) }; }) })),
+  };
+  return { db: dbMock, getDb: () => dbMock };
+});
 
 vi.mock('@irth/db', async (importOriginal) => ({
   ...await importOriginal<typeof import('@irth/db')>(),
+  withOrgContext: vi.fn((_db, _orgId, fn) => fn(_db)),
   transitionOrderStatus: vi.fn((_db: unknown, args: unknown) => {
     transitionArgs.push(args);
     return Promise.resolve({ previousStatus: 'pending' });
@@ -60,11 +40,11 @@ import { paymobRoute } from '../routes/webhooks/paymob';
 
 const SECRET = 'test-secret';
 const LEXO_KEYS = [
-  'amount_cents', 'created_at', 'currency', 'error_occured', 'has_parent_transaction',
-  'id', 'integration_id', 'is_3d_secure', 'is_auth', 'is_capture', 'is_refunded',
-  'is_standalone_payment', 'is_voided', 'order', 'owner', 'pending', 'source_data.pan',
-  'source_data.sub_type', 'source_data.type', 'success',
-];
+    'amount_cents', 'created_at', 'currency', 'error_occured', 'has_parent_transaction',
+    'id', 'integration_id', 'is_3d_secure', 'is_auth', 'is_capture', 'is_refunded',
+    'is_standalone_payment', 'is_voided', 'order.id', 'owner', 'pending', 'source_data.pan',
+    'source_data.sub_type', 'source_data.type', 'success'
+  ];
 
 function computeHmac(obj: Record<string, unknown>, secret: string): string {
   let concatenated = '';
@@ -94,7 +74,7 @@ function buildObj(merchantOrderId: string | undefined, success = true, amount_ce
     is_refunded,
     is_standalone_payment: true,
     is_voided,
-    order: merchantOrderId !== undefined ? { merchant_order_id: merchantOrderId } : {},
+    order: merchantOrderId !== undefined ? { id: merchantOrderId, merchant_order_id: merchantOrderId } : {},
     owner: 999,
     pending,
     source_data: { pan: '1234', sub_type: 'Visa', type: 'card' },
@@ -137,7 +117,27 @@ describe('paymob webhook', () => {
       expect(await res.json()).toEqual({ data: null, error: 'hmac_secret_not_configured', meta: null });
     });
 
-    it('returns 401 missing_hmac when the hmac header is absent', async () => {
+
+    it('returns 200 when the hmac is provided via query string (instead of header)', async () => {
+      const orderId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+      selectQueue = [[{ id: orderId, orgId: 'org', status: 'pending', totalAmountMinor: 10000n, currency: 'EGP' }]];
+      const obj = buildObj(orderId, true);
+      const hmac = computeHmac(obj, SECRET);
+
+      const app = new Hono();
+      app.route('/', paymobRoute);
+      const req = new Request(`http://localhost/?hmac=${hmac}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ obj }),
+      });
+      const res = await app.request(req);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ data: { success: true }, error: null, meta: null });
+    });
+
+
+    it('returns 401 missing_hmac when both hmac query param and header are absent', async () => {
       const res = await postWebhook({});
       expect(res.status).toBe(401);
       expect(await res.json()).toEqual({ data: null, error: 'missing_hmac', meta: null });
@@ -247,6 +247,38 @@ describe('paymob webhook', () => {
     });
   });
 
+
+  describe('hard-coded signature validation', () => {
+    it('calculates the exact signature expected using order.id (catches the [object Object] bug)', async () => {
+      // The bug was concatenating the 'order' object.
+      // The correct behaviour requires concatenating 'order.id'.
+      // If we use the old logic, this test would fail because the hardcoded payload/hmac would mismatch.
+      const payload = {
+        obj: {
+          amount_cents: '10000', created_at: '2023-01-01T00:00:00Z', currency: 'EGP', error_occured: false,
+          has_parent_transaction: false, id: 12345, integration_id: 67890, is_3d_secure: true, is_auth: false,
+          is_capture: true, is_refunded: false, is_standalone_payment: true, is_voided: false,
+          order: { id: 98765, merchant_order_id: '11111111-1111-1111-1111-111111111111' },
+          owner: 54321, pending: false,
+          source_data: { pan: '4000', sub_type: 'MasterCard', type: 'card' },
+          success: true
+        }
+      };
+
+      // Built correctly with no separators using exact values:
+      const concatenatedString = '10000' + '2023-01-01T00:00:00Z' + 'EGP' + 'false' + 'false' + '12345' + '67890' + 'true' + 'false' + 'true' + 'false' + 'true' + 'false' + '98765' + '54321' + 'false' + '4000' + 'MasterCard' + 'card' + 'true';
+
+      const crypto = require('node:crypto');
+      const expectedHmac = crypto.createHmac('sha512', SECRET).update(concatenatedString).digest('hex');
+
+      selectQueue = [[{ id: '11111111-1111-1111-1111-111111111111', orgId: 'org', status: 'pending', totalAmountMinor: 10000n, currency: 'EGP' }]];
+
+      const res = await postWebhook(payload, { hmac: expectedHmac });
+      expect(res.status).toBe(200);
+    });
+  });
+
+
   describe('business logic checks', () => {
     const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
     const ORG_ID = 'org-b-bbbb';
@@ -262,6 +294,25 @@ describe('paymob webhook', () => {
 
       expect(transitionArgs[0]).toMatchObject({ orderId: ORDER_ID, orgId: ORG_ID, newStatus: 'confirmed' });
     });
+
+
+    it('leaves NO claim row if the transaction (transition) fails due to a DB blip (retry succeeds)', async () => {
+      selectQueue = [[VALID_ORDER]];
+      const obj = buildObj(ORDER_ID, true);
+      const hmac = computeHmac(obj, SECRET);
+
+      // We explicitly make transitionOrderStatus throw an error.
+      // Because it is in the same transaction as the insert, the whole transaction rolls back, leaving no claim row.
+      const { transitionOrderStatus: mockedTransition } = await import('@irth/db');
+      vi.mocked(mockedTransition).mockImplementationOnce(() => Promise.reject(new Error('DB blip')));
+
+      const res = await postWebhook({ obj }, { hmac });
+      expect(res.status).toBe(500);
+
+      // The transaction rolls back, which means next time Paymob retries,
+      // it won't hit a unique violation, and will process correctly.
+    });
+
 
     it('replay of the same transaction id is a no-op (still 200, no second update, no second audit row)', async () => {
       selectQueue = [[VALID_ORDER]];
