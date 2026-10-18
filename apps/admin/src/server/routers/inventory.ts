@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, requirePermission } from '../trpc';
 import { brandScope } from '../scopes';
-import { inventoryItems, inventoryMovements, productVariants, products, inventoryLevelDiscrepancies, withAudit } from '@irth/db';
+import { inventoryItems, inventoryMovements, productVariants, products, inventoryLevelDiscrepancies, withAudit, emitOutboxEvent, emitOutboxEvents } from '@irth/db';
 import { eq, and, desc, asc, lte, gt, sql, count, inArray, or, lt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
@@ -339,6 +339,15 @@ export const inventoryRouter = router({
           note: parsedInput.note,
         });
 
+        // Same transaction as the stock write: the push is queued if and only
+        // if the change committed. The worker re-reads the quantity, so this
+        // carries ids only.
+        await emitOutboxEvent(tx, {
+          orgId: ctx.orgId,
+          eventType: 'inventory.push',
+          payload: { orgId: ctx.orgId, variantId: item.variantId },
+        });
+
         return { data: { newQuantity }, error: null, meta: null };
       });
     }),
@@ -530,6 +539,16 @@ export const inventoryRouter = router({
             changes: { type: input.type, count: input.items.length, items: adjustedItems },
           }
         );
+
+        // One push per distinct variant (several stock rows can share one), in
+        // the same transaction as the writes above. items is .min(1), so the
+        // list is never empty (an empty multi-row insert would throw).
+        const variantIds = [...new Set(adjustedItems.map((line) => existingMap.get(line.id)!.variantId))];
+        await emitOutboxEvents(tx, variantIds.map((variantId) => ({
+          orgId: ctx.orgId,
+          eventType: 'inventory.push' as const,
+          payload: { orgId: ctx.orgId, variantId },
+        })));
 
         return { data: { success: true, count: adjustedItems.length }, error: null };
       });

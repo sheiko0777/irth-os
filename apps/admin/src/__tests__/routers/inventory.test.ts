@@ -180,3 +180,70 @@ describe('inventory.setLevelDiscrepancyStatus', () => {
     expect(res.data.status).toBe('resolved');
   });
 });
+
+describe('inventory stock changes queue a Shopify push', () => {
+  const caller = inventoryRouter.createCaller(ctx('owner'));
+  const itemA = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+  const itemB = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12';
+  const itemC = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13';
+
+  function updateReturning(rows: unknown[]) {
+    const chain: Record<string, unknown> = {};
+    for (const m of ['set', 'where', 'returning']) chain[m] = vi.fn(() => chain);
+    chain.then = (resolve: (v: unknown) => void) => Promise.resolve(rows).then(resolve);
+    mockDb.update = vi.fn(() => chain) as never;
+  }
+
+  /** Records every inserted row; returns the parsed inventory.push payloads. */
+  function capturePushes() {
+    const inserted: Array<Record<string, unknown>> = [];
+    mockDb.insert = vi.fn(() => ({
+      values: vi.fn(async (v: Record<string, unknown> | Array<Record<string, unknown>>) => {
+        inserted.push(...(Array.isArray(v) ? v : [v]));
+      }),
+    })) as never;
+    return () => inserted
+      .filter((row) => row.eventType === 'inventory.push')
+      .map((row) => JSON.parse(String(row.payload)));
+  }
+
+  it('adjust queues one push for the adjusted item\'s variant', async () => {
+    queueSelects([[{ id: itemA, orgId: 'org-1', variantId: 'variant-1', quantity: 5 }]]);
+    updateReturning([{ id: itemA, quantity: 8 }]);
+    const pushes = capturePushes();
+
+    await caller.adjust({ itemId: itemA, type: 'in', quantity: 3 });
+
+    expect(pushes()).toEqual([{ orgId: 'org-1', variantId: 'variant-1' }]);
+  });
+
+  it('adjust queues nothing when the guarded update rejects the change', async () => {
+    queueSelects([[{ id: itemA, orgId: 'org-1', variantId: 'variant-1', quantity: 2 }]]);
+    updateReturning([]);
+    const pushes = capturePushes();
+
+    await expect(caller.adjust({ itemId: itemA, type: 'out', quantity: 5 })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(pushes()).toEqual([]);
+  });
+
+  it('batchAdjust queues one push per distinct variant, not per stock row', async () => {
+    queueSelects([[
+      { id: itemA, orgId: 'org-1', variantId: 'variant-1', quantity: 5 },
+      { id: itemB, orgId: 'org-1', variantId: 'variant-1', quantity: 2 },
+      { id: itemC, orgId: 'org-1', variantId: 'variant-2', quantity: 9 },
+    ]]);
+    updateReturning([{ id: itemA }]);
+    const pushes = capturePushes();
+
+    await caller.batchAdjust({
+      type: 'in',
+      items: [{ itemId: itemA, quantity: 1 }, { itemId: itemB, quantity: 1 }, { itemId: itemC, quantity: 1 }],
+    });
+
+    expect(pushes()).toEqual([
+      { orgId: 'org-1', variantId: 'variant-1' },
+      { orgId: 'org-1', variantId: 'variant-2' },
+    ]);
+  });
+});
