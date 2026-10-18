@@ -207,7 +207,7 @@ export const auditRouter = router({
       const [aggregates] = await tx
         .select({
           totalEvents: sql<number>`count(*)::int`,
-          todayEvents: sql<number>`sum(case when ${auditLog.createdAt} >= ${todayStart} then 1 else 0 end)::int`,
+          todayEvents: sql<number>`sum(case when ${auditLog.createdAt} >= ${todayStart.toISOString()} then 1 else 0 end)::int`,
           activeOperatorsCount: sql<number>`count(distinct ${auditLog.userId})` // implicitly filtered out nulls anyway, Postgres count(expr) ignores nulls
         })
         .from(auditLog)

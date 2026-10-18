@@ -35,3 +35,6 @@
 ## 2026-10-18 - Fix mocked Postgres query parsing on `FILTER`
 **Learning:** E2E or certain pg mock test environments might fail when trying to parse `count(*) filter (where ...)` syntax, producing `syntax error at or near "filter"`.
 **Action:** When you encounter a Postgres query parsing issue with `FILTER` (like `count(*)::int filter (where ...)`), replace it with the standard ANSI SQL equivalent using `sum(case when ... then 1 else 0 end)::int` to ensure compatibility across all test runners and environments.
+## 2026-10-18 - Fix mocked Postgres query parsing on `FILTER` parameters
+**Learning:** Under certain testing drivers for Postgres, directly supplying `Date` objects as parameters into a `case when ... then 1 else 0 end` logic block throws `TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date`. This happens because standard mapping functionality for dates gets lost if it's evaluated inside sum(case when).
+**Action:** Call `.toISOString()` on any Date objects being injected into `sql` string templates when utilized within standard string mapping blocks like `sum(case when ... then 1 else 0 end)::int` to ensure query string evaluations parse correctly inside e2e and integration environments.

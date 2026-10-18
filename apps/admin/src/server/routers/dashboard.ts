@@ -40,8 +40,8 @@ export const dashboardRouter = router({
         ] = await Promise.all([
             ctx.withOrg((tx) => tx
                 .select({
-                    today: sql<number>`sum(case when ${orders.createdAt} >= ${startOfDay} then 1 else 0 end)::int`,
-                    yesterday: sql<number>`sum(case when ${orders.createdAt} >= ${startOfYesterday} and ${orders.createdAt} < ${startOfDay} then 1 else 0 end)::int`
+                    today: sql<number>`sum(case when ${orders.createdAt} >= ${startOfDay.toISOString()} then 1 else 0 end)::int`,
+                    yesterday: sql<number>`sum(case when ${orders.createdAt} >= ${startOfYesterday.toISOString()} and ${orders.createdAt} < ${startOfDay.toISOString()} then 1 else 0 end)::int`
                 })
                 .from(orders)
                 .where(and(
