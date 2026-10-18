@@ -4,6 +4,7 @@ import { db, getDb } from '../../db';
 import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent, postOrderDeliveredEntry, transitionOrderStatus } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { verifyHmac } from '../../middlewares/verifyWebhook';
+import { pinnedCourierOrgId } from './courierOrgPin';
 
 /**
  * NOTE FOR ANYONE TRYING TO UNDERSTAND BOSTA INTEGRATION: there are TWO live,
@@ -70,12 +71,17 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
   //   planner returned first, which on a collision is an arbitrary tenant.
   //   Failing loudly is the only safe reading: there is no correct way to
   //   choose, and guessing books revenue into someone else's ledger.
+  const pinnedOrgId = pinnedCourierOrgId();
   const matches = await db
     .select()
     .from(shipmentTracking)
     .where(and(
       eq(shipmentTracking.trackingNumber, trackingNumber),
       eq(shipmentTracking.provider, 'bosta'),
+      // The shared HMAC secret only vouches for one org (see courierOrgPin.ts):
+      // without this, a holder of that secret could drive ANOTHER tenant's
+      // order to delivered, posting its revenue and issuing its e-invoice.
+      pinnedOrgId ? eq(shipmentTracking.orgId, pinnedOrgId) : undefined,
     ))
     .limit(2);
 

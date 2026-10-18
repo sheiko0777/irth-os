@@ -6,6 +6,8 @@ import * as dbExports from '@irth/db';
 vi.mock('../db', () => ({
   db: { select: vi.fn() },
   getDb: vi.fn(),
+  // The handler reads the shared-secret org pin through envVar() -> getEnv().
+  getEnv: () => ({}),
 }));
 
 // Signature verification is covered separately; supply its raw-body contract.

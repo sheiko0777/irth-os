@@ -6,6 +6,7 @@ import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNo
 import { eq, and, sql } from 'drizzle-orm';
 import { envVar } from '../../utils/env';
 import { resolveCourierShipmentByTracking } from './resolveCourierShipmentByTracking';
+import { pinnedCourierOrgId } from './courierOrgPin';
 
 /**
  * Courier states that mean "the parcel is moving" — the natural trigger for
@@ -83,7 +84,9 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   else if (state === 'RECEIVED_AT_WAREHOUSE' || state === 'OUT_FOR_DELIVERY') courierStatus = 'in_transit';
   else if (state === 'PACKAGE_PICKED_UP') courierStatus = 'picked_up';
 
-  const resolution = await resolveCourierShipmentByTracking(db, 'bosta', trackingNumber);
+  // The shared secret authenticated this request; it only vouches for ONE org.
+  const pinnedOrgId = pinnedCourierOrgId();
+  const resolution = await resolveCourierShipmentByTracking(db, 'bosta', trackingNumber, pinnedOrgId);
   if (resolution.status === 'ambiguous') {
     return c.json({ data: null, error: 'ambiguous_tracking_number', meta: null }, 409);
   }
@@ -167,7 +170,13 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   } else if (data.businessReference) {
     // Attempt to parse businessReference as order_id
     // Need to get orgId from somewhere, let's look up the order
-    const [order] = await db.select().from(orders).where(eq(orders.id, data.businessReference));
+    // businessReference is attacker-controllable: without the pin, a holder of
+    // the shared secret could name ANY tenant's order id and have this upsert
+    // overwrite that order's shipment (onConflictDoUpdate on orderId).
+    const [order] = await db.select().from(orders).where(and(
+      eq(orders.id, data.businessReference),
+      pinnedOrgId ? eq(orders.orgId, pinnedOrgId) : undefined,
+    ));
 
     if (order) {
         const isDeliveredAndCod = state === 'DELIVERED' && codMinor > 0n;
