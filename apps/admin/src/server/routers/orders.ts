@@ -320,6 +320,13 @@ export const ordersRouter = router({
                 });
             }
 
+            if (order.status === 'delivered' && input.status !== 'delivered') {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'A delivered order cannot change status. Use Returns to reverse a sale.',
+                });
+            }
+
             // Status change, audit row, staff notification and the customer
             // outbox event in one transaction. As separate autocommits, a
             // failure between them left the order advanced with no audit trail
@@ -328,10 +335,29 @@ export const ordersRouter = router({
             // row written outside the transaction would tell the customer about
             // a change that then rolled back.
             const result = await ctx.withOrg(async (tx) => {
+                const onlyIfPreviousStatusIn = input.status !== 'delivered'
+                    ? orderStatusEnum.enumValues.filter(s => s !== 'delivered')
+                    : undefined;
+
                 const transition = await transitionOrderStatus(tx, {
                     orgId: ctx.orgId, orderId: input.id, newStatus: input.status,
+                    onlyIfPreviousStatusIn,
                 });
-                if (!transition) throw new TRPCError({ code: 'NOT_FOUND' });
+                if (!transition) {
+                    const currentOrder = await tx.query.orders.findFirst({
+                        where: and(
+                            eq(orders.id, input.id),
+                            eq(orders.orgId, ctx.orgId)
+                        )
+                    });
+                    if (currentOrder?.status === 'delivered' && input.status !== 'delivered') {
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message: 'A delivered order cannot change status. Use Returns to reverse a sale.',
+                        });
+                    }
+                    throw new TRPCError({ code: 'NOT_FOUND' });
+                }
                 const { previousStatus } = transition;
                 const updated = await withAudit(
                     tx,

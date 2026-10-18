@@ -367,6 +367,16 @@ describe('orders router — authorization', () => {
 
     expect(res.data).toEqual({ id: ORDER_UUID, status: 'confirmed' });
   });
+
+  it('updateStatus: rejects moving away from delivered with BAD_REQUEST', async () => {
+    stubOrder({ id: ORDER_UUID, orderNumber: 'IRT-2026-0011', status: 'delivered', customerId: null });
+
+    const caller = ordersRouter.createCaller(ctx('admin'));
+    await expectCode(
+      caller.updateStatus({ id: ORDER_UUID, status: 'shipped' }),
+      'BAD_REQUEST'
+    );
+  });
 });
 
 describe('orders.setShipment', () => {
