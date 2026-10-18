@@ -13,7 +13,8 @@ let transitionArgs: unknown[] = [];
 
 vi.mock('../db', () => {
   const dbMock = {
-    insert: vi.fn(() => ({ values: vi.fn((vals: unknown) => { insertValuesArgs.push(vals); return Promise.resolve(); }) })),
+    // Awaitable on its own (audit rows) and chainable with .returning() (the delivery claim reads back its id).
+    insert: vi.fn(() => ({ values: vi.fn((vals: unknown) => { insertValuesArgs.push(vals); return Object.assign(Promise.resolve(), { returning: vi.fn(() => Promise.resolve([{ id: 'delivery-1' }])) }); }) })),
     select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn((...args: unknown[]) => { selectWhereArgs.push(...args); return Promise.resolve(selectQueue.shift() || []); }) })) })),
     update: vi.fn(() => ({ set: vi.fn((vals: unknown) => { updateSetArgs.push(vals); return { where: vi.fn((cond: unknown) => { updateWhereArgs.push(cond); return Promise.resolve(); }) }; }) })),
   };
@@ -309,7 +310,12 @@ describe('paymob webhook', () => {
           { accountCode: '1080', currency: 'EGP', debitMinor: 10000n },
           { accountCode: '1050', currency: 'EGP', creditMinor: 10000n }
         ],
-        dimensions: { orderId: ORDER_ID }
+        dimensions: { orderId: ORDER_ID },
+        // Keyed by the Paymob delivery (one per transaction), not by the order: a
+        // second genuine capture on the same order must not collide on the ledger's
+        // one-entry-per-source unique index and roll the webhook back.
+        sourceTable: 'paymob_webhook_deliveries',
+        sourceId: 'delivery-1',
       });
     });
 

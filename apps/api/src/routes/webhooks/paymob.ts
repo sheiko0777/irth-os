@@ -92,13 +92,17 @@ paymobRoute.post('/', async (c: Context) => {
     await withOrgContext(getDb(), order.orgId, async (tx) => {
       // Idempotency: Insert transaction first to claim the delivery, catch unique violation
       // to detect re-delivery of the same transaction id.
-      await tx.insert(paymobWebhookDeliveries).values({
+      // The id is read back: the capture ledger entry is keyed by this delivery
+      // (one per Paymob transaction), not by the order, so a second genuine
+      // capture on the same order (a failed payment retried) cannot hit the
+      // ledger's one-entry-per-source unique index and roll the webhook back.
+      const [delivery] = await tx.insert(paymobWebhookDeliveries).values({
         orgId: order.orgId,
         orderId: order.id,
         transactionId,
         payload: obj,
         status: 'processed'
-      });
+      }).returning({ id: paymobWebhookDeliveries.id });
 
       // Amount/currency check
       let isAmountMatch: boolean;
@@ -155,8 +159,8 @@ paymobRoute.post('/', async (c: Context) => {
             { accountCode: ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_ONLINE, currency: orderCurrency, creditMinor: order.totalAmountMinor }
           ],
           dimensions: { orderId: order.id },
-          sourceTable: 'orders',
-          sourceId: order.id,
+          sourceTable: 'paymob_webhook_deliveries',
+          sourceId: delivery.id,
           createdBy: null
         });
 
