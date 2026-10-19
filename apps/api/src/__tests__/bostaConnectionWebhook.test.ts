@@ -8,12 +8,12 @@ import { Hono } from 'hono';
 import * as dbExports from '@irth/db';
 
 vi.mock('../db', () => ({ db: { select: vi.fn() }, getDb: vi.fn(), getEnv: () => ({}) }));
-vi.mock('../integrations/kernel/secrets', () => ({ readConnectionSecret: vi.fn() }));
+vi.mock('../integrations/kernel/secrets', () => ({ readCourierWebhookSecret: vi.fn() }));
 vi.mock('../routes/webhooks/resolveCourierShipmentByTracking', () => ({
   resolveCourierShipmentByTracking: vi.fn(async () => ({ status: 'none', shipment: null })),
 }));
 
-import { readConnectionSecret } from '../integrations/kernel/secrets';
+import { readCourierWebhookSecret } from '../integrations/kernel/secrets';
 import { resolveCourierShipmentByTracking } from '../routes/webhooks/resolveCourierShipmentByTracking';
 import { bostaWebhookRoute } from '../routes/webhooks/bosta-webhook';
 
@@ -55,7 +55,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('bosta per-connection webhook', () => {
   it('rejects a signature made with a different secret', async () => {
     stubConnection(true);
-    vi.mocked(readConnectionSecret).mockResolvedValue('tenant-a-secret');
+    vi.mocked(readCourierWebhookSecret).mockResolvedValue('tenant-a-secret');
     const res = await post(`/${orgId}/${connectionId}`, 'tenant-b-secret');
     expect(res.status).toBe(401);
     expect(resolveCourierShipmentByTracking).not.toHaveBeenCalled();
@@ -63,7 +63,7 @@ describe('bosta per-connection webhook', () => {
 
   it('accepts the connection secret and pins the shipment lookup to the path org', async () => {
     stubConnection(true);
-    vi.mocked(readConnectionSecret).mockResolvedValue('tenant-a-secret');
+    vi.mocked(readCourierWebhookSecret).mockResolvedValue('tenant-a-secret');
     const res = await post(`/${orgId}/${connectionId}`, 'tenant-a-secret');
     expect(res.status).not.toBe(401);
     expect(resolveCourierShipmentByTracking).toHaveBeenCalledWith(expect.anything(), 'bosta', 'T1', orgId);
@@ -73,7 +73,7 @@ describe('bosta per-connection webhook', () => {
     stubConnection(false);
     const res = await post(`/${orgId}/${connectionId}`, 'anything');
     expect(res.status).toBe(500);
-    expect(readConnectionSecret).not.toHaveBeenCalled();
+    expect(readCourierWebhookSecret).not.toHaveBeenCalled();
   });
 
   it('refuses malformed ids before touching the database', async () => {

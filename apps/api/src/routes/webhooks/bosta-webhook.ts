@@ -7,7 +7,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { envVar } from '../../utils/env';
 import { resolveCourierShipmentByTracking } from './resolveCourierShipmentByTracking';
 import { pinnedCourierOrgId } from './courierOrgPin';
-import { readConnectionSecret } from '../../integrations/kernel/secrets';
+import { readCourierWebhookSecret } from '../../integrations/kernel/secrets';
 
 /**
  * Courier states that mean "the parcel is moving" — the natural trigger for
@@ -48,13 +48,12 @@ bostaWebhookRoute.post('/:orgId/:connectionId', (c) => handleBosta(c, async () =
       eq(connections.status, 'active'),
     ));
     if (!conn) return null;
-    const secret = await readConnectionSecret(tx, { orgId, connectionId, name: WEBHOOK_SECRET_NAME });
+    const secret = await readCourierWebhookSecret(tx, orgId, connectionId);
     return secret ? { secret, orgId } : null;
   });
 }));
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const WEBHOOK_SECRET_NAME = 'webhook_secret';
 
 async function handleBosta(c: Context, authenticate: () => Promise<BostaAuth | null>) {
   const auth = await authenticate();
