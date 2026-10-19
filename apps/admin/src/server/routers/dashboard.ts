@@ -54,9 +54,9 @@ export const dashboardRouter = router({
             return [
                 await tx
                     .select({
-                        ordersToday: sql<number>`count(*) filter (where ${orders.createdAt} >= ${startOfDay})::int`,
+                        ordersToday: sql<number>`count(*) filter (where ${orders.createdAt} >= ${startOfDay.toISOString()})::int`,
                         pendingOrders: sql<number>`count(*) filter (where ${orders.status} = 'pending')::int`,
-                        ordersYesterday: sql<number>`count(*) filter (where ${orders.createdAt} >= ${startOfYesterday} and ${orders.createdAt} < ${startOfDay})::int`,
+                        ordersYesterday: sql<number>`count(*) filter (where ${orders.createdAt} >= ${startOfYesterday.toISOString()} and ${orders.createdAt} < ${startOfDay.toISOString()})::int`,
                     })
                     .from(orders)
                     .where(and(
