@@ -2,11 +2,12 @@ import { parseDecimal } from '@irth/domain';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { db, getDb } from '../../db';
-import { courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification, safeEqual } from '@irth/db';
+import { connections, courierShipments, orders, withOrgContext, emitOutboxEvent, buildOrderNotification, safeEqual } from '@irth/db';
 import { eq, and, sql } from 'drizzle-orm';
 import { envVar } from '../../utils/env';
 import { resolveCourierShipmentByTracking } from './resolveCourierShipmentByTracking';
 import { pinnedCourierOrgId } from './courierOrgPin';
+import { readConnectionSecret } from '../../integrations/kernel/secrets';
 
 /**
  * Courier states that mean "the parcel is moving" — the natural trigger for
@@ -21,12 +22,46 @@ const SHIPPED_STATUSES = new Set(['picked_up', 'in_transit']);
 
 export const bostaWebhookRoute = new Hono();
 
-bostaWebhookRoute.post('/', async (c: Context) => {
+/** What authenticated a delivery: the HMAC secret, and the org it vouches for. */
+type BostaAuth = { secret: string; orgId: string | null };
+
+// Legacy single shared secret: vouches for the one org named by the pin.
+bostaWebhookRoute.post('/', (c) => handleBosta(c, async () => {
   // Request-time read through the captured Worker env — see utils/env.ts.
   const secret = envVar('BOSTA_WEBHOOK_SECRET');
-  if (!secret) {
+  return secret ? { secret, orgId: pinnedCourierOrgId() } : null;
+}));
+
+// Per-tenant: the URL names the org and the connection; the signature is
+// checked against THAT connection's own secret, so holding it proves nothing
+// about any other tenant. The org in the path is untrusted until the secret
+// verifies — it only selects which connection row and secret to try.
+bostaWebhookRoute.post('/:orgId/:connectionId', (c) => handleBosta(c, async () => {
+  const { orgId, connectionId } = c.req.param();
+  if (!UUID_RE.test(orgId) || !UUID_RE.test(connectionId)) return null;
+  return withOrgContext(getDb(), orgId, async (tx) => {
+    const [conn] = await tx.select({ id: connections.id }).from(connections).where(and(
+      eq(connections.id, connectionId),
+      eq(connections.orgId, orgId),
+      eq(connections.provider, 'bosta'),
+      eq(connections.family, 'courier'),
+      eq(connections.status, 'active'),
+    ));
+    if (!conn) return null;
+    const secret = await readConnectionSecret(tx, { orgId, connectionId, name: WEBHOOK_SECRET_NAME });
+    return secret ? { secret, orgId } : null;
+  });
+}));
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const WEBHOOK_SECRET_NAME = 'webhook_secret';
+
+async function handleBosta(c: Context, authenticate: () => Promise<BostaAuth | null>) {
+  const auth = await authenticate();
+  if (!auth) {
     return c.json({ data: null, error: 'webhook_secret_not_configured', meta: null }, 500);
   }
+  const { secret } = auth;
 
   const signature = c.req.header('X-Bosta-Signature');
   if (!signature) {
@@ -85,7 +120,7 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   else if (state === 'PACKAGE_PICKED_UP') courierStatus = 'picked_up';
 
   // The shared secret authenticated this request; it only vouches for ONE org.
-  const pinnedOrgId = pinnedCourierOrgId();
+  const pinnedOrgId = auth.orgId;
   const resolution = await resolveCourierShipmentByTracking(db, 'bosta', trackingNumber, pinnedOrgId);
   if (resolution.status === 'ambiguous') {
     return c.json({ data: null, error: 'ambiguous_tracking_number', meta: null }, 409);
@@ -204,4 +239,4 @@ bostaWebhookRoute.post('/', async (c: Context) => {
   }
 
   return c.json({ received: true });
-});
+}
