@@ -115,7 +115,8 @@ semantic tokens, so older pages follow the palette. New code uses semantic names
   quantity to ship, then the shipping notice and a notice timeline.
 - **Every other admin screen** opens with `PageHeader` (the nav group as eyebrow,
   the nav icon) and uses glass cards. The primary action is the navy button.
-- **Sign-in:** a navy mark and a glass card over the lit canvas.
+- **Detail screens** (customer, return): `PageHeader` with the back link as an outline action.
+- **Sign-in, join, change password, two-factor:** a navy mark and a glass card over the lit canvas.
 
 ## 7. Anti-patterns
 
