@@ -24,20 +24,21 @@ export const courierRouter = router({
           conditions.push(eq(courierShipments.courierStatus, input.status));
         }
 
-        const [data, totalRowResult] = await Promise.all([
-          ctx.withOrg(async (tx) => tx
+        const { data, totalRow } = await ctx.withOrg(async (tx) => {
+          const data = await tx
             .select()
             .from(courierShipments)
             .where(and(...conditions))
             .limit(input.pageSize)
-            .offset(offset)),
-          ctx.withOrg(async (tx) => tx
+            .offset(offset);
+
+          const totalRowResult = await tx
             .select({ count: count() })
             .from(courierShipments)
-            .where(and(...conditions)))
-        ]);
+            .where(and(...conditions));
 
-        const totalRow = totalRowResult[0];
+          return { data, totalRow: totalRowResult[0] };
+        });
 
         return {
           data,
@@ -91,20 +92,21 @@ export const courierRouter = router({
           conditions.push(eq(courierRemittances.status, input.status));
         }
 
-        const [data, totalRowResult] = await Promise.all([
-          ctx.withOrg(async (tx) => tx
+        const { data, totalRow } = await ctx.withOrg(async (tx) => {
+          const data = await tx
             .select()
             .from(courierRemittances)
             .where(and(...conditions))
             .limit(input.pageSize)
-            .offset(offset)),
-          ctx.withOrg(async (tx) => tx
+            .offset(offset);
+
+          const totalRowResult = await tx
             .select({ count: count() })
             .from(courierRemittances)
-            .where(and(...conditions)))
-        ]);
+            .where(and(...conditions));
 
-        const totalRow = totalRowResult[0];
+          return { data, totalRow: totalRowResult[0] };
+        });
 
         return {
           data,
