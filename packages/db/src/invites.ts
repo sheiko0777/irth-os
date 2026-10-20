@@ -1,4 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
+import { randomInt } from 'node:crypto';
 import { orgInvites, orgMembers } from './schema';
 import type { DbInstance } from './index';
 
@@ -12,9 +13,8 @@ import type { DbInstance } from './index';
  * column already applies (also plaintext).
  */
 export function generateInviteOtp(ttlMs = 15 * 60_000): { code: string; expiresAt: Date } {
-  // SECURITY: Math.random() is predictable. Use Web Crypto API for secure OTP generation.
-  const randomVal = crypto.getRandomValues(new Uint32Array(1))[0];
-  const code = String(100000 + (randomVal % 900000));
+  // SECURITY: Math.random() is predictable. Use node:crypto for secure OTP generation without modulo bias.
+  const code = String(randomInt(100000, 1000000));
   return { code, expiresAt: new Date(Date.now() + ttlMs) };
 }
 

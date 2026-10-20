@@ -161,8 +161,13 @@ export async function postOrderDeliveredEntry(
         );
     }
 
+    // Parent direct sale: the org's default entity and its default channel
+    // (orders carry no channel of their own yet), tagged with the order.
     return postJournalEntry(tx, {
         orgId,
+        entryKind: 'order_delivered',
+        defaultChannel: true,
+        dimensions: { orderId: order.id },
         journalType: 'sales',
         description: `Order delivered — ${order.orderNumber}`,
         sourceTable: 'orders',

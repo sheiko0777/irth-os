@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
@@ -46,9 +46,10 @@ function lookup(rows: ReturnType<typeof shipment>[]) {
   const limit = vi.fn();
   const where = vi.fn((predicate: SQL) => {
     const query = dialect.sqlToQuery(predicate);
-    const filters = [...query.sql.matchAll(/"courier_shipments"\."(courier|tracking_number)" = \$(\d+)/g)];
+    const filters = [...query.sql.matchAll(/"courier_shipments"\."(courier|tracking_number|org_id)" = \$(\d+)/g)];
+    const field = { courier: 'courier', tracking_number: 'trackingNumber', org_id: 'orgId' } as const;
     const matching = rows.filter(row => filters.every(([, column, parameter]) =>
-      row[column === 'courier' ? 'courier' : 'trackingNumber'] === query.params[Number(parameter) - 1],
+      row[field[column as keyof typeof field]] === query.params[Number(parameter) - 1],
     ));
     limit.mockImplementation(async (count: number) => matching.slice(0, count));
     return { limit, then: (resolve: (value: unknown) => void) => Promise.resolve(matching).then(resolve) };
@@ -69,6 +70,10 @@ function post(courier: Courier, extra: Record<string, unknown> = {}) {
     method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body,
   });
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -104,6 +109,36 @@ describe.each(['bosta', 'aramex'] as const)('%s courier shipment resolution', (c
     expect(db.select).toHaveBeenCalledTimes(1);
     expect(buildOrderNotification).not.toHaveBeenCalled();
     expect(emitOutboxEvent).not.toHaveBeenCalled();
+  });
+
+  describe('when the shared secret is pinned to one org', () => {
+    it('ignores another tenant that shares the waybill instead of refusing as ambiguous', async () => {
+      vi.stubEnv('COURIER_WEBHOOK_ORG_ID', 'org-b');
+      lookup([shipment(courier), shipment(courier, 'org-b')]);
+      const res = await post(courier);
+      expect(res.status).toBe(200);
+      expect(withOrgContext).toHaveBeenCalledTimes(1);
+      expect(withOrgContext).toHaveBeenCalledWith(undefined, 'org-b', expect.any(Function));
+      expect(emitOutboxEvent).toHaveBeenCalledWith(tx, expect.objectContaining({ orgId: 'org-b' }));
+    });
+
+    it('cannot reach a shipment that belongs to a different tenant (forged event)', async () => {
+      vi.stubEnv('COURIER_WEBHOOK_ORG_ID', 'org-b');
+      lookup([shipment(courier, 'org-a')]);
+      const res = await post(courier);
+      expect(res.status).toBe(404);
+      expect(withOrgContext).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+      expect(emitOutboxEvent).not.toHaveBeenCalled();
+    });
+
+    it('falls back to SHOPIFY_ORG_ID when COURIER_WEBHOOK_ORG_ID is unset', async () => {
+      vi.stubEnv('SHOPIFY_ORG_ID', 'org-b');
+      lookup([shipment(courier, 'org-a')]);
+      const res = await post(courier);
+      expect(res.status).toBe(404);
+      expect(withOrgContext).not.toHaveBeenCalled();
+    });
   });
 
   it('excludes another courier with the same waybill and the same courier with another waybill', async () => {

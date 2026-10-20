@@ -97,6 +97,9 @@
   --success-bg: #ecfdf3;
   --warning: #92400e;
   --warning-bg: #fff7e6;
+  /* --warning is a text colour (dark for contrast); as a bar/dot fill it reads
+     brown. Fills use this amber instead. */
+  --warning-fill: #f59e0b;
   --critical: #b42318;
   --critical-bg: #fef3f2;
   --info: #1d4ed8;
@@ -165,6 +168,7 @@
     --success-bg: #0f2a1e;
     --warning: #fbbf5a;
     --warning-bg: #2c2111;
+    --warning-fill: #fbbf5a;
     --critical: #fca5a5;
     --critical-bg: #331a1f;
     --info: #93c5fd;
@@ -197,6 +201,7 @@
   --success-bg: #0f2a1e;
   --warning: #fbbf5a;
   --warning-bg: #2c2111;
+  --warning-fill: #fbbf5a;
   --critical: #fca5a5;
   --critical-bg: #331a1f;
   --info: #93c5fd;
@@ -284,6 +289,13 @@ table {
     linear-gradient(135deg, var(--hero-from), var(--hero-to));
   color: var(--hero-fg);
   box-shadow: var(--float-shadow);
+}
+
+/* The floating assistant button (ChatBot) sits over the page's last rows:
+   keep the bottom of every dashboard page clear of it — and of the tab bar,
+   since --chat-launcher-bottom already rises above that where one is shown. */
+.irth-shell .irth-shell__content {
+  padding-bottom: calc(var(--chat-launcher-bottom) + 76px + env(safe-area-inset-bottom));
 }
 
 /* Room for the phone-only bottom tab bar and the device's home indicator. */

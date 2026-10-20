@@ -97,6 +97,7 @@ productsRouter.post('/', requireOrgId(), requirePermission('products', 'write'),
     }, {
       orgId,
       userId,
+      channel: 'api',
       action: 'CREATE_PRODUCT',
       tableName: 'products',
       changes: data
@@ -191,6 +192,7 @@ productsRouter.patch('/:id', requireOrgId(), requirePermission('products', 'writ
     }, {
       orgId,
       userId,
+      channel: 'api',
       action: 'UPDATE_PRODUCT',
       tableName: 'products',
       changes: data
@@ -224,6 +226,7 @@ productsRouter.delete('/:id', requireOrgId(), requirePermission('products', 'del
     }, {
       orgId,
       userId,
+      channel: 'api',
       action: 'DELETE_PRODUCT',
       tableName: 'products',
       changes: { status: 'archived' }
@@ -308,6 +311,7 @@ productsRouter.post('/:id/variants', requireOrgId(), requirePermission('products
     }, {
       orgId,
       userId,
+      channel: 'api',
       action: 'CREATE_PRODUCT_VARIANT',
       tableName: 'product_variants',
       changes: data

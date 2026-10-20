@@ -5,13 +5,31 @@ import { verifyShopifyWebhook } from '../middlewares/verifyShopifyWebhook';
 
 const SECRET = 'test-shopify-client-secret';
 
+function signBytes(body: Uint8Array, secret = SECRET): string {
+  return createHmac('sha256', secret).update(body).digest('base64');
+}
+
 function sign(body: string, secret = SECRET): string {
-  return createHmac('sha256', secret).update(body, 'utf8').digest('base64');
+  return signBytes(new TextEncoder().encode(body), secret);
 }
 
 function buildApp() {
   const app = new Hono();
   app.post('/webhook', verifyShopifyWebhook(), (c) => c.json({ data: { ok: true }, error: null, meta: null }));
+  return app;
+}
+
+function buildInspectingApp() {
+  const app = new Hono();
+  app.post('/webhook', verifyShopifyWebhook(), (c) => {
+    const getContextValue = c.get as (key: string) => unknown;
+    const rawBytes = getContextValue('rawBytes') as Uint8Array;
+    return c.json({
+      data: { bytes: Array.from(rawBytes), rawBody: getContextValue('rawBody') },
+      error: null,
+      meta: null,
+    });
+  });
   return app;
 }
 
@@ -85,5 +103,31 @@ describe('verifyShopifyWebhook', () => {
       body,
     });
     expect(res.status).toBe(500);
+  });
+
+  it('verifies HMAC over the exact bytes, including invalid UTF-8', async () => {
+    const body = Uint8Array.from([0x7b, 0xff, 0x7d]);
+    const res = await buildInspectingApp().request('/webhook', {
+      method: 'POST',
+      headers: { 'X-Shopify-Hmac-Sha256': signBytes(body) },
+      body,
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json() as { data: { bytes: number[]; rawBody: string } };
+    expect(json.data.bytes).toEqual([0x7b, 0xff, 0x7d]);
+    expect(json.data.rawBody).toBe('{�}');
+  });
+
+  it('rejects a signature computed over decoded replacement text instead of the raw bytes', async () => {
+    const body = Uint8Array.from([0x7b, 0xff, 0x7d]);
+    const decodedSignature = sign('{�}');
+    const res = await buildApp().request('/webhook', {
+      method: 'POST',
+      headers: { 'X-Shopify-Hmac-Sha256': decodedSignature },
+      body,
+    });
+
+    expect(res.status).toBe(401);
   });
 });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, requirePermission } from '../trpc';
-import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx } from '@irth/db';
+import { db, orderReturns, returnItems, inventoryItems, inventoryMovements, orderItems, orders, products, productVariants, withAudit, emitOutboxEvent, nextDocumentNumber, formatDocumentNumber, postJournalEntry, ACCOUNT_CODES, paginationMeta, paginationOffset, type JournalLineInput, MAX_IDEMPOTENCY_KEY_LENGTH, type DbTx, journalEntries } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { EGYPT_VAT_BP, add, assertSupportedCurrency, fromMinor, multiply, netOfTax, parseDecimal, taxIncludedIn } from '@irth/domain';
 import { eq, and, count, sum, sql, desc, isNull } from 'drizzle-orm';
@@ -64,6 +64,18 @@ async function refundReturn(
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Refund amount is invalid or exceeds the order total' });
     }
   }
+  const [deliveredEntry] = await tx.select({ id: journalEntries.id }).from(journalEntries)
+    .where(and(
+      eq(journalEntries.orgId, orgId),
+      eq(journalEntries.sourceTable, 'orders'),
+      eq(journalEntries.sourceId, target.orderId),
+      eq(journalEntries.entryKind, 'order_delivered')
+    )).limit(1);
+
+  if (!deliveredEntry) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Order has no recognised sale to refund' });
+  }
+
   // Like restock, the atomic claim guards all ledger side effects. Its
   // durable marker is independent of the editable current status.
   const [row] = await tx.update(orderReturns)
@@ -99,7 +111,7 @@ async function refundReturn(
 
     await postJournalEntry(tx, {
       orgId,
-      journalType: 'sales',
+      journalType: 'sales', entryKind: 'return_refund', defaultChannel: true, dimensions: { orderId: row.orderId },
       description: `Return refunded — ${row.returnNumber}`,
       sourceTable: 'order_returns',
       sourceId: row.id,
@@ -377,7 +389,8 @@ export const returnsRouter = router({
         if (orderItem.costMinor !== null && orderItem.costMinor > 0n) {
           const cost = multiply(fromMinor(orderItem.costMinor, returnCurrency), item.quantity);
           await postJournalEntry(tx, {
-            orgId: ctx.orgId, journalType: 'sales',
+            orgId: ctx.orgId, journalType: 'sales', entryKind: 'return_restock', defaultChannel: true,
+            dimensions: { orderId: returnObj.orderId, variantId: orderItem.variantId },
             description: `Return restocked - ${returnObj.returnNumber}`,
             sourceTable: 'return_items', sourceId: item.id, createdBy: ctx.userId,
             lines: [
@@ -401,6 +414,15 @@ export const returnsRouter = router({
           quantity: item.quantity,
           note: saleable ? `Return restock ${input.returnId}`
             : `Return restock ${input.returnId} - condition: ${item.condition ?? 'unknown'}, held out of saleable stock, no quarantine location configured`,
+        });
+
+        // Sellable stock rose, so Shopify's count is now too low. Queued in this
+        // transaction (ids only; the worker re-reads the quantity). Held-out
+        // damaged/unknown items do not change available stock and push nothing.
+        if (saleable) await emitOutboxEvent(tx, {
+          orgId: ctx.orgId,
+          eventType: 'inventory.push',
+          payload: { orgId: ctx.orgId, variantId: orderItem.variantId },
         });
 
         await withAudit(

@@ -9,9 +9,31 @@ import { SHOPIFY_API_VERSION } from './shopifyApi';
 export const SHOPIFY_SCOPES = [
   'read_products', 'write_products', 'read_inventory', 'write_inventory',
   'read_orders', 'read_customers', 'read_pixels', 'write_pixels',
+  'read_fulfillments', 'write_fulfillments',
+  'read_merchant_managed_fulfillment_orders', 'write_merchant_managed_fulfillment_orders',
 ].join(',');
 
 type ShopifyConnection = InferSelectModel<typeof shopifyConnections>;
+
+export interface ShopifyGraphQLError {
+  message: string;
+  path?: Array<string | number>;
+  extensions?: Record<string, unknown>;
+}
+
+export interface ShopifyGraphQLRawResult<T> {
+  data?: T;
+  errors?: ShopifyGraphQLError[];
+  extensions?: unknown;
+  status: number;
+}
+
+export type ShopifyGraphQLFetch = (input: string | URL, init?: RequestInit, timeoutMs?: number) => Promise<Response>;
+
+export interface ShopifyGraphQLRawOptions {
+  fetch?: ShopifyGraphQLFetch;
+  apiVersion?: string;
+}
 
 async function aesKey(usages: Array<'encrypt' | 'decrypt'>): Promise<CryptoKey> {
   const encoded = envVar('SHOPIFY_TOKEN_ENCRYPTION_KEY');
@@ -104,6 +126,38 @@ export async function shopifyGraphQL<T>(connection: Pick<ShopifyConnection, 'sho
   return body.data;
 }
 
+export async function shopifyGraphQLRaw<T>(
+  connection: Pick<ShopifyConnection, 'shopDomain' | 'accessTokenCiphertext' | 'accessTokenIv'>,
+  query: string,
+  variables?: Record<string, unknown>,
+  options: ShopifyGraphQLRawOptions = {},
+): Promise<ShopifyGraphQLRawResult<T>> {
+  const accessToken = await decryptShopifyToken(connection);
+  const apiVersion = options.apiVersion ?? SHOPIFY_API_VERSION;
+  const fetcher = options.fetch ?? fetchWithTimeout;
+  const response = await fetcher(`https://${connection.shopDomain}/admin/api/${apiVersion}/graphql.json`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
+    body: JSON.stringify({ query, variables }),
+  });
+  const body = await response.json().catch((): unknown => ({}));
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: response.status };
+  const record = body as Record<string, unknown>;
+  const errors = Array.isArray(record.errors)
+    ? record.errors.filter((error): error is ShopifyGraphQLError => {
+      if (!error || typeof error !== 'object' || Array.isArray(error)) return false;
+      const candidate = error as Record<string, unknown>;
+      return typeof candidate.message === 'string';
+    })
+    : undefined;
+  return {
+    data: record.data as T | undefined,
+    errors,
+    extensions: record.extensions,
+    status: response.status,
+  };
+}
+
 export async function listShopifyLocations(connection: ShopifyConnection): Promise<Array<{ id: string; name: string }>> {
   const data = await shopifyGraphQL<{ locations: { nodes: Array<{ id: string; name: string }> } }>(connection, `query { locations(first: 50) { nodes { id name } } }`);
   return data.locations.nodes;
@@ -178,10 +232,22 @@ export async function setConnectionInventoryQuantity(connection: ShopifyConnecti
  * that script, one-time manual setup for the legacy single-tenant shop) must
  * agree on route names since both point at the same handler file.
  */
+/**
+ * Note: ORDERS_CREATE, ORDERS_UPDATED, and ORDERS_CANCELLED bypass the inbox
+ * intentionally because OR-10 (order promotion) is not built yet.
+ */
 const WEBHOOK_TOPIC_ROUTES: Record<string, string> = {
   ORDERS_CREATE: 'orders-create',
   ORDERS_UPDATED: 'orders-updated',
+  ORDERS_EDITED: 'inbox/orders-edited',
+  ORDERS_PAID: 'inbox/orders-paid',
   ORDERS_CANCELLED: 'orders-cancelled',
+  ORDERS_FULFILLED: 'inbox/orders-fulfilled',
+  ORDERS_PARTIALLY_FULFILLED: 'inbox/orders-partially-fulfilled',
+  REFUNDS_CREATE: 'inbox/refunds-create',
+  FULFILLMENTS_CREATE: 'inbox/fulfillments-create',
+  FULFILLMENTS_UPDATE: 'inbox/fulfillments-update',
+  ORDER_TRANSACTIONS_CREATE: 'inbox/order-transactions-create',
   CUSTOMERS_CREATE: 'customers-upsert',
   CUSTOMERS_UPDATE: 'customers-upsert',
   INVENTORY_LEVELS_UPDATE: 'inventory-levels-update',
@@ -190,14 +256,68 @@ const WEBHOOK_TOPIC_ROUTES: Record<string, string> = {
   APP_UNINSTALLED: 'app-uninstalled',
 };
 
-export async function registerShopifyWebhooks(connection: ShopifyConnection, apiBaseUrl: string): Promise<void> {
+export async function registerShopifyWebhooks(connection: ShopifyConnection, apiBaseUrl: string): Promise<string[]> {
   const callbackBase = `${apiBaseUrl.replace(/\/$/, '')}/api/webhooks/shopify`;
+  const errors: string[] = [];
+
   for (const [topic, route] of Object.entries(WEBHOOK_TOPIC_ROUTES)) {
-    const data = await shopifyGraphQL<{ webhookSubscriptionCreate: { userErrors: Array<{ message: string }> } }>(connection, `
-      mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) {
-        webhookSubscriptionCreate(topic: $topic, webhookSubscription: $input) { userErrors { message } }
+    try {
+      const callbackUrl = `${callbackBase}/${route}`;
+
+      const existingData = await shopifyGraphQL<{ webhookSubscriptions: { nodes: Array<{ id: string; endpoint: { __typename: string; callbackUrl?: string } }> } }>(connection, `
+        query GetWebhooks($topic: WebhookSubscriptionTopic!) {
+          webhookSubscriptions(first: 50, topics: [$topic]) {
+            nodes {
+              id
+              endpoint {
+                __typename
+                ... on WebhookHttpEndpoint {
+                  callbackUrl
+                }
+              }
+            }
+          }
+        }
+      `, { topic });
+
+      const existing = existingData.webhookSubscriptions.nodes;
+      let shouldCreate = true;
+
+      for (const sub of existing) {
+        if (sub.endpoint.__typename === 'WebhookHttpEndpoint') {
+          if (sub.endpoint.callbackUrl === callbackUrl) {
+            shouldCreate = false; // Already exactly correct
+          } else {
+            // Wrong callback URL -> delete first
+            const deleteData = await shopifyGraphQL<{ webhookSubscriptionDelete: { userErrors: Array<{ message: string }> } }>(connection, `
+              mutation DeleteWebhook($id: ID!) {
+                webhookSubscriptionDelete(id: $id) { userErrors { message } }
+              }
+            `, { id: sub.id });
+            if (deleteData.webhookSubscriptionDelete.userErrors.length) throw new Error(deleteData.webhookSubscriptionDelete.userErrors.map((error) => error.message).join('; '));
+          }
+        } else {
+          // E.g., EventBridge endpoint, delete it as we expect an HTTP endpoint
+          const deleteData = await shopifyGraphQL<{ webhookSubscriptionDelete: { userErrors: Array<{ message: string }> } }>(connection, `
+            mutation DeleteWebhook($id: ID!) {
+              webhookSubscriptionDelete(id: $id) { userErrors { message } }
+            }
+          `, { id: sub.id });
+          if (deleteData.webhookSubscriptionDelete.userErrors.length) throw new Error(deleteData.webhookSubscriptionDelete.userErrors.map((error) => error.message).join('; '));
+        }
       }
-    `, { topic, input: { callbackUrl: `${callbackBase}/${route}`, format: 'JSON' } });
-    if (data.webhookSubscriptionCreate.userErrors.length) throw new Error(data.webhookSubscriptionCreate.userErrors.map((error) => error.message).join('; '));
+
+      if (shouldCreate) {
+        const createData = await shopifyGraphQL<{ webhookSubscriptionCreate: { userErrors: Array<{ message: string }> } }>(connection, `
+          mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) {
+            webhookSubscriptionCreate(topic: $topic, webhookSubscription: $input) { userErrors { message } }
+          }
+        `, { topic, input: { callbackUrl, format: 'JSON' } });
+        if (createData.webhookSubscriptionCreate.userErrors.length) throw new Error(createData.webhookSubscriptionCreate.userErrors.map((error) => error.message).join('; '));
+      }
+    } catch (e) {
+      errors.push(`Failed to register ${topic}: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
+  return errors;
 }

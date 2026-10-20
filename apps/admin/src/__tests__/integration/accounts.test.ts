@@ -238,5 +238,7 @@ describe('refused calls are audited', () => {
       .where(and(eq(auditLog.orgId, orgA), eq(auditLog.action, 'PERMISSION_DENIED'), eq(auditLog.userId, 'member-x')));
     expect(rows).toHaveLength(1);
     expect(rows[0].changes).toMatchObject({ path: 'roles.create', permission: 'roles.manage' });
+    // audit_log v2 (0082): a refusal is outcome='denied', from the admin door.
+    expect(rows[0]).toMatchObject({ outcome: 'denied', channel: 'admin', actorId: 'member-x' });
   });
 });

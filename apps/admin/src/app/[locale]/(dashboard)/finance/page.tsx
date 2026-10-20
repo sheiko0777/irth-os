@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { formatDate, formatMoney, fromMinor } from "@irth/domain";
+import { formatDate, fromMinor, isZero } from "@irth/domain";
+import { Money } from "@/components/ui/Money";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { serverCaller } from "@/server/caller";
 import { AiQueryForm } from "./AiQueryForm";
@@ -34,6 +35,10 @@ export default async function FinancePage() {
     const pnl = pnlRes.data;
     const codRows = codRes.data;
     const vat = vatRes.data;
+    // Presentation only: the ledger total is kept as-is, the screen just
+    // stops presenting an unknown cost as a real zero.
+    const cogsUnknown = isZero(pnl.cogs);
+    const ESTIMATED = t("estimated");
 
     return (
         <div className="space-y-8">
@@ -54,25 +59,25 @@ export default async function FinancePage() {
                         icon={<Wallet />}
                         variant="hero"
                         title="إجمالي الإيرادات"
-                        value={formatMoney(pnl.totalRevenue)}
+                        value={<Money value={pnl.totalRevenue} emphasis />}
                     />
                     <KpiCard
                         id="fin-orders"
                         icon={<ShoppingCart />}
                         title="إجمالي الطلبات"
-                        value={pnl.totalOrders.toLocaleString('ar-EG')}
+                        value={pnl.totalOrders}
                     />
                     <KpiCard
                         id="fin-aov"
                         icon={<Receipt />}
                         title="متوسط قيمة الطلب"
-                        value={formatMoney(pnl.avgOrderValue)}
+                        value={<Money value={pnl.avgOrderValue} emphasis />}
                     />
                     <KpiCard
                         id="fin-cancelled"
                         icon={<XCircle />}
                         title="طلبات ملغاة"
-                        value={pnl.cancelledOrders.toLocaleString('ar-EG')}
+                        value={pnl.cancelledOrders}
                     />
                 </div>
 
@@ -80,29 +85,45 @@ export default async function FinancePage() {
                     total: everything below comes from the double-entry ledger
                     (packages/db/src/ledger.ts), not from summing order rows. */}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    {/* No cost posted means "unknown", not "free": 0.00 here made
+                        gross profit equal revenue and read as a 100% margin. */}
                     <KpiCard
                         id="fin-cogs"
                         icon={<Boxes />}
                         title="تكلفة البضاعة المباعة"
-                        value={formatMoney(pnl.cogs)}
+                        value={
+                            cogsUnknown ? (
+                                <span
+                                    className="inline-flex rounded-full bg-[var(--raised)] px-2.5 py-1 text-xs font-medium tracking-normal text-[var(--text-secondary)]"
+                                    data-testid="cogs-not-calculated"
+                                >
+                                    {t("cogsNotCalculated")}
+                                </span>
+                            ) : (
+                                <Money value={pnl.cogs} emphasis />
+                            )
+                        }
+                        sub={cogsUnknown ? t("cogsNotCalculatedHint") : undefined}
                     />
                     <KpiCard
                         id="fin-gross-profit"
                         icon={<TrendingUp />}
                         title="مجمل الربح"
-                        value={formatMoney(pnl.grossProfit)}
+                        value={<Money value={pnl.grossProfit} emphasis />}
+                        sub={cogsUnknown ? ESTIMATED : undefined}
                     />
                     <KpiCard
                         id="fin-returns"
                         icon={<Undo2 />}
                         title="مرتجعات ومسموحات"
-                        value={formatMoney(pnl.returns)}
+                        value={<Money value={pnl.returns} emphasis />}
                     />
                     <KpiCard
                         id="fin-net-income"
                         icon={<PiggyBank />}
                         title="صافي الدخل"
-                        value={formatMoney(pnl.netIncome)}
+                        value={<Money value={pnl.netIncome} emphasis />}
+                        sub={cogsUnknown ? ESTIMATED : undefined}
                     />
                 </div>
             </section>
@@ -116,7 +137,7 @@ export default async function FinancePage() {
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">الإيراد الإجمالي</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-[var(--t1)]">{formatMoney(vat.grossRevenue)}</div>
+                            <div className="text-2xl font-bold text-[var(--t1)]"><Money value={vat.grossRevenue} /></div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -124,7 +145,9 @@ export default async function FinancePage() {
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">قيمة ضريبة القيمة المضافة (14%)</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-[var(--crimson)]">{formatMoney(vat.vatAmount)}</div>
+                            {/* Neutral: a VAT amount or a net figure is not good or bad news —
+                                red/green is kept for deltas. */}
+                            <div className="text-2xl font-bold text-[var(--t1)]"><Money value={vat.vatAmount} /></div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -132,7 +155,7 @@ export default async function FinancePage() {
                             <CardTitle className="text-sm font-medium text-[var(--t2)]">الإيراد الصافي</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold text-[var(--emerald)]">{formatMoney(vat.netRevenue)}</div>
+                            <div className="text-2xl font-bold text-[var(--t1)]"><Money value={vat.netRevenue} /></div>
                         </CardContent>
                     </Card>
                 </div>
@@ -160,7 +183,7 @@ export default async function FinancePage() {
                                 codRows.map((row) => (
                                     <TableRow key={row.orderId}>
                                         <TableCell className="font-mono">{row.orderNumber}</TableCell>
-                                        <TableCell>{formatMoney(fromMinor(row.amount))}</TableCell>
+                                        <TableCell><Money value={fromMinor(row.amount)} /></TableCell>
                                         <TableCell>{formatDate(row.createdAt)}</TableCell>
                                         <TableCell>
                                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[var(--emerald)]/10 text-[var(--emerald)]">

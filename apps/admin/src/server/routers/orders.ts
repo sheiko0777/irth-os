@@ -1,5 +1,5 @@
 import { router, requirePermission } from '../trpc';
-import { orders, orderItems, shipmentTracking, products, productVariants, orderStatusEnum, notifications, paginationMeta, paginationOffset } from '@irth/db';
+import { orders, orderItems, shipmentTracking, products, productVariants, orderStatusEnum, notifications, paginationMeta, paginationOffset, courierShipments } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
 import { orderRepScope } from '../scopes';
 import { orderAssignmentProcedures } from './orderAssignment';
@@ -131,29 +131,31 @@ export const ordersRouter = router({
             const conditions = status ? [...scope, eq(orders.status, status)] : [...scope];
             if (blockedOnly) conditions.push(eq(orders.importStatus, 'blocked'));
 
-            // Execute list, count and status breakdown concurrently
-            const [data, totalQuery, statusCountsQuery, blockedQuery] = await Promise.all([
-                ctx.withOrg(async (tx) => tx
+            // Execute list, count and status breakdown sequentially in one transaction to preserve isolation
+            const [data, totalQuery, statusCountsQuery, blockedQuery] = await ctx.withOrg(async (tx) => {
+                const dataRes = await tx
                     .select()
                     .from(orders)
                     .where(and(...conditions))
                     .orderBy(desc(orders.createdAt))
                     .limit(pageSize)
-                    .offset(offset)),
-                ctx.withOrg(async (tx) => tx
+                    .offset(offset);
+                const totalRes = await tx
                     .select({ count: count() })
                     .from(orders)
-                    .where(and(...conditions))),
-                ctx.withOrg(async (tx) => tx
+                    .where(and(...conditions));
+                const statusRes = await tx
                     .select({ status: orders.status, count: count() })
                     .from(orders)
                     .where(and(...scope))
-                    .groupBy(orders.status)),
-                ctx.withOrg(async (tx) => tx
+                    .groupBy(orders.status);
+                const blockedRes = await tx
                     .select({ count: count() })
                     .from(orders)
-                    .where(and(eq(orders.orgId, ctx.orgId), eq(orders.importStatus, 'blocked'), rep))),
-            ]);
+                    .where(and(eq(orders.orgId, ctx.orgId), eq(orders.importStatus, 'blocked'), rep));
+
+                return [dataRes, totalRes, statusRes, blockedRes] as const;
+            });
 
             return {
                 data,
@@ -176,18 +178,21 @@ export const ordersRouter = router({
             // order, items and history are all keyed by input.id (the order id
             // in the where clause is `eq(orders.id, input.id)`), so none of the
             // three reads depends on the others' results — run them in one
-            // org-scoped transaction concurrently instead of three sequential
-            // round-trips, matching the `list` procedure above. On the rare
-            // not-found path the two extra queries just return empty.
-            const [order, items, history] = await Promise.all([
-                ctx.withOrg(async (tx) => tx.query.orders.findFirst({
+            // org-scoped transaction sequentially instead of three sequential
+            // connection-exhausting transactions. On the rare
+            // not-found path the two extra queries are skipped entirely.
+            const [order, items, history] = await ctx.withOrg(async (tx) => {
+                const orderRes = await tx.query.orders.findFirst({
                     where: and(
                         eq(orders.id, input.id),
                         eq(orders.orgId, ctx.orgId),
                         orderRepScope(ctx),
                     )
-                })),
-                ctx.withOrg(async (tx) => tx
+                });
+
+                if (!orderRes) return [undefined, [], []];
+
+                const itemsRes = await tx
                     .select({
                         id: orderItems.id,
                         quantity: orderItems.quantity,
@@ -195,20 +200,24 @@ export const ordersRouter = router({
                         sku: productVariants.sku,
                     })
                     .from(orderItems)
-                    .innerJoin(productVariants, eq(orderItems.variantId, productVariants.id))
+                    // LEFT: a custom_nonstock line (no variant, 0086) is still on the order.
+                    .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
                     .where(and(
                         eq(orderItems.orderId, input.id),
                         eq(orderItems.orgId, ctx.orgId)
-                    ))),
-                ctx.withOrg(async (tx) => tx
+                    ));
+
+                const historyRes = await tx
                     .select()
                     .from(shipmentTracking)
                     .where(and(
                         eq(shipmentTracking.orderId, input.id),
                         eq(shipmentTracking.orgId, ctx.orgId)
                     ))
-                    .orderBy(desc(shipmentTracking.createdAt))),
-            ]);
+                    .orderBy(desc(shipmentTracking.createdAt));
+
+                return [orderRes, itemsRes, historyRes] as const;
+            });
 
             if (!order) {
                 throw new TRPCError({ code: 'NOT_FOUND' });
@@ -223,6 +232,66 @@ export const ordersRouter = router({
                 error: null,
                 meta: null
             };
+        }),
+
+    setShipment: requirePermission('orders', 'write')
+        .input(z.object({
+            orderId: z.string().uuid(),
+            courier: z.enum(['bosta', 'aramex']),
+            trackingNumber: z.string().trim().min(3).max(64)
+        }))
+        .mutation(async ({ ctx, input }) => {
+            return ctx.withOrg(async (tx) => {
+                const order = await tx.query.orders.findFirst({
+                    where: and(
+                        eq(orders.id, input.orderId),
+                        eq(orders.orgId, ctx.orgId)
+                    )
+                });
+
+                if (!order) {
+                    throw new TRPCError({ code: 'NOT_FOUND' });
+                }
+
+                if (order.status !== 'confirmed' && order.status !== 'shipped') {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'Shipments can only be updated for confirmed or shipped orders.',
+                    });
+                }
+
+                const isCod = order.paymentMethod !== 'online' && order.totalAmountMinor > 0n;
+                const codAmountMinor = isCod ? order.totalAmountMinor : null;
+
+                const result = await withAudit(tx, async () => {
+                    const [upserted] = await tx.insert(courierShipments)
+                        .values({
+                            orgId: ctx.orgId,
+                            orderId: input.orderId,
+                            courier: input.courier,
+                            trackingNumber: input.trackingNumber,
+                            codAmountMinor,
+                        })
+                        .onConflictDoUpdate({
+                            target: [courierShipments.orderId],
+                            set: {
+                                courier: input.courier,
+                                trackingNumber: input.trackingNumber,
+                                codAmountMinor,
+                            }
+                        })
+                        .returning();
+                    return upserted;
+                }, {
+                    action: 'courier_shipments.set',
+                    orgId: ctx.orgId,
+                    userId: ctx.userId,
+                    tableName: 'courier_shipments',
+                    changes: { courier: input.courier, trackingNumber: input.trackingNumber, codAmountMinor: codAmountMinor?.toString() },
+                });
+
+                return { data: result, error: null, meta: null };
+            });
         }),
 
     updateStatus: requirePermission('orders', 'write')
@@ -251,6 +320,13 @@ export const ordersRouter = router({
                 });
             }
 
+            if (order.status === 'delivered' && input.status !== 'delivered') {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'A delivered order cannot change status. Use Returns to reverse a sale.',
+                });
+            }
+
             // Status change, audit row, staff notification and the customer
             // outbox event in one transaction. As separate autocommits, a
             // failure between them left the order advanced with no audit trail
@@ -259,10 +335,29 @@ export const ordersRouter = router({
             // row written outside the transaction would tell the customer about
             // a change that then rolled back.
             const result = await ctx.withOrg(async (tx) => {
+                const onlyIfPreviousStatusIn = input.status !== 'delivered'
+                    ? orderStatusEnum.enumValues.filter(s => s !== 'delivered')
+                    : undefined;
+
                 const transition = await transitionOrderStatus(tx, {
                     orgId: ctx.orgId, orderId: input.id, newStatus: input.status,
+                    onlyIfPreviousStatusIn,
                 });
-                if (!transition) throw new TRPCError({ code: 'NOT_FOUND' });
+                if (!transition) {
+                    const currentOrder = await tx.query.orders.findFirst({
+                        where: and(
+                            eq(orders.id, input.id),
+                            eq(orders.orgId, ctx.orgId)
+                        )
+                    });
+                    if (currentOrder?.status === 'delivered' && input.status !== 'delivered') {
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message: 'A delivered order cannot change status. Use Returns to reverse a sale.',
+                        });
+                    }
+                    throw new TRPCError({ code: 'NOT_FOUND' });
+                }
                 const { previousStatus } = transition;
                 const updated = await withAudit(
                     tx,

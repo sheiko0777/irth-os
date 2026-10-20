@@ -1,22 +1,37 @@
 /**
- * A smooth line through the points (Catmull-Rom as cubic Béziers). The curve
- * passes through every point, so a peak on the chart is a real value — the
- * tension is kept low enough that it never overshoots far between two points.
+ * A smooth line through the points, monotone in y between neighbours (the
+ * Fritsch–Carlson / d3 `curveMonotoneX` cubic). Unlike Catmull-Rom it never
+ * overshoots: between two points the curve stays inside their y range, so a
+ * run of zero days can not dip below the baseline and a peak is a real value.
+ * Points must be sorted by x.
  */
-export function smoothPath(points: ReadonlyArray<readonly [number, number]>, tension = 0.18): string {
-  if (points.length === 0) return '';
+export function smoothPath(points: ReadonlyArray<readonly [number, number]>): string {
+  const n = points.length;
+  if (n === 0) return '';
   const [first] = points;
   let d = `M ${first[0]},${first[1]}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i - 1] ?? points[i];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2] ?? p2;
-    const c1x = p1[0] + (p2[0] - p0[0]) * tension;
-    const c1y = p1[1] + (p2[1] - p0[1]) * tension;
-    const c2x = p2[0] - (p3[0] - p1[0]) * tension;
-    const c2y = p2[1] - (p3[1] - p1[1]) * tension;
-    d += ` C ${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+  if (n === 1) return d;
+
+  // Secant slopes, then tangents: zero at a local extremum or a flat run,
+  // the harmonic mean otherwise (which keeps the cubic monotone).
+  const secant: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const dx = points[i + 1][0] - points[i][0];
+    secant.push(dx === 0 ? 0 : (points[i + 1][1] - points[i][1]) / dx);
+  }
+  const tangent = points.map((_, i) => {
+    if (i === 0) return secant[0];
+    if (i === n - 1) return secant[n - 2];
+    const a = secant[i - 1];
+    const b = secant[i];
+    return a * b <= 0 ? 0 : (2 * a * b) / (a + b);
+  });
+
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = points[i];
+    const [x1, y1] = points[i + 1];
+    const h = (x1 - x0) / 3;
+    d += ` C ${x0 + h},${y0 + h * tangent[i]} ${x1 - h},${y1 - h * tangent[i + 1]} ${x1},${y1}`;
   }
   return d;
 }

@@ -14,3 +14,15 @@
 ## 2025-02-28 - Optimize AI tool sales summary queries in `apps/api/src/ai/tools.ts`
 **Learning:** Combining multiple aggregate queries using PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility prevents executing multiple queries concurrently inside transaction contexts and reduces network roundtrips.
 **Action:** When making multiple conditional aggregates on the same table, use PostgreSQL's `FILTER` clause.
+## 2023-11-20 - Combine Queries using PostgreSQL FILTER
+**Learning:** Three separate database queries executing in Promise.all were making three separate database round trips to fetch counts with different where conditions for the same table.
+**Action:** When making multiple conditional aggregates on the same table, use PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine them into a single query to reduce latency and database roundtrips.
+## 2023-11-20 - Combine Courier Shipments Aggregates using PostgreSQL FILTER
+**Learning:** Three separate aggregate queries running concurrently were making three separate database round trips to fetch counts with different where conditions for the same table, opening multiple connections against the database.
+**Action:** Used PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` utility to combine them into a single query to reduce database round trips and connections footprint. Added an `or` restrictive `WHERE` clause to narrow scanned rows and leverage indexes.
+## 2026-10-12 - Sequential transaction queries vs concurrent withOrg connections
+**Learning:** Using `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside pagination API handlers acquires multiple database connections concurrently, causing connection pool exhaustion under load and breaking data isolation.
+**Action:** When handling data and count queries requiring a transaction wrapper, run them sequentially inside a single `ctx.withOrg(async (tx) => { ... })` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+## 2026-10-18 - Fix batch Purchasing PO List Query with single transaction wrapper
+**Learning:** Combining pagination list and count queries into `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` incorrectly acquires multiple database connections concurrently and breaks transaction data isolation, leading to potential pool exhaustion.
+**Action:** When executing batch list and count queries that require transaction-level consistency or isolation, wrap them sequentially inside a single `ctx.withOrg` transaction block to avoid scaling risks.

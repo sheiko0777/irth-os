@@ -1,5 +1,6 @@
+import { Money } from "@/components/ui/Money";
 import { serverCaller } from "@/server/caller";
-import { formatMoney, fromMinor } from "@irth/domain";
+import { fromMinor } from "@irth/domain";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
@@ -86,7 +87,7 @@ export default async function CustomersPage({
                   <TableCell>{customer.totalOrders ?? 0}</TableCell>
                   {/* Was `${customer.totalSpent} ج.م` — the raw column value,
                       so it printed ungrouped ("1234.56 ج.م"). */}
-                  <TableCell>{customer.totalSpentMinor ? formatMoney(fromMinor(customer.totalSpentMinor)) : '-'}</TableCell>
+                  <TableCell>{customer.totalSpentMinor ? <Money value={fromMinor(customer.totalSpentMinor)} /> : '-'}</TableCell>
                   <TableCell>
                     <SalesRepCell customerId={customer.id} customerName={customer.name} memberId={customer.salesRepMemberId ?? null} />
                   </TableCell>

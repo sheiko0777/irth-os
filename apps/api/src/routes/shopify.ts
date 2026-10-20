@@ -54,11 +54,18 @@ shopifyRoute.get('/oauth/callback', async (c) => {
     }).onConflictDoUpdate({ target: shopifyConnections.orgId, set: { shopDomain, accessTokenCiphertext: sealed.ciphertext, accessTokenIv: sealed.iv, scopes: token.scope, status: 'active', uninstalledAt: null, lastError: null, updatedAt: new Date() } }).returning();
     return row;
   });
+  // registerShopifyWebhooks reports per-topic failures instead of aborting on the
+  // first one; it can still throw for something outside a topic (e.g. the token
+  // cannot be decrypted), so keep the catch — the connect must still land.
+  let registrationErrors: string[];
   try {
-    await registerShopifyWebhooks(connection, apiBaseUrl());
+    registrationErrors = await registerShopifyWebhooks(connection, apiBaseUrl());
   } catch (error) {
-    await database.update(shopifyConnections).set({ lastError: error instanceof Error ? error.message : String(error) }).where(eq(shopifyConnections.id, connection.id));
+    registrationErrors = [error instanceof Error ? error.message : String(error)];
   }
+  await database.update(shopifyConnections)
+    .set({ lastError: registrationErrors.length > 0 ? registrationErrors.join('\n') : null })
+    .where(eq(shopifyConnections.id, connection.id));
   return c.redirect(`${adminBaseUrl()}/ar/integrations?shopify=connected`);
 });
 

@@ -54,6 +54,7 @@ categoriesRouter.post('/', requireOrgId(), requirePermission('categories', 'writ
     }, {
       orgId,
       userId,
+      channel: 'api',
       action: 'CREATE_CATEGORY',
       tableName: 'categories',
       changes: data
@@ -82,6 +83,7 @@ categoriesRouter.delete('/:id', requireOrgId(), requirePermission('categories', 
     }, {
       orgId,
       userId,
+      channel: 'api',
       action: 'DELETE_CATEGORY',
       tableName: 'categories',
       changes: { id }

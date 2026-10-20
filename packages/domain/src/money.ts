@@ -125,6 +125,10 @@ export function parseDecimal(input: string, c: Currency = EGP): Money {
   return { minor: sign ? -minor : minor, currency: c };
 }
 
+export function decimalStringToMinor(value: string, currencyCode: string): bigint {
+  return parseDecimal(value, currency(currencyCode)).minor;
+}
+
 /** Renders minor units back to a plain decimal string. No locale, no symbol. */
 export function toDecimalString(m: Money): string {
   const exponent = exponentOf(m.currency);

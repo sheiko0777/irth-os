@@ -35,21 +35,7 @@ export const shopifyOAuthStates = pgTable('shopify_oauth_states', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
-export const shopifyWebhookDeliveries = pgTable('shopify_webhook_deliveries', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  orgId: uuid('org_id').notNull().references(() => organizations.id),
-  connectionId: uuid('connection_id').references(() => shopifyConnections.id),
-  webhookId: text('webhook_id').notNull(),
-  topic: text('topic').notNull(),
-  payload: jsonb('payload').notNull(),
-  status: text('status').notNull().default('received'),
-  error: text('error'),
-  receivedAt: timestamp('received_at').notNull().defaultNow(),
-  processedAt: timestamp('processed_at'),
-}, (table) => ({
-  orgReceivedIdx: index('shopify_webhook_deliveries_org_received_idx').on(table.orgId, table.receivedAt),
-  deliveryUnique: uniqueIndex('shopify_webhook_deliveries_connection_webhook_idx').on(table.connectionId, table.webhookId),
-}));
+// shopify_webhook_deliveries became inbound_deliveries in 0084 — see ./inbound.ts.
 
 export const storefrontSessions = pgTable('storefront_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),

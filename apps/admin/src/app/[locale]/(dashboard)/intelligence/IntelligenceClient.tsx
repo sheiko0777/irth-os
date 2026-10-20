@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { BrainCircuit, PackageSearch, Send, ShoppingCart, Sparkles, Warehouse } from 'lucide-react';
+import { currency, formatMoney, fromMinor } from '@irth/domain';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -70,20 +71,17 @@ type ApiResponse = {
   error?: string | null;
 };
 
-function formatMinor(minor: string, currency: string, locale: Locale) {
-  const amount = Number(minor) / 100;
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 2,
-  }).format(amount);
+// Minor units stay bigint to the formatter: `Number(minor) / 100` lost
+// precision past 2^53 and assumed every currency has two decimals.
+function formatMinor(minor: string, code: string) {
+  return formatMoney(fromMinor(BigInt(minor), currency(code)));
 }
 
 function stateLabel(state: 'out' | 'low' | 'ok', labels: IntelligenceCopy['labels']) {
   return labels[state];
 }
 
-function ResultCard({ card, locale, labels }: { card: Card; locale: Locale; labels: IntelligenceCopy['labels'] }) {
+function ResultCard({ card, labels }: { card: Card; labels: IntelligenceCopy['labels'] }) {
   if (card.type === 'sales_summary') {
     return (
       <div className="glass rounded-[var(--card-radius)] p-4">
@@ -128,7 +126,7 @@ function ResultCard({ card, locale, labels }: { card: Card; locale: Locale; labe
               <p className="text-xs text-[var(--t3)]">{labels.status}: {item.status}</p>
             </div>
             <p className="text-sm font-semibold text-[var(--t1)] tabular-nums" dir="ltr">
-              {formatMinor(item.totalAmountMinor, item.currency, locale)}
+              {formatMinor(item.totalAmountMinor, item.currency)}
             </p>
           </div>
         ))}
@@ -139,7 +137,7 @@ function ResultCard({ card, locale, labels }: { card: Card; locale: Locale; labe
               <p className="text-xs text-[var(--t3)]">{labels.sku}: {item.sku} · {labels.status}: {item.status}</p>
             </div>
             <div className="text-sm text-[var(--t2)] sm:text-end">
-              <p className="font-semibold text-[var(--t1)] tabular-nums" dir="ltr">{formatMinor(item.priceMinor, item.currency, locale)}</p>
+              <p className="font-semibold text-[var(--t1)] tabular-nums" dir="ltr">{formatMinor(item.priceMinor, item.currency)}</p>
               <p className="text-xs">{labels.quantity}: {item.stock}</p>
             </div>
           </div>
@@ -248,7 +246,7 @@ export function IntelligenceClient({ locale, copy }: { locale: Locale; copy: Int
                       {message.content}
                     </div>
                     {message.cards?.map((card, index) => (
-                      <ResultCard key={`${message.id}-${card.type}-${index}`} card={card} locale={locale} labels={copy.labels} />
+                      <ResultCard key={`${message.id}-${card.type}-${index}`} card={card} labels={copy.labels} />
                     ))}
                   </div>
                 </div>

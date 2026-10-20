@@ -13,7 +13,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 vi.mock('../services/integrations', () => ({ sendWhatsAppTemplate: vi.fn(), sendTransactionalEmail: vi.fn() }));
 
 import { sendTransactionalEmail } from '../services/integrations';
-import { outboxEvents, outboxDeadLetters } from '@irth/db';
+import { auditLog, outboxEvents, outboxDeadLetters } from '@irth/db';
 import { processOutbox, OUTBOX_MAX_ATTEMPTS } from '../workers/outboxWorker';
 
 function orgInviteEvent(overrides: { attempts?: number; payload?: string } = {}) {
@@ -102,6 +102,12 @@ describe('processOutbox — dead-lettering (event-type-agnostic)', () => {
     expect(String(values.payload)).toContain('invitee@test.com');
 
     expect(deletes.some((d) => d.table === outboxEvents)).toBe(true);
+    // CX-05: the dead letter is audited as a cron failure.
+    const audit = inserts.find((i) => i.table === auditLog);
+    expect(audit?.values).toMatchObject({
+      orgId: event.orgId, actorKind: 'cron', channel: 'cron', outcome: 'failed',
+      action: 'OUTBOX_DEAD_LETTERED', resourceId: event.id, reason: 'resend unreachable',
+    });
     // The exhausting attempt does not also write an attempts-bump update —
     // it is removed from the live queue entirely instead.
     expect(updates.some((u) => u.table === outboxEvents)).toBe(false);

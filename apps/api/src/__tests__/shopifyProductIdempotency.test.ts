@@ -48,5 +48,7 @@ describe('upsertShopifyProduct — first-push idempotency', () => {
     expect(graphqlBodies).toHaveLength(2);
     expect(graphqlBodies[0]?.variables.identifier).toEqual(graphqlBodies[1]?.variables.identifier);
     expect(graphqlBodies[0]?.variables.input.handle).toBe('irth-a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
-  });
+    // resetModules + a cold import of the real @irth/db barrel takes 3-5s on
+    // its own, so the 5s default flaked under a full parallel run.
+  }, 30_000);
 });

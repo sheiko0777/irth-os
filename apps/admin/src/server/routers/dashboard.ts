@@ -43,61 +43,60 @@ export const dashboardRouter = router({
 
         // Batch independent queries — O(max latency) instead of O(n × latency)
         const [
-            ordersTodayQuery,
+            ordersCountsQuery,
             revenueTodayQuery,
-            pendingOrdersQuery,
             activeProductsQuery,
-            ordersYesterdayQuery,
             revenueYesterdayQuery,
             dailyOrdersQuery,
             dailyRevenueQuery,
             pipelineQuery,
-        ] = await Promise.all([
-            ctx.withOrg((tx) => tx
-                .select({ count: count() })
-                .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, startOfDay)))),
-            // Revenue reads the ledger (CLAUDE.md rule 2), never orders: net
-            // sales ex-VAT, less returns, dated when the sale was recognised.
-            ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfDay })),
-            ctx.withOrg((tx) => tx
-                .select({ count: count() })
-                .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), eq(orders.status, 'pending')))),
-            ctx.withOrg((tx) => tx
-                .select({ count: count() })
-                .from(products)
-                .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active')))),
-            ctx.withOrg((tx) => tx
-                .select({ count: count() })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    gte(orders.createdAt, startOfYesterday),
-                    lt(orders.createdAt, startOfDay),
-                ))),
-            ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: startOfYesterday, to: startOfDay })),
-            ctx.withOrg((tx) => tx
-                .select({
-                    day: sql<string>`${dayBucket}::date::text`,
-                    orderCount: count(),
-                })
-                .from(orders)
-                .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, sparkFrom)))
-                .groupBy(dayBucket)
-                .orderBy(dayBucket)),
-            // Same source as revenueToday so the headline and its trend line
-            // measure the same thing.
-            ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: sparkFrom })),
-            ctx.withOrg((tx) => tx
-                .select({ status: orders.status, count: count() })
-                .from(orders)
-                .where(eq(orders.orgId, ctx.orgId))
-                .groupBy(orders.status)),
-        ]);
+        ] = await ctx.withOrg(async (tx) => {
+            return [
+                await tx
+                    .select({
+                        ordersToday: sql<number>`count(*) filter (where ${orders.createdAt} >= ${startOfDay.toISOString()})::int`,
+                        pendingOrders: sql<number>`count(*) filter (where ${orders.status} = 'pending')::int`,
+                        ordersYesterday: sql<number>`count(*) filter (where ${orders.createdAt} >= ${startOfYesterday.toISOString()} and ${orders.createdAt} < ${startOfDay.toISOString()})::int`,
+                    })
+                    .from(orders)
+                    .where(and(
+                        eq(orders.orgId, ctx.orgId),
+                        or(
+                            gte(orders.createdAt, startOfYesterday),
+                            eq(orders.status, 'pending')
+                        )
+                    )),
+                // Revenue reads the ledger (CLAUDE.md rule 2), never orders: net
+                // sales ex-VAT, less returns, dated when the sale was recognised.
+                await salesTotals(tx, ctx.orgId, { from: startOfDay }),
+                await tx
+                    .select({ count: count() })
+                    .from(products)
+                    .where(and(eq(products.orgId, ctx.orgId), eq(products.status, 'active'))),
+                await salesTotals(tx, ctx.orgId, { from: startOfYesterday, to: startOfDay }),
+                await tx
+                    .select({
+                        day: sql<string>`${dayBucket}::date::text`,
+                        orderCount: count(),
+                    })
+                    .from(orders)
+                    .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, sparkFrom)))
+                    .groupBy(dayBucket)
+                    .orderBy(dayBucket),
+                // Same source as revenueToday so the headline and its trend line
+                // measure the same thing.
+                await dailyNetSales(tx, ctx.orgId, { from: sparkFrom }),
+                await tx
+                    .select({ status: orders.status, count: count() })
+                    .from(orders)
+                    .where(eq(orders.orgId, ctx.orgId))
+                    .groupBy(orders.status),
+            ] as const;
+        });
 
-        const ordersToday = ordersTodayQuery[0]?.count ?? 0;
-        const ordersYesterday = ordersYesterdayQuery[0]?.count ?? 0;
+        const ordersToday = ordersCountsQuery[0]?.ordersToday ?? 0;
+        const pendingOrders = ordersCountsQuery[0]?.pendingOrders ?? 0;
+        const ordersYesterday = ordersCountsQuery[0]?.ordersYesterday ?? 0;
 
         const revenueTodayMinor = revenueTodayQuery.netSalesMinor;
         const revenueYesterdayMinor = revenueYesterdayQuery.netSalesMinor;
@@ -127,7 +126,7 @@ export const dashboardRouter = router({
             data: {
                 ordersToday,
                 revenueToday: fromMinor(revenueTodayMinor),
-                pendingOrders: pendingOrdersQuery[0]?.count ?? 0,
+                pendingOrders,
                 activeProducts: activeProductsQuery[0]?.count ?? 0,
                 deltas: {
                     ordersToday: countDelta(ordersToday, ordersYesterday),
@@ -152,30 +151,32 @@ export const dashboardRouter = router({
     getAlerts: requirePermission('dashboard', 'view').query(async ({ ctx }) => {
         const lateBefore = new Date(Date.now() - LATE_ORDER_HOURS * 60 * 60 * 1000);
 
-        const [lateOrdersQuery, outOfStockQuery, pendingReturnsQuery] = await Promise.all([
-            ctx.withOrg((tx) => tx
-                .select({ count: count() })
-                .from(orders)
-                .where(and(
-                    eq(orders.orgId, ctx.orgId),
-                    inArray(orders.status, ['pending', 'confirmed']),
-                    lt(orders.createdAt, lateBefore),
-                ))),
-            ctx.withOrg((tx) => tx
-                .select({ count: count() })
-                .from(inventoryItems)
-                .where(and(
-                    eq(inventoryItems.orgId, ctx.orgId),
-                    lteOp(inventoryItems.quantity, 0),
-                ))),
-            ctx.db
-                .select({ count: count() })
-                .from(orderReturns)
-                .where(and(
-                    eq(orderReturns.orgId, ctx.orgId),
-                    eq(orderReturns.status, 'requested'),
-                )),
-        ]);
+        const [lateOrdersQuery, outOfStockQuery, pendingReturnsQuery] = await ctx.withOrg(async (tx) => {
+            return [
+                await tx
+                    .select({ count: count() })
+                    .from(orders)
+                    .where(and(
+                        eq(orders.orgId, ctx.orgId),
+                        inArray(orders.status, ['pending', 'confirmed']),
+                        lt(orders.createdAt, lateBefore),
+                    )),
+                await tx
+                    .select({ count: count() })
+                    .from(inventoryItems)
+                    .where(and(
+                        eq(inventoryItems.orgId, ctx.orgId),
+                        lteOp(inventoryItems.quantity, 0),
+                    )),
+                await tx
+                    .select({ count: count() })
+                    .from(orderReturns)
+                    .where(and(
+                        eq(orderReturns.orgId, ctx.orgId),
+                        eq(orderReturns.status, 'requested'),
+                    )),
+            ] as const;
+        });
 
         return {
             data: {

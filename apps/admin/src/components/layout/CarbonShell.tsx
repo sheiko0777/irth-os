@@ -241,7 +241,10 @@ export function CarbonShell({
             aria-controls={expanded ? "irth-main-navigation" : undefined}
             aria-expanded={expanded}
             isActive={expanded}
-            isCollapsible
+            // Not collapsible: Carbon then hides the toggle from its lg
+            // breakpoint (66rem, the same query as `desktop` above), so a
+            // docked desktop sidebar shows no ✕ in the top bar. Below lg it
+            // opens the modal drawer.
             onClick={() =>
               desktop
                 ? setDesktopOpen((value) => !value)

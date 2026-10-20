@@ -1,5 +1,6 @@
 import { serverCaller } from '@/server/caller';
 import { BarChart } from '@/components/charts/BarChart';
+import { formatNumber } from '@irth/domain';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,11 +10,12 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { AnalyticsTabs } from './AnalyticsTabs';
 
 function fmt(n: number) {
-  return n.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return formatNumber(Math.round(n));
 }
 
 function fmtCurrency(n: number) {
-  return `${fmt(n)} ج.م`;
+  // LRI…PDI isolate: amount then mark, even inside an RTL sentence.
+  return `⁦${fmt(n)} ج.م⁩`;
 }
 
 function GrowthBadge({ pct }: { pct: number | null }) {

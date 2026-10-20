@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronRight, ChevronLeft } from 'lucide-react';
+import { formatNumber } from '@irth/domain';
 import { Button } from '@/components/ui/button';
 
 interface PaginationProps {
@@ -11,7 +12,7 @@ interface PaginationProps {
 }
 
 /**
- * RTL-aware pagination control. Arabic numerals via toLocaleString('ar-EG').
+ * RTL-aware pagination control. Digits via the shared formatNumber (Western).
  * In RTL, "previous" sits on the right (ChevronRight) and "next" on the left.
  */
 export function Pagination({ page, pageSize, total, onPageChange }: PaginationProps) {
@@ -25,9 +26,9 @@ export function Pagination({ page, pageSize, total, onPageChange }: PaginationPr
     <div
       className="flex items-center justify-between gap-4 py-3 text-sm text-[var(--t2)]"
     >
-      <span>
-        عرض {from.toLocaleString('ar-EG')}–{to.toLocaleString('ar-EG')} من{' '}
-        {total.toLocaleString('ar-EG')}
+      <span className="tabular-nums">
+        عرض <bdi dir="ltr">{formatNumber(from)}–{formatNumber(to)}</bdi> من{' '}
+        {formatNumber(total)}
       </span>
       <div className="flex items-center gap-2">
         <Button
@@ -39,8 +40,8 @@ export function Pagination({ page, pageSize, total, onPageChange }: PaginationPr
           <ChevronRight size={16} />
           السابق
         </Button>
-        <span className="text-[var(--t1)]">
-          صفحة {page.toLocaleString('ar-EG')} من {totalPages.toLocaleString('ar-EG')}
+        <span className="text-[var(--t1)] tabular-nums">
+          صفحة {formatNumber(page)} من {formatNumber(totalPages)}
         </span>
         <Button
           variant="outline"

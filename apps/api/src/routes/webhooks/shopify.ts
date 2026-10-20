@@ -4,15 +4,17 @@ import { getDb, getEnv } from '../../db';
 import {
   orders, orderItems, customers, productVariants, inventoryItems, inventoryMovements,
   inventoryDiscrepancies, inventoryLevelDiscrepancies, orgMembers, notifications,
-  shopifyConnections, shopifyWebhookDeliveries, storefrontSessions, storefrontEvents,
+  shopifyConnections, inboundDeliveries, storefrontSessions, storefrontEvents,
   withOrgContext, withAudit, jsonSafe,
   nextDocumentNumber, formatDocumentNumber,
   emitOutboxEvent, buildOrderNotification, OUTBOX_EVENT_BY_STATUS,
+  isUniqueViolation, upsertIdentity,
 } from '@irth/db';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
 import { UnsupportedCurrencyError, assertSupportedCurrency } from '@irth/domain';
 import { hashOpaque } from '../../services/shopifyConnection';
+import { shopifyInboxRoute } from './shopifyInbox';
 import {
   applyShopifyOrderLines, blockedReasonFor, findUnmappedLines, notifyAdminsOfBlockedImport,
   notifyAdminsOfStockShortfall, shopifyGid, shopifyMoneyToMinor, snapshotShopifyOrder,
@@ -37,6 +39,7 @@ import {
  */
 
 const shopifyWebhookRoute = new Hono();
+shopifyWebhookRoute.route('/inbox', shopifyInboxRoute);
 
 /**
  * Legacy single-tenant fallback. The org every webhook wrote into before
@@ -118,6 +121,11 @@ type DeliveryClaim =
  * same as a browser) rather than read back via `.returning()` — this insert
  * otherwise matches the prior version's shape exactly, so it stays
  * compatible with every existing test's mock of a plain `insert(...).values(...)`.
+ *
+ * OR-01: the row lives in `inbound_deliveries` and also keeps the evidence —
+ * the exact bytes the HMAC was checked over (`rawBody`, set by
+ * verifyShopifyWebhook), their sha256, the x-shopify-* headers, and the API
+ * version / event id / triggered-at Shopify sent.
  */
 async function claimDelivery(
   db: ReturnType<typeof getDb>,
@@ -127,42 +135,87 @@ async function claimDelivery(
   payload: unknown,
 ): Promise<DeliveryClaim> {
   if (!resolved.connectionId) return { kind: 'unrecorded' };
-  const webhookId = c.req.header('x-shopify-webhook-id');
-  if (!webhookId) return { kind: 'unrecorded' };
+  const deliveryKey = c.req.header('x-shopify-webhook-id');
+  if (!deliveryKey) return { kind: 'unrecorded' };
 
   const deliveryId = crypto.randomUUID();
+  const rawBytes: unknown = c.get('rawBytes');
+  const raw: unknown = c.get('rawBody');
+  // Set by verifyShopifyWebhook from the body it HMAC-checked; never guess it.
+  const rawBody = rawBytes instanceof Uint8Array
+    ? rawBytes
+    : typeof raw === 'string'
+      ? new TextEncoder().encode(raw)
+      : null;
+  if (!rawBody) throw new Error('claimDelivery: rawBody not set by verifyShopifyWebhook');
+  const headers = shopifyEvidenceHeaders(c.req.header());
   try {
-    await db.insert(shopifyWebhookDeliveries).values({
-      id: deliveryId, orgId: resolved.orgId, connectionId: resolved.connectionId, webhookId, topic,
+    await db.insert(inboundDeliveries).values({
+      id: deliveryId, orgId: resolved.orgId, provider: 'shopify', connectionId: resolved.connectionId, deliveryKey, topic,
+      rawBody, headers, bodySha256: await sha256Hex(rawBody),
+      apiVersion: headers['x-shopify-api-version'] ?? null,
+      eventId: headers['x-shopify-event-id'] ?? null,
+      triggeredAt: parseTimestamp(headers['x-shopify-triggered-at']),
       payload: payload as object, status: 'received',
     });
     await db.update(shopifyConnections).set({ lastWebhookAt: new Date() }).where(eq(shopifyConnections.id, resolved.connectionId));
     return { kind: 'new', deliveryId };
   } catch (err) {
-    if ((err as { code?: string }).code !== '23505') throw err;
+    // A redelivery reaches the status lookup below (see pgError.ts for why
+    // the code is not on err.code).
+    if (!isUniqueViolation(err)) throw err;
   }
 
   // Redelivery — decide based on durable state, not mere existence.
-  const [existing] = await db.select({ id: shopifyWebhookDeliveries.id, status: shopifyWebhookDeliveries.status })
-    .from(shopifyWebhookDeliveries)
-    .where(and(eq(shopifyWebhookDeliveries.connectionId, resolved.connectionId), eq(shopifyWebhookDeliveries.webhookId, webhookId)));
+  const [existing] = await db.select({ id: inboundDeliveries.id, status: inboundDeliveries.status })
+    .from(inboundDeliveries)
+    .where(and(
+      eq(inboundDeliveries.provider, 'shopify'),
+      eq(inboundDeliveries.connectionId, resolved.connectionId),
+      eq(inboundDeliveries.deliveryKey, deliveryKey),
+    ));
   if (existing?.status === 'processed') return { kind: 'processed' };
   return { kind: 'retry', deliveryId: existing?.id ?? '' };
 }
 
+/** Only Shopify's own headers are evidence; Authorization/cookies never reach the row. */
+function shopifyEvidenceHeaders(all: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(all ?? {})) {
+    const key = name.toLowerCase();
+    if (key.startsWith('x-shopify-')) out[key] = value;
+  }
+  return out;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function parseTimestamp(value: string | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 async function markDeliveryProcessed(executor: DbOrTx, deliveryId: string): Promise<void> {
   if (!deliveryId) return;
-  await executor.update(shopifyWebhookDeliveries)
+  await executor.update(inboundDeliveries)
     .set({ status: 'processed', processedAt: new Date() })
-    .where(eq(shopifyWebhookDeliveries.id, deliveryId));
+    .where(eq(inboundDeliveries.id, deliveryId));
 }
 
 async function markDeliveryFailed(db: ReturnType<typeof getDb>, deliveryId: string, error: unknown): Promise<void> {
   if (!deliveryId) return;
   try {
-    await db.update(shopifyWebhookDeliveries)
-      .set({ status: 'failed', error: error instanceof Error ? error.message : String(error) })
-      .where(eq(shopifyWebhookDeliveries.id, deliveryId));
+    await db.update(inboundDeliveries)
+      .set({
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+        attempts: sql`${inboundDeliveries.attempts} + 1`,
+      })
+      .where(eq(inboundDeliveries.id, deliveryId));
   } catch {
     // Best-effort — called from a catch block about to rethrow the real
     // error; a failure writing this marker must never mask that error.
@@ -212,12 +265,50 @@ function parseWebhookBody<T>(raw: string): T | null {
   }
 }
 
-async function findOrCreateCustomer(
-  tx: Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0],
+type WebhookTx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
+
+/**
+ * DM-06 (additive): the customers row stays the source of truth for the
+ * lookup below; this also records the connection-scoped identities so
+ * customer_identities fills in as deliveries arrive. Insert-or-nothing — an
+ * identity already held (even by another customer) is left alone; merging is
+ * an explicit operation, never a side effect of a webhook.
+ */
+async function recordShopifyIdentities(
+  tx: WebhookTx,
   orgId: string,
+  connectionId: string | null,
+  customerId: string,
+  shopifyCustomerId: string | null,
+  email: string | null | undefined,
+): Promise<void> {
+  if (shopifyCustomerId) {
+    await upsertIdentity(tx, orgId, { customerId, kind: 'shopify', connectionId, externalId: shopifyCustomerId, verified: true });
+  }
+  if (email) await upsertIdentity(tx, orgId, { customerId, kind: 'email', connectionId, externalId: email });
+}
+
+async function findOrCreateCustomer(
+  tx: WebhookTx,
+  orgId: string,
+  connectionId: string | null,
   payload: ShopifyCustomerPayload | null | undefined,
+  // A guest checkout's token stands in for the customer id on the legacy
+  // customers row, but it is not a Shopify customer: record its email only.
+  guestCheckout = false,
 ): Promise<string | null> {
   if (!payload) return null;
+  const customerId = await findOrCreateCustomerRow(tx, orgId, payload);
+  const shopifyCustomerId = guestCheckout ? null : shopifyGid('Customer', payload.id);
+  await recordShopifyIdentities(tx, orgId, connectionId, customerId, shopifyCustomerId, payload.email);
+  return customerId;
+}
+
+async function findOrCreateCustomerRow(
+  tx: WebhookTx,
+  orgId: string,
+  payload: ShopifyCustomerPayload,
+): Promise<string> {
   const shopifyCustomerId = shopifyGid('Customer', payload.id);
 
   const [existing] = await tx.select().from(customers)
@@ -305,7 +396,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
   let result;
   try {
     result = await withOrgContext(db, orgId, async (tx) => {
-    const customerId = await findOrCreateCustomer(tx, orgId, payload.customer);
+    const customerId = await findOrCreateCustomer(tx, orgId, resolved.connectionId, payload.customer);
     const snapshot = snapshotShopifyOrder(payload);
     const totalMinor = shopifyMoneyToMinor(payload.total_price);
     const paymentMethod = payload.payment_gateway_names?.some(name => /cash on delivery|\bcod\b/i.test(name)) ? 'cod' : 'online';
@@ -338,7 +429,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
         return row;
       }, {
         orgId,
-        userId: null,
+        userId: null, actorKind: 'webhook', channel: 'webhook',
         action: 'SHOPIFY_ORDER_BLOCKED',
         tableName: 'orders',
         changes: { shopifyOrderId, orderNumber: blockedNumber, unmapped },
@@ -386,7 +477,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
       return row;
     }, {
       orgId,
-      userId: null,
+      userId: null, actorKind: 'webhook', channel: 'webhook',
       action: 'SHOPIFY_ORDER_CREATE',
       tableName: 'orders',
       changes: { shopifyOrderId, orderNumber, unmatchedSkus },
@@ -430,7 +521,7 @@ shopifyWebhookRoute.post('/orders-create', verifyShopifyWebhook(), async (c: Con
     // nothing caught the violation it raises, so the losing request
     // surfaced as an unhandled 500 instead of the same idempotent response
     // the pre-check already returns for a genuine duplicate delivery.
-    if ((err as { code?: string }).code === '23505') {
+    if (isUniqueViolation(err)) {
       const [synced] = await db.select({ id: orders.id }).from(orders)
         .where(and(eq(orders.orgId, orgId), eq(orders.shopifyOrderId, shopifyOrderId)));
       if (synced) {
@@ -484,7 +575,7 @@ shopifyWebhookRoute.post('/orders-updated', verifyShopifyWebhook(), async (c: Co
       return row;
     }, {
       orgId,
-      userId: null,
+      userId: null, actorKind: 'webhook', channel: 'webhook',
       action: 'SHOPIFY_ORDER_UPDATE',
       tableName: 'orders',
       changes: { oldStatus: existing.status, newStatus },
@@ -541,9 +632,12 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
     // restocking the requested amount for a floored line would inflate
     // stock beyond what was ever removed. This is new: cancelling a Shopify
     // order never gave inventory back before.
-    const items = await tx.select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
+    // A custom_nonstock line (variant_id NULL, 0086) never took stock, so it
+    // has nothing to restock: skip it rather than look up a NULL variant.
+    const items = (await tx.select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
       .from(orderItems)
-      .where(eq(orderItems.orderId, existing.id));
+      .where(eq(orderItems.orderId, existing.id)))
+      .flatMap((item) => (item.variantId === null ? [] : [{ variantId: item.variantId, quantity: item.quantity }]));
     const discrepancyRows = await tx.select({
       variantId: inventoryDiscrepancies.variantId,
       appliedQuantity: inventoryDiscrepancies.appliedQuantity,
@@ -595,7 +689,7 @@ shopifyWebhookRoute.post('/orders-cancelled', verifyShopifyWebhook(), async (c: 
     return row;
   }, {
     orgId,
-    userId: null,
+    userId: null, actorKind: 'webhook', channel: 'webhook',
     action: 'SHOPIFY_ORDER_CANCEL',
     tableName: 'orders',
     changes: { oldStatus: existing.status, newStatus: 'cancelled' },
@@ -628,7 +722,7 @@ shopifyWebhookRoute.post('/customers-upsert', verifyShopifyWebhook(), async (c: 
 
   try {
     const customerId = await withOrgContext(db, orgId, async (tx) => {
-      const id = await findOrCreateCustomer(tx, orgId, payload);
+      const id = await findOrCreateCustomer(tx, orgId, resolved.connectionId, payload);
       if (delivery.kind !== 'unrecorded') await markDeliveryProcessed(tx, delivery.deliveryId);
       return id;
     });
@@ -744,11 +838,11 @@ shopifyWebhookRoute.post('/checkouts-upsert', verifyShopifyWebhook(), async (c: 
     await withOrgContext(db, orgId, async (tx) => {
       let customerId: string | null = null;
       if (payload.customer || payload.email || payload.phone) {
-        customerId = await findOrCreateCustomer(tx, orgId, payload.customer ?? {
+        customerId = await findOrCreateCustomer(tx, orgId, connectionId, payload.customer ?? {
           id: payload.token || String(payload.id),
           email: payload.email,
           phone: payload.phone,
-        });
+        }, !payload.customer);
       }
 
       const clientRaw = payload.token || payload.cart_token || String(payload.id);

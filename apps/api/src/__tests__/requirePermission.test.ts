@@ -5,14 +5,31 @@
  * orgResolution.test.ts for the buildApp() + app.request() pattern this
  * follows.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
-import { effectiveAccess, type EffectiveAccess, type Role } from '@irth/db';
+import { auditLog, effectiveAccess, resetDenialThrottle, DENIAL_CAP_PER_MINUTE, type EffectiveAccess, type Role } from '@irth/db';
 import { requirePermission } from '../middlewares/requirePermission';
 
-function buildApp(ctx: { orgId?: string; role?: Role; access?: EffectiveAccess }) {
+// Denials are audited through withOrg(c, …); record the rows instead of
+// touching a database.
+const audited = vi.hoisted(() => [] as Record<string, unknown>[]);
+vi.mock('../db', () => ({
+  withOrg: vi.fn(async (_c: unknown, fn: (tx: unknown) => Promise<unknown>) => fn({
+    insert: (table: unknown) => ({
+      values: async (row: Record<string, unknown>) => { if (table === auditLog) audited.push(row); },
+    }),
+  })),
+}));
+
+beforeEach(() => {
+  audited.length = 0;
+  resetDenialThrottle();
+});
+
+function buildApp(ctx: { orgId?: string; role?: Role; access?: EffectiveAccess; userId?: string }) {
   const app = new Hono();
   app.use('*', async (c, next) => {
+    if (ctx.userId !== undefined) c.set('userId', ctx.userId);
     if (ctx.orgId !== undefined) c.set('orgId', ctx.orgId);
     if (ctx.role !== undefined) c.set('role', ctx.role);
     const access = ctx.access ?? (ctx.role ? effectiveAccess({ systemKey: ctx.role }) : undefined);
@@ -71,5 +88,51 @@ describe('requirePermission', () => {
     const res = await buildApp({ orgId: 'org-1', role: 'owner', access: effectiveAccess({ systemKey: 'member' }) })
       .request('/products/p1', { method: 'DELETE' });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('requirePermission — denials are audited (CX-05)', () => {
+  it('a 403 writes exactly one outcome=denied row with the route, not the request body', async () => {
+    const res = await buildApp({ orgId: 'org-1', role: 'member', userId: 'user-1' })
+      .request('/products/p1', { method: 'DELETE', body: JSON.stringify({ secret: 'do-not-log' }) });
+    expect(res.status).toBe(403);
+    expect(audited).toHaveLength(1);
+    expect(audited[0]).toMatchObject({
+      orgId: 'org-1', userId: 'user-1', action: 'PERMISSION_DENIED', outcome: 'denied', channel: 'api',
+      changes: { path: 'DELETE /products/:id', permission: 'products.delete' },
+    });
+    expect(JSON.stringify(audited[0])).not.toContain('do-not-log');
+  });
+
+  it('an allowed call and a 401 write nothing', async () => {
+    await buildApp({ orgId: 'org-1', role: 'member', userId: 'user-1' }).request('/products');
+    await buildApp({ role: 'member', userId: 'user-1' }).request('/products');
+    expect(audited).toHaveLength(0);
+  });
+
+  it(`caps at ${DENIAL_CAP_PER_MINUTE} rows per actor per minute; the next denial writes nothing but still 403s`, async () => {
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('userId', 'user-1');
+      c.set('orgId', 'org-1');
+      c.set('access', effectiveAccess({ systemKey: 'member' }));
+      await next();
+    });
+    // Distinct routes, so the per-path dedupe does not hide the per-actor cap.
+    for (let i = 0; i <= DENIAL_CAP_PER_MINUTE; i++) {
+      app.delete(`/r${i}`, requirePermission('products', 'delete'), (c) => c.json({ ok: true }));
+    }
+    for (let i = 0; i <= DENIAL_CAP_PER_MINUTE; i++) {
+      expect((await app.request(`/r${i}`, { method: 'DELETE' })).status).toBe(403);
+    }
+    expect(audited).toHaveLength(DENIAL_CAP_PER_MINUTE);
+  });
+
+  it('repeats of the same denied route collapse to one row per minute', async () => {
+    const app = buildApp({ orgId: 'org-1', role: 'member', userId: 'user-1' });
+    for (let i = 0; i < 3; i++) {
+      expect((await app.request(`/products/p${i}`, { method: 'DELETE' })).status).toBe(403);
+    }
+    expect(audited).toHaveLength(1);
   });
 });

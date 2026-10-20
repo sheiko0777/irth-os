@@ -101,6 +101,27 @@ describe('logger — structured JSON output', () => {
     expect(a).not.toBe(b);
     expect(a).toMatch(/^[0-9a-f-]{36}$/i);
   });
+
+  it('redacts PII fields in sanitize', () => {
+    const log = createLogger({
+      customerEmail: 'test@example.com',
+      phone: '+1234567890',
+      homeAddress: '123 Fake St',
+      nonPii: 'hello',
+    });
+    log.info('message', { userEmail: 'user@example.com', userPhone: '987654321', shippingAddress: '456 Real St', other: 'world' });
+
+    const parsed = JSON.parse(lines[0]) as Record<string, unknown>;
+    expect(parsed.customerEmail).toBe('[redacted]');
+    expect(parsed.phone).toBe('[redacted]');
+    expect(parsed.homeAddress).toBe('[redacted]');
+    expect(parsed.nonPii).toBe('hello');
+    
+    expect(parsed.userEmail).toBe('[redacted]');
+    expect(parsed.userPhone).toBe('[redacted]');
+    expect(parsed.shippingAddress).toBe('[redacted]');
+    expect(parsed.other).toBe('world');
+  });
 });
 
 // ─── provider metrics ─────────────────────────────────────────────────────

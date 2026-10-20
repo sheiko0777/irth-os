@@ -18,9 +18,11 @@ import type { DbTx } from './index';
  * entry (recognition), not by when the order was placed.
  *
  * One currency at a time: amounts in different currencies cannot be added
- * (rule 1). Callers pass the org's presentation currency; lines in any other
- * currency are excluded rather than summed as if they were the same unit,
- * until ledger v2 carries functional-currency amounts.
+ * (rule 1). Reads the functional amounts (ledger v2, 0080) of lines whose
+ * functional currency is the one asked for — every entity whose functional
+ * currency differs is excluded rather than summed as if it were the same unit.
+ * For single-currency data functional = transaction amount, so the figures
+ * are what they were before 0080.
  */
 export interface SalesWindow {
     from: Date;
@@ -41,7 +43,7 @@ const SALES_CODES = [ACCOUNT_CODES.SALES_REVENUE, ACCOUNT_CODES.SALES_RETURNS, A
 function windowConditions(orgId: string, window: SalesWindow) {
     return [
         eq(journalLines.orgId, orgId),
-        eq(journalLines.currency, window.currency ?? 'EGP'),
+        eq(journalLines.functionalCurrency, window.currency ?? 'EGP'),
         inArray(accounts.code, SALES_CODES),
         gte(journalEntries.entryDate, window.from),
         ...(window.to ? [lt(journalEntries.entryDate, window.to)] : []),
@@ -49,7 +51,7 @@ function windowConditions(orgId: string, window: SalesWindow) {
 }
 
 // credit - debit: positive for sales and VAT collected, negative for returns.
-const signedNet = sql<string>`COALESCE(SUM(${journalLines.creditMinor} - ${journalLines.debitMinor}), 0)::text`;
+const signedNet = sql<string>`COALESCE(SUM(${journalLines.functionalCreditMinor} - ${journalLines.functionalDebitMinor}), 0)::text`;
 
 function totalsFrom(byCode: Map<string, bigint>): SalesTotals {
     const netSalesMinor = (byCode.get(ACCOUNT_CODES.SALES_REVENUE) ?? 0n) + (byCode.get(ACCOUNT_CODES.SALES_RETURNS) ?? 0n);

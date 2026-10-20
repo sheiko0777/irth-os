@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
-import { db, resolveActiveOrgMembership, resolveEffectiveAccess, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, canAccess, transactionSettings, auditLog, hiddenKeys, redact, type ActionFor, type Resource } from '@irth/db';
+import { db, resolveActiveOrgMembership, resolveEffectiveAccess, withOrgContext, withIdempotency, markIdempotencyEffect, IdempotencyError, canAccess, transactionSettings, logDenial, hiddenKeys, redact, type ActionFor, type Resource } from '@irth/db';
 import { verifySession } from '@/lib/auth';
 
 export const createContext = async () => {
@@ -200,36 +200,10 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next, path }) =>
     return hidden.size === 0 ? result : { ...result, data: redact(result.data, hidden) };
 });
 
-/**
- * A refused call is evidence — someone probing, or a role missing something
- * they need — so it goes to the audit log (PR-1d). At most one row per member,
- * procedure and minute per server instance, so a client retrying in a loop
- * cannot flood the table; and never at the cost of the refusal itself, which
- * stands whether or not the row is written.
- */
-const DENIAL_WINDOW_MS = 60_000;
-const recentDenials = new Map<string, number>();
-
-async function recordDenied(ctx: Pick<Context, 'orgId' | 'userId' | 'withOrg'>, path: string, permission: string) {
-    const key = `${ctx.orgId}:${ctx.userId}:${path}`;
-    const now = Date.now();
-    const last = recentDenials.get(key);
-    if (last !== undefined && now - last < DENIAL_WINDOW_MS) return;
-    recentDenials.set(key, now);
-    if (recentDenials.size > 10_000) recentDenials.clear();
-    try {
-        await ctx.withOrg((tx) => tx.insert(auditLog).values({
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            action: 'PERMISSION_DENIED',
-            tableName: 'permissions',
-            recordId: null,
-            changes: { path, permission },
-        }));
-    } catch {
-        // The refusal is what matters; a lost audit row must not turn it into a 500.
-    }
-}
+// A refused call is evidence, so it is audited (outcome='denied', PR-1d/CX-05)
+// through logDenial in packages/db/src/auditDenial.ts — the same throttled
+// helper apps/api uses: one row per member, procedure and minute, at most 20
+// per member per minute, and never at the cost of the refusal itself.
 
 // Requires the caller to hold resource.action — the ONLY authorization gate
 // for tenant procedures. Checked against ctx.access, resolved per request from
@@ -249,7 +223,10 @@ export function requirePermission<R extends Resource>(resource: R, action: Actio
             throw new TRPCError({ code: 'FORBIDDEN', message: 'PASSWORD_CHANGE_REQUIRED' });
         }
         if (!canAccess(ctx.access, resource, action)) {
-            await recordDenied(ctx, path, `${String(resource)}.${String(action)}`);
+            await logDenial(ctx.withOrg, {
+                orgId: ctx.orgId, userId: ctx.userId, path,
+                permission: `${String(resource)}.${String(action)}`, channel: 'admin',
+            });
             throw new TRPCError({ code: 'FORBIDDEN', message: `Missing permission: ${String(resource)}.${String(action)}` });
         }
         return next({ ctx });

@@ -1,0 +1,51 @@
+{
+  "fetchStatus": {
+    "items": "fetch_failed",
+    "paginationComplete": false
+  },
+  "blockers": [
+    {
+      "code": "hydrate_failed",
+      "section": "items"
+    },
+    {
+      "code": "pagination_incomplete",
+      "section": "items"
+    }
+  ],
+  "sections": {
+    "identity": {
+      "status": "loaded"
+    },
+    "items": {
+      "status": "fetch_failed"
+    },
+    "buyer": {
+      "status": "loaded"
+    },
+    "addresses": {
+      "status": "loaded"
+    },
+    "price": {
+      "status": "loaded"
+    },
+    "currency": {
+      "status": "loaded"
+    },
+    "payment": {
+      "status": "loaded"
+    },
+    "fulfillment": {
+      "status": "loaded"
+    },
+    "returns": {
+      "status": "loaded"
+    },
+    "context": {
+      "status": "loaded"
+    },
+    "evidence": {
+      "status": "loaded"
+    }
+  }
+}

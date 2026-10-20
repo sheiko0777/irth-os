@@ -7,8 +7,8 @@
  * semantics.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
-import { formatDocumentNumber, nextDocumentNumber, organizations, withOrgContext } from '@irth/db';
+import { eq, sql } from 'drizzle-orm';
+import { formatDocumentNumber, legalEntities, nextDocumentNumber, organizations, withOrgContext } from '@irth/db';
 import { closeTestDb, testDb, truncateAll } from './helpers/testDb';
 
 let orgA: string;
@@ -100,6 +100,78 @@ describe('nextDocumentNumber', () => {
 
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.org_id === orgA)).toBe(true);
+  });
+});
+
+describe('per-legal-entity series (DM-04, 0081)', () => {
+  let defaultEntityA: string;
+  let entityA2: string;
+  let defaultEntityB: string;
+
+  const defaultEntityOf = async (orgId: string) => {
+    const [org] = await testDb.select({ id: organizations.stockOwnerEntityId })
+      .from(organizations).where(eq(organizations.id, orgId));
+    return org.id!;
+  };
+
+  beforeAll(async () => {
+    defaultEntityA = await defaultEntityOf(orgA);
+    defaultEntityB = await defaultEntityOf(orgB);
+    const [e] = await withOrgContext(testDb, orgA, (tx) => tx.insert(legalEntities).values({
+      orgId: orgA, code: `E2${Date.now()}`, name: 'Second entity', documentPrefix: 'E2',
+    }).returning({ id: legalEntities.id }));
+    entityA2 = e.id;
+  });
+
+  it('two entities claim invoice concurrently; each series is gapless and independent', async () => {
+    const N = 10;
+    const claim = (entity: string) =>
+      withOrgContext(testDb, orgA, (tx) => nextDocumentNumber(tx, orgA, 'invoice', entity));
+    // Interleaved so both series are contended at the same time.
+    const claimed = await Promise.all(
+      Array.from({ length: 2 * N }, (_, i) =>
+        claim(i % 2 === 0 ? defaultEntityA : entityA2).then((n) => ({ entity: i % 2, n }))),
+    );
+    const series = (entity: number) =>
+      claimed.filter((c) => c.entity === entity).map((c) => c.n).sort((x, y) => x - y);
+    const oneToN = Array.from({ length: N }, (_, i) => i + 1);
+    expect(series(0)).toEqual(oneToN);
+    expect(series(1)).toEqual(oneToN);
+  });
+
+  it('a rolled-back claim leaves no gap in an entity series', async () => {
+    const before = await withOrgContext(testDb, orgA, (tx) =>
+      nextDocumentNumber(tx, orgA, 'credit_note', entityA2));
+    await expect(
+      withOrgContext(testDb, orgA, async (tx) => {
+        await nextDocumentNumber(tx, orgA, 'credit_note', entityA2);
+        throw new Error('simulated failure after claiming a number');
+      }),
+    ).rejects.toThrow('simulated failure');
+    const after = await withOrgContext(testDb, orgA, (tx) =>
+      nextDocumentNumber(tx, orgA, 'credit_note', entityA2));
+    expect(after).toBe(before + 1);
+  });
+
+  it('omitting the entity continues the default entity series', async () => {
+    const implicit = await withOrgContext(testDb, orgA, (tx) => nextDocumentNumber(tx, orgA, 'order'));
+    const explicit = await withOrgContext(testDb, orgA, (tx) =>
+      nextDocumentNumber(tx, orgA, 'order', defaultEntityA));
+    expect(explicit).toBe(implicit + 1);
+    // ...and a second entity's order series is untouched by it.
+    const other = await withOrgContext(testDb, orgA, (tx) => nextDocumentNumber(tx, orgA, 'order', entityA2));
+    expect(other).toBe(1);
+  });
+
+  it('keys the counter row by (org, entity, kind)', async () => {
+    const rows = await withOrgContext(testDb, orgA, async (tx) => [...await tx.execute<{ legal_entity_id: string }>(sql`
+      SELECT legal_entity_id FROM org_document_counters WHERE kind = 'invoice'`)]);
+    expect(rows.map((r) => r.legal_entity_id).sort()).toEqual([defaultEntityA, entityA2].sort());
+  });
+
+  it('refuses an entity that belongs to another org (composite FK)', async () => {
+    await expect(withOrgContext(testDb, orgA, (tx) =>
+      nextDocumentNumber(tx, orgA, 'invoice', defaultEntityB))).rejects.toThrow();
   });
 });
 

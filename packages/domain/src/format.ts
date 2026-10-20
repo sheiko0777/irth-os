@@ -39,10 +39,11 @@ export interface FormatOptions {
   /** BCP 47 tag. Defaults to Egyptian Arabic, which the admin renders in. */
   locale?: string;
   /**
-   * `ar-EG` uses Arabic-Indic digits (١٢٣٤) by default, which is what the app
-   * shows today. Pass 'latin' where digits must align in a column — Arabic-Indic
-   * glyphs are not tabular in most fonts, so a right-aligned money column
-   * visibly ragged is usually this.
+   * Western digits (`latn`) in every locale, by default: the admin is one
+   * product and a number must read the same on every screen — it used to show
+   * 877.20 on the dashboard and ٧٬٠١٧٫٦٠ on finance because each call site
+   * picked its own. Western digits are also tabular in the UI font, so money
+   * columns align. Pass 'default' only for the locale's native digits.
    */
   digits?: 'default' | 'latin';
   /** Set false for a bare number, e.g. inside a column already headed "ج.م". */
@@ -56,11 +57,16 @@ export interface FormatOptions {
 
 /**
  * BCP 47 tag from FormatOptions: the caller's `locale` (default `ar-EG`), with
- * the `-u-nu-latn` Unicode extension appended when latin digits are requested.
+ * the `-u-nu-latn` Unicode extension appended unless native digits are asked for.
  */
 function resolveLocale(options: FormatOptions): string {
   const base = options.locale ?? 'ar-EG';
-  return options.digits === 'latin' ? `${base}-u-nu-latn` : base;
+  return options.digits === 'default' ? base : `${base}-u-nu-latn`;
+}
+
+/** A plain count or quantity, grouped, Western digits: 7017 -> "7,017". */
+export function formatNumber(n: number | bigint, options: FormatOptions = {}): string {
+  return new Intl.NumberFormat(resolveLocale(options), { maximumFractionDigits: 2 }).format(n);
 }
 
 function numberFormat(c: Currency, options: FormatOptions): Intl.NumberFormat {
@@ -75,7 +81,7 @@ function numberFormat(c: Currency, options: FormatOptions): Intl.NumberFormat {
 }
 
 /**
- * Renders an amount with its symbol, e.g. "١٬٢٣٤٫٥٦ ج.م".
+ * Renders an amount with its symbol, e.g. "1,234.56 ج.م".
  *
  * The decimal string is handed to Intl directly rather than converted to a
  * number: `Number` loses precision past 2^53, and the whole point of holding
@@ -125,7 +131,7 @@ export function formatDate(
   return options.withTime ? date.toLocaleString(locale) : date.toLocaleDateString(locale);
 }
 
-/** Basis points as a percentage, e.g. 1400 -> "١٤٪". */
+/** Basis points as a percentage, e.g. 1400 -> "14%". */
 export function formatRate(basisPoints: number, options: FormatOptions = {}): string {
   const locale = resolveLocale(options);
   const percent = basisPoints / 100;

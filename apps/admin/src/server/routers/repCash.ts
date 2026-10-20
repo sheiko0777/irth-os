@@ -91,7 +91,8 @@ export const repCashRouter = router({
             if (receivedMinor > 0n) {
               await postJournalEntry(tx, {
                 orgId: ctx.orgId,
-                journalType: 'cash',
+                journalType: 'cash', entryKind: 'rep_handover',
+                dimensions: { counterpartyKind: 'member', counterpartyId: row.memberId },
                 description: 'استلام عهدة مندوب',
                 sourceTable: 'rep_cash_handovers',
                 sourceId: row.id,
@@ -140,7 +141,8 @@ export const repCashRouter = router({
           const handoverCurrency = assertSupportedCurrency(row.currency);
           await postJournalEntry(tx, {
             orgId: ctx.orgId,
-            journalType: 'general',
+            journalType: 'general', entryKind: 'rep_shortage_writeoff',
+            dimensions: { counterpartyKind: 'member', counterpartyId: row.memberId },
             description: 'تسوية عجز عهدة مندوب',
             sourceTable: 'rep_cash_handovers',
             sourceId: row.id,

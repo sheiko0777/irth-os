@@ -216,12 +216,12 @@ export const accountsRouter = router({
 
   /** The brands, suppliers and price lists a scope can name — as far as the caller can see them. */
   scopeOptions: requirePermission('members', 'changeRole').query(async ({ ctx }) => {
-    const [brandRows, supplierRows, pricelistRows] = await ctx.withOrg((tx) => Promise.all([
-      tx.select({ id: brands.id, name: brands.name }).from(brands).where(eq(brands.orgId, ctx.orgId)).orderBy(asc(brands.name)),
-      tx.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(eq(suppliers.orgId, ctx.orgId)).orderBy(asc(suppliers.name)),
-      tx.select({ id: priceLists.id, name: priceLists.name }).from(priceLists).where(eq(priceLists.orgId, ctx.orgId)).orderBy(asc(priceLists.name)),
-    ]));
-    return { data: { brands: brandRows, suppliers: supplierRows, pricelists: pricelistRows }, error: null, meta: null };
+    return await ctx.withOrg(async (tx) => {
+      const brandRows = await tx.select({ id: brands.id, name: brands.name }).from(brands).where(eq(brands.orgId, ctx.orgId)).orderBy(asc(brands.name));
+      const supplierRows = await tx.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(eq(suppliers.orgId, ctx.orgId)).orderBy(asc(suppliers.name));
+      const pricelistRows = await tx.select({ id: priceLists.id, name: priceLists.name }).from(priceLists).where(eq(priceLists.orgId, ctx.orgId)).orderBy(asc(priceLists.name));
+      return { data: { brands: brandRows, suppliers: supplierRows, pricelists: pricelistRows }, error: null, meta: null };
+    });
   }),
 
   /**
@@ -249,11 +249,10 @@ export const accountsRouter = router({
         const target = await loadMember(tx, ctx.orgId, input.memberId);
         assertMayManage(ctx, target);
         // Every id must be a brand or supplier of this org (and visible to the caller).
-        const [foundBrands, foundSuppliers, foundPricelists] = await Promise.all([
-          next.brand.length ? tx.select({ id: brands.id }).from(brands).where(and(eq(brands.orgId, ctx.orgId), inArray(brands.id, next.brand))) : [],
-          next.supplier.length ? tx.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.orgId, ctx.orgId), inArray(suppliers.id, next.supplier))) : [],
-          next.pricelist.length ? tx.select({ id: priceLists.id }).from(priceLists).where(and(eq(priceLists.orgId, ctx.orgId), inArray(priceLists.id, next.pricelist))) : [],
-        ]);
+        const foundBrands = next.brand.length ? await tx.select({ id: brands.id }).from(brands).where(and(eq(brands.orgId, ctx.orgId), inArray(brands.id, next.brand))) : [];
+        const foundSuppliers = next.supplier.length ? await tx.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.orgId, ctx.orgId), inArray(suppliers.id, next.supplier))) : [];
+        const foundPricelists = next.pricelist.length ? await tx.select({ id: priceLists.id }).from(priceLists).where(and(eq(priceLists.orgId, ctx.orgId), inArray(priceLists.id, next.pricelist))) : [];
+
         if (foundBrands.length !== next.brand.length || foundSuppliers.length !== next.supplier.length || foundPricelists.length !== next.pricelist.length) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'براند أو مورد أو قائمة أسعار غير موجودة.' });
         }

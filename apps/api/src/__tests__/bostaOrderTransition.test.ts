@@ -6,6 +6,8 @@ import * as dbExports from '@irth/db';
 vi.mock('../db', () => ({
   db: { select: vi.fn() },
   getDb: vi.fn(),
+  // The handler reads the shared-secret org pin through envVar() -> getEnv().
+  getEnv: () => ({}),
 }));
 
 // Signature verification is covered separately; supply its raw-body contract.
@@ -54,7 +56,12 @@ describe('Bosta order status — atomic transition wiring', () => {
 
     const response = await post({ trackingNumber: 'F02', state: 'Delivered' });
     expect(response.status).toBe(200);
-    expect(transition).toHaveBeenCalledExactlyOnceWith(tx, { orgId, orderId, newStatus: 'delivered' });
+    expect(transition).toHaveBeenCalledExactlyOnceWith(tx, {
+      orgId,
+      orderId,
+      newStatus: 'delivered',
+      onlyIfPreviousStatusIn: ['pending', 'confirmed', 'payment_failed', 'shipped', 'delivered']
+    });
     return { tx, posting, outbox };
   }
 

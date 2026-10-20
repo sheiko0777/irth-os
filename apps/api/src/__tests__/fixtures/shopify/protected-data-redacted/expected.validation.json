@@ -1,0 +1,47 @@
+{
+  "fetchStatus": {
+    "buyer": "permission_denied",
+    "addresses": "permission_denied"
+  },
+  "blockers": [
+    {
+      "code": "buyer_unavailable",
+      "section": "buyer"
+    }
+  ],
+  "sections": {
+    "identity": {
+      "status": "loaded"
+    },
+    "items": {
+      "status": "loaded"
+    },
+    "buyer": {
+      "status": "permission_denied"
+    },
+    "addresses": {
+      "status": "permission_denied"
+    },
+    "price": {
+      "status": "loaded"
+    },
+    "currency": {
+      "status": "loaded"
+    },
+    "payment": {
+      "status": "loaded"
+    },
+    "fulfillment": {
+      "status": "loaded"
+    },
+    "returns": {
+      "status": "loaded"
+    },
+    "context": {
+      "status": "loaded"
+    },
+    "evidence": {
+      "status": "loaded"
+    }
+  }
+}

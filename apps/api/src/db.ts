@@ -79,15 +79,6 @@ export const dbContext = (): MiddlewareHandler => async (c, next) => {
  * has its own copy of the same env var, on Vercel) is visible at a glance
  * instead of failing silently — see apps/admin's `/api/health` for the other half.
  */
-export function getDbHost(): string | null {
-  const url = envRef?.DATABASE_URL ?? process.env.DATABASE_URL;
-  if (!url) return null;
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
-}
 
 export function getDb(): DbInstance {
   if (cached) return cached;

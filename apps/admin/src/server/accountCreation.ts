@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
+import { randomInt } from 'node:crypto';
 import { account, memberScopes, orgMembers, user, type DbTx } from '@irth/db';
 import type { Context } from './trpc';
 import { pgCode } from './permissionInput';
@@ -19,8 +20,7 @@ export const usernameSchema = z.string().trim().toLowerCase().min(3).max(30).reg
 const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 
 export function temporaryPassword(length = 12): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(length));
-  return Array.from(bytes, (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]).join('');
+  return Array.from({ length }, () => PASSWORD_ALPHABET[randomInt(0, PASSWORD_ALPHABET.length)]).join('');
 }
 
 /** Accounts without an email still need one (Better Auth requires it). `.invalid` never delivers. */

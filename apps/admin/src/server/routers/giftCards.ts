@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { router, requirePermission } from '../trpc';
-import { giftCards, giftCardTransactions, withAudit, postJournalEntry, ACCOUNT_CODES, MAX_IDEMPOTENCY_KEY_LENGTH, paginationOffset, paginationMeta } from '@irth/db';
+import { giftCards, giftCardTransactions, orders, withAudit, postJournalEntry, ACCOUNT_CODES, MAX_IDEMPOTENCY_KEY_LENGTH, paginationOffset, paginationMeta } from '@irth/db';
 import { paginationInputSchema } from '../pagination';
-import { eq, and, desc, sql, ne, count } from 'drizzle-orm';
+import { eq, and, desc, sql, ne, count, or, isNull, gt } from 'drizzle-orm';
+import { randomInt } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { assertSupportedCurrency, currency, fromMinor, parseDecimal } from '@irth/domain';
 
@@ -12,9 +13,8 @@ function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const segments = [4, 4, 4].map(() =>
     Array.from({ length: 4 }, () => {
-      // SECURITY: Math.random() is predictable. Use Web Crypto API for secure gift card generation.
-      const randomVal = crypto.getRandomValues(new Uint32Array(1))[0];
-      return chars[randomVal % chars.length];
+      // SECURITY: Math.random() is predictable. Use node:crypto for secure gift card generation without modulo bias.
+      return chars[randomInt(0, chars.length)];
     }).join('')
   );
   return segments.join('-');
@@ -82,12 +82,19 @@ export const giftCardsRouter = router({
         recipientEmail: z.string().email().optional(),
         message: z.string().optional(),
         expiresAt: z.date().optional(),
+        idempotencyKey: z.string().min(1).max(MAX_IDEMPOTENCY_KEY_LENGTH),
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) =>
+      ctx.idempotent('giftCards.create', input.idempotencyKey, input, async () => {
       const code = generateCode();
       const giftCardCurrency = currency(input.currency);
       const initialAmountMinor = parseDecimal(String(input.initialAmount), giftCardCurrency).minor;
+      // moneyInput accepts any string, so a zero or negative amount would parse
+      // here; a card must open with a positive balance.
+      if (initialAmountMinor <= 0n) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'قيمة غير صالحة' });
+      }
       // The card and its opening ledger line are one transaction: a card
       // issued without its `issue` row is a liability with no record of where
       // it came from, and the transaction history no longer reconciles to the
@@ -132,7 +139,7 @@ export const giftCardsRouter = router({
         if (initialAmountMinor > 0n) {
           await postJournalEntry(tx, {
             orgId: ctx.orgId,
-            journalType: 'general',
+            journalType: 'general', entryKind: 'gift_card_issued',
             description: `Gift card issued — ${code}`,
             sourceTable: 'gift_cards',
             sourceId: issued.id,
@@ -149,7 +156,7 @@ export const giftCardsRouter = router({
       });
 
       return { data: card, error: null };
-    }),
+    })),
 
   topup: requirePermission('giftCards', 'write')
     .input(z.object({
@@ -175,6 +182,10 @@ export const giftCardsRouter = router({
       // this statement would otherwise credit a cancelled card and flip it
       // back to 'active', reviving a balance that was written off.
       const amountMinor = parseDecimal(String(input.amount), currency(card.currency)).minor;
+      // A negative string would otherwise drain the balance with no ledger entry.
+      if (amountMinor <= 0n) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'قيمة غير صالحة' });
+      }
 
       const updated = await ctx.withOrg(async (tx) => {
         const [row] = await tx
@@ -262,7 +273,42 @@ export const giftCardsRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'قيمة غير صالحة' });
       }
 
+      const cardCurrency = assertSupportedCurrency(card.currency);
+
       const updated = await ctx.withOrg(async (tx) => {
+        // A card that pays for an order SETTLES that order's receivable: the
+        // order's delivered entry already booked the revenue and VAT (Dr AR /
+        // Cr revenue), so crediting revenue again here counted the sale twice
+        // and left the receivable open. The order row is locked so concurrent
+        // redemptions against one order serialise and cannot exceed its total.
+        let receivableAccount: string | null = null;
+        if (input.orderId) {
+          const [order] = await tx
+            .select({ paymentMethod: orders.paymentMethod, totalAmountMinor: orders.totalAmountMinor, currency: orders.currency })
+            .from(orders)
+            .where(and(eq(orders.id, input.orderId), eq(orders.orgId, ctx.orgId)))
+            .for('update');
+          if (!order) throw new TRPCError({ code: 'BAD_REQUEST', message: 'الطلب غير موجود' });
+          if (order.currency !== card.currency) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'عملة الطلب لا تطابق عملة البطاقة' });
+          }
+          const [prior] = await tx
+            .select({ total: sql<string | null>`COALESCE(SUM(${giftCardTransactions.amountMinor}), 0)` })
+            .from(giftCardTransactions)
+            .where(and(
+              eq(giftCardTransactions.orgId, ctx.orgId),
+              eq(giftCardTransactions.orderId, input.orderId),
+              eq(giftCardTransactions.txType, 'redeem'),
+            ));
+          if (BigInt(prior?.total ?? '0') + amountMinor > order.totalAmountMinor) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'مبلغ البطاقة يتجاوز إجمالي الطلب' });
+          }
+          // Same rule as the delivered entry: anything not 'online' is COD.
+          receivableAccount = order.paymentMethod === 'online'
+            ? ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_ONLINE
+            : ACCOUNT_CODES.ACCOUNTS_RECEIVABLE_COD;
+        }
+
         const [row] = await tx
           .update(giftCards)
           .set({
@@ -279,6 +325,8 @@ export const giftCardsRouter = router({
             eq(giftCards.orgId, ctx.orgId),
             eq(giftCards.status, 'active'),
             sql`${giftCards.balanceMinor} >= ${amountMinor}`,
+            // An expired card cannot be spent (a NULL expiry never expires).
+            or(isNull(giftCards.expiresAt), gt(giftCards.expiresAt, new Date())),
           ))
           .returning();
 
@@ -296,19 +344,21 @@ export const giftCardsRouter = router({
           orderId: input.orderId ?? null,
         });
 
-        // The card was used to pay for goods/services: the deferred revenue
-        // recognised at issuance becomes real revenue now.
+        // Spending the card extinguishes the liability recorded when it was
+        // issued. With an order, the other side clears that order's receivable
+        // (no new revenue - the delivered entry already booked it). With no
+        // order there is nothing else recognising the sale, so it is booked as
+        // revenue as before (note: that standalone path carries no VAT split).
         await postJournalEntry(tx, {
           orgId: ctx.orgId,
-          journalType: 'general',
+          journalType: 'general', entryKind: 'gift_card_redeemed', defaultChannel: true, dimensions: { orderId: input.orderId ?? null },
           description: `Gift card redeemed — ${card.code}`,
           sourceTable: 'gift_cards',
           sourceId: input.id,
           createdBy: ctx.userId,
           lines: [
-            // Provisional: defaulted to EGP pending gift_cards acquiring a currency column.
-            { accountCode: ACCOUNT_CODES.GIFT_CARD_LIABILITY, currency: assertSupportedCurrency('EGP'), debitMinor: amountMinor },
-            { accountCode: ACCOUNT_CODES.SALES_REVENUE, currency: assertSupportedCurrency('EGP'), creditMinor: amountMinor },
+            { accountCode: ACCOUNT_CODES.GIFT_CARD_LIABILITY, currency: cardCurrency, debitMinor: amountMinor },
+            { accountCode: receivableAccount ?? ACCOUNT_CODES.SALES_REVENUE, currency: cardCurrency, creditMinor: amountMinor },
           ],
         });
 

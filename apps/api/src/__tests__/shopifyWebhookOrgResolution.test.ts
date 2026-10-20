@@ -47,10 +47,10 @@ const CONNECTION_B = { id: 'conn-b', orgId: 'org-b' };
 let connectionsByDomain: Record<string, (typeof CONNECTION_A & { status?: string }) | undefined> = {};
 let lastQueriedDomain = '';
 let lastWebhookIdHeader = '';
-let deliveryInsertCalls: Array<{ orgId: string; connectionId: string | null; webhookId: string }> = [];
+let deliveryInsertCalls: Array<{ orgId: string; connectionId: string | null; deliveryKey: string }> = [];
 let seenWebhookIds = new Set<string>();
 // F01's fix (claimDelivery) adds a THIRD select — a redelivery's own
-// {id, status} lookup on shopify_webhook_deliveries — so call order is no
+// {id, status} lookup on inbound_deliveries — so call order is no
 // longer a safe way to distinguish these from each other or from the
 // product_variants check below. Branching on the `cols` argument passed to
 // `select(cols)` instead: resolveWebhookOrg's connection lookup always
@@ -90,8 +90,8 @@ vi.mock('../db', () => ({
       })),
     })),
     insert: vi.fn(() => ({
-      values: vi.fn((row: { orgId: string; connectionId: string | null; webhookId: string; status?: string }) => {
-        const key = `${row.connectionId}:${row.webhookId}`;
+      values: vi.fn((row: { orgId: string; connectionId: string | null; deliveryKey: string; status?: string }) => {
+        const key = `${row.connectionId}:${row.deliveryKey}`;
         if (seenWebhookIds.has(key)) {
           return Promise.reject(Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' }));
         }
@@ -122,7 +122,7 @@ vi.mock('../db', () => ({
   getEnv: () => ({}),
 }));
 
-// `shopifyConnections`/`shopifyWebhookDeliveries` need to exist as SOME
+// `shopifyConnections`/`inboundDeliveries` need to exist as SOME
 // truthy object — `where(and(eq(shopifyConnections.shopDomain, …)))` in
 // resolveWebhookOrg evaluates them for real before the mocked `where()`
 // above ever runs — but NOT the real Drizzle table object. `eq()`/`and()`
@@ -144,13 +144,21 @@ vi.mock('../db', () => ({
 // depend on in the first place). Sidestepping it entirely, rather than
 // continuing to chase why, is the robust fix.
 vi.mock('@irth/db', () => ({
+  safeEqual: (left: string, right: string) => left === right,
+  isUniqueViolation: (e: { code?: string; cause?: { code?: string } }) => (e?.cause?.code ?? e?.code) === '23505',
+  emitOutboxEvent: vi.fn(),
   shopifyConnections: { id: 'id', orgId: 'orgId', shopDomain: 'shopDomain', status: 'status' },
-  shopifyWebhookDeliveries: { orgId: 'orgId', connectionId: 'connectionId', webhookId: 'webhookId', topic: 'topic', payload: 'payload' },
+  inboundDeliveries: {
+    id: 'id', orgId: 'orgId', provider: 'provider', connectionId: 'connectionId', deliveryKey: 'deliveryKey',
+    topic: 'topic', rawBody: 'rawBody', headers: 'headers', bodySha256: 'bodySha256', apiVersion: 'apiVersion',
+    eventId: 'eventId', triggeredAt: 'triggeredAt', payload: 'payload', status: 'status', attempts: 'attempts',
+  },
   // Referenced by the /inventory-levels-update handler's variant lookup
   // (`eq(productVariants.orgId, ...)`) even though the mocked `where()`
   // above always makes that lookup miss — the reference is still evaluated
   // to build the (discarded) query expression before `where()` short-circuits.
   productVariants: { orgId: 'orgId', shopifyInventoryItemId: 'shopifyInventoryItemId' },
+  upsertIdentity: vi.fn(),
 }));
 
 import { shopifyWebhookRoute } from '../routes/webhooks/shopify';
@@ -199,7 +207,7 @@ describe('Shopify webhook org resolution', () => {
 
     expect(res.status).toBe(200);
     expect(deliveryInsertCalls).toHaveLength(1);
-    expect(deliveryInsertCalls[0]).toMatchObject({ orgId: 'org-a', connectionId: 'conn-a', webhookId: 'wh-1' });
+    expect(deliveryInsertCalls[0]).toMatchObject({ orgId: 'org-a', connectionId: 'conn-a', deliveryKey: 'wh-1' });
   });
 
   it('two different orgs each get their own webhooks — no cross-tenant bleed', async () => {

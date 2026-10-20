@@ -28,6 +28,15 @@ export interface ProductVariantQrItem {
   binLocation?: string | null;
 }
 
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 interface ProductQrDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -117,7 +126,7 @@ export function ProductQrDialog({
       <html dir="rtl" lang="ar">
         <head>
           <meta charset="utf-8" />
-          <title>ملصق باركود - ${currentSku}</title>
+          <title>ملصق باركود - ${escapeHtml(currentSku)}</title>
           <style>
             ${sizeCss}
             * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -210,13 +219,13 @@ export function ProductQrDialog({
           <div class="label-card">
             <div class="info-col">
               <div>
-                <div class="brand">${activeItem.brand || 'IRTH'}</div>
-                <div class="name">${activeItem.nameAr || activeItem.name}</div>
+                <div class="brand">${escapeHtml(activeItem.brand || 'IRTH')}</div>
+                <div class="name">${escapeHtml(activeItem.nameAr || activeItem.name)}</div>
               </div>
               <div>
-                <div class="sku">${currentSku}</div>
-                ${binLocation ? `<div class="bin-location">الرف: ${binLocation}</div>` : ''}
-                ${currentPriceFormatted ? `<div class="price">${currentPriceFormatted}</div>` : ''}
+                <div class="sku">${escapeHtml(currentSku)}</div>
+                ${binLocation ? `<div class="bin-location">الرف: ${escapeHtml(binLocation)}</div>` : ''}
+                ${currentPriceFormatted ? `<div class="price">${escapeHtml(currentPriceFormatted)}</div>` : ''}
               </div>
             </div>
             <div class="qr-col">

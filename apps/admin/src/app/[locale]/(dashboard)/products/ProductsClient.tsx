@@ -1,5 +1,6 @@
 'use client';
-import { formatMoney, fromMinor, toDecimalString } from '@irth/domain';
+import { Money } from "@/components/ui/Money";
+import { fromMinor, toDecimalString } from '@irth/domain';
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
@@ -324,7 +325,7 @@ export function ProductsClient({ products: initialProducts, categories }: { prod
                                 <TableRow key={p.id}>
                                     <TableCell className="font-medium">{p.name}</TableCell>
                                     <TableCell>{p.sku}</TableCell>
-                                    <TableCell>{formatMoney(fromMinor(p.priceMinor))}</TableCell>
+                                    <TableCell>{<Money value={fromMinor(p.priceMinor)} />}</TableCell>
                                     <TableCell>{p.stock}</TableCell>
                                     <TableCell>{getStatusBadge(p.status)}</TableCell>
                                     <TableCell>{p.category || t("table.noCategory")}</TableCell>

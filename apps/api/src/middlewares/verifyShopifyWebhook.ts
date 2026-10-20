@@ -24,15 +24,17 @@ export function verifyShopifyWebhook(): MiddlewareHandler {
     const signature = c.req.header('X-Shopify-Hmac-Sha256');
     if (!signature) return c.json({ data: null, error: 'Missing signature', meta: null }, 401);
 
-    const body = await c.req.text();
-    const expected = createHmac('sha256', secret).update(body, 'utf8').digest('base64');
+    const bodyBytes = new Uint8Array(await c.req.arrayBuffer());
+    const expected = createHmac('sha256', secret).update(bodyBytes).digest('base64');
 
     if (!safeEqual(signature, expected, 'base64')) {
       return c.json({ data: null, error: 'Invalid signature', meta: null }, 401);
     }
 
-    // Re-attach body for downstream handlers, matching verifyHmac's convention.
-    c.set('rawBody', body);
+    // Re-attach the exact signed bytes plus a decoded copy for legacy handlers
+    // that still parse JSON inline.
+    c.set('rawBytes', bodyBytes);
+    c.set('rawBody', new TextDecoder().decode(bodyBytes));
     await next();
   };
 }

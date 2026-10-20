@@ -255,7 +255,7 @@ export const stocktakingRouter = router({
 
             await postJournalEntry(tx, {
               orgId: ctx.orgId,
-              journalType: 'inventory',
+              journalType: 'inventory', entryKind: 'stocktake_variance',
               description: `Stocktake variance — session ${session.id}`,
               sourceTable: 'stocktaking_sessions',
               sourceId: session.id,

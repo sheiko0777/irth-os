@@ -1,5 +1,6 @@
+import { Money } from "@/components/ui/Money";
 import { serverCaller } from "@/server/caller";
-import { formatMoney, fromMinor } from "@irth/domain";
+import { fromMinor } from "@irth/domain";
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatBox } from "@/components/ui/StatBox";
@@ -57,7 +58,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatBox label={t("summary.loyaltyPoints")} value={customer.loyaltyPoints ?? 0} valueClassName="text-[var(--gold)]" />
         <StatBox label={t("summary.totalOrders")} value={customer.totalOrders ?? 0} />
-        <StatBox label={t("summary.totalSpent")} value={formatMoney(fromMinor(customer.totalSpentMinor ?? 0n))} />
+        <StatBox label={t("summary.totalSpent")} value={<Money value={fromMinor(customer.totalSpentMinor ?? 0n)} />} />
       </div>
 
       <div className="glass rounded-[var(--card-radius)] p-6 space-y-3">

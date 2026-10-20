@@ -1,8 +1,8 @@
 import { router, requirePermission } from '../trpc';
 import { z } from 'zod';
 import { courierShipments, courierRemittances, paginationMeta, paginationOffset, withAudit, postJournalEntry, ACCOUNT_CODES } from '@irth/db';
-import { assertSupportedCurrency, fromMinor, parseDecimal } from '@irth/domain';
-import { eq, and, ne, sum, count } from 'drizzle-orm';
+import { assertSupportedCurrency, formatMoney, fromMinor, parseDecimal } from '@irth/domain';
+import { eq, and, ne, sum, count, sql, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { paginationInputSchema } from '../pagination';
 
@@ -128,6 +128,18 @@ export const courierRouter = router({
         const newRemittance = await ctx.withOrg((tx) => withAudit(
           tx,
           async () => {
+            // Best-effort guard against a race by design (no unique index).
+            const [existing] = await tx
+              .select()
+              .from(courierRemittances)
+              .where(and(
+                eq(courierRemittances.orgId, ctx.orgId),
+                eq(courierRemittances.remittanceReference, input.reference)
+              ));
+            if (existing) {
+              throw new TRPCError({ code: 'CONFLICT', message: 'A remittance with this reference already exists' });
+            }
+
             const [row] = await tx
               .insert(courierRemittances)
               .values({
@@ -180,6 +192,34 @@ export const courierRouter = router({
             throw new TRPCError({ code: 'NOT_FOUND', message: 'Remittance not found' });
           }
 
+          const [shipmentsAggr] = await tx
+            .select({
+              totalCodMinor: sql<string | null>`SUM(${courierShipments.codAmountMinor})`
+            })
+            .from(courierShipments)
+            .where(and(
+              eq(courierShipments.orgId, ctx.orgId),
+              eq(courierShipments.remittanceId, remittance.remittanceReference)
+            ));
+
+          const expectedMinor = BigInt(shipmentsAggr?.totalCodMinor ?? '0');
+
+          if (expectedMinor === 0n && remittance.amountMinor > 0n) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'No COD shipments are linked to this remittance reference',
+            });
+          }
+
+          if (expectedMinor !== remittance.amountMinor) {
+            const expectedStr = formatMoney(fromMinor(expectedMinor, assertSupportedCurrency('EGP')), { symbol: false });
+            const amountStr = formatMoney(fromMinor(remittance.amountMinor, assertSupportedCurrency('EGP')), { symbol: false });
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Remittance amount ${amountStr} does not match the COD total of its linked shipments ${expectedStr}`,
+            });
+          }
+
           // Idempotency without a key: only a remittance that is not already
           // reconciled can transition. A double submit updates zero rows and
           // throws below, rather than writing a second audit row and
@@ -223,7 +263,7 @@ export const courierRouter = router({
           if (remittance.amountMinor > 0n) {
             await postJournalEntry(tx, {
               orgId: ctx.orgId,
-              journalType: 'cash',
+              journalType: 'cash', entryKind: 'courier_remittance',
               description: `COD remitted — ${remittance.remittanceReference}`,
               sourceTable: 'courier_remittances',
               sourceId: remittance.id,
@@ -254,21 +294,23 @@ export const courierRouter = router({
   }),
 
   summary: requirePermission('courier', 'view').query(async ({ ctx }) => {
-    // We will run the aggregations using Promise.all per the memory guidelines
-    const [collectedRes, remittedRes, unremittedRes, statusesRes] = await Promise.all([
-      // The CAST is gone with the column: cod_amount_minor is already bigint,
-      // so sum() aggregates it natively.
-      ctx.withOrg(async (tx) => tx.select({ total: sum(courierShipments.codAmountMinor) })
-        .from(courierShipments)
-        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true)))),
-
-      ctx.withOrg(async (tx) => tx.select({ total: sum(courierShipments.codAmountMinor) })
-        .from(courierShipments)
-        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codRemitted, true)))),
-
-      ctx.withOrg(async (tx) => tx.select({ total: sum(courierShipments.codAmountMinor) })
-        .from(courierShipments)
-        .where(and(eq(courierShipments.orgId, ctx.orgId), eq(courierShipments.codCollected, true), eq(courierShipments.codRemitted, false)))),
+    const [aggregatesRes, statusesRes] = await Promise.all([
+      // Use PostgreSQL FILTER to combine multiple aggregate queries. This is
+      // significantly faster than running them concurrently in separate
+      // Promise.all elements, and reduces database roundtrips.
+      ctx.withOrg(async (tx) => tx.select({
+        totalCollected: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codCollected} = true)`,
+        totalRemitted: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codRemitted} = true)`,
+        totalUnremitted: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codCollected} = true and ${courierShipments.codRemitted} = false)`,
+      })
+      .from(courierShipments)
+      .where(and(
+        eq(courierShipments.orgId, ctx.orgId),
+        or(
+          eq(courierShipments.codCollected, true),
+          eq(courierShipments.codRemitted, true)
+        )
+      ))),
 
       ctx.withOrg(async (tx) => tx.select({ status: courierShipments.courierStatus, count: count() })
         .from(courierShipments)
@@ -286,9 +328,9 @@ export const courierRouter = router({
         // sum() returns a numeric string (null when nothing matched). BigInt
         // keeps it exact; Number would silently cap at 2^53 and reintroduce a
         // float for the COD balance the courier actually owes us.
-        totalCodCollected: fromMinor(BigInt((collectedRes[0]?.total as string | null) ?? '0')),
-        totalCodRemitted: fromMinor(BigInt((remittedRes[0]?.total as string | null) ?? '0')),
-        pendingRemittance: fromMinor(BigInt((unremittedRes[0]?.total as string | null) ?? '0')),
+        totalCodCollected: fromMinor(BigInt((aggregatesRes[0]?.totalCollected as string | null) ?? '0')),
+        totalCodRemitted: fromMinor(BigInt((aggregatesRes[0]?.totalRemitted as string | null) ?? '0')),
+        pendingRemittance: fromMinor(BigInt((aggregatesRes[0]?.totalUnremitted as string | null) ?? '0')),
         shipmentsByStatus,
       },
       error: null,

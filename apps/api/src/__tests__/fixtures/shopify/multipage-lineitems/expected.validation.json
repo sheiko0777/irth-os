@@ -1,0 +1,42 @@
+{
+  "fetchStatus": {
+    "paginationComplete": true,
+    "sourceLineCount": 3
+  },
+  "blockers": [],
+  "sections": {
+    "identity": {
+      "status": "loaded"
+    },
+    "items": {
+      "status": "loaded"
+    },
+    "buyer": {
+      "status": "loaded"
+    },
+    "addresses": {
+      "status": "loaded"
+    },
+    "price": {
+      "status": "loaded"
+    },
+    "currency": {
+      "status": "loaded"
+    },
+    "payment": {
+      "status": "loaded"
+    },
+    "fulfillment": {
+      "status": "loaded"
+    },
+    "returns": {
+      "status": "loaded"
+    },
+    "context": {
+      "status": "loaded"
+    },
+    "evidence": {
+      "status": "loaded"
+    }
+  }
+}

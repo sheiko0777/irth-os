@@ -1,4 +1,5 @@
-import { formatMoney, fromMinor } from "@irth/domain";
+import { Money } from "@/components/ui/Money";
+import { fromMinor } from "@irth/domain";
 import { getTranslations } from 'next-intl/server';
 import { serverCaller } from '@/server/caller';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -92,13 +93,13 @@ export default async function CouponsPage({ searchParams }: { searchParams: Prom
                                                 ? (coupon.percentBp === null ? '-' : t('values.percentage', { value: coupon.percentBp / 100 }))
                                                 : coupon.type === 'free_shipping'
                                                   ? '-'
-                                                  : (coupon.amountMinor === null ? '-' : formatMoney(fromMinor(coupon.amountMinor)))}
+                                                  : (coupon.amountMinor === null ? '-' : <Money value={fromMinor(coupon.amountMinor)} />)}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]">
                                             {coupon.usedCount} {coupon.maxUses ? `/ ${coupon.maxUses}` : ''}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]" dir="ltr">
-                                            {coupon.minOrderAmountMinor === null ? '-' : formatMoney(fromMinor(coupon.minOrderAmountMinor))}
+                                            {coupon.minOrderAmountMinor === null ? '-' : <Money value={fromMinor(coupon.minOrderAmountMinor)} />}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-[var(--t2)]" dir="ltr">
                                             {coupon.expiresAt ? format(new Date(coupon.expiresAt), 'yyyy-MM-dd') : '-'}

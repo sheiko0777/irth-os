@@ -4,6 +4,7 @@ import { db, getDb } from '../../db';
 import { orders, shipmentTracking, auditLog, withOrgContext, emitOutboxEvent, postOrderDeliveredEntry, transitionOrderStatus } from '@irth/db';
 import { eq, and } from 'drizzle-orm';
 import { verifyHmac } from '../../middlewares/verifyWebhook';
+import { pinnedCourierOrgId } from './courierOrgPin';
 
 /**
  * NOTE FOR ANYONE TRYING TO UNDERSTAND BOSTA INTEGRATION: there are TWO live,
@@ -70,12 +71,17 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
   //   planner returned first, which on a collision is an arbitrary tenant.
   //   Failing loudly is the only safe reading: there is no correct way to
   //   choose, and guessing books revenue into someone else's ledger.
+  const pinnedOrgId = pinnedCourierOrgId();
   const matches = await db
     .select()
     .from(shipmentTracking)
     .where(and(
       eq(shipmentTracking.trackingNumber, trackingNumber),
       eq(shipmentTracking.provider, 'bosta'),
+      // The shared HMAC secret only vouches for one org (see courierOrgPin.ts):
+      // without this, a holder of that secret could drive ANOTHER tenant's
+      // order to delivered, posting its revenue and issuing its e-invoice.
+      pinnedOrgId ? eq(shipmentTracking.orgId, pinnedOrgId) : undefined,
     ))
     .limit(2);
 
@@ -114,10 +120,40 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     const [order] = await tx.select().from(orders)
       .where(and(eq(orders.id, shipment.orderId), eq(orders.orgId, shipment.orgId)));
     if (!order) return null;
+
+    const PRE_DELIVERY_STATUSES = ['pending', 'confirmed', 'payment_failed', 'shipped'];
+
+    // webhook-driven 'delivered' is allowed from any pre-delivery status AND is idempotent when already delivered
+    // webhook-driven 'shipped' and 'cancelled' are only allowed from pre-delivery statuses.
+    let onlyIfPreviousStatusIn: string[] | undefined;
+    if (newOrderStatus === 'shipped') {
+      onlyIfPreviousStatusIn = ['pending', 'confirmed', 'payment_failed'];
+    } else if (newOrderStatus === 'cancelled') {
+      onlyIfPreviousStatusIn = PRE_DELIVERY_STATUSES;
+    } else if (newOrderStatus === 'delivered') {
+      onlyIfPreviousStatusIn = [...PRE_DELIVERY_STATUSES, 'delivered'];
+    }
+
     const transition = await transitionOrderStatus(tx, {
       orgId: shipment.orgId, orderId: order.id, newStatus: newOrderStatus,
+      onlyIfPreviousStatusIn
     });
-    if (!transition || transition.previousStatus === newOrderStatus) return null;
+
+    if (!transition || transition.previousStatus === newOrderStatus) {
+      if (order.status === 'delivered' || order.status === 'cancelled') {
+         await tx.insert(auditLog).values({
+           orgId: order.orgId,
+           userId: null,
+           actorKind: 'webhook',
+           channel: 'webhook',
+           action: 'courier_event_ignored_after_delivery',
+           tableName: 'orders',
+           recordId: order.id,
+           changes: { status: order.status, ignoredCourierState: bostaState },
+         });
+      }
+      return null;
+    }
     const { previousStatus } = transition;
 
     // userId: null throughout this file — a webhook has no authenticated
@@ -125,6 +161,8 @@ bostaRoute.post('/', verifyHmac('BOSTA_WEBHOOK_SECRET', 'x-bosta-signature'), as
     await tx.insert(auditLog).values({
       orgId: order.orgId,
       userId: null,
+      actorKind: 'webhook',
+      channel: 'webhook',
       action: 'BOSTA_WEBHOOK_STATUS_UPDATE',
       tableName: 'orders',
       recordId: order.id,

@@ -6,7 +6,7 @@ import { trpc } from '@/lib/trpc';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { formatDate } from '@irth/domain';
+import { formatDate, formatNumber } from '@irth/domain';
 import { FormDialog } from '@/components/ui/FormDialog';
 import { useTranslations } from 'next-intl';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -41,7 +41,7 @@ function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl p-5 border" style={{ background: 'var(--surface)', borderColor: 'var(--rim1)' }}>
       <p className="text-sm mb-1" style={{ color: 'var(--t2)' }}>{label}</p>
-      <p className="text-3xl font-bold" style={{ color: 'var(--gold)' }}>{value.toLocaleString('ar-EG')}</p>
+      <p className="text-3xl font-bold" style={{ color: 'var(--gold)' }}>{formatNumber(value)}</p>
     </div>
   );
 }

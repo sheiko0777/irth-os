@@ -25,15 +25,17 @@ import {
   ArrowDownRight,
   Filter,
 } from 'lucide-react';
+import { formatNumber } from '@irth/domain';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
 function fmt(n: number) {
-  return n.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return formatNumber(Math.round(n));
 }
 
 function fmtCurrency(n: number, currency: string = 'ج.م') {
-  return `${fmt(n)} ${currency === 'EGP' ? 'ج.م' : currency}`;
+  // LRI…PDI isolate: amount then mark, even inside an RTL sentence.
+  return `⁦${fmt(n)} ${currency === 'EGP' ? 'ج.م' : currency}⁩`;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
