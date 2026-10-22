@@ -33,22 +33,24 @@ export const customersRouter = router({
           : undefined,
       );
 
-      // Execute list and count queries concurrently to reduce latency
-      const [data, totalRowResult] = await Promise.all([
-        ctx.withOrg(async (tx) => tx
+      // Execute sequentially inside a single transaction to prevent connection
+      // pool exhaustion
+      const { data, totalRow } = await ctx.withOrg(async (tx) => {
+        const data = await tx
           .select()
           .from(customers)
           .where(whereClause)
           .orderBy(desc(customers.createdAt))
           .limit(input.pageSize)
-          .offset(offset)),
-        ctx.withOrg(async (tx) => tx
+          .offset(offset);
+
+        const totalRowResult = await tx
           .select({ count: count() })
           .from(customers)
-          .where(whereClause))
-      ]);
+          .where(whereClause);
 
-      const totalRow = totalRowResult[0];
+        return { data, totalRow: totalRowResult[0] };
+      });
 
       return {
         data,
