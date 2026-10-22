@@ -29,19 +29,24 @@ export const analyticsRouter = router({
       // everyone, always.
       const sinceIso = daysAgoIso(input.days);
 
-      const [rows, netByDay] = await Promise.all([
-        ctx.withOrg((tx) => tx.execute(sql`
-          SELECT
-            (date_trunc('day', created_at)::date)::text AS day,
-            COUNT(*)::int                               AS orders
-          FROM orders
-          WHERE org_id = ${ctx.orgId}
-            AND created_at >= ${sinceIso}
-            AND status = 'delivered'
-          GROUP BY 1
-        `)),
-        ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: new Date(sinceIso) })),
-      ]);
+      // ⚡ Bolt: Wrap independent queries in a single ctx.withOrg transaction sequentially.
+      // Why: Promise.all over multiple ctx.withOrg calls acquires multiple DB connections concurrently, risking pool exhaustion.
+      // Impact: Reduces connection acquisition overhead per request to exactly 1, significantly improving scale and latency stability under load.
+      const [rows, netByDay] = await ctx.withOrg(async (tx) => {
+        return [
+          await tx.execute(sql`
+            SELECT
+              (date_trunc('day', created_at)::date)::text AS day,
+              COUNT(*)::int                               AS orders
+            FROM orders
+            WHERE org_id = ${ctx.orgId}
+              AND created_at >= ${sinceIso}
+              AND status = 'delivered'
+            GROUP BY 1
+          `),
+          await dailyNetSales(tx, ctx.orgId, { from: new Date(sinceIso) }),
+        ] as const;
+      });
 
       type Row = { day: string; orders: number };
       const ordersByDay = new Map((rows as unknown as Row[]).map((r) => [r.day, Number(r.orders)]));
@@ -158,27 +163,32 @@ export const analyticsRouter = router({
       lastMonthRevenue,
       totalOrders,
       lowStockCount,
-    ] = await Promise.all([
-      ctx.withOrg((tx) => tx
-        .select({ count: count() })
-        .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart)))),
-      // Net sales from the ledger (CLAUDE.md rule 2); see `revenue` above.
-      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: todayStart })),
-      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: thisMonthStart })),
-      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: lastMonthStart, to: thisMonthStart })),
-      ctx.withOrg((tx) => tx
-        .select({ count: count() })
-        .from(orders)
-        .where(eq(orders.orgId, ctx.orgId))),
-      ctx.withOrg((tx) => tx
-        .select({ count: count() })
-        .from(inventoryItems)
-        .where(and(
-          eq(inventoryItems.orgId, ctx.orgId),
-          sql`${inventoryItems.quantity} <= ${inventoryItems.reorderPoint}`
-        ))),
-    ]);
+    ] = await ctx.withOrg(async (tx) => {
+        // ⚡ Bolt: Run independent data queries sequentially inside a single transaction.
+        // Why: Using Promise.all with multiple ctx.withOrg calls acquires up to 6 connections concurrently, breaking isolation and risking pool exhaustion.
+        // Impact: Reduces connection footprint to 1 per request, drastically improving system throughput and eliminating potential race conditions under load.
+      return [
+        await tx
+          .select({ count: count() })
+          .from(orders)
+          .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart))),
+        // Net sales from the ledger (CLAUDE.md rule 2); see `revenue` above.
+        await salesTotals(tx, ctx.orgId, { from: todayStart }),
+        await salesTotals(tx, ctx.orgId, { from: thisMonthStart }),
+        await salesTotals(tx, ctx.orgId, { from: lastMonthStart, to: thisMonthStart }),
+        await tx
+          .select({ count: count() })
+          .from(orders)
+          .where(eq(orders.orgId, ctx.orgId)),
+        await tx
+          .select({ count: count() })
+          .from(inventoryItems)
+          .where(and(
+            eq(inventoryItems.orgId, ctx.orgId),
+            sql`${inventoryItems.quantity} <= ${inventoryItems.reorderPoint}`
+          )),
+      ] as const;
+    });
 
     const todayRevMinor = todayRevenue.netSalesMinor;
     const monthRevMinor = monthRevenue.netSalesMinor;
@@ -504,29 +514,34 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
 
-      const [sessionsRow, eventsRows, ordersRow] = await Promise.all([
-        ctx.withOrg(async (tx) => tx.execute(sql`
-          SELECT COUNT(DISTINCT id)::int AS count
-          FROM storefront_sessions
-          WHERE org_id = ${ctx.orgId} AND first_seen_at >= ${sinceIso}
-        `)),
-        ctx.withOrg(async (tx) => tx.execute(sql`
-          SELECT
-            event_name,
-            COUNT(DISTINCT session_id)::int AS unique_sessions,
-            COUNT(*)::int AS total_events
-          FROM storefront_events
-          WHERE org_id = ${ctx.orgId} AND occurred_at >= ${sinceIso}
-            AND event_name IN ('product_viewed', 'product_added_to_cart', 'cart_viewed', 'checkout_started', 'checkout_completed')
-          GROUP BY event_name
-        `)),
-        ctx.withOrg(async (tx) => tx.execute(sql`
-          SELECT COUNT(*)::int AS count
-          FROM orders
-          WHERE org_id = ${ctx.orgId} AND created_at >= ${sinceIso}
-            AND status != 'cancelled'
-        `)),
-      ]);
+      // ⚡ Bolt: Execute these aggregate funnel queries sequentially inside a single transaction.
+      // Why: Promise.all([ctx.withOrg, ctx.withOrg, ctx.withOrg]) opens 3 concurrent database connections per request, which scales poorly and risks pool exhaustion.
+      // Impact: Single connection acquisition reduces overhead and stabilizes database performance under load.
+      const [sessionsRow, eventsRows, ordersRow] = await ctx.withOrg(async (tx) => {
+        return [
+          await tx.execute(sql`
+            SELECT COUNT(DISTINCT id)::int AS count
+            FROM storefront_sessions
+            WHERE org_id = ${ctx.orgId} AND first_seen_at >= ${sinceIso}
+          `),
+          await tx.execute(sql`
+            SELECT
+              event_name,
+              COUNT(DISTINCT session_id)::int AS unique_sessions,
+              COUNT(*)::int AS total_events
+            FROM storefront_events
+            WHERE org_id = ${ctx.orgId} AND occurred_at >= ${sinceIso}
+              AND event_name IN ('product_viewed', 'product_added_to_cart', 'cart_viewed', 'checkout_started', 'checkout_completed')
+            GROUP BY event_name
+          `),
+          await tx.execute(sql`
+            SELECT COUNT(*)::int AS count
+            FROM orders
+            WHERE org_id = ${ctx.orgId} AND created_at >= ${sinceIso}
+              AND status != 'cancelled'
+          `),
+        ] as const;
+      });
 
       type CountRow = { count: number };
       type EventCountRow = { event_name: string; unique_sessions: number; total_events: number };

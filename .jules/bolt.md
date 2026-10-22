@@ -26,3 +26,7 @@
 ## 2026-10-18 - Fix batch Purchasing PO List Query with single transaction wrapper
 **Learning:** Combining pagination list and count queries into `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` incorrectly acquires multiple database connections concurrently and breaks transaction data isolation, leading to potential pool exhaustion.
 **Action:** When executing batch list and count queries that require transaction-level consistency or isolation, wrap them sequentially inside a single `ctx.withOrg` transaction block to avoid scaling risks.
+
+## 2026-10-23 - Batch Transaction Queries for Analytics Route
+**Learning:** Combining multiple `ctx.withOrg()` transactions using `Promise.all` acquires multiple concurrent database connections and causes pool exhaustion under load, which breaks transaction isolation.
+**Action:** When handling data queries requiring a transaction wrapper, run them sequentially inside a single `ctx.withOrg(async (tx) => { ... })` instead of wrapping each in `ctx.withOrg` inside `Promise.all`.
