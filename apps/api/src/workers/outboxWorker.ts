@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/cloudflare';
 import { db } from '@irth/db';
-import { auditLog, outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, type InboundDeliveryProcessPayload, type InventoryPushPayload, inventoryItems, campaigns, campaignRecipients, customers } from '@irth/db';
+import { auditLog, outboxEvents, outboxDeadLetters, products, productVariants, etaInvoices, buildEtaOrderInput, claimEtaIssuance, shopifyConnections, type EtaInvoiceIssuePayload, type OrgInvitePayload, type ShopifyProductPushPayload, type CampaignRecipientSendPayload, type InventoryPushPayload, inventoryItems, campaigns, campaignRecipients, customers } from '@irth/db';
 import { issueInvoice, buildEtaConfig } from '@irth/domain';
 import { and, eq, lt, lte, or, isNull, inArray, sql } from 'drizzle-orm';
 import { sendWhatsAppTemplate, sendTransactionalEmail } from '../services/integrations';
@@ -10,6 +10,7 @@ import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection, setConnectionInventoryQuantity } from '../services/shopifyConnection';
 import { envVar } from '../utils/env';
 import { handleShopifyOrderReimport } from './shopifyOrderReimport';
+import { blockInboundImportAfterExhaustion, handleInboundCandidateReprocess, handleInboundDeliveryProcess } from './inboundProcess';
 
 interface OrderPayload {
     customerPhone: string;
@@ -382,20 +383,6 @@ async function handleOrgInviteSent(database: typeof db, event: OutboxEvent): Pro
     await markProcessed(database, event.id);
 }
 
-/**
- * Temporary OR-04 stub. OR-10 will hydrate and promote the preserved delivery;
- * until then, processing must be a safe no-op so receipt events do not
- * dead-letter forever.
- */
-async function handleInboundDeliveryProcess(database: typeof db, event: OutboxEvent): Promise<void> {
-    const payload = JSON.parse(event.payload) as InboundDeliveryProcessPayload;
-    console.info('inbound.delivery.process not implemented until OR-10', {
-        orgId: payload.orgId,
-        deliveryId: payload.deliveryId,
-    });
-    await markProcessed(database, event.id);
-}
-
 /** Customer-facing order.confirmed / order.shipped WhatsApp + email notices. */
 async function handleOrderNotification(database: typeof db, event: OutboxEvent): Promise<void> {
     const payload = JSON.parse(event.payload) as OrderPayload;
@@ -485,7 +472,7 @@ async function finalizeDeadLetteredCampaignRecipient(database: typeof db, event:
  * campaign.recipient.send additionally gets its own domain-specific
  * finalization so its campaign can complete.
  */
-async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<void> {
+export async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<void> {
     switch (event.eventType) {
         case 'shopify.product.push':
             return handleShopifyProductPush(database, event);
@@ -504,6 +491,14 @@ async function dispatchEvent(database: typeof db, event: OutboxEvent): Promise<v
             return handleInboundDeliveryProcess(database, event);
         case 'inventory.push':
             return handleInventoryPush(database, event);
+        case 'inbound.candidate.reprocess':
+            return handleInboundCandidateReprocess(database, event);
+        // OR-10 emits these for downstream consumers that do not exist yet.
+        // TODO(IN): replace the ack with reserveForOrder; until then a promoted
+        // order's reservation must be re-derived from orders (no stock moves).
+        case 'order.accepted':
+        case 'inventory.reserve':
+            return markProcessed(database, event.id);
         default:
             throw new Error(`Unknown outbox event type: ${event.eventType}`);
     }
@@ -547,7 +542,7 @@ async function deadLetterEvent(database: typeof db, event: OutboxEvent, errorMes
     }
 }
 
-async function recordEventFailure(database: typeof db, event: OutboxEvent, error: unknown): Promise<void> {
+export async function recordEventFailure(database: typeof db, event: OutboxEvent, error: unknown): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const attemptsAfterThis = event.attempts + 1;
 
@@ -575,6 +570,9 @@ async function recordEventFailure(database: typeof db, event: OutboxEvent, error
         // the dead-letter table.
         if (event.eventType === 'campaign.recipient.send') {
             await finalizeDeadLetteredCampaignRecipient(database, event, errorMessage);
+        }
+        if (event.eventType === 'inbound.delivery.process' || event.eventType === 'inbound.candidate.reprocess') {
+            await blockInboundImportAfterExhaustion(database, event, error);
         }
         return;
     }

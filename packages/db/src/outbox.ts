@@ -22,7 +22,19 @@ import { orgSettings } from './schema/orgSettings';
  */
 const TRACKING_URL_TEMPLATE_KEY = 'shipping.tracking_url_template';
 
-export type OutboxEventType = 'order.confirmed' | 'order.shipped' | 'eta.invoice.issue' | 'org.invite.sent' | 'shopify.product.push' | 'campaign.recipient.send' | 'shopify.order.reimport' | 'inbound.delivery.process' | 'inventory.push';
+export type OutboxEventType =
+    | 'order.confirmed'
+    | 'order.shipped'
+    | 'eta.invoice.issue'
+    | 'org.invite.sent'
+    | 'shopify.product.push'
+    | 'campaign.recipient.send'
+    | 'shopify.order.reimport'
+    | 'inbound.delivery.process'
+    | 'inventory.push'
+    | 'inbound.candidate.reprocess'
+    | 'order.accepted'
+    | 'inventory.reserve';
 
 /**
  * Push one variant's current available stock to Shopify. Just the ids: the
@@ -35,12 +47,29 @@ export interface InventoryPushPayload {
 }
 
 /**
- * Temporary OR-04 receipt event. OR-10 replaces the worker stub with Shopify
- * hydration/normalization/promotion, keyed by the preserved delivery row.
+ * OR-04 receipt event; the OR-10 worker hydrates, normalizes, validates and
+ * promotes the preserved delivery row (apps/api/src/workers/inboundProcess.ts).
  */
 export interface InboundDeliveryProcessPayload {
     orgId: string;
     deliveryId: string;
+}
+
+/** Re-validate (or, with refetch, re-hydrate) a candidate and promote it if clean. */
+export interface InboundCandidateReprocessPayload {
+    orgId: string;
+    candidateId: string;
+    refetch?: boolean;
+}
+
+export interface OrderAcceptedPayload {
+    orgId: string;
+    orderId: string;
+}
+
+export interface InventoryReservePayload {
+    orgId: string;
+    orderId: string;
 }
 
 /**
@@ -171,6 +200,19 @@ export interface OrderNotificationPayload {
  */
 type OutboxWriter = Pick<DbTx, 'insert' | 'rollback'>;
 
+type OutboxPayload =
+    | OrderNotificationPayload
+    | EtaInvoiceIssuePayload
+    | OrgInvitePayload
+    | ShopifyProductPushPayload
+    | CampaignRecipientSendPayload
+    | ShopifyOrderReimportPayload
+    | InboundDeliveryProcessPayload
+    | InventoryPushPayload
+    | InboundCandidateReprocessPayload
+    | OrderAcceptedPayload
+    | InventoryReservePayload;
+
 /**
  * Queues one event for the outbox worker, inside the caller's transaction.
  *
@@ -187,7 +229,7 @@ type OutboxWriter = Pick<DbTx, 'insert' | 'rollback'>;
  */
 export async function emitOutboxEvent(
     tx: OutboxWriter,
-    event: { orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload | ShopifyProductPushPayload | CampaignRecipientSendPayload | ShopifyOrderReimportPayload | InboundDeliveryProcessPayload | InventoryPushPayload },
+    event: { orgId: string; eventType: OutboxEventType; payload: OutboxPayload },
 ): Promise<void> {
     await tx.insert(outboxEvents).values({
         orgId: event.orgId,
@@ -198,7 +240,7 @@ export async function emitOutboxEvent(
 
 export async function emitOutboxEvents(
     tx: OutboxWriter,
-    events: Array<{ orgId: string; eventType: OutboxEventType; payload: OrderNotificationPayload | EtaInvoiceIssuePayload | OrgInvitePayload | ShopifyProductPushPayload | CampaignRecipientSendPayload | ShopifyOrderReimportPayload | InboundDeliveryProcessPayload | InventoryPushPayload }>,
+    events: Array<{ orgId: string; eventType: OutboxEventType; payload: OutboxPayload }>,
 ): Promise<void> {
     await tx.insert(outboxEvents).values(events.map((event) => ({
         orgId: event.orgId,
