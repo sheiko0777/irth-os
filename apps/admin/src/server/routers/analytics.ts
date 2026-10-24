@@ -29,8 +29,8 @@ export const analyticsRouter = router({
       // everyone, always.
       const sinceIso = daysAgoIso(input.days);
 
-      const [rows, netByDay] = await Promise.all([
-        ctx.withOrg((tx) => tx.execute(sql`
+      const [rows, netByDay] = await ctx.withOrg((tx) => Promise.all([
+        tx.execute(sql`
           SELECT
             (date_trunc('day', created_at)::date)::text AS day,
             COUNT(*)::int                               AS orders
@@ -39,9 +39,9 @@ export const analyticsRouter = router({
             AND created_at >= ${sinceIso}
             AND status = 'delivered'
           GROUP BY 1
-        `)),
-        ctx.withOrg((tx) => dailyNetSales(tx, ctx.orgId, { from: new Date(sinceIso) })),
-      ]);
+        `),
+        dailyNetSales(tx, ctx.orgId, { from: new Date(sinceIso) }),
+      ]));
 
       type Row = { day: string; orders: number };
       const ordersByDay = new Map((rows as unknown as Row[]).map((r) => [r.day, Number(r.orders)]));
@@ -158,27 +158,27 @@ export const analyticsRouter = router({
       lastMonthRevenue,
       totalOrders,
       lowStockCount,
-    ] = await Promise.all([
-      ctx.withOrg((tx) => tx
+    ] = await ctx.withOrg((tx) => Promise.all([
+      tx
         .select({ count: count() })
         .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart)))),
+        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart))),
       // Net sales from the ledger (CLAUDE.md rule 2); see `revenue` above.
-      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: todayStart })),
-      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: thisMonthStart })),
-      ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: lastMonthStart, to: thisMonthStart })),
-      ctx.withOrg((tx) => tx
+      salesTotals(tx, ctx.orgId, { from: todayStart }),
+      salesTotals(tx, ctx.orgId, { from: thisMonthStart }),
+      salesTotals(tx, ctx.orgId, { from: lastMonthStart, to: thisMonthStart }),
+      tx
         .select({ count: count() })
         .from(orders)
-        .where(eq(orders.orgId, ctx.orgId))),
-      ctx.withOrg((tx) => tx
+        .where(eq(orders.orgId, ctx.orgId)),
+      tx
         .select({ count: count() })
         .from(inventoryItems)
         .where(and(
           eq(inventoryItems.orgId, ctx.orgId),
           sql`${inventoryItems.quantity} <= ${inventoryItems.reorderPoint}`
-        ))),
-    ]);
+        )),
+    ]));
 
     const todayRevMinor = todayRevenue.netSalesMinor;
     const monthRevMinor = monthRevenue.netSalesMinor;
@@ -504,13 +504,13 @@ export const analyticsRouter = router({
     .query(async ({ ctx, input }) => {
       const sinceIso = daysAgoIso(input.days);
 
-      const [sessionsRow, eventsRows, ordersRow] = await Promise.all([
-        ctx.withOrg(async (tx) => tx.execute(sql`
+      const [sessionsRow, eventsRows, ordersRow] = await ctx.withOrg((tx) => Promise.all([
+        tx.execute(sql`
           SELECT COUNT(DISTINCT id)::int AS count
           FROM storefront_sessions
           WHERE org_id = ${ctx.orgId} AND first_seen_at >= ${sinceIso}
-        `)),
-        ctx.withOrg(async (tx) => tx.execute(sql`
+        `),
+        tx.execute(sql`
           SELECT
             event_name,
             COUNT(DISTINCT session_id)::int AS unique_sessions,
@@ -519,14 +519,14 @@ export const analyticsRouter = router({
           WHERE org_id = ${ctx.orgId} AND occurred_at >= ${sinceIso}
             AND event_name IN ('product_viewed', 'product_added_to_cart', 'cart_viewed', 'checkout_started', 'checkout_completed')
           GROUP BY event_name
-        `)),
-        ctx.withOrg(async (tx) => tx.execute(sql`
+        `),
+        tx.execute(sql`
           SELECT COUNT(*)::int AS count
           FROM orders
           WHERE org_id = ${ctx.orgId} AND created_at >= ${sinceIso}
             AND status != 'cancelled'
-        `)),
-      ]);
+        `),
+      ]));
 
       type CountRow = { count: number };
       type EventCountRow = { event_name: string; unique_sessions: number; total_events: number };
