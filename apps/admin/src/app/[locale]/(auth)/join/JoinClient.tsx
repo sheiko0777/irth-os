@@ -128,27 +128,27 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
     <div
       className="w-full max-w-sm"
     >
-      <div className="rounded-xl border p-8 space-y-6" style={{ borderColor: 'var(--rim1)', background: 'var(--surface)' }}>
+      <div className="glass rounded-[var(--card-radius)] p-8 space-y-6">
         {/* Header */}
         <div className="text-center space-y-1">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl mx-auto mb-4" style={{ background: 'var(--gold-bg)', border: '1px solid var(--gold-br)' }}>
-            <span className="text-2xl font-bold leading-none" style={{ color: 'var(--gold)' }}>إ</span>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl mx-auto mb-4" style={{ background: 'var(--accent-soft)' }}>
+            <span className="text-2xl font-bold leading-none" style={{ color: 'var(--accent)' }}>إ</span>
           </div>
-          <h1 className="text-lg font-bold" style={{ color: 'var(--t1)' }}>
+          <h1 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
             مرحباً بك في {orgName}
           </h1>
-          <p className="text-sm" style={{ color: 'var(--t3)' }}>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
             {mode === 'signup' ? 'أنشئ حسابك للبدء' : mode === 'signin' ? 'سجّل دخولك لقبول الدعوة' : 'أدخل رمز التأكيد المرسل إلى بريدك'}
           </p>
         </div>
 
         {/* Invited email badge */}
-        <div className="rounded-lg px-3 py-2 text-sm text-center" style={{ background: 'var(--gold-bg)', color: 'var(--gold)' }}>
+        <div className="rounded-lg px-3 py-2 text-sm text-center" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
           {email}
         </div>
 
         {error && (
-          <p className="text-sm px-3 py-2 rounded-md" style={{ background: 'var(--rim1)', color: 'var(--crimson)' }}>
+          <p className="text-sm px-3 py-2 rounded-md" style={{ background: 'var(--critical-bg)', color: 'var(--critical)' }}>
             {error}
           </p>
         )}
@@ -156,7 +156,7 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
         {mode === 'otp' ? (
           <form onSubmit={handleOtpSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--t3)' }}>رمز التأكيد</label>
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>رمز التأكيد</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -166,23 +166,23 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
                 placeholder="——————"
                 required
                 dir="ltr"
-                className="w-full text-center text-lg tracking-[0.5em] rounded-lg border px-4 py-2.5 outline-none"
-                style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
+                className="w-full text-center text-lg tracking-[0.5em] rounded-[var(--control-radius)] border px-4 py-2.5 min-h-11 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                style={{ borderColor: 'var(--input-border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-lg text-sm font-bold transition-opacity"
-              style={{ background: 'var(--gold)', color: 'var(--void)', opacity: loading ? 0.6 : 1 }}
+              className="w-full min-h-11 py-2.5 rounded-[var(--control-radius)] text-sm font-semibold transition-opacity"
+              style={{ background: 'var(--accent)', color: 'var(--accent-fg)', opacity: loading ? 0.6 : 1 }}
             >
               {loading ? 'جارٍ التحقق...' : 'تأكيد'}
             </button>
 
-            <p className="text-center text-xs" style={{ color: 'var(--t3)' }}>
+            <p className="text-center text-xs" style={{ color: 'var(--text-secondary)' }}>
               {resent ? (
-                <span style={{ color: 'var(--emerald)' }}>تم إرسال رمز جديد إلى بريدك</span>
+                <span style={{ color: 'var(--success)' }}>تم إرسال رمز جديد إلى بريدك</span>
               ) : (
                 <>
                   لم يصلك الرمز؟{' '}
@@ -191,7 +191,7 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
                     onClick={handleResend}
                     disabled={resending}
                     className="underline"
-                    style={{ color: 'var(--gold)' }}
+                    style={{ color: 'var(--accent)' }}
                   >
                     {resending ? 'جارٍ الإرسال...' : 'إعادة الإرسال'}
                   </button>
@@ -203,43 +203,43 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'signup' && (
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--t3)' }}>الاسم الكامل</label>
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>الاسم الكامل</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e: { target: { value: string } }) => setName(e.target.value)}
                 placeholder="محمد أحمد"
                 required
-                className="w-full text-sm rounded-lg border px-4 py-2.5 outline-none"
-                style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
+                className="w-full text-sm rounded-[var(--control-radius)] border px-4 py-2.5 min-h-11 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                style={{ borderColor: 'var(--input-border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
               />
             </div>
           )}
 
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--t3)' }}>كلمة المرور</label>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>كلمة المرور</label>
             <input
               type="password"
               value={password}
               onChange={(e: { target: { value: string } }) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className="w-full text-sm rounded-lg border px-4 py-2.5 outline-none"
-              style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
+              className="w-full text-sm rounded-[var(--control-radius)] border px-4 py-2.5 min-h-11 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              style={{ borderColor: 'var(--input-border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
             />
           </div>
 
           {mode === 'signup' && (
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--t3)' }}>تأكيد كلمة المرور</label>
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>تأكيد كلمة المرور</label>
               <input
                 type="password"
                 value={confirm}
                 onChange={(e: { target: { value: string } }) => setConfirm(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full text-sm rounded-lg border px-4 py-2.5 outline-none"
-                style={{ borderColor: 'var(--rim2)', background: 'transparent', color: 'var(--t1)' }}
+                className="w-full text-sm rounded-[var(--control-radius)] border px-4 py-2.5 min-h-11 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                style={{ borderColor: 'var(--input-border)', background: 'var(--surface)', color: 'var(--text-primary)' }}
               />
             </div>
           )}
@@ -247,8 +247,8 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-lg text-sm font-bold transition-opacity"
-            style={{ background: 'var(--gold)', color: 'var(--void)', opacity: loading ? 0.6 : 1 }}
+            className="w-full min-h-11 py-2.5 rounded-[var(--control-radius)] text-sm font-semibold transition-opacity"
+            style={{ background: 'var(--accent)', color: 'var(--accent-fg)', opacity: loading ? 0.6 : 1 }}
           >
             {loading ? 'جارٍ المعالجة...' : mode === 'signup' ? 'إنشاء الحساب والانضمام' : 'تسجيل الدخول والانضمام'}
           </button>
@@ -256,14 +256,14 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
         )}
 
         {mode !== 'otp' && (
-        <p className="text-center text-xs" style={{ color: 'var(--t3)' }}>
+        <p className="text-center text-xs" style={{ color: 'var(--text-secondary)' }}>
           {mode === 'signup' ? (
             <>
               لديك حساب بالفعل؟{' '}
               <button
                 onClick={() => { setMode('signin'); setError(''); }}
                 className="underline"
-                style={{ color: 'var(--gold)' }}
+                style={{ color: 'var(--accent)' }}
               >
                 سجّل دخولك
               </button>
@@ -273,7 +273,7 @@ export default function JoinClient({ token, email, orgName, locale }: Props) {
               <button
                 onClick={() => { setMode('signup'); setError(''); }}
                 className="underline"
-                style={{ color: 'var(--gold)' }}
+                style={{ color: 'var(--accent)' }}
               >
                 إنشاء حساب جديد
               </button>
