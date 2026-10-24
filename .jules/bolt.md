@@ -29,3 +29,6 @@
 ## 2026-10-21 - Fix connection pool exhaustion in Admin Routers
 **Learning:** `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside API handlers acquired multiple database connections concurrently, causing connection pool exhaustion under load and breaking transaction data isolation.
 **Action:** When handling data list and count queries requiring a transaction wrapper, run them sequentially inside a single `ctx.withOrg(async (tx) => { ... })` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+## 2026-10-24 - Fix connection pool exhaustion in Analytics Router
+**Learning:** `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside analytics API handlers acquired multiple database connections concurrently for the same request, causing connection pool exhaustion under load and risking transaction-data isolation.
+**Action:** When handling data list and count queries requiring a transaction wrapper, run them securely and efficiently inside a single `ctx.withOrg(async (tx) => { ... })` and pass the single `tx` down into a `Promise.all([ tx.select(...), ... ])` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
