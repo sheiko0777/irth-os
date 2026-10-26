@@ -296,29 +296,32 @@ export const courierRouter = router({
   }),
 
   summary: requirePermission('courier', 'view').query(async ({ ctx }) => {
-    const [aggregatesRes, statusesRes] = await Promise.all([
-      // Use PostgreSQL FILTER to combine multiple aggregate queries. This is
-      // significantly faster than running them concurrently in separate
-      // Promise.all elements, and reduces database roundtrips.
-      ctx.withOrg(async (tx) => tx.select({
-        totalCollected: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codCollected} = true)`,
-        totalRemitted: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codRemitted} = true)`,
-        totalUnremitted: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codCollected} = true and ${courierShipments.codRemitted} = false)`,
-      })
-      .from(courierShipments)
-      .where(and(
-        eq(courierShipments.orgId, ctx.orgId),
-        or(
-          eq(courierShipments.codCollected, true),
-          eq(courierShipments.codRemitted, true)
-        )
-      ))),
-
-      ctx.withOrg(async (tx) => tx.select({ status: courierShipments.courierStatus, count: count() })
+    const [aggregatesRes, statusesRes] = await ctx.withOrg(async (tx) => {
+      const res = await Promise.all([
+        // Use PostgreSQL FILTER to combine multiple aggregate queries. This is
+        // significantly faster than running them concurrently in separate
+        // Promise.all elements, and reduces database roundtrips.
+        tx.select({
+          totalCollected: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codCollected} = true)`,
+          totalRemitted: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codRemitted} = true)`,
+          totalUnremitted: sql<string | null>`sum(${courierShipments.codAmountMinor}) filter (where ${courierShipments.codCollected} = true and ${courierShipments.codRemitted} = false)`,
+        })
         .from(courierShipments)
-        .where(eq(courierShipments.orgId, ctx.orgId))
-        .groupBy(courierShipments.courierStatus))
-    ]);
+        .where(and(
+          eq(courierShipments.orgId, ctx.orgId),
+          or(
+            eq(courierShipments.codCollected, true),
+            eq(courierShipments.codRemitted, true)
+          )
+        )),
+
+        tx.select({ status: courierShipments.courierStatus, count: count() })
+          .from(courierShipments)
+          .where(eq(courierShipments.orgId, ctx.orgId))
+          .groupBy(courierShipments.courierStatus)
+      ]);
+      return [res[0], res[1]] as const;
+    });
 
     const shipmentsByStatus = statusesRes.reduce((acc: Record<string, number>, curr: { status: string; count: number }) => {
       acc[curr.status] = curr.count;
