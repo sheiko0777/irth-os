@@ -32,3 +32,7 @@
 ## 2026-10-24 - Fix connection pool exhaustion in Analytics Router
 **Learning:** `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside analytics API handlers acquired multiple database connections concurrently for the same request, causing connection pool exhaustion under load and risking transaction-data isolation.
 **Action:** When handling data list and count queries requiring a transaction wrapper, run them securely and efficiently inside a single `ctx.withOrg(async (tx) => { ... })` and pass the single `tx` down into a `Promise.all([ tx.select(...), ... ])` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+
+## 2024-05-18 - [Fix Sequential Awaits in Array Literals]
+**Learning:** Using `[await a(), await b()]` executes `a()` completely before executing `b()`. This means the total time taken is `O(n * latency)` rather than `O(max latency)` which was intended for batching independent queries inside `ctx.withOrg`.
+**Action:** When executing independent queries concurrently, always wrap the queries inside `Promise.all([ a(), b() ] as const)` instead of awaiting them sequentially inside an array literal.
