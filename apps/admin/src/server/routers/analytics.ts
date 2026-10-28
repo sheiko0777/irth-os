@@ -152,25 +152,23 @@ export const analyticsRouter = router({
     lastMonthStart.setMonth(lastMonthStart.getMonth() - 1);
 
     const [
-      todayOrders,
+      ordersCountsQuery,
       todayRevenue,
       monthRevenue,
       lastMonthRevenue,
-      totalOrders,
       lowStockCount,
     ] = await ctx.withOrg((tx) => Promise.all([
       tx
-        .select({ count: count() })
+        .select({
+          todayOrders: sql<number>`count(*) filter (where ${orders.createdAt} >= ${todayStart.toISOString()})::int`,
+          totalOrders: count(),
+        })
         .from(orders)
-        .where(and(eq(orders.orgId, ctx.orgId), gte(orders.createdAt, todayStart))),
+        .where(eq(orders.orgId, ctx.orgId)),
       // Net sales from the ledger (CLAUDE.md rule 2); see `revenue` above.
       salesTotals(tx, ctx.orgId, { from: todayStart }),
       salesTotals(tx, ctx.orgId, { from: thisMonthStart }),
       salesTotals(tx, ctx.orgId, { from: lastMonthStart, to: thisMonthStart }),
-      tx
-        .select({ count: count() })
-        .from(orders)
-        .where(eq(orders.orgId, ctx.orgId)),
       tx
         .select({ count: count() })
         .from(inventoryItems)
@@ -187,11 +185,11 @@ export const analyticsRouter = router({
 
     return {
       data: {
-        ordersToday: todayOrders[0]?.count ?? 0,
+        ordersToday: ordersCountsQuery[0]?.todayOrders ?? 0,
         revenueToday: wholeMajorUnits(todayRevMinor.toString()),
         revenueThisMonth: wholeMajorUnits(monthRevMinor.toString()),
         revenueGrowth,
-        totalOrders: totalOrders[0]?.count ?? 0,
+        totalOrders: ordersCountsQuery[0]?.totalOrders ?? 0,
         lowStockCount: lowStockCount[0]?.count ?? 0,
       },
       error: null,
