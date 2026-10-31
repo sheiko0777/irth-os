@@ -84,3 +84,8 @@
 **Vulnerability:** The `ProductQrDialog` component constructed a raw HTML string for barcode label printing via `printWindow.document.write()`. User-controlled fields like product names, SKUs, and bin locations were interpolated directly into this HTML string without sanitization, leading to a Cross-Site Scripting (XSS) vulnerability if malicious input was present.
 **Learning:** Even when outputting to seemingly isolated contexts like `window.open` for printing, raw HTML construction via template literals is a high-risk pattern. The lack of automatic escaping (unlike standard React JSX) leaves all interpolated variables as potential XSS vectors.
 **Prevention:** Whenever constructing raw HTML strings, all dynamic variables must be wrapped in an HTML escaping function (e.g., a simple `escapeHtml` utility) before interpolation to ensure unsafe characters (`&`, `<`, `>`, `"`, `'`) are converted to safe HTML entities.
+
+## 2024-10-31 - [Structured JSON Logger Bypass]
+**Vulnerability:** Unsanitized raw `console.error` calls bypassed the structured JSON logger in `apps/api/src/utils/errors.ts`, risking exposure of sensitive data/PII embedded in Error or payload objects.
+**Learning:** Direct `console.*` calls for errors circumvent the defensive stringification and sanitization rules defined in the custom logger.
+**Prevention:** Always route errors through `createLogger().error()` to ensure fields are safely serialized and PII is redacted.
