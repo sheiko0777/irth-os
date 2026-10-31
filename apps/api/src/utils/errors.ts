@@ -1,4 +1,5 @@
 import { nodeEnv } from './env';
+import { createLogger } from '../lib/logger';
 
 /**
  * `NODE_ENV` is read at request time, not module scope: on Workers
@@ -6,8 +7,10 @@ import { nodeEnv } from './env';
  * always take the "development" branch and leak raw internal error strings —
  * Postgres constraint messages included — to clients in production.
  */
+const logger = createLogger();
+
 export function handleError(error: unknown): string {
-  console.error("API Error:", error);
+  logger.error("API Error", { error });
   if (nodeEnv() === "production") {
     return "internal_server_error";
   }
