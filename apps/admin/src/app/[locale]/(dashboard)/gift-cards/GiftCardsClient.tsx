@@ -1,5 +1,5 @@
 'use client';
-import { currency, formatDate, formatMoney, fromMinor, type Money } from '@irth/domain';
+import { currency, formatDate, formatMoney, fromMinor, parseDecimal, EGP, type Money } from '@irth/domain';
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -88,10 +88,20 @@ export default function GiftCardsClient({
 
   const handleCreate = (e: { preventDefault: () => void }) => {
     e.preventDefault();
-    const amt = parseFloat(amount);
-    if (!amt || amt <= 0) { setCreateErr(t('validation.amountPositive')); return; }
+    // The server re-parses this string into minor units; the client check only
+    // rejects obvious nonsense before the request goes out. parseDecimal throws
+    // on anything that is not a plain decimal, so it is caught here rather than
+    // crashing the form.
+    let minor: bigint;
+    try {
+      minor = parseDecimal(amount, EGP).minor;
+    } catch {
+      setCreateErr(t('validation.amountPositive'));
+      return;
+    }
+    if (minor <= 0n) { setCreateErr(t('validation.amountPositive')); return; }
     createMutation.mutate({
-      initialAmount: amt,
+      initialAmount: amount,
       recipientName: recipientName || undefined,
       recipientEmail: recipientEmail || undefined,
       message: message || undefined,
