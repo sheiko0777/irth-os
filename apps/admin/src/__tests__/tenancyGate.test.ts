@@ -78,7 +78,6 @@ const UNSCOPED_READ_BASELINE = [
   'eta.ts:34',
   'eta.ts:107',
   'eta.ts:134',
-  'finance.ts:110',
   'giftCards.ts:29',
   'giftCards.ts:36',
   'giftCards.ts:49',

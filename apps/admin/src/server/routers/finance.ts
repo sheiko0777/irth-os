@@ -106,8 +106,10 @@ export const financeRouter = router({
             // reporting separately, and summing all `expense`-type accounts
             // together would silently merge COGS (5010) with Inventory Variance
             // (5020) into one figure.
-            const [ledgerRows, orderStatsQuery] = await Promise.all([
-                ctx.db
+            // ⚡ Bolt: Wrapped multiple queries in a single ctx.withOrg transaction
+            // to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+            const [ledgerRows, orderStatsQuery] = await ctx.withOrg((tx) => Promise.all([
+                tx
                     .select({
                         code: accounts.code,
                         normalBalance: accounts.normalBalance,
@@ -124,7 +126,7 @@ export const financeRouter = router({
                     ))
                     .groupBy(accounts.code, accounts.normalBalance),
                 // One scoped query with FILTER instead of three round-trips (#404).
-                ctx.withOrg((tx) => tx
+                tx
                     .select({
                         totalCount: count(),
                         cancelledCount: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`.mapWith(Number),
@@ -135,8 +137,8 @@ export const financeRouter = router({
                         eq(orders.orgId, ctx.orgId),
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end)
-                    ))),
-            ]);
+                    ))
+            ] as const));
 
             const byCode = new Map(ledgerRows.map((r) => [r.code, accountBalanceMinor(r)]));
             const zero = BigInt(0);
@@ -235,9 +237,11 @@ export const financeRouter = router({
             // to come off, and a delivered order whose sale was never posted
             // owes no VAT in the books. `end` is inclusive to the millisecond.
             const exclusiveEnd = new Date(end.getTime() + 1);
-            const [totals, countRows] = await Promise.all([
-                ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: start, to: exclusiveEnd })),
-                ctx.withOrg((tx) => tx
+            // ⚡ Bolt: Wrapped multiple queries in a single ctx.withOrg transaction
+            // to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+            const [totals, countRows] = await ctx.withOrg((tx) => Promise.all([
+                salesTotals(tx, ctx.orgId, { from: start, to: exclusiveEnd }),
+                tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(
@@ -245,8 +249,8 @@ export const financeRouter = router({
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end),
                         eq(orders.status, 'delivered')
-                    ))),
-            ]);
+                    ))
+            ] as const));
 
             const grossRevenue = fromMinor(totals.grossSalesMinor);
             const orderCount = countRows[0]?.count ?? 0;
