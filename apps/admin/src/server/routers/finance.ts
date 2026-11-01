@@ -106,10 +106,8 @@ export const financeRouter = router({
             // reporting separately, and summing all `expense`-type accounts
             // together would silently merge COGS (5010) with Inventory Variance
             // (5020) into one figure.
-            // ⚡ Bolt: Wrapped multiple queries in a single ctx.withOrg transaction
-            // to reduce connection acquisition overhead to one, significantly improving system scale and performance.
-            const [ledgerRows, orderStatsQuery] = await ctx.withOrg((tx) => Promise.all([
-                tx
+            const [ledgerRows, orderStatsQuery] = await Promise.all([
+                ctx.db
                     .select({
                         code: accounts.code,
                         normalBalance: accounts.normalBalance,
@@ -126,7 +124,7 @@ export const financeRouter = router({
                     ))
                     .groupBy(accounts.code, accounts.normalBalance),
                 // One scoped query with FILTER instead of three round-trips (#404).
-                tx
+                ctx.withOrg((tx) => tx
                     .select({
                         totalCount: count(),
                         cancelledCount: sql<number>`count(*) filter (where ${orders.status} = 'cancelled')`.mapWith(Number),
@@ -137,8 +135,8 @@ export const financeRouter = router({
                         eq(orders.orgId, ctx.orgId),
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end)
-                    ))
-            ] as const));
+                    ))),
+            ]);
 
             const byCode = new Map(ledgerRows.map((r) => [r.code, accountBalanceMinor(r)]));
             const zero = BigInt(0);
