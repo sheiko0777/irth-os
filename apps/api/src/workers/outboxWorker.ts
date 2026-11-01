@@ -10,6 +10,9 @@ import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection, setConnectionInventoryQuantity } from '../services/shopifyConnection';
 import { envVar } from '../utils/env';
 import { handleShopifyOrderReimport } from './shopifyOrderReimport';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger({ component: 'outboxWorker' });
 
 interface OrderPayload {
     customerPhone: string;
@@ -471,7 +474,7 @@ async function finalizeDeadLetteredCampaignRecipient(database: typeof db, event:
             }
         });
     } catch (finalizeError) {
-        console.error('Failed to finalize dead-lettered campaign recipient', finalizeError);
+        log.error('Failed to finalize dead-lettered campaign recipient', { err: finalizeError });
     }
 }
 
@@ -543,7 +546,7 @@ async function deadLetterEvent(database: typeof db, event: OutboxEvent, errorMes
             changes: { eventType: event.eventType, attempts },
         });
     } catch (deadLetterError) {
-        console.error('Failed to dead-letter outbox event', deadLetterError);
+        log.error('Failed to dead-letter outbox event', { err: deadLetterError });
     }
 }
 
@@ -656,7 +659,7 @@ export async function processOutbox(database: typeof db): Promise<number> {
         }
         return pendingEvents.length;
     } catch (e) {
-        console.error('Error fetching outbox events', e);
+        log.error('Error fetching outbox events', { err: e });
         return 0;
     }
 }
