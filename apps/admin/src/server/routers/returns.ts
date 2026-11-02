@@ -447,33 +447,38 @@ export const returnsRouter = router({
     .query(async ({ ctx }) => {
       if (!ctx.orgId) throw new Error('Unauthorized');
 
-      const returns = await db.select().from(orderReturns).where(eq(orderReturns.orgId, ctx.orgId));
+      // Use PostgreSQL FILTER to combine multiple aggregate queries. This avoids
+      // fetching all order returns into memory just to calculate counts and sums.
+      const [res] = await db
+        .select({
+          total: count(),
+          requested: sql<number>`count(*) filter (where ${orderReturns.status} = 'requested')::int`,
+          approved: sql<number>`count(*) filter (where ${orderReturns.status} = 'approved')::int`,
+          rejected: sql<number>`count(*) filter (where ${orderReturns.status} = 'rejected')::int`,
+          received: sql<number>`count(*) filter (where ${orderReturns.status} = 'received')::int`,
+          restocked: sql<number>`count(*) filter (where ${orderReturns.status} = 'restocked')::int`,
+          refunded: sql<number>`count(*) filter (where ${orderReturns.status} = 'refunded')::int`,
+          exchanged: sql<number>`count(*) filter (where ${orderReturns.status} = 'exchanged')::int`,
+          // Accumulated in minor units. The float version compounded its error on
+          // every approved return, so the pending-refund figure drifted further
+          // from the truth the more returns an org processed.
+          pendingRefundMinor: sql<string | null>`sum(${orderReturns.refundAmountMinor}) filter (where ${orderReturns.status} = 'approved')`,
+        })
+        .from(orderReturns)
+        .where(eq(orderReturns.orgId, ctx.orgId));
 
-      const total = returns.length;
+      const total = res?.total ?? 0;
       const byStatus = {
-        requested: 0,
-        approved: 0,
-        rejected: 0,
-        received: 0,
-        restocked: 0,
-        refunded: 0,
-        exchanged: 0,
+        requested: res?.requested ?? 0,
+        approved: res?.approved ?? 0,
+        rejected: res?.rejected ?? 0,
+        received: res?.received ?? 0,
+        restocked: res?.restocked ?? 0,
+        refunded: res?.refunded ?? 0,
+        exchanged: res?.exchanged ?? 0,
       };
 
-      // Accumulated in minor units. The float version compounded its error on
-      // every approved return, so the pending-refund figure drifted further
-      // from the truth the more returns an org processed.
-      let pendingRefundMinor = 0n;
-
-      for (const r of returns) {
-        if (byStatus[r.status as keyof typeof byStatus] !== undefined) {
-           byStatus[r.status as keyof typeof byStatus]++;
-        }
-        if (r.status === 'approved' && r.refundAmountMinor !== null) {
-          pendingRefundMinor += r.refundAmountMinor;
-        }
-      }
-      const pendingRefundAmount = fromMinor(pendingRefundMinor);
+      const pendingRefundAmount = fromMinor(BigInt(res?.pendingRefundMinor ?? '0'));
 
       return {
         data: {

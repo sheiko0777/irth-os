@@ -36,3 +36,6 @@
 ## 2024-05-18 - [Fix Sequential Awaits in Array Literals]
 **Learning:** Using `[await a(), await b()]` executes `a()` completely before executing `b()`. This means the total time taken is `O(n * latency)` rather than `O(max latency)` which was intended for batching independent queries inside `ctx.withOrg`.
 **Action:** When executing independent queries concurrently, always wrap the queries inside `Promise.all([ a(), b() ] as const)` instead of awaiting them sequentially inside an array literal.
+## 2026-11-02 - Combine returns summary aggregates using PostgreSQL FILTER
+**Learning:** Found sequential independent count and summation logic iterating through all fetched rows into memory to compute metrics for order returns.
+**Action:** Replace the in-memory array processing with a single database aggregation query utilizing `sql` tagged templates for `count()` and `sum()` with `FILTER (WHERE ...)` clauses to avoid fetching all order returns into memory and compute stats directly in the database.
