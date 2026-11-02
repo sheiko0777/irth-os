@@ -29,6 +29,7 @@ import { processOutbox, OUTBOX_BATCH_SIZE } from './workers/outboxWorker'
 import { rollupStorefrontMetrics } from './workers/storefrontRollup'
 import { metricsSnapshot } from './lib/metrics'
 import { sentryOptions } from './lib/sentry'
+import { createLogger } from './lib/logger'
 
 export { RateLimiterDO } from './durableObjects/RateLimiterDO'
 
@@ -322,7 +323,8 @@ const handler = {
               await db.update(campaigns)
                   .set({ status: 'failed', updatedAt: new Date() })
                   .where(eq(campaigns.id, camp.id));
-              console.error(`[scheduled-campaign] ${camp.id} failed to dispatch: ${message}`);
+              const log = createLogger({ component: 'scheduler' });
+              log.error(`failed to dispatch campaign`, { campaignId: camp.id, err: message });
           }
       }
     })());
