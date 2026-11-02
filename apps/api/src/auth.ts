@@ -4,6 +4,9 @@ import { twoFactor, username } from 'better-auth/plugins';
 import { db } from './db';
 import { envVar, nodeEnv } from './utils/env';
 import * as authSchema from '@irth/db/src/schema/auth';
+import { createLogger } from './lib/logger';
+
+const logger = createLogger();
 
 /**
  * The Worker's Better Auth instance. Must stay in step with
@@ -106,7 +109,7 @@ function buildAuth() {
         // 500 every authenticated request if the variable was never set on the
         // Worker. The fallback is the pre-existing behaviour; the log makes the
         // misconfiguration visible in `wrangler tail` / observability.
-        console.error('API_BASE_URL is not set in production; Better Auth is falling back to http://localhost:8787');
+        logger.error('API_BASE_URL is not set in production; Better Auth is falling back to http://localhost:8787');
       }
       return 'http://localhost:8787';
     })(),
