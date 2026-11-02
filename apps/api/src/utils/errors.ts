@@ -1,4 +1,7 @@
 import { nodeEnv } from './env';
+import { createLogger } from '../lib/logger';
+
+const log = createLogger({ component: 'errors' });
 
 /**
  * `NODE_ENV` is read at request time, not module scope: on Workers
@@ -7,7 +10,7 @@ import { nodeEnv } from './env';
  * Postgres constraint messages included — to clients in production.
  */
 export function handleError(error: unknown): string {
-  console.error("API Error:", error);
+  log.error("API Error:", { error });
   if (nodeEnv() === "production") {
     return "internal_server_error";
   }
