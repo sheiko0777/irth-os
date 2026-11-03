@@ -4,7 +4,8 @@ import { serverCaller } from "@/server/caller";
 import { NewSaleForm } from "./NewSaleForm";
 import { SalesLists } from "./SalesLists";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Briefcase } from "lucide-react";
+import { Briefcase, FilePlus2, Receipt, ScrollText } from "lucide-react";
+import { MobileTabBar } from "@/components/mobile/MobileTabBar";
 
 /**
  * مبيعاتي (PR-2b): the sales rep's screen — a new order or quote for one of
@@ -21,15 +22,25 @@ export default async function SalesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="pb-tabbar mx-auto max-w-4xl space-y-6">
       <PageHeader
         eyebrow="عام"
         title={"مبيعاتي"}
         description={"طلب أو عرض سعر لعملائك، بأسعار القوائم المسموحة لك. الأسعار بيحسبها النظام."}
         icon={<Briefcase />}
       />
-      <NewSaleForm />
+      <div id="new-sale" className="scroll-mt-24">
+        <NewSaleForm />
+      </div>
       <SalesLists />
+      <MobileTabBar
+        label="أقسام مبيعاتي"
+        items={[
+          { href: "#new-sale", label: "جديد", icon: <FilePlus2 /> },
+          { href: "#my-orders", label: "طلباتي", icon: <Receipt /> },
+          { href: "#my-quotes", label: "العروض", icon: <ScrollText /> },
+        ]}
+      />
     </div>
   );
 }

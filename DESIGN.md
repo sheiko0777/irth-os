@@ -103,6 +103,7 @@ semantic tokens, so older pages follow the palette. New code uses semantic names
 - **Lists** (orders, inventory, products): `PageHeader`, then filter chips, then a
   glass table card.
 - **Finance and analytics:** `PageHeader`, KPI cards with icons, glass chart cards.
+- **Sales rep** (`/sales`, phone-first): PageHeader, new-sale form, order and quote lists as glass cards, and a tab bar (new, orders, quotes).
 - **Delivery rep** (`/rep`, phone-first): custody `BalanceCard` with the handover
   form inside, large order cards with full-width deliver and call actions, and a
   tab bar (orders and custody).
@@ -114,7 +115,8 @@ semantic tokens, so older pages follow the palette. New code uses semantic names
   quantity to ship, then the shipping notice and a notice timeline.
 - **Every other admin screen** opens with `PageHeader` (the nav group as eyebrow,
   the nav icon) and uses glass cards. The primary action is the navy button.
-- **Sign-in:** a navy mark and a glass card over the lit canvas.
+- **Detail screens** (customer, return): `PageHeader` with the back link as an outline action.
+- **Sign-in, join, change password, two-factor:** a navy mark and a glass card over the lit canvas.
 
 ## 7. Anti-patterns
 
