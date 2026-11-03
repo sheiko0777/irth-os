@@ -11,6 +11,7 @@ import {
 import { getDb } from '../../db';
 import { verifyShopifyWebhook } from '../../middlewares/verifyShopifyWebhook';
 import { hashOpaque } from '../../services/shopifyConnection';
+import { createLogger } from '../../lib/logger';
 
 const shopifyInboxRoute = new Hono();
 
@@ -74,7 +75,7 @@ async function receiveShopifyInboxDelivery(c: Context, topic: string): Promise<R
 async function resolveWebhookConnection(c: Context, db: Db, topic: string): Promise<ResolvedConnection | null> {
   const shopDomain = c.req.header('x-shopify-shop-domain')?.toLowerCase().trim();
   if (!shopDomain) {
-    console.warn('shopify_webhook.no_matching_connection', {
+    createLogger().warn('shopify_webhook.no_matching_connection', {
       topic,
       reason: 'missing_shop_domain',
     });
@@ -89,7 +90,7 @@ async function resolveWebhookConnection(c: Context, db: Db, topic: string): Prom
     .where(and(eq(shopifyConnections.shopDomain, shopDomain), eq(shopifyConnections.status, 'active')));
 
   if (!connection) {
-    console.warn('shopify_webhook.no_matching_connection', {
+    createLogger().warn('shopify_webhook.no_matching_connection', {
       topic,
       shopDomainHash: hashOpaque(shopDomain),
     });
