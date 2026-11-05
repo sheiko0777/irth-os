@@ -36,3 +36,6 @@
 ## 2024-05-18 - [Fix Sequential Awaits in Array Literals]
 **Learning:** Using `[await a(), await b()]` executes `a()` completely before executing `b()`. This means the total time taken is `O(n * latency)` rather than `O(max latency)` which was intended for batching independent queries inside `ctx.withOrg`.
 **Action:** When executing independent queries concurrently, always wrap the queries inside `Promise.all([ a(), b() ] as const)` instead of awaiting them sequentially inside an array literal.
+## 2026-11-05 - Fix connection pool exhaustion in Finance Router
+**Learning:** Using `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside API handlers acquired multiple database connections concurrently for the same request, causing connection pool exhaustion under load and breaking transaction data isolation.
+**Action:** When handling independent queries requiring a transaction wrapper, run them securely and efficiently inside a single `ctx.withOrg(async (tx) => { ... })` and pass the single `tx` down into a `Promise.all([ tx.select(...), ... ])` to reduce connection acquisition overhead to one, significantly improving system scale and performance.
