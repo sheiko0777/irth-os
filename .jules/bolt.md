@@ -36,3 +36,6 @@
 ## 2024-05-18 - [Fix Sequential Awaits in Array Literals]
 **Learning:** Using `[await a(), await b()]` executes `a()` completely before executing `b()`. This means the total time taken is `O(n * latency)` rather than `O(max latency)` which was intended for batching independent queries inside `ctx.withOrg`.
 **Action:** When executing independent queries concurrently, always wrap the queries inside `Promise.all([ a(), b() ] as const)` instead of awaiting them sequentially inside an array literal.
+## 2026-11-07 - Optimize Admin Analytics KPI Summary
+**Learning:** The `kpiSummary` procedure in `apps/admin/src/server/routers/analytics.ts` executed two separate aggregate queries on the `orders` table concurrently using `Promise.all` inside `ctx.withOrg`. This caused unnecessary connection overhead and double scanning of the `orders` table.
+**Action:** Always combine multiple aggregate queries on the same table (such as conditional counts) into a single query using PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` tagged template literal to reduce database round-trips.
