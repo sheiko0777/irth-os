@@ -19,6 +19,7 @@ import { aiChatRouter } from './ai/route'
 import { corsMiddleware } from './middlewares/cors'
 import { securityHeaders } from './middlewares/securityHeaders'
 import { rateLimit } from './middlewares/rateLimit'
+import { createLogger } from './lib/logger'
 import { redactResponse } from './middlewares/redactResponse';
 import { authContext } from './middlewares/authContext'
 import { requestContext } from './middlewares/requestContext'
@@ -322,7 +323,7 @@ const handler = {
               await db.update(campaigns)
                   .set({ status: 'failed', updatedAt: new Date() })
                   .where(eq(campaigns.id, camp.id));
-              console.error(`[scheduled-campaign] ${camp.id} failed to dispatch: ${message}`);
+              createLogger().error(`[scheduled-campaign] ${camp.id} failed to dispatch`, { message });
           }
       }
     })());
