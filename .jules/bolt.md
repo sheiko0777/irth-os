@@ -36,3 +36,7 @@
 ## 2024-05-18 - [Fix Sequential Awaits in Array Literals]
 **Learning:** Using `[await a(), await b()]` executes `a()` completely before executing `b()`. This means the total time taken is `O(n * latency)` rather than `O(max latency)` which was intended for batching independent queries inside `ctx.withOrg`.
 **Action:** When executing independent queries concurrently, always wrap the queries inside `Promise.all([ a(), b() ] as const)` instead of awaiting them sequentially inside an array literal.
+
+## 2024-11-08 - [Batch Independent Queries in `ctx.withOrg`]
+**Learning:** Sequential independent queries inside a `ctx.withOrg` block result in O(n) latency, causing a performance bottleneck.
+**Action:** Use `Promise.all` inside `ctx.withOrg` to run independent queries concurrently, achieving O(max latency) and reducing overall connection multiplexing delays.
