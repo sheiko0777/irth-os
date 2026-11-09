@@ -1,0 +1,6 @@
+⚡ Bolt: [performance improvement]
+
+💡 What: Modified `apps/api/src/ai/tools.ts` to execute database queries sequentially inside a Drizzle transaction instead of concurrently with `Promise.all`.
+🎯 Why: `Promise.all([ctx.db.select(...), salesTotals(ctx.db)])` executes multiple database queries concurrently inside a transaction block which is illegal in Postgres. A single transaction connection cannot multiplex queries concurrently, leading to race conditions and breaking connection isolation.
+📊 Impact: Eliminates connection multiplexing bugs inside `withOrg` transaction blocks and ensures database data integrity and application stability under load.
+🔬 Measurement: Verify the change using code review ensuring no concurrent `Promise.all` read queries exist inside `withOrg` or `ctx.db` transaction wrappers in `apps/api/src/ai/tools.ts`.
