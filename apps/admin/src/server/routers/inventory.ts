@@ -34,29 +34,32 @@ export const inventoryRouter = router({
       // Counts always span the whole org, never the active filter — a tab that
       // showed its own filtered count would read zero on every other tab.
       const { items, tally } = await ctx.withOrg(async (tx) => {
-        const itemsList = await tx
-          .select({
-            item: inventoryItems,
-            variant: productVariants,
-            product: products,
-          })
-          .from(inventoryItems)
-          .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
-          .innerJoin(products, eq(productVariants.productId, products.id))
-          .where(stockFilter ? and(inScope, stockFilter) : inScope)
-          .orderBy(asc(inventoryItems.quantity));
-
-        const tallyList = await tx
-          .select({
-            out: sql<number>`count(*) filter (where ${inventoryItems.quantity} <= 0)`.mapWith(Number),
-            low: sql<number>`count(*) filter (where ${inventoryItems.quantity} > 0 and ${inventoryItems.quantity} <= ${inventoryItems.reorderPoint})`.mapWith(Number),
-            ok: sql<number>`count(*) filter (where ${inventoryItems.quantity} > ${inventoryItems.reorderPoint})`.mapWith(Number),
-            all: count(),
-          })
-          .from(inventoryItems)
-          .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
-          .innerJoin(products, eq(productVariants.productId, products.id))
-          .where(inScope);
+        // Run independent select queries concurrently within the transaction using Promise.all
+        // to reduce overall latency and avoid connection multiplexing delays.
+        const [itemsList, tallyList] = await Promise.all([
+          tx
+            .select({
+              item: inventoryItems,
+              variant: productVariants,
+              product: products,
+            })
+            .from(inventoryItems)
+            .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
+            .innerJoin(products, eq(productVariants.productId, products.id))
+            .where(stockFilter ? and(inScope, stockFilter) : inScope)
+            .orderBy(asc(inventoryItems.quantity)),
+          tx
+            .select({
+              out: sql<number>`count(*) filter (where ${inventoryItems.quantity} <= 0)`.mapWith(Number),
+              low: sql<number>`count(*) filter (where ${inventoryItems.quantity} > 0 and ${inventoryItems.quantity} <= ${inventoryItems.reorderPoint})`.mapWith(Number),
+              ok: sql<number>`count(*) filter (where ${inventoryItems.quantity} > ${inventoryItems.reorderPoint})`.mapWith(Number),
+              all: count(),
+            })
+            .from(inventoryItems)
+            .innerJoin(productVariants, eq(inventoryItems.variantId, productVariants.id))
+            .innerJoin(products, eq(productVariants.productId, products.id))
+            .where(inScope)
+        ]);
 
         return { items: itemsList, tally: tallyList };
       });
