@@ -235,9 +235,11 @@ export const financeRouter = router({
             // to come off, and a delivered order whose sale was never posted
             // owes no VAT in the books. `end` is inclusive to the millisecond.
             const exclusiveEnd = new Date(end.getTime() + 1);
-            const [totals, countRows] = await Promise.all([
-                ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: start, to: exclusiveEnd })),
-                ctx.withOrg((tx) => tx
+            // ⚡ Bolt: Wrapped multiple queries in a single ctx.withOrg transaction
+            // to reduce connection acquisition overhead to one, significantly improving system scale and performance.
+            const [totals, countRows] = await ctx.withOrg((tx) => Promise.all([
+                salesTotals(tx, ctx.orgId, { from: start, to: exclusiveEnd }),
+                tx
                     .select({ count: count() })
                     .from(orders)
                     .where(and(
@@ -245,8 +247,8 @@ export const financeRouter = router({
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end),
                         eq(orders.status, 'delivered')
-                    ))),
-            ]);
+                    ))
+            ] as const));
 
             const grossRevenue = fromMinor(totals.grossSalesMinor);
             const orderCount = countRows[0]?.count ?? 0;
