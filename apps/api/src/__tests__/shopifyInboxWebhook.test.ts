@@ -207,7 +207,7 @@ describe('Shopify inbox webhook route', () => {
     expect(insertedRows).toEqual([]);
     expect(emitCalls).toEqual([]);
     expect(warnCalls).toHaveLength(1);
-    expect(warnCalls[0][0]).toBe('shopify_webhook.no_matching_connection');
-    expect(warnCalls[0][1]).toMatchObject({ topic: 'fulfillments/update' });
+    expect(JSON.parse(warnCalls[0][0] as string).msg).toBe('shopify_webhook.no_matching_connection');
+    expect(JSON.parse(warnCalls[0][0] as string)).toMatchObject({ topic: 'fulfillments/update' });
   });
 });
