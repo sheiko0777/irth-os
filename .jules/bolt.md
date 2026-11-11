@@ -40,3 +40,7 @@
 ## 2024-11-08 - [Batch Independent Queries in `ctx.withOrg`]
 **Learning:** Sequential independent queries inside a `ctx.withOrg` block result in O(n) latency, causing a performance bottleneck.
 **Action:** Use `Promise.all` inside `ctx.withOrg` to run independent queries concurrently, achieving O(max latency) and reducing overall connection multiplexing delays.
+
+## 2026-10-25 - Fix connection pool exhaustion in Finance Router
+**Learning:** `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside finance API handlers acquired multiple database connections concurrently for the same request, causing connection pool exhaustion under load. However, combining them into a single `Promise.all` inside `ctx.withOrg` executes concurrent queries on a single transaction connection, which violates driver constraints and is unsafe in Postgres.
+**Action:** When handling data list and count queries requiring a transaction wrapper, run them securely and efficiently inside a single `ctx.withOrg(async (tx) => { ... })` sequentially (awaiting each query one after the other) to reduce connection acquisition overhead to one, significantly improving system scale and performance without violating single-connection concurrent execution limits.
