@@ -8,11 +8,15 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Users } from "lucide-react";
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const t = await getTranslations("customers");
   const { id } = await params;
+  const locale = await getLocale();
   const caller = await serverCaller();
 
   let response;
@@ -48,12 +52,16 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/ar/customers" className="text-[var(--t2)] hover:text-[var(--t1)] text-sm">
-          {t("detail.backToCustomers")}
-        </Link>
-        <h1 className="text-[1.5rem] font-semibold leading-tight tracking-tight">{customer.name}</h1>
-      </div>
+      <PageHeader
+        eyebrow="عام"
+        title={customer.name}
+        icon={<Users />}
+        actions={
+          <Button asChild variant="outline">
+            <Link href={`/${locale}/customers`}>{t("detail.backToCustomers")}</Link>
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatBox label={t("summary.loyaltyPoints")} value={customer.loyaltyPoints ?? 0} valueClassName="text-[var(--gold)]" />
