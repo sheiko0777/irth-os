@@ -1,3 +1,4 @@
+import { createLogger } from '../lib/logger';
 import { nodeEnv } from './env';
 
 /**
@@ -7,7 +8,7 @@ import { nodeEnv } from './env';
  * Postgres constraint messages included — to clients in production.
  */
 export function handleError(error: unknown): string {
-  console.error("API Error:", error);
+  createLogger().error("API Error:", { err: error });
   if (nodeEnv() === "production") {
     return "internal_server_error";
   }

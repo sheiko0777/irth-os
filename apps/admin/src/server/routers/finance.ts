@@ -235,18 +235,18 @@ export const financeRouter = router({
             // to come off, and a delivered order whose sale was never posted
             // owes no VAT in the books. `end` is inclusive to the millisecond.
             const exclusiveEnd = new Date(end.getTime() + 1);
-            const [totals, countRows] = await Promise.all([
-                ctx.withOrg((tx) => salesTotals(tx, ctx.orgId, { from: start, to: exclusiveEnd })),
-                ctx.withOrg((tx) => tx
-                    .select({ count: count() })
+            const { totals, countRows } = await ctx.withOrg(async (tx) => {
+                const totals = await salesTotals(tx, ctx.orgId, { from: start, to: exclusiveEnd });
+                const countRows = await tx.select({ count: count() })
                     .from(orders)
                     .where(and(
                         eq(orders.orgId, ctx.orgId),
                         gte(orders.createdAt, start),
                         lte(orders.createdAt, end),
                         eq(orders.status, 'delivered')
-                    ))),
-            ]);
+                    ));
+                return { totals, countRows };
+            });
 
             const grossRevenue = fromMinor(totals.grossSalesMinor);
             const orderCount = countRows[0]?.count ?? 0;
