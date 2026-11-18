@@ -10,6 +10,7 @@ import { upsertShopifyProduct, statusFromLocal } from '../services/shopify';
 import { upsertShopifyProductForConnection, setConnectionInventoryQuantity } from '../services/shopifyConnection';
 import { envVar } from '../utils/env';
 import { handleShopifyOrderReimport } from './shopifyOrderReimport';
+import { createLogger } from '../lib/logger';
 
 interface OrderPayload {
     customerPhone: string;
@@ -389,7 +390,7 @@ async function handleOrgInviteSent(database: typeof db, event: OutboxEvent): Pro
  */
 async function handleInboundDeliveryProcess(database: typeof db, event: OutboxEvent): Promise<void> {
     const payload = JSON.parse(event.payload) as InboundDeliveryProcessPayload;
-    console.info('inbound.delivery.process not implemented until OR-10', {
+    createLogger().info('inbound.delivery.process not implemented until OR-10', {
         orgId: payload.orgId,
         deliveryId: payload.deliveryId,
     });
@@ -471,7 +472,7 @@ async function finalizeDeadLetteredCampaignRecipient(database: typeof db, event:
             }
         });
     } catch (finalizeError) {
-        console.error('Failed to finalize dead-lettered campaign recipient', finalizeError);
+        createLogger().error('Failed to finalize dead-lettered campaign recipient', { err: finalizeError });
     }
 }
 
@@ -543,7 +544,7 @@ async function deadLetterEvent(database: typeof db, event: OutboxEvent, errorMes
             changes: { eventType: event.eventType, attempts },
         });
     } catch (deadLetterError) {
-        console.error('Failed to dead-letter outbox event', deadLetterError);
+        createLogger().error('Failed to dead-letter outbox event', { err: deadLetterError });
     }
 }
 
@@ -656,7 +657,7 @@ export async function processOutbox(database: typeof db): Promise<number> {
         }
         return pendingEvents.length;
     } catch (e) {
-        console.error('Error fetching outbox events', e);
+        createLogger().error('Error fetching outbox events', { err: e });
         return 0;
     }
 }

@@ -36,6 +36,15 @@
 ## 2024-05-18 - [Fix Sequential Awaits in Array Literals]
 **Learning:** Using `[await a(), await b()]` executes `a()` completely before executing `b()`. This means the total time taken is `O(n * latency)` rather than `O(max latency)` which was intended for batching independent queries inside `ctx.withOrg`.
 **Action:** When executing independent queries concurrently, always wrap the queries inside `Promise.all([ a(), b() ] as const)` instead of awaiting them sequentially inside an array literal.
+
+## 2024-11-08 - [Batch Independent Queries in `ctx.withOrg`]
+**Learning:** Sequential independent queries inside a `ctx.withOrg` block result in O(n) latency, causing a performance bottleneck.
+**Action:** Use `Promise.all` inside `ctx.withOrg` to run independent queries concurrently, achieving O(max latency) and reducing overall connection multiplexing delays.
+
+## 2026-10-25 - Fix connection pool exhaustion in Finance Router
+**Learning:** `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside finance API handlers acquired multiple database connections concurrently for the same request, causing connection pool exhaustion under load. However, combining them into a single `Promise.all` inside `ctx.withOrg` executes concurrent queries on a single transaction connection, which violates driver constraints and is unsafe in Postgres.
+**Action:** When handling data list and count queries requiring a transaction wrapper, run them securely and efficiently inside a single `ctx.withOrg(async (tx) => { ... })` sequentially (awaiting each query one after the other) to reduce connection acquisition overhead to one, significantly improving system scale and performance without violating single-connection concurrent execution limits.
+
 ## 2026-11-02 - Combine returns summary aggregates using PostgreSQL FILTER
 **Learning:** Found sequential independent count and summation logic iterating through all fetched rows into memory to compute metrics for order returns.
 **Action:** Replace the in-memory array processing with a single database aggregation query utilizing `sql` tagged templates for `count()` and `sum()` with `FILTER (WHERE ...)` clauses to avoid fetching all order returns into memory and compute stats directly in the database.

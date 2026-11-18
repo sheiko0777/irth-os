@@ -1,3 +1,4 @@
+import { createLogger } from '../../lib/logger';
 import { envVar } from '../../utils/env';
 
 /**
@@ -27,7 +28,7 @@ export function pinnedCourierOrgId(): string | null {
   const orgId = envVar('COURIER_WEBHOOK_ORG_ID') ?? envVar('SHOPIFY_ORG_ID') ?? null;
   if (!orgId && !warnedUnpinned) {
     warnedUnpinned = true;
-    console.error(
+    createLogger().error(
       'COURIER_WEBHOOK_ORG_ID (or SHOPIFY_ORG_ID) is not set: shared-secret courier webhooks are not pinned to one tenant, '
       + 'so any holder of the shared secret can affect any tenant. Set COURIER_WEBHOOK_ORG_ID to the owning org id.',
     );
