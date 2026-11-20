@@ -29,6 +29,14 @@ export async function readConnectionSecret(tx: Pick<DbTx, 'select'>, address: Se
   return getConnectionSecret(tx, connectionKeyring(), address);
 }
 
+/** Name under which a courier connection stores its inbound webhook HMAC secret. */
+export const COURIER_WEBHOOK_SECRET_NAME = 'webhook_secret';
+
+/** Courier webhook door: callers outside the kernel never name the generic reader. */
+export async function readCourierWebhookSecret(tx: Pick<DbTx, 'select'>, orgId: string, connectionId: string): Promise<string | null> {
+  return readConnectionSecret(tx, { orgId, connectionId, name: COURIER_WEBHOOK_SECRET_NAME });
+}
+
 export async function writeConnectionSecret(tx: DbTx, ctx: ConnectionOpCtx, input: { connectionId: string; name: string; value: string }) {
   return putConnectionSecret(tx, ctx, connectionKeyring(), input);
 }
