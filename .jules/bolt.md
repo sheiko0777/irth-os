@@ -48,3 +48,7 @@
 ## 2026-11-02 - Combine returns summary aggregates using PostgreSQL FILTER
 **Learning:** Found sequential independent count and summation logic iterating through all fetched rows into memory to compute metrics for order returns.
 **Action:** Replace the in-memory array processing with a single database aggregation query utilizing `sql` tagged templates for `count()` and `sum()` with `FILTER (WHERE ...)` clauses to avoid fetching all order returns into memory and compute stats directly in the database.
+
+## 2026-11-07 - Optimize Admin Analytics KPI Summary
+**Learning:** The `kpiSummary` procedure in `apps/admin/src/server/routers/analytics.ts` executed two separate aggregate queries on the `orders` table concurrently using `Promise.all` inside `ctx.withOrg`. This caused unnecessary connection overhead and double scanning of the `orders` table.
+**Action:** Always combine multiple aggregate queries on the same table (such as conditional counts) into a single query using PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` tagged template literal to reduce database round-trips.

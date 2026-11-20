@@ -53,9 +53,9 @@ const UNSCOPED_READ = /(^|[^.\w])(ctx\s*\.\s*)?db\s*\.\s*(?:(?:select(?:Distinct
  * follow-up gate/migration (orders, products, categories, orgs, shipping).
  */
 const UNSCOPED_READ_BASELINE = [
-  'analytics.ts:224',
-  'analytics.ts:253',
-  'analytics.ts:275',
+  'analytics.ts:222',
+  'analytics.ts:251',
+  'analytics.ts:273',
   'campaigns.ts:14',
   'campaigns.ts:21',
   'campaigns.ts:36',
