@@ -44,3 +44,7 @@
 ## 2026-10-25 - Fix connection pool exhaustion in Finance Router
 **Learning:** `Promise.all([ctx.withOrg(...), ctx.withOrg(...)])` inside finance API handlers acquired multiple database connections concurrently for the same request, causing connection pool exhaustion under load. However, combining them into a single `Promise.all` inside `ctx.withOrg` executes concurrent queries on a single transaction connection, which violates driver constraints and is unsafe in Postgres.
 **Action:** When handling data list and count queries requiring a transaction wrapper, run them securely and efficiently inside a single `ctx.withOrg(async (tx) => { ... })` sequentially (awaiting each query one after the other) to reduce connection acquisition overhead to one, significantly improving system scale and performance without violating single-connection concurrent execution limits.
+
+## 2026-11-07 - Optimize Admin Analytics KPI Summary
+**Learning:** The `kpiSummary` procedure in `apps/admin/src/server/routers/analytics.ts` executed two separate aggregate queries on the `orders` table concurrently using `Promise.all` inside `ctx.withOrg`. This caused unnecessary connection overhead and double scanning of the `orders` table.
+**Action:** Always combine multiple aggregate queries on the same table (such as conditional counts) into a single query using PostgreSQL's `FILTER (WHERE ...)` clause with `drizzle-orm`'s `sql` tagged template literal to reduce database round-trips.
