@@ -144,18 +144,16 @@ export const returnsRouter = router({
       const offset = paginationOffset(input.page, input.pageSize);
 
       // Execute list and count queries concurrently to reduce latency
-      const [data, totalResult] = await Promise.all([
-        db.query.orderReturns.findMany({
+      const [data, totalResult] = await ctx.withOrg(async (tx) => {
+        const d = await tx.query.orderReturns.findMany({
           where: and(...conditions),
           orderBy: [desc(orderReturns.createdAt)],
           limit: input.pageSize,
           offset,
-        }),
-        db
-          .select({ count: count() })
-          .from(orderReturns)
-          .where(and(...conditions))
-      ]);
+        });
+        const c = await tx.select({ count: count() }).from(orderReturns).where(and(...conditions));
+        return [d, c] as const;
+      });
 
       const total = totalResult[0].count;
 
